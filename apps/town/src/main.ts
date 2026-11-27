@@ -22,6 +22,7 @@ import { unlock } from "@sequoia-leaf/kit/sound.ts";
 import { fontsReady } from "@sequoia-leaf/kit/text.ts";
 import { tipAt, tipOff, tipTo } from "@sequoia-leaf/kit/tip.ts";
 import { clamp, must, type Pt } from "@sequoia-leaf/kit/util.ts";
+import { catalogAt } from "@sequoia-leaf/raid/content/catalog.ts";
 import { FOLK } from "@sequoia-leaf/town/folk.ts";
 
 import { stepAbout } from "./aboutui.ts";
@@ -47,7 +48,7 @@ import { leafNow, onStage } from "./players.ts";
 import { lookFromOutside } from "./review.ts";
 import { darkOf, inGame, mayAct, next, openOf, type Place, placeOf, takesWalk } from "./screen.ts";
 import { startSettings } from "./settings.ts";
-import { showCampSheet, showSheet } from "./sheet.ts";
+import { eraFromLeaf, showCampSheet, showSheet } from "./sheet.ts";
 import { makeSprites } from "./sprites.ts";
 import type { Bound, Hover, Scene, Stage, Steer, Stood } from "./stage.ts";
 import { listenKeys } from "./townkeys.ts";
@@ -79,7 +80,7 @@ async function boot(): Promise<void> {
     const part = new URLSearchParams(location.search).get("sheet");
     if (part === "map") return showMapSheet(sprites);
     const campArt = makeCampArt(sprites);
-    if (part === "camp") return showCampSheet(campArt);
+    if (part === "camp") return showCampSheet(campArt, catalogAt(await eraFromLeaf()));
     initFolkArt(campArt);
     const folk = FOLK.flatMap((t) => {
       const a = folkArt(t);
@@ -176,7 +177,7 @@ async function boot(): Promise<void> {
   const menu = startSettings(scope(), () => letGo());
   initHud(menu.gear());
   const art = makeCampArt(sprites);
-  void nameMembers(art);
+  nameMembers(art);
   const town = makeTown(sprites, art, stage);
   const campUi = makeCampUi(art);
   const camp = makeCamp(sprites, art, stage, town.backdrop, campUi);

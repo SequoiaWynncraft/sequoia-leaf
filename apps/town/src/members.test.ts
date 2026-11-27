@@ -1,55 +1,57 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 
-import { type Standin, standin } from "@sequoia-leaf/kit/standin.ts";
+import { makePeople } from "@sequoia-leaf/figures/people.ts";
+import type { Answer } from "@sequoia-leaf/kit/net.ts";
+import { blankCanvas, noCanvas } from "@sequoia-leaf/kit/standin.ts";
 import { thingOf } from "@sequoia-leaf/town/things.ts";
 
 import { nameMembers } from "./members.ts";
 
-let world: Standin | null = null;
 const was = thingOf("member-banner-1")?.name;
 
 beforeAll(() => {
-  // No page here: a canvas that takes any drawing and gives back blank pixels, and a skin that never loads.
-  const pen: object = new Proxy(
-    {},
-    {
-      get: (_, name) =>
-        name === "getImageData"
-          ? (_x: number, _y: number, w: number, h: number) => ({ data: new Uint8ClampedArray(w * h * 4) })
-          : () => undefined,
-      set: () => true,
-    },
-  );
-  class Picture {
-    src = "";
-    addEventListener(): void {}
-  }
-  Object.assign(globalThis, {
-    document: { createElement: () => ({ width: 1, height: 1, getContext: () => pen }) },
-    Image: Picture,
-    HTMLImageElement: Picture,
-  });
+  // No page here: a blank canvas, and a skin that never loads.
+  blankCanvas();
 });
 
 afterAll(() => {
-  world?.done();
   const thing = thingOf("member-banner-1");
   if (thing && was) thing.name = was;
-  Object.assign(globalThis, { document: undefined, Image: undefined, HTMLImageElement: undefined });
+  noCanvas();
 });
 
 test("a banner's member is called by their name alone once Leaf says who, and drawn each time who they are is better known", async () => {
-  const headliner = { id: "p-quill", name: "Quillfeather" };
-  let said: unknown = { banners: [{ id: "banner-1", headliner: null }] };
-  world = standin({ "GET /v1/game/banners": () => ({ status: 200, body: said }) });
+  const answers: ((a: Answer) => void)[] = [];
+  const store = makePeople(
+    () => new Promise<Answer>((done) => answers.push(done)),
+    () => 0,
+  );
   const stood: string[] = [];
   const art = { stand: (id: string): number => stood.push(id) };
-  // Nobody yet: drawn as nobody, and named as no more than is known.
-  await nameMembers(art);
-  expect([thingOf("member-banner-1")?.name, stood]).toEqual(["A guild member", ["member-banner-1"]]);
+  // Nobody yet: drawn as nobody, and named as no more than is known; Groot Night's by its title.
+  nameMembers(art, store);
+  expect([thingOf("member-banner-1")?.name, thingOf("member-groot-night")?.name, stood]).toEqual([
+    "A guild member",
+    "Commodore",
+    ["member-banner-1", "member-groot-night"],
+  ]);
   // Leaf says who: their name and nothing else, drawn again as them; their skin is asked for by their id.
-  said = { banners: [{ id: "banner-1", headliner }] };
-  await nameMembers(art);
-  expect(thingOf("member-banner-1")?.name).toBe("Quillfeather");
-  expect(stood).toEqual(["member-banner-1", "member-banner-1", "member-banner-1"]);
+  // Groot Night's member is drawn as them and keeps the title: never their name.
+  store.see(["banner-1", "groot-night"]);
+  answers.shift()?.({
+    status: 200,
+    body: {
+      banners: [
+        { id: "banner-1", headliner: { id: "p-quill", name: "Quillfeather" } },
+        { id: "groot-night", headliner: { id: "p-moss", name: "Mossy" } },
+      ],
+    },
+  });
+  await Bun.sleep(0);
+  expect([thingOf("member-banner-1")?.name, thingOf("member-groot-night")?.name]).toEqual([
+    "Quillfeather",
+    "Commodore",
+  ]);
+  expect(stood.filter((id) => id === "member-banner-1")).toHaveLength(2);
+  expect(stood.filter((id) => id === "member-groot-night")).toHaveLength(2);
 });

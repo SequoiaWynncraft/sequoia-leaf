@@ -3,11 +3,11 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 import { abilityText, refusalText, TRAIT_IDS } from "@sequoia-leaf/raid";
-import { everyShared } from "@sequoia-leaf/raid/content/catalog.ts";
+import { catalogAt, everyShared } from "@sequoia-leaf/raid/content/catalog.ts";
 import { BOSS_IDS, specOf, SUMMON_IDS } from "@sequoia-leaf/raid/content/figures.ts";
 import { TRUE_FORM_IDS, TRUE_FORMS } from "@sequoia-leaf/raid/content/graid.ts";
 import { LORE } from "@sequoia-leaf/raid/content/lore.ts";
-import { RELEASES } from "@sequoia-leaf/raid/content/releases.ts";
+import { LAST_ERA, RELEASES } from "@sequoia-leaf/raid/content/releases.ts";
 import { HANDLES, nowCalled, regularOf } from "@sequoia-leaf/raid/content/rooms.ts";
 import { CAT } from "@sequoia-leaf/raid/testkit.ts";
 
@@ -45,6 +45,17 @@ const NAMES: Readonly<Record<string, string>> = {
   whitefox: "Orphion",
   hearthcat: "Vesta",
   seqwawa: "Seqwawa",
+  // Groot Night's (RAID-BANNERS.md, section 1); the crabs by their numbers.
+  peep: "Peep",
+  crab31: "Crab #31",
+  munch: "Munch",
+  clutch: "Clutch",
+  crab8: "Crab #8",
+  hatchling: "Hatchling",
+  grooter1: "Grooter",
+  grooter2: "Grooter",
+  grooter3: "Grooter",
+  grooter4: "Grooter",
   glorplet: "Glorplet",
   uncounted: "Crab #??",
   biguncounted: "Big Crab #??",
@@ -53,6 +64,9 @@ const NAMES: Readonly<Record<string, string>> = {
   hoardmagpie: "Swipe",
   bigcrab: "The Crab Nobody Counted",
 };
+
+/** The catalogue with every release open: everyone in the game, today's and those staged for a release. */
+const EVERY = catalogAt(LAST_ERA);
 
 /** What they were called before, none of which a player reads any more. */
 const OLD = [
@@ -138,7 +152,7 @@ describe("the names", () => {
   test("every figure, summon and boss in the game today has its name from the list, ids unchanged", () => {
     const ids = [...everyShared(), ...SUMMON_IDS, ...BOSS_IDS];
     expect(ids.filter((id) => NAMES[id] === undefined)).toEqual([]);
-    expect(ids.filter((id) => specOf(CAT, id).name !== NAMES[id])).toEqual([]);
+    expect(ids.filter((id) => specOf(EVERY, id).name !== NAMES[id])).toEqual([]);
   });
 
   test("each true form is Real and its figure's name, and two abilities are renamed", () => {
@@ -206,7 +220,7 @@ describe("the names", () => {
       );
     });
     expect(left).toEqual([]);
-    expect(everyShared().filter((id) => OLD.some((old) => abilityText(CAT, id, 1).includes(old)))).toEqual([]);
+    expect(everyShared().filter((id) => OLD.some((old) => abilityText(EVERY, id, 1).includes(old)))).toEqual([]);
   });
 });
 
@@ -225,13 +239,14 @@ describe("the words", () => {
   });
 
   test("the five named after the guild's raids are Graid: the page says Groot only for the Groot Night banner", () => {
-    // Groot is the Nest of the Grootslangs; a graid is any guild raid. Old names kept in `RENAMED`, and
+    // Groot is the Nest of the Grootslangs, and a grooter one who raids it; a graid is any guild raid. Old names kept in `RENAMED`, and
     // the releases' own ids (`groot`, `groot-night`, never shown) and the files of their patches, are let be.
     const groot = [...PAGE_TEXT, ...filesUnder(join(ROOT, "packages/figures/src"))].flatMap((path) =>
       stringsIn(textOf(path))
         .filter(
           (s) =>
-            /groot(?!slang)(?! night)/i.test(s) && !RELEASES.some((r) => [r.id, `./releases/${r.id}.ts`].includes(s)),
+            /groot(?!slang)(?! night)(?!er)/i.test(s) &&
+            !RELEASES.some((r) => [r.id, `./releases/${r.id}.ts`].includes(s)),
         )
         .map((s) => `${path.slice(ROOT.length + 1)}: ${s}`),
     );

@@ -97,6 +97,11 @@ export const neighbours = (cell: number): readonly number[] => neighbourTable[ce
 /** The hexes touching one, in the order a side tries them when it walks. */
 export const neighboursFor = (side: Side, cell: number): readonly number[] =>
   (side === 0 ? neighbourTable[cell] : mirroredTable[cell]) ?? NONE;
+/** The seats touching a seat, on the same half: where they are once the halves are pushed together, either side alike. */
+export const besideOf = (seat: number): number[] =>
+  neighbours(seatCell(0, seat))
+    .map((cell) => cellSeat(0, cell))
+    .filter((s) => s >= 0);
 /** How many steps apart two hexes are. */
 export const distance = (a: number, b: number): number => distances[a * CELLS + b] ?? 0;
 /** Whether two hexes touch. */

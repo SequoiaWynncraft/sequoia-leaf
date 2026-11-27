@@ -1,4 +1,4 @@
-import { parsePlayerId } from "@sequoia-leaf/core";
+import { parsePlayerId, type PlayerId } from "@sequoia-leaf/core";
 import { BANNERS } from "@sequoia-leaf/pulls";
 import { Clock, Effect, Option, Schema } from "effect";
 import { HttpServerResponse } from "effect/http";
@@ -18,6 +18,7 @@ import { Coins } from "../../play/coins.ts";
 import { PlayStore } from "../../play/store.ts";
 import { GuildFeed, OpenStreams } from "../streams.ts";
 import {
+  BannerCalled,
   BannerPerson,
   eventId,
   eventStreamFrom,
@@ -29,6 +30,50 @@ import {
   membersOnly,
   seconds,
 } from "./shared.ts";
+
+/**
+ * `GET /v1/game/banners`: every pull banner whose day has come on Leaf's clock (`from`), ended or
+ * not, with its headliner and whom it calls besides, each by their seat, named as the boards name
+ * players. One still to come is not said, nor are its people. The rows are put in by hand: a row
+ * whose id is not a player's names nobody, and its seat stays empty.
+ */
+const bannersNow = (sql: SqlClient.SqlClient, names: PlayerNames["Service"]) =>
+  Effect.gen(function* () {
+    const rows = yield* sql`SELECT banner, player_id AS playerId FROM banner_people`.pipe(
+      Effect.flatMap(Schema.decodeUnknownEffect(Schema.Array(BannerPerson))),
+      Effect.orDie,
+    );
+    const calls = yield* sql`
+      SELECT banner, seat, player_id AS playerId FROM banner_called ORDER BY banner, seat
+    `.pipe(Effect.flatMap(Schema.decodeUnknownEffect(Schema.Array(BannerCalled))), Effect.orDie);
+    const people = new Map(
+      rows.flatMap(({ banner, playerId }) => {
+        const id = parsePlayerId(playerId);
+        return id === undefined ? [] : [[banner, id] as const];
+      }),
+    );
+    const called = calls.flatMap(({ banner, seat, playerId }) => {
+      const id = parsePlayerId(playerId);
+      return id === undefined ? [] : [{ banner, seat, id }];
+    });
+    const now = yield* Clock.currentTimeMillis;
+    const named = yield* names.of([...people.values(), ...called.map(({ id }) => id)]);
+    const nameOf = (player: PlayerId) => ({ id: player, name: named.get(player) ?? "Someone" });
+    return {
+      banners: BANNERS.filter(({ from }) => from <= now).map(({ id, from, until }) => {
+        const person = people.get(id);
+        return {
+          id,
+          from: iso(from),
+          until: iso(until),
+          headliner: person === undefined ? null : nameOf(person),
+          called: called
+            .filter((c) => c.banner === id)
+            .map((c) => ({ seat: c.seat, id: c.id, name: named.get(c.id) ?? "Someone" })),
+        };
+      }),
+    };
+  });
 
 /** `GET /v1/game/me`: who is signed in, with their Leaf, Coins and level, and how they signed in. */
 const gameMe = ({
@@ -189,34 +234,8 @@ export const GamePeopleHandlers = HttpApiBuilder.group(LeafApi, "gamePeople", (h
             };
           }),
         )
-        // Every pull banner and its headliner, named as the boards name players.
-        .handle("banners", () =>
-          Effect.gen(function* () {
-            const rows = yield* sql`SELECT banner, player_id AS playerId FROM banner_people`.pipe(
-              Effect.flatMap(Schema.decodeUnknownEffect(Schema.Array(BannerPerson))),
-              Effect.orDie,
-            );
-            // Put in by hand: a row whose id is not a player's names nobody.
-            const people = new Map(
-              rows.flatMap(({ banner, playerId }) => {
-                const id = parsePlayerId(playerId);
-                return id === undefined ? [] : [[banner, id] as const];
-              }),
-            );
-            const named = yield* names.of([...people.values()]);
-            return {
-              banners: BANNERS.map(({ id, from, until }) => {
-                const person = people.get(id);
-                return {
-                  id,
-                  from: iso(from),
-                  until: iso(until),
-                  headliner: person === undefined ? null : { id: person, name: named.get(person) ?? "Someone" },
-                };
-              }),
-            };
-          }),
-        )
+        // Every pull banner, its headliner and whom it calls, named as the boards name players.
+        .handle("banners", () => bannersNow(sql, names))
     );
   }),
 );

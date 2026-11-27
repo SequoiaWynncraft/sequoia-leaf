@@ -14,7 +14,7 @@ import { BANNERS } from "./content/banners.ts";
 import { catalogAt } from "./content/catalog.ts";
 import { abilityNumber, abilityText, type FigureId, figureIn, type Stars, TIERS } from "./content/figures.ts";
 import { isMemberId, MEMBERS } from "./content/members.ts";
-import { eraOf, LEGACY_ERA } from "./content/releases.ts";
+import { eraOf, LAST_ERA, LEGACY_ERA } from "./content/releases.ts";
 import { MAX_LEVEL, ROOMS, STALL_ODDS, TRAIL_COUNT } from "./content/rooms.ts";
 import { HZ, summon } from "./fight/core.ts";
 import type { FightEvent } from "./fight/types.ts";
@@ -45,15 +45,16 @@ import {
 import { onTrail } from "./way.ts";
 import { readView } from "./wire.ts";
 
-/** Every banner's headliner. */
-const HEADLINERS = BANNERS.map((b) => b.headliner);
+/** Every headliner of the banners open in the tests' catalogue: the first banner's member. */
+const HEADLINERS = CAT.banners.map((b) => b.headliner);
 
 const UNIT = "banner-1";
 /** What the pulls award a member who has pulled the first banner's member four times, and Greg once. */
 const HAS = ["pull:headliner:banner-1", ...[2, 3, 4].map((n) => `copies:headliner:banner-1:${n}`), "pull:figure:greg"];
 
 const ctx = (awards: readonly string[] = [], seed = 5): Ctx => ({
-  now: 1_800_000_000_000,
+  // During the first banner, in the tests' era (`CAT`): before Groot Night brings anyone.
+  now: Date.UTC(2026, 10, 27, 12),
   player: { id: "10000000-0000-0000-0000-000000000001", guest: false },
   seed,
   room: 1e9,
@@ -101,13 +102,23 @@ describe("the twenty-eight", () => {
     for (const id of HEADLINERS) {
       expect(stall).not.toContain(id);
       expect(isMemberId(id)).toBe(true);
-      if (isMemberId(id)) expect(figureIn(CAT, id)).toMatchObject(MEMBERS[id]);
+      const spec = isMemberId(id) ? MEMBERS[id] : undefined;
+      expect(spec).toBeDefined();
+      if (spec) expect(figureIn(CAT, id)).toMatchObject(spec);
       expect([figureIn(CAT, id).tier, figureIn(CAT, id).extra, new Set(GOOD_WITH[id]).size]).toEqual([5, [], 3]);
     }
     expect(HEADLINERS.every(isMemberId) && !EVERYONES.some(isMemberId)).toBe(true);
   });
-  test("a banner's member is nobody in particular: its name is what any guild member is", () => {
+  test("a banner's member is nobody in particular: its name is what any guild member is, or its banner's title", () => {
     for (const id of HEADLINERS) expect(figureIn(CAT, id).name).toBe("A guild member");
+    // Every banner's, with every release open: a banner that shows its member by name is "A guild
+    // member" in the rules; one that shows a title has that title, and the member's skin, never their name.
+    const every = catalogAt(LAST_ERA);
+    expect(BANNERS.map((b) => [b.id, b.shows, figureIn(every, b.headliner).name])).toEqual([
+      ["banner-1", "name", "A guild member"],
+      ["groot-night", "title", "Commodore"],
+    ]);
+    for (const b of BANNERS) expect([isMemberId(b.headliner), b.look]).toEqual([true, "skin"]);
   });
 });
 
@@ -411,7 +422,7 @@ describe("I heard you weren't graiding.", () => {
     expect(abilityText(CAT, UNIT, 1)).toBe(SENTENCE("2", 550));
     expect(abilityText(CAT, UNIT, 2)).toBe(SENTENCE("2.5", 950));
     expect(abilityText(CAT, UNIT, 3)).toBe(SENTENCE("3.5", 2200));
-    expect(MEMBERS[UNIT].mana).toEqual([50, 80]);
+    expect(MEMBERS[UNIT]?.mana).toEqual([50, 80]);
   });
   test("of enemies who have taken the same, it picks the one who has dealt the least", () => {
     const { f, across } = scene(1, [

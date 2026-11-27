@@ -3,11 +3,11 @@ import { describe, expect, test } from "bun:test";
 import { COLS, distance, seatCell } from "../hex.ts";
 import { CAT } from "../testkit.ts";
 import { drawName, drawTip, GOOD_WITH, placeOf, roleLine, ROLES } from "./advice.ts";
-import { BOON_IDS, boonShort, boonText } from "./boons.ts";
+import { boonShort, boonText } from "./boons.ts";
+import { type Catalog, catalogAt } from "./catalog.ts";
 import {
   abilityShort,
   abilityText,
-  FIGURE_IDS,
   figureIn,
   specOf,
   type Stars,
@@ -15,9 +15,9 @@ import {
   TROUBLE_IDS,
   type UnitKind,
 } from "./figures.ts";
-import { FINISHED_IDS, isFinishedId, ITEM_IDS, itemShort, itemText } from "./items.ts";
-import { MEMBER_IDS } from "./members.ts";
-import { TRAIT_IDS, traitIn, traitShort, traitText } from "./traits.ts";
+import { FINISHED_IDS, isFinishedId, itemShort, itemText } from "./items.ts";
+import { eraOf, LAST_ERA, RELEASES } from "./releases.ts";
+import { traitIn, traitShort, traitText } from "./traits.ts";
 
 /** The longest a fragment may be and still fit one line of a card. */
 const FRAGMENT = 48;
@@ -53,28 +53,37 @@ function checkShort(what: string, short: string, long: string, most: number): vo
 }
 
 const STARS: readonly Stars[] = [1, 2, 3];
-const EVERYONE: readonly UnitKind[] = [...FIGURE_IDS, ...MEMBER_IDS, ...SUMMON_IDS, ...TROUBLE_IDS];
+/** Every era's catalogue, each with what it has open: every short form as each era words it. */
+const ERAS: readonly Catalog[] = RELEASES.map((r) => catalogAt(eraOf(r.id)));
+/** Everyone who can stand on the board in a catalogue: its figures, the summoned and the forest's. */
+const everyone = (cat: Catalog): readonly UnitKind[] => [...cat.order, ...SUMMON_IDS, ...TROUBLE_IDS];
+/** The catalogue with every release open: every figure there is. */
+const EVERY = catalogAt(LAST_ERA);
 
 describe("short forms", () => {
   test("every ability has one, at every number of stars", () => {
-    for (const kind of EVERYONE) {
-      if (!specOf(CAT, kind).ability) continue;
-      for (const stars of STARS)
-        checkShort(`${kind} at ${stars}`, abilityShort(CAT, kind, stars), abilityText(CAT, kind, stars), 2);
-    }
+    for (const cat of ERAS)
+      for (const kind of everyone(cat)) {
+        if (!specOf(cat, kind).ability) continue;
+        for (const stars of STARS)
+          checkShort(`${kind} at ${stars}`, abilityShort(cat, kind, stars), abilityText(cat, kind, stars), 2);
+      }
   });
   test("every trait step has one, of one fragment", () => {
-    for (const id of TRAIT_IDS) {
-      expect(traitIn(CAT, id).short.length).toBe(traitIn(CAT, id).steps.length);
-      for (let step = 1; step <= traitIn(CAT, id).steps.length; step++)
-        checkShort(`${id} step ${step}`, traitShort(CAT, id, step), traitText(CAT, id, step), 1);
-    }
+    for (const cat of ERAS)
+      for (const id of cat.ids.traits) {
+        expect(traitIn(cat, id).short.length).toBe(traitIn(cat, id).steps.length);
+        for (let step = 1; step <= traitIn(cat, id).steps.length; step++)
+          checkShort(`${id} step ${step}`, traitShort(cat, id, step), traitText(cat, id, step), 1);
+      }
   });
   test("every item has one", () => {
-    for (const id of ITEM_IDS) checkShort(id, itemShort(CAT, id), itemText(CAT, id), 2);
+    for (const cat of ERAS)
+      for (const id of [...cat.ids.components, ...cat.ids.finished, ...cat.ids.emblems])
+        checkShort(id, itemShort(cat, id), itemText(cat, id), 2);
   });
   test("every boon has one", () => {
-    for (const id of BOON_IDS) checkShort(id, boonShort(CAT, id), boonText(CAT, id), 2);
+    for (const cat of ERAS) for (const id of cat.ids.boons) checkShort(id, boonShort(cat, id), boonText(cat, id), 2);
   });
   test("the numbers are the ones for the stars asked for", () => {
     expect(abilityShort(CAT, "barrowgnome", 2)).toBe("Shield 210 for 4s. 70 physical to adjacent enemies.");
@@ -87,8 +96,8 @@ describe("short forms", () => {
 
 describe("advice for the cards", () => {
   test("a card says a figure's role, where it stands, and its draw", () => {
-    for (const id of [...FIGURE_IDS, ...MEMBER_IDS])
-      expect(roleLine(CAT, id)).toStartWith(`${ROLES[figureIn(CAT, id).calling]} · ${placeOf(CAT, id)}`);
+    for (const id of EVERY.order)
+      expect(roleLine(EVERY, id)).toStartWith(`${ROLES[figureIn(EVERY, id).calling]} · ${placeOf(EVERY, id)}`);
     expect(roleLine(CAT, "emberkit")).toBe("Fighter · front row");
     expect(roleLine(CAT, "barrowgnome")).toBe("Tank · front row · draws fire");
     expect(roleLine(CAT, "worm")).toBe("Assassin · leaps to the enemy back row · avoids fire");
@@ -98,16 +107,16 @@ describe("advice for the cards", () => {
   test("seated where its card says, every figure reaches the enemy's front line", () => {
     const rows = ["front row", "second row", "third row", "back row"];
     const theirFront = Array.from({ length: COLS }, (_, col) => seatCell(1, col));
-    for (const id of [...FIGURE_IDS, ...MEMBER_IDS]) {
-      if (figureIn(CAT, id).calling === "sneak") continue;
-      const row = rows.indexOf(placeOf(CAT, id));
+    for (const id of EVERY.order) {
+      if (figureIn(EVERY, id).calling === "sneak") continue;
+      const row = rows.indexOf(placeOf(EVERY, id));
       expect(row, id).toBeGreaterThanOrEqual(0);
       for (let col = 0; col < COLS; col++) {
         const from = seatCell(0, row * COLS + col);
         expect(
           Math.min(...theirFront.map((cell) => distance(from, cell))),
           `${id} in column ${col}`,
-        ).toBeLessThanOrEqual(figureIn(CAT, id).range);
+        ).toBeLessThanOrEqual(figureIn(EVERY, id).range);
       }
     }
   });
@@ -121,7 +130,7 @@ describe("advice for the cards", () => {
     expect(drawTip(-1)).toBe("Enemies pick their target as if this figure stood 1 hex further.");
   });
   test("every figure is good with three different finished items", () => {
-    for (const id of [...FIGURE_IDS, ...MEMBER_IDS]) {
+    for (const id of EVERY.order) {
       const three = GOOD_WITH[id];
       expect(three.length).toBe(3);
       expect(new Set(three).size, id).toBe(3);

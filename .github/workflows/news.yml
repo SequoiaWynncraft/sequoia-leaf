@@ -1,16 +1,29 @@
 name: News
 
-# Each patch note a merge to main adds to the town's News tab (apps/town/src/notes.json) is posted
-# to Discord, by each webhook kept as the secrets NEWS_WEBHOOK and NEWS_WEBHOOK_2, each in its own
-# job, so one that fails or hangs never keeps the notes from the other. A secret that is not set is
-# skipped. A note changed after it was posted is not posted again.
+# Each patch note in the town's News tab (apps/town/src/notes.json) is posted to Discord once it is
+# out, by each webhook kept as the secrets NEWS_WEBHOOK and NEWS_WEBHOOK_2, each in its own job, so
+# one that fails or hangs never keeps the notes from the other. A secret that is not set is skipped.
+# A note is out from its `at`, so one merged ahead of its day (a banner's) waits for it.
+#
+# Each channel keeps its own record: a note it took is marked on the commit that added the note, as
+# the commit status `news/<channel>/<note id>`. Each run, on a merge and twice an hour, posts every
+# note that is out, in the last week, and not yet marked for that channel, and marks only what the
+# channel took (posted with ?wait=true, so a 2xx means Discord saved it): a 429, a 5xx or no answer
+# is tried again on the next run. A mark that cannot be written fails the job once the rest are
+# posted. Which notes is `toPost`'s to say and what counts as taken `deliver`'s
+# (apps/town/src/notes.ts, tested there); apps/town/review/news.ts runs them. A note changed after
+# it was posted is not posted again.
 on:
   push:
     branches: [main]
     paths: [apps/town/src/notes.json]
+  schedule:
+    - cron: "11,41 * * * *"
 
 permissions:
   contents: read
+  # Each channel's record: the notes it took, marked on the commits that added them.
+  statuses: write
 
 concurrency:
   group: news
@@ -28,37 +41,33 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          # The merge and the main it was merged onto, to tell which notes are new.
-          fetch-depth: 2
-      - name: Post the new notes
+      # Whether any note came out in the last week: only those are ever tried. Most runs stop here.
+      - name: Look for notes out this week
+        id: window
+        run: |
+          set -euo pipefail
+          now=$(date +%s000)
+          due=$(jq --argjson now "$now" '
+            map(.at | (if test("T") then sub("Z$"; ":00Z") else . + "T00:00:00Z" end) | fromdateiso8601 * 1000
+              | select(. <= $now and . > $now - 604800000)) | length' apps/town/src/notes.json)
+          printf 'due=%s\n' "$due" | tee -a "$GITHUB_OUTPUT"
+      # When each note was added, and when the record began, are in the history.
+      - name: Fetch the history
+        if: steps.window.outputs.due != '0'
+        run: git fetch --unshallow --quiet origin "$GITHUB_REF"
+      - uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
+        if: steps.window.outputs.due != '0'
+        with:
+          version: "2026.10.17"
+          sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
+          install_args: bun
+      - name: Post the notes the channel has not taken
+        if: steps.window.outputs.due != '0'
         env:
           NAME: ${{ matrix.webhook }}
           WEBHOOK: ${{ secrets[matrix.webhook] }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           if [ -z "$WEBHOOK" ]; then echo "No $NAME: nothing posted."; exit 0; fi
-          notes=apps/town/src/notes.json
-          git show "HEAD^1:$notes" > /tmp/before.json 2>/dev/null || echo '[]' > /tmp/before.json
-          # The notes this merge added, oldest first, each as a Discord message.
-          jq -c --slurpfile before /tmp/before.json '
-            ($before[0] | map(.id)) as $had
-            | map(select(.id as $id | $had | index($id) | not)) | reverse | .[]
-            | {embeds: [{
-                title: .title,
-                url: "https://leaf.seqwawa.com/play/town/",
-                description: ([(.lines // [])[]]
-                  + [(.more // [])[] | "**\(.head)**\n" + ([.points[] | "- " + .] | join("\n"))]
-                  | join("\n\n"))[0:4000],
-                color: 16101685,
-                timestamp: (.at | if test("T") then sub("Z$"; ":00Z") else . + "T12:00:00Z" end)
-              }]}' "$notes" > /tmp/messages.jsonl
-          # Every note is tried; any that fails is named, and the job fails at the end.
-          failed=0
-          while read -r message; do
-            if ! curl -fsS --max-time 15 -o /dev/null -H 'Content-Type: application/json' --data "$message" "$WEBHOOK"; then
-              echo "::error::$NAME did not take the note \"$(jq -r '.embeds[0].title' <<< "$message")\"."
-              failed=1
-            fi
-            sleep 1
-          done < /tmp/messages.jsonl
-          exit "$failed"
+          bun apps/town/review/news.ts

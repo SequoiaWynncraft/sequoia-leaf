@@ -100,6 +100,9 @@ export const FIGHT = {
   /** The most and least a figure's draw can be, however much it carries and holds. */
   drawMost: 2,
   drawLeast: -1,
+  /** The most mana friends' abilities may give one figure (`giveMana`) in any `giftOver` seconds. */
+  giftMost: 50,
+  giftOver: 2,
 } as const;
 
 // ---------- rooms ----------

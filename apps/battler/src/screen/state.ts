@@ -22,6 +22,7 @@
  * also asks Leaf for a room's takings once its fight has been played; whoever animates the table
  * hears each move (`onScreen`).
  */
+import { bannersIn, PEOPLE } from "@sequoia-leaf/figures/people.ts";
 import { makeHold, openPlay, type Play, type Trouble, waitingLook } from "@sequoia-leaf/kit/play.ts";
 import {
   type Almanac,
@@ -178,6 +179,8 @@ function take(view: TableView): void {
   S.apart = view.apart;
   S.roster = view.roster;
   S.era = view.era;
+  // The banners open in Leaf's era: the page's store asks who their people are, as one opens.
+  PEOPLE.see(bannersIn(catalogOf(view)));
   S.laid = { run: view.held.main, endless: view.held.endless };
   // A run that has ended stays on the table, for its last page, while the screen shows it.
   S.run = LIVE.seat ? LIVE.seat.run() : (inSlot(view, S.slot) ?? endedOf(S.screen)?.run ?? null);

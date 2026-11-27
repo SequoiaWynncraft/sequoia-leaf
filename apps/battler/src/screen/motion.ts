@@ -60,6 +60,8 @@ export interface Actor {
   /** When it last came down from a leap or a hop, for the squash of landing. */
   landAt: number;
   shieldAt: number;
+  /** When a friend last gave it mana, for its mana bar to tick. */
+  giftAt: number;
   hpShown: number;
   phase: number;
 }
@@ -90,6 +92,7 @@ export function actorFor(unit: Unit, at: Pt, bornAt: number): Actor {
     hopAt: -99,
     landAt: -99,
     shieldAt: -99,
+    giftAt: -99,
     hpShown: unit.hp,
     phase: (unit.id * 0.37) % 1,
   };

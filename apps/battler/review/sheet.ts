@@ -1,23 +1,35 @@
-import { drawFigure, drawStanding, drawStars, framesOf } from "@sequoia-leaf/figures/sprites.ts";
+import { CALLED, drawFigure, drawStanding, drawStars, framesOf, wear } from "@sequoia-leaf/figures/sprites.ts";
 /**
  * A contact sheet of every figure with its name, for looking at the art large while drawing it:
  * open the page with `?sheet`. Each is shown standing on its base, then using its ability, then
- * tipped over.
+ * tipped over. `?sheet=peep,greg` shows only those, side by side, and `&zoom=6` at that size; the
+ * people among them (the Commodore, his grooters) wear the review's skins (`crew.ts`).
  */
 import { BARK, CREAM, GOLD, INK } from "@sequoia-leaf/kit/palette.ts";
+import { bake } from "@sequoia-leaf/kit/skin.ts";
 import { write } from "@sequoia-leaf/kit/text.ts";
 import { makeCanvas, must } from "@sequoia-leaf/kit/util.ts";
 import { catalogAt, everyFigure } from "@sequoia-leaf/raid/content/catalog.ts";
 import { isFigureId, specOf, SUMMON_IDS, TROUBLE_IDS, type UnitKind } from "@sequoia-leaf/raid/content/figures.ts";
 import { LAST_ERA } from "@sequoia-leaf/raid/content/releases.ts";
 
+import { COMMODORE, crewSheet, GROOTERS } from "./crew.ts";
+
 /** Every release open: the sheet draws everyone any release has. */
 const NOW = catalogAt(LAST_ERA);
 
-export function showSheet(): void {
-  const zoom = 3;
-  const kinds: UnitKind[] = [...everyFigure(), ...SUMMON_IDS, ...TROUBLE_IDS];
-  const wide = 424;
+export function showSheet(only: readonly string[] = [], zoom = 3): void {
+  const every: UnitKind[] = [...everyFigure(), ...SUMMON_IDS, ...TROUBLE_IDS];
+  const kinds =
+    only.length > 0
+      ? every.filter((k) => only.includes(k)).toSorted((a, b) => only.indexOf(a) - only.indexOf(b))
+      : every;
+  wear("commodore", "Commodore", bake(crewSheet(COMMODORE)));
+  GROOTERS.forEach(([name, inks], i) => {
+    const id = CALLED[i];
+    if (id) wear(id, name, bake(crewSheet(inks)));
+  });
+  const wide = only.length > 0 ? Math.max(200, Math.floor(innerWidth / zoom)) : 424;
   const cells: { kind: UnitKind; x: number; y: number; w: number }[] = [];
   let x = 0;
   let y = 0;
@@ -35,7 +47,7 @@ export function showSheet(): void {
     x += w;
     rowH = Math.max(rowH, h);
   }
-  const small = makeCanvas(wide, y + rowH);
+  const small = makeCanvas(only.length > 0 && y === 0 ? x : wide, y + rowH);
   const g = small.g;
   g.fillStyle = GOLD[0];
   g.fillRect(0, 0, small.c.width, small.c.height);

@@ -510,6 +510,10 @@ body[data-picking="yes"] #foe {
   align-items: center;
   gap: var(--u);
 }
+/* On the board and in no chair: a Stowaway, in a crab's coral. */
+#level .stowed {
+  color: var(--k-coral);
+}
 /* What a reroll can bring at this level: each tier's share in that tier's colour, cheapest first. */
 #level > .odds {
   grid-column: 1 / -1;

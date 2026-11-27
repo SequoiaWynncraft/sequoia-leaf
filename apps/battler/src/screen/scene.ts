@@ -17,6 +17,7 @@ import { HOME_ROWS, seatCell } from "@sequoia-leaf/raid/hex.ts";
 import { itemPic, levelPic } from "./art/icons.ts";
 import { drawLife } from "./art/place.ts";
 import { hexMark, lampsOf, rimTop, stumpOf, warmGlow } from "./art/table.ts";
+import { drawCallsUnder } from "./call.ts";
 import { drawClosed } from "./closed.ts";
 import { drawFightMarks } from "./fightmarks.ts";
 import { drawFight, drawFightAir, fightBump, fightHeldUnder, fightOn } from "./fightview.ts";
@@ -26,11 +27,13 @@ import type { Marks } from "./gesture.ts";
 import { handMarks } from "./hand.ts";
 import { drawHeld, type HeldAt, heldAt, heldRow, heldTop } from "./held.ts";
 import { DIM, shineOf } from "./light.ts";
+import { drawLitter } from "./litter.ts";
 import { arrivalOf, handing, watchersOf } from "./logic.ts";
 import { aloft, FOOT, type Pawn, pawns, spotOfPawn } from "./pawns.ts";
 import { drawRisings } from "./rising.ts";
 import { drawRoots } from "./roots.ts";
 import { facing } from "./screen.ts";
+import { drawShellsUnder } from "./shell.ts";
 import { snd } from "./sounds.ts";
 import { drawSeals } from "./spells.ts";
 import { boardHalves, place, type Standing, V } from "./stage.ts";
@@ -247,7 +250,8 @@ const capInWords = (run: RunView): boolean => fieldCap(run) > mostPips();
 /**
  * The room's chairs, as a column of pips beside the front line: gold for a chair taken, hollow for a
  * free one; past ten they close up to stay beside the board, and past what reads at a glance it is
- * one pip and the count under it (`wordsCap`).
+ * one pip and the count under it (`wordsCap`). Under them, coral, one for each figure on the board
+ * in no chair (`drawStowed`).
  */
 function drawCap(g: Ctx, run: RunView): void {
   const cap = fieldCap(run);
@@ -265,6 +269,9 @@ function drawCap(g: Ctx, run: RunView): void {
     R(g, x + 1, y + 1, size - 2, size - 2, full ? (flash ? "#e67967" : GOLD[1]) : "#3d2050");
     if (full) R(g, x + 1, y + 1, size - 3, 1, flash ? "#f4a08c" : GOLD[2]);
   }
+  // The stowaways under the last pip, or under the count where the chairs are written.
+  const stowedAt = capInWords(run) ? 22 : pips * step + 2;
+  drawStowed(g, x, y0 + stowedAt, run.board.filter((p) => p !== null).length - on);
 }
 /** The chairs as a count under their pip, when there are more than read as pips: those taken over those there are. */
 function wordsCap(ctx: Ctx, px: number): void {
@@ -277,6 +284,15 @@ function wordsCap(ctx: Ctx, px: number): void {
   ctx.fillStyle = GOLD[2];
   ctx.fillRect(x - 5 * px, y + 10 * px, 10 * px, px);
   write(ctx, String(fieldCap(run)), x, y + 12 * px, words);
+}
+
+/** A pip for each figure on the board that takes no chair (a Stowaway), in a crab's coral, from `x`, `y` down. */
+function drawStowed(g: Ctx, x: number, y: number, n: number): void {
+  for (let i = 0; i < n; i++) {
+    R(g, x, y + i * 6, 5, 5, INK);
+    R(g, x + 1, y + i * 6 + 1, 3, 3, "#e67967");
+    R(g, x + 1, y + i * 6 + 1, 2, 1, "#f4a08c");
+  }
 }
 
 /**
@@ -379,9 +395,12 @@ function drawTable(g: Ctx): void {
   }
   drawFxUnder(g);
   drawFightMarks(g);
+  drawLitter(g);
   drawRoots(g);
   drawRisings(g);
   drawSeals(g);
+  drawCallsUnder(g);
+  drawShellsUnder(g);
   const list: Standing[] = [];
   if (fighting) drawFight(g, list);
   else {

@@ -13,12 +13,16 @@
  */
 import type { FigureSpec } from "./figures.ts";
 
-/** A banner's member is known by its banner's id, as the pull game knows the banner. */
-export const MEMBER_IDS = ["banner-1"] as const;
+/**
+ * The banners' members: the first is known by its banner's id, as the pull game knows the banner; a
+ * later one by a title of its own (`commodore`, Groot Night's), never the member's name.
+ */
+export const MEMBER_IDS = ["banner-1", "commodore"] as const;
 export type MemberId = (typeof MEMBER_IDS)[number];
 export const isMemberId = (v: unknown): v is MemberId => MEMBER_IDS.some((id) => id === v);
 
-export const MEMBERS: Record<MemberId, FigureSpec> = {
+/** The base's member, as the base release brought it; a later member comes with its banner's release (`releases/`). */
+export const MEMBERS: Readonly<Partial<Record<MemberId, FigureSpec>>> = {
   "banner-1": {
     name: "A guild member",
     tier: 5,

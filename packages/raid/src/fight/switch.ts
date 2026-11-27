@@ -2,7 +2,8 @@
  * Traits switching on as the two parties sit down: what each does to the figures it touches, set on
  * them as numbers the fight reads from then on. One entry a trait (`ON`), so a new trait is a new
  * entry. Some do their part later: roll call once everyone is seated (`rollCall` in `engine.ts`),
- * Greg's meals as he sits down (`seat`), Graid's getting back up as one falls (`enter.ts`).
+ * Greg's meals as he sits down (`seat`), Graid's getting back up as one falls (`enter.ts`),
+ * Grooter's cracking as one hits (`hurt` in `core.ts`).
  */
 import { carries } from "../content/items.ts";
 import { type TraitId, traitNumber } from "../content/traits.ts";
@@ -66,6 +67,14 @@ const ON: Readonly<Record<TraitId, On>> = {
     for (const u of members) u.rises = true;
     return members;
   },
+  // Its hits crack in `hurt`, and so do what its members summon (`summon`).
+  grooter: ({ members, v }) => {
+    for (const u of members) {
+      u.crack = v("crack");
+      u.crackMost = v("most");
+    }
+    return members;
+  },
   bulwark: ({ mine, members, v }) => {
     for (const u of mine) u.armour += members.includes(u) ? v("armour") : v("party");
     return v("party") > 0 ? mine : members;
@@ -103,11 +112,18 @@ const ON: Readonly<Record<TraitId, On>> = {
     }
     return members;
   },
+  // Mana by the second: a Chorus figure its own rate, everyone else the party's.
+  chorus: ({ mine, members, v }) => {
+    for (const u of mine) u.manaRate += members.includes(u) ? v("own") : v("party");
+    return mine;
+  },
   greg: ({ members }) => members,
   rooted: ({ members, v }) => {
     for (const u of members) u.manaRate += v("mana");
     return members;
   },
+  // Takes no chair (`chairsUsed`); nothing in the fight.
+  stowaway: ({ members }) => members,
 };
 
 /** Switches a side's traits on, in the order of the fight's catalogue (`ids.traits`), and says so. */

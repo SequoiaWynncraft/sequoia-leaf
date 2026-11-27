@@ -484,7 +484,13 @@ describe("the counters' first counts", () => {
         await before.query((sql) => sql`DROP TRIGGER ${sql(trigger)}`);
       }
       await before.query((sql) => sql`DROP TABLE last_visits`);
-      for (const table of ["raid_sitting_seats", "raid_sitting_places", "raid_sittings", "raid_fights"]) {
+      for (const table of [
+        "banner_called",
+        "raid_sitting_seats",
+        "raid_sitting_places",
+        "raid_sittings",
+        "raid_fights",
+      ]) {
         // oxlint-disable-next-line no-await-in-loop -- one after another
         await before.query((sql) => sql`DROP TABLE ${sql(table)}`);
       }

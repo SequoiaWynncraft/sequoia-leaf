@@ -47,10 +47,14 @@ function onFile<A, E>(path: string, program: Effect.Effect<A, E, SqlClient.SqlCl
 }
 
 /** Runs SQL against the database file at `path`. */
-/** Undoes migration 48: no fight's setup kept. */
-const beforeFightSetups = (sql: SqlClient.SqlClient) => sql`ALTER TABLE raid_fights DROP COLUMN setup`;
+/** Undoes migration 49: nobody a banner calls. */
+const beforeBannerCalled = (sql: SqlClient.SqlClient) => sql`DROP TABLE banner_called`;
 
-/** Undoes migrations 48 and 47: no fight's setup, nor its course, pool or era kept beside its way. */
+/** Undoes migrations 49 and 48: nobody a banner calls, and no fight's setup kept. */
+const beforeFightSetups = (sql: SqlClient.SqlClient) =>
+  Effect.andThen(beforeBannerCalled(sql), sql`ALTER TABLE raid_fights DROP COLUMN setup`);
+
+/** Undoes migrations 49 to 47: nobody a banner calls, no fight's setup, nor its course, pool or era kept beside its way. */
 const beforeFightsWay = (sql: SqlClient.SqlClient) =>
   Effect.andThen(
     beforeFightSetups(sql),
@@ -61,7 +65,7 @@ const beforeFightsWay = (sql: SqlClient.SqlClient) =>
     ]),
   );
 
-/** Undoes migrations 48 to 46: none of the raid's sittings kept. */
+/** Undoes migrations 49 to 46: none of the raid's sittings kept. */
 const beforeRaidSittings = (sql: SqlClient.SqlClient) =>
   Effect.andThen(
     beforeFightsWay(sql),
@@ -302,6 +306,7 @@ describe("the database", () => {
       { migration_id: 46, name: "raid_sittings" },
       { migration_id: 47, name: "raid_fights_way" },
       { migration_id: 48, name: "raid_fights_setup" },
+      { migration_id: 49, name: "banner_called" },
     ]);
     // Each feed has its own lease and cursor, not started yet.
     expect(await query(path, (sql) => sql`SELECT name, started_at, cursor FROM sync_state ORDER BY name`)).toEqual([
@@ -362,6 +367,7 @@ describe("the database", () => {
           "raid_sitting_seats",
           "raid_sitting_places",
           "raid_sittings",
+          "banner_called",
         ]) {
           yield* sql`DROP TABLE ${sql(table)}`;
         }
@@ -376,7 +382,7 @@ describe("the database", () => {
 
     expect(account.balance).toBe(110);
     expect(await query(path, (sql) => sql`SELECT max(migration_id) AS latest FROM effect_sql_migrations`)).toEqual([
-      { latest: 48 },
+      { latest: 49 },
     ]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM announcements`)).toEqual([{ n: 0 }]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM saves`)).toEqual([{ n: 0 }]);

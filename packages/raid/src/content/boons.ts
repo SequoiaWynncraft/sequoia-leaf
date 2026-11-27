@@ -1,6 +1,6 @@
 /**
  * Boons: three times a run the party is offered three and keeps one. Some change the stall and the
- * purse, some change the fight, and seven are charms, each of which gives an emblem (`gives`,
+ * purse, some change the fight, and some are charms, each of which gives an emblem (`gives`,
  * `items.ts`): an item whose holder carries a trait as well. A boon may also be made by a recipe
  * (`made`, `recipes.ts`). Words and numbers only; `run.ts` and `fight/` read the numbers.
  *
@@ -34,6 +34,10 @@ export const BOON_IDS = [
   "feathercharm",
   "crabcharm",
   "gnomecharm",
+  "grootercharm",
+  "choruscharm",
+  "graidcharm",
+  "sneakcharm",
 ] as const;
 export type BoonId = (typeof BOON_IDS)[number];
 

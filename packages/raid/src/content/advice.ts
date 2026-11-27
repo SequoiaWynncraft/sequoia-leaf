@@ -22,6 +22,7 @@ export const ROLES: Readonly<Record<CallingId, string>> = {
   sage: "Caster",
   mender: "Healer",
   sneak: "Assassin",
+  chorus: "Support",
 };
 
 /** A party's rows, from its front line back. */
@@ -65,23 +66,27 @@ export const GOOD_WITH: Readonly<Record<FigureId, Three>> = {
   rock: ["hedgehog", "hoard", "hollowlog"],
   crab40: ["hedgehog", "hoard", "hollowlog"],
   greg: ["hoard", "hollowlog", "lichen"],
+  clutch: ["hoard", "hollowlog", "lichen"],
   // Fighters: Thorn with Chestnut or Plume.
   emberkit: ["conker", "honeycake", "wasptail"],
   crab7: ["conker", "honeycake", "wasptail"],
   jay: ["wasptail", "honeycake", "conker"],
   badger: ["conker", "honeycake", "wasptail"],
+  munch: ["conker", "honeycake", "wasptail"],
   whitefox: ["mothlantern", "honeycake", "glowthorn"],
   // Assassins: the same, though the ones that leap into the back row live longer for a shield.
   worm: ["honeycake", "conker", "wasptail"],
   fogowl: ["honeycake", "wasptail", "conker"],
   bushgnome: ["honeycake", "lichen", "hollowlog"],
   hearthcat: ["honeycake", "conker", "lichen"],
+  crab8: ["honeycake", "conker", "wasptail"],
   // Ranged: Thorn and Plume.
   finch: ["wasptail", "honeycake", "hummingbird"],
   chickaree: ["wasptail", "mothlantern", "conker"],
   crab12: ["wasptail", "mothlantern", "conker"],
   drizzlefrog: ["wasptail", "mothlantern", "honeycake"],
   heron: ["wasptail", "mothlantern", "conker"],
+  peep: ["wasptail", "mothlantern", "conker"],
   // Casters: Glowcap, with Plume where the ability comes round often.
   moth: ["mothlantern", "glowthorn", "lichen"],
   lanterngnome: ["fairyring", "mothlantern", "glowthorn"],
@@ -93,6 +98,9 @@ export const GOOD_WITH: Readonly<Record<FigureId, Three>> = {
   kettle: ["stewpot", "glowthorn", "lichen"],
   crab23: ["stewpot", "glowthorn", "lichen"],
   apothecary: ["glowthorn", "stewpot", "mothlantern"],
+  // Support: Glowcap, with Chestnut, to keep the mana coming and stand while it does.
+  crab31: ["stewpot", "mothlantern", "lichen"],
+  commodore: ["fairyring", "mothlantern", "stewpot"],
   // Never attacks: what makes its ability stronger, or keeps it standing where it is rooted.
   seqwawa: ["fairyring", "stewpot", "lichen"],
 };

@@ -28,10 +28,12 @@ import {
   available,
   type Catalog,
   catalogAt,
+  type FigureId,
   figureOf,
   prizeOf,
   prizeRarities,
   type Rarity,
+  RARITY_IDS,
   rarityIn,
 } from "@sequoia-leaf/raid/content/catalog.ts";
 import { type Era, eraAt, isEra, LAST_ERA, RELEASES } from "@sequoia-leaf/raid/content/releases.ts";
@@ -65,6 +67,11 @@ export const RATES = {
    * `headliner`, or for certain after a top-tier prize that was not.
    */
   top: { chance: 0.008, rampAfter: 65, certainAt: 80, headliner: 0.5 },
+  /**
+   * In a banner, a prize of a rarity that has featured figures (`Banner.featured`) is one of them,
+   * evenly, with this chance, and otherwise one of the others of that rarity, evenly.
+   */
+  featured: 0.5,
   /** If not top, a mid-tier prize: `chance`, or certain on the `certainAt`th pull since the last mid-tier or better. Dryad and Druid by weight. */
   mid: { chance: 0.06, certainAt: 10, Dryad: 7, Druid: 3 },
   /** Otherwise filler, by weight. */
@@ -104,6 +111,26 @@ export function prizesOf(cat: Catalog, pool: string): Prizes {
     Treant: of("Treant"),
     Yggdrasil: of("Yggdrasil"),
   };
+}
+/** One of a banner's featured figures: the figure, as a prize, and the rarity its pool gives it at. */
+export interface Featured {
+  readonly id: FigureId;
+  readonly prize: string;
+  readonly rarity: Rarity;
+}
+/**
+ * A pool's featured figures at a catalogue's era, in its banner's order: those of them it gives,
+ * each with the rarity it gives it at; none for the grove. The one list of them, for a pull's draw
+ * and for the page that shows them.
+ */
+export function featuredOf(cat: Catalog, pool: string): readonly Featured[] {
+  const prizes = prizesOf(cat, pool);
+  const banner = BANNERS.find(({ id }) => id === pool);
+  return (banner?.featured ?? []).flatMap((id) => {
+    const prize = prizeOf(id);
+    const rarity = RARITY_IDS.find((r) => prizes[r].includes(prize));
+    return rarity === undefined ? [] : [{ id, prize, rarity }];
+  });
 }
 /** What Seeds buy at a catalogue's era, had or not: every mid-tier prize of the grove. */
 export const forSeeds = (cat: Catalog): readonly string[] => available(cat, { for: "exchange" }).map(prizeOf);
@@ -284,10 +311,23 @@ export function isOpen(pool: string, now: number): boolean {
 }
 
 /**
- * One pull from a pool's prizes (`prizesOf`), moving a kind of pool's counters and the stream on:
- * from a banner, whose top tier holds its headliner, or from `grove`, whose holds none.
+ * A prize of a rarity: one of the pool's featured prizes of that rarity, evenly, with the chance
+ * `RATES.featured`, else one of the others of that rarity, evenly, so the chance said is the chance
+ * there is. A rarity with none featured draws as it always has; one with nothing else, a featured.
  */
-export function draw(c: Counters, prizes: Prizes, s: Stream): Drawn {
+function prizeOfRarity(prizes: Prizes, rarity: Rarity, featured: readonly string[], s: Stream): string {
+  const favoured = featured.filter((prize) => prizes[rarity].includes(prize));
+  const others = prizes[rarity].filter((prize) => !favoured.includes(prize));
+  if (favoured.length === 0 || others.length === 0) return pick(s, prizes[rarity]);
+  return chance(s) < RATES.featured ? pick(s, favoured) : pick(s, others);
+}
+
+/**
+ * One pull from a pool's prizes (`prizesOf`), moving a kind of pool's counters and the stream on:
+ * from a banner, whose top tier holds its headliner, or from `grove`, whose holds none. A banner's
+ * featured prizes (`featuredOf`) are favoured in their rarity.
+ */
+export function draw(c: Counters, prizes: Prizes, s: Stream, featured: readonly string[] = []): Drawn {
   c.top += 1;
   c.mid += 1;
   const { top } = c;
@@ -295,11 +335,11 @@ export function draw(c: Counters, prizes: Prizes, s: Stream): Drawn {
     c.top = 0;
     c.mid = 0;
     const headline = prizes.Yggdrasil[0];
-    if (headline === undefined) return { prize: pick(s, prizes.Treant), rarity: "Treant", top };
+    if (headline === undefined) return { prize: prizeOfRarity(prizes, "Treant", featured, s), rarity: "Treant", top };
     const fifty: Fifty = c.owed ? "owed" : chance(s) < RATES.top.headliner ? "won" : "lost";
     c.owed = fifty === "lost";
     return fifty === "lost"
-      ? { prize: pick(s, prizes.Treant), rarity: "Treant", top, fifty }
+      ? { prize: prizeOfRarity(prizes, "Treant", featured, s), rarity: "Treant", top, fifty }
       : { prize: headline, rarity: "Yggdrasil", top, fifty };
   }
   const { mid, filler } = RATES;
@@ -311,7 +351,7 @@ export function draw(c: Counters, prizes: Prizes, s: Stream): Drawn {
     const roll = chance(s) * (filler.Leafkin + filler.Sapling + filler.Sprite);
     rarity = roll < filler.Leafkin ? "Leafkin" : roll < filler.Leafkin + filler.Sapling ? "Sapling" : "Sprite";
   }
-  return { prize: pick(s, prizes[rarity]), rarity, top };
+  return { prize: prizeOfRarity(prizes, rarity, featured, s), rarity, top };
 }
 
 type Answer = Done<Pulls, PullsNote> | Refused;
@@ -330,7 +370,9 @@ const copy = (s: Pulls): Pulls => ({
 function pull(state: Pulls, c: Extract<PullsCommand, { do: "pull" }>, ctx: Ctx): Answer {
   if (!isOpen(c.pool, ctx.now)) return no("closed");
   // What the pool gives in the era Leaf's clock is in; a pull shown other prizes is not done, and nothing is paid.
-  const prizes = prizesOf(catalogAt(eraAt(ctx.now)), c.pool);
+  const cat = catalogAt(eraAt(ctx.now));
+  const prizes = prizesOf(cat, c.pool);
+  const featured = featuredOf(cat, c.pool).map((f) => f.prize);
   if (JSON.stringify(prizesOf(catalogAt(c.era), c.pool)) !== JSON.stringify(prizes)) return no("prizes_changed");
   if (c.with === "free" && state.free.waiting < c.n) return no("no_free");
   const s = copy(state);
@@ -348,7 +390,7 @@ function pull(state: Pulls, c: Extract<PullsCommand, { do: "pull" }>, ctx: Ctx):
   const notes: PullsNote[] = [];
   const log: Logged[] = [];
   for (let i = 0; i < c.n; i++) {
-    const drawn = draw(counters, prizes, s);
+    const drawn = draw(counters, prizes, s, featured);
     const { prize, rarity, top } = drawn;
     const tier = RARITIES[rarity].tier;
     const have = (s.have[prize] ?? 0) + 1;

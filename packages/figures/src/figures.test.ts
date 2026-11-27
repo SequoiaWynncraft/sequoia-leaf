@@ -5,9 +5,13 @@ import { everyShared } from "@sequoia-leaf/raid/content/catalog.ts";
 import { SUMMON_IDS, TROUBLE_IDS } from "@sequoia-leaf/raid/content/figures.ts";
 import { TRUE_FORM_IDS } from "@sequoia-leaf/raid/content/graid.ts";
 
-import { artOf } from "./figures.ts";
+import { artOf, carrying } from "./figures.ts";
 import { FIGURE_PAL, TOWNS_OWN } from "./pal.ts";
 import { readRows } from "./rows.ts";
+import { isPersonId } from "./sprites.ts";
+
+/** Everyone on the board typed as rows: all but the people, who are drawn from a member's skin. */
+const TYPED = [...everyShared(), ...SUMMON_IDS, ...TROUBLE_IDS].filter((id) => !isPersonId(id));
 
 test("every figure a member can own has its pictures, standing and casting", () => {
   const missing = everyShared().filter((id) => artOf(id).rows.length === 0 || (artOf(id).cast ?? []).length === 0);
@@ -15,13 +19,12 @@ test("every figure a member can own has its pictures, standing and casting", () 
 });
 
 test("everything on the board is drawn in the town's colours: the kit's palette, and what the town's own creatures have", () => {
-  const kinds = [...everyShared(), ...SUMMON_IDS, ...TROUBLE_IDS];
   const arts = [
-    ...kinds.map((id) => [id, artOf(id)] as const),
+    ...TYPED.map((id) => [id, artOf(id)] as const),
     ...TRUE_FORM_IDS.map((id) => [`${id} true`, artOf(id, "true")] as const),
   ];
-  const strays = arts.flatMap(([id, { rows, cast = [], alt = [] }]) => {
-    const letters = new Set([...rows, ...cast, ...alt].join("").replaceAll(".", ""));
+  const strays = arts.flatMap(([id, { rows, cast = [], alt = [], prop }]) => {
+    const letters = new Set([...rows, ...cast, ...alt, ...(prop?.rows ?? [])].join("").replaceAll(".", ""));
     const unknown = [...letters].filter((l) => !(l in FIGURE_PAL));
     return unknown.length > 0 ? [`${id} ${unknown.join("")}`] : [];
   });
@@ -32,11 +35,11 @@ test("everything on the board is drawn in the town's colours: the kit's palette,
 });
 
 test("figures.txt names only the stump's figures and their other pictures, and every figure stands", async () => {
-  const kinds: readonly string[] = [...everyShared(), ...SUMMON_IDS, ...TROUBLE_IDS];
+  const kinds: readonly string[] = TYPED;
   const named = [...readRows(await Bun.file(new URL("figures.txt", import.meta.url)).text()).keys()];
   const forms: readonly string[] = TRUE_FORM_IDS;
   const stray = (name: string): boolean => {
-    const [kind = "", second] = name.replace(/ (cast|alt)$/, "").split(" ");
+    const [kind = "", second] = name.replace(/ (cast|alt|prop)$/, "").split(" ");
     return second === undefined ? !kinds.includes(kind) : second !== "true" || !forms.includes(kind);
   };
   expect(named.filter(stray)).toEqual([]);
@@ -63,4 +66,33 @@ test("Seqwawa stands a hex and a half tall, and its small picture keeps the room
   expect(art.room ?? art.rows.length).toBeLessThanOrEqual(tallest);
   // Its breath and its wind-up are pictures of their own, all typed to one width and height.
   expect([art.alt?.length, art.cast?.length]).toEqual([art.rows.length, art.rows.length]);
+});
+
+test("what a figure carries sits inside its pictures, standing and casting, and is laid over them a letter at a time", () => {
+  for (const id of TYPED) {
+    const { rows, cast = rows, prop } = artOf(id);
+    if (!prop) continue;
+    const inside = (pic: readonly string[], [x, y]: readonly [number, number]): boolean =>
+      y >= 0 &&
+      x >= 0 &&
+      y + prop.rows.length <= pic.length &&
+      x + 1 + (prop.rows[0]?.length ?? 0) <= (pic[0]?.length ?? 0);
+    expect([id, prop.at.every((at) => inside(rows, at)), prop.castAt.every((at) => inside(cast, at))]).toEqual([
+      id,
+      true,
+      true,
+    ]);
+  }
+  // Two of three, the second rocked a pixel aside; the third place left as it was.
+  const laid = carrying(
+    ["....", "....", "...."],
+    ["ab"],
+    [
+      [0, 0],
+      [1, 1],
+      [2, 2],
+    ],
+    { n: 2, rock: 1 },
+  );
+  expect(laid).toEqual(["ab..", "..ab", "...."]);
 });

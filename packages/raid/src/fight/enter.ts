@@ -90,7 +90,11 @@ const PLAIN = {
   digLess: 0,
   digFor: 0,
   regrow: 0,
+  crack: 0,
+  crackMost: 0,
   called: false,
+  cracked: 0,
+  calledLast: -1,
   pierce: 0,
   twice: 0,
   prickle: 0,
@@ -119,6 +123,7 @@ export function enter(f: Fight, s: Start): Unit {
   const attack = Math.max(0, Math.round(s.attack));
   const u: Unit = {
     ...PLAIN,
+    gifts: [],
     id: f.units.length,
     side: s.side,
     kind: s.kind,
@@ -183,6 +188,11 @@ export function summon(
     power: 100 * might,
   });
   u.busyUntil = f.tick + FIGHT.cast;
+  // What a Grooter figure summons cracks as it does.
+  if (by) {
+    u.crack = by.crack;
+    u.crackMost = by.crackMost;
+  }
   emit(f, { t: "summon", id: u.id, by: by?.id ?? -1, kind, cell, side });
   return u;
 }

@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:tes
 
 import { restart, start } from "@sequoia-leaf/kit/live.ts";
 import { forgetLedger } from "@sequoia-leaf/kit/purse.ts";
-import { HELLO, type Standin, standin, TESTER } from "@sequoia-leaf/kit/standin.ts";
+import { blankCanvas, HELLO, noCanvas, type Standin, standin, TESTER } from "@sequoia-leaf/kit/standin.ts";
 import { dozing, HOME, SITS_AFTER } from "@sequoia-leaf/town/clock.ts";
 import { TOWN } from "@sequoia-leaf/town/map/map.ts";
 
@@ -26,26 +26,8 @@ let moments: Moment[] = [];
 let live = new Set<string>();
 
 beforeAll(async () => {
-  // No page here: a canvas that takes any drawing and gives back blank pixels, and a picture that never loads.
-  const pen: object = new Proxy(
-    {},
-    {
-      get: (_, name) =>
-        name === "getImageData"
-          ? (_x: number, _y: number, w: number, h: number) => ({ data: new Uint8ClampedArray(w * h * 4) })
-          : () => undefined,
-      set: () => true,
-    },
-  );
-  class Picture {
-    src = "";
-    addEventListener(): void {}
-  }
-  Object.assign(globalThis, {
-    document: { createElement: () => ({ width: 1, height: 1, getContext: () => pen }) },
-    Image: Picture,
-    HTMLImageElement: Picture,
-  });
+  // No page here: a blank canvas, and a skin that never loads.
+  blankCanvas();
   world = standin({
     "GET /v1/game/hello": HELLO,
     "GET /v1/game/me": { status: 200, body: TESTER },
@@ -69,7 +51,7 @@ afterAll(() => {
   restart();
   forgetLedger();
   unprepare();
-  Object.assign(globalThis, { document: undefined, Image: undefined, HTMLImageElement: undefined });
+  noCanvas();
 });
 
 /** How long a fade takes, in seconds, and a little more: one step that long puts a fade through. */

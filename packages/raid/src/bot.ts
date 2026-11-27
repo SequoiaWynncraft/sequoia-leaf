@@ -11,7 +11,14 @@ import { act, type PlanningCommand } from "./command.ts";
 import { type BoonId, giftsTrait } from "./content/boons.ts";
 import { type Catalog, catalogOf } from "./content/catalog.ts";
 import { type FigureId, figureIn, specOf, type Stars, starScale, traitsOf } from "./content/figures.ts";
-import { type ComponentId, type FinishedId, halvesOf, isComponentId, isEmblemId } from "./content/items.ts";
+import {
+  type ComponentId,
+  type EmblemId,
+  type FinishedId,
+  halvesOf,
+  isComponentId,
+  isEmblemId,
+} from "./content/items.ts";
 import { holdItem } from "./content/recipes.ts";
 import { ECONOMY, MAX_LEVEL } from "./content/rooms.ts";
 import { stepFor, type TraitId, traitNumber } from "./content/traits.ts";
@@ -112,10 +119,16 @@ const liking = (cat: Catalog, habit: Habit, kind: FigureId): number => {
   for (const trait of traitsOf(cat, kind)) most = Math.max(most, habit.taste[trait] ?? 1);
   return most;
 };
+/**
+ * The tier a figure is worth on the board: its cost, but a figure that takes no chair (Crab #8) a
+ * four-acorn figure's, as its numbers are; it costs no seat, so it is always fielded besides.
+ */
+const tierWorth = (cat: Catalog, kind: FigureId): number => {
+  const f = figureIn(cat, kind);
+  return f.chairs === 0 ? Math.min(f.tier, 4) : f.tier;
+};
 const worthOf = (cat: Catalog, habit: Habit, kind: FigureId, stars: Stars): number =>
-  (TIER_WORTH[figureIn(cat, kind).tier - 1] ?? 1) *
-  (STAR_WORTH[stars - 1] ?? 1) *
-  (0.7 + 0.3 * liking(cat, habit, kind));
+  (TIER_WORTH[tierWorth(cat, kind) - 1] ?? 1) * (STAR_WORTH[stars - 1] ?? 1) * (0.7 + 0.3 * liking(cat, habit, kind));
 
 /** How good a set of figures is as a party: what each is worth, and something for every trait step switched on. */
 function partyScore(cat: Catalog, habit: Habit, party: readonly Piece[]): number {
@@ -183,6 +196,10 @@ const BOON_LIKES: Record<BoonId, number> = {
   feathercharm: 3,
   crabcharm: 3,
   gnomecharm: 3,
+  grootercharm: 3,
+  choruscharm: 3,
+  graidcharm: 3,
+  sneakcharm: 3,
 };
 function likesBoon(run: RunView, habit: Habit, boon: BoonId): number {
   let score = BOON_LIKES[boon];
@@ -417,8 +434,25 @@ function fits(cat: Catalog, p: Piece, suits: Suits): number {
         ? 1
         : 0.5;
   }
-  if (suits === "caster") return f.calling === "sage" ? 3 : f.calling === "mender" ? 2.5 : 1;
-  return f.calling === "bulwark" ? 3 : f.range <= 1 ? 2 : 1;
+  if (suits === "caster") return f.calling === "sage" ? 3 : f.calling === "mender" || f.calling === "chorus" ? 2.5 : 1;
+  return f.calling === "bulwark" ? 3 : f.range <= 1 || f.calling === "chorus" ? 2 : 1;
+}
+/** Whether an emblem is any use on a figure: a False Moustache is not on one rooted to its hex, which never leaps. */
+const emblemSuits = (cat: Catalog, p: Piece, item: EmblemId): boolean =>
+  !(item === "sneakcharm" && specOf(cat, p.kind).rooted === true);
+/** Whether a figure on the board holding an emblem would put its trait's step on: it counts once a figure, so not on a twin of one that carries it. */
+function raisesStep(run: RunView, p: Piece, item: EmblemId): boolean {
+  const cat = catalogOf(run);
+  const board = run.board.flatMap((b) => (b ? [b] : []));
+  const trait = cat.items[item]?.grants;
+  if (trait === undefined) return false;
+  const before = countTraits(cat, board)[trait] ?? 0;
+  const after =
+    countTraits(
+      cat,
+      board.map((b) => (b === p ? { kind: b.kind, items: [...b.items, item] } : b)),
+    )[trait] ?? 0;
+  return stepFor(cat, trait, after) > stepFor(cat, trait, before);
 }
 function handOutItems<R extends RunView>(run: R, habit: Habit, hands: Hands<R>): void {
   // Components and finished items first, the first on the item bench first.
@@ -441,15 +475,20 @@ function handOutItems<R extends RunView>(run: R, habit: Habit, hands: Hands<R>):
     });
     if (best < 0 || !hands(run, { do: "give", item: at, to: { on: "board", at: best } }).ok) break;
   }
-  // Then each emblem, to the worthiest figure on the board that can take it.
+  // Then each emblem, to the worthiest figure on the board that can take it and that it suits.
   for (let at = run.items.length - 1; at >= 0; at--) {
     const item = run.items[at];
     if (!isEmblemId(item)) continue;
     let best = -1;
     let bestScore = 0;
     run.board.forEach((p, seat) => {
-      if (!p || "refused" in holdItem(catalogOf(run), p, item)) return;
-      const score = worthOf(catalogOf(run), habit, p.kind, p.stars);
+      if (!p || "refused" in holdItem(catalogOf(run), p, item) || !emblemSuits(catalogOf(run), p, item)) return;
+      // First to one for whom it puts a step on; then a Tin Whistle to the dearest mana bar, any other by worth.
+      const score =
+        (raisesStep(run, p, item) ? 1000 : 0) +
+        (item === "choruscharm"
+          ? specOf(catalogOf(run), p.kind).mana[1]
+          : worthOf(catalogOf(run), habit, p.kind, p.stars));
       if (score > bestScore) {
         best = seat;
         bestScore = score;

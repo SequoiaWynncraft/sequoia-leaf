@@ -138,8 +138,8 @@ async function boot(): Promise<void> {
   const menu = startSettings(scope(), lookBack);
   registerCards();
   registerFought();
-  // Who each banner's member is: their figure is nobody yet until Leaf has said.
-  void meetMember();
+  // Who each banner's people are: their figures are nobody yet until Leaf has said, and as each banner opens.
+  meetMember();
   onCarry(carryOn, lookBack);
   buildTable({
     rustle: () => void doRustle(),

@@ -1,16 +1,18 @@
 /**
  * For looking at a banner's member in a fight from outside (`window.standin`), beside the tours'
  * handle: the play server's members wear plain made-up skins, so `wear()` has the first banner's
- * member wear a mage's skin (`mage.ts`), and `seat()` plays a fight with everyone seated where the
- * tour says, so that whoever an ability picks can be put in the front row or the back.
+ * member wear a mage's skin (`mage.ts`), `crew()` has the Commodore and the grooters he calls wear
+ * skins of their own (`crew.ts`), and `seat()` plays a fight with everyone seated where the tour
+ * says, so that whoever an ability picks can be put in the front row or the back.
  */
-import { wear } from "@sequoia-leaf/figures/sprites.ts";
+import { CALLED, wear } from "@sequoia-leaf/figures/sprites.ts";
 import { bake } from "@sequoia-leaf/kit/skin.ts";
 import { LAST_ERA } from "@sequoia-leaf/raid";
 import { isUnitKind } from "@sequoia-leaf/raid/content/figures.ts";
 
 import { fightEvents, fightUnits, startFight } from "../src/screen/fightview.ts";
 import { S } from "../src/screen/state.ts";
+import { COMMODORE, crewSheet, GROOTERS } from "./crew.ts";
 import { mageSheet } from "./mage.ts";
 
 /** Where a figure of a kind sits: `seat` counts from the left of its own front row. */
@@ -27,6 +29,15 @@ const standin = {
     if (worn instanceof HTMLImageElement) await worn.decode();
     wear("banner-1", "Hoodwick", bake(worn));
     return "Hoodwick";
+  },
+  /** The Commodore in a skin drawn here, and the grooters he calls each in theirs under a made-up name: as Leaf would name them. */
+  crew(): string {
+    wear("commodore", "Commodore", bake(crewSheet(COMMODORE)));
+    GROOTERS.forEach(([name, inks], i) => {
+      const id = CALLED[i];
+      if (id) wear(id, name, bake(crewSheet(inks)));
+    });
+    return GROOTERS.map(([name]) => name).join(", ");
   },
   /** Plays a fight on the table between two parties seated as said, at some stars, from a seed; the table must be planning. */
   seat(ours: readonly Seated[], theirs: readonly Seated[], stars: 1 | 2 | 3 = 1, seed = 1): string {

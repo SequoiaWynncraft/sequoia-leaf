@@ -1,8 +1,8 @@
 /**
  * Items: five plain components, one stat each, and the fifteen things any two of them make when
  * the same figure holds both. A finished item has the stats of both its halves and one effect of
- * its own. And seven emblems, one for each kin, which a charm boon gives: whoever holds one is of
- * that kin as well. Words and numbers only; the effects happen in `fight/`.
+ * its own. And the emblems a charm boon gives: whoever holds one carries its trait as well, an
+ * origin or a class. Words and numbers only; the effects happen in `fight/`.
  *
  * Every item is one `ItemSpec`, whatever its sort: its own stats, the trait it grants its holder
  * (any origin or class), the two halves it is made of, and its words. What two items make is asked
@@ -59,6 +59,10 @@ export const EMBLEM_IDS = [
   "feathercharm",
   "crabcharm",
   "gnomecharm",
+  "grootercharm",
+  "choruscharm",
+  "graidcharm",
+  "sneakcharm",
 ] as const;
 export type EmblemId = (typeof EMBLEM_IDS)[number];
 export type ItemId = ComponentId | FinishedId | EmblemId;
@@ -92,11 +96,11 @@ const component = (name: string, stats: Partial<ItemStats>, short: string, quip:
   quip,
 });
 const finished = (spec: Omit<ItemSpec, "sort" | "stats">): ItemSpec => ({ sort: "finished", stats: NO_STATS, ...spec });
-/** An emblem a charm gives: the charm's name and quip, and the trait. */
-const emblem = (grants: TraitId, name: string, quip: string): ItemSpec => ({
+/** An emblem a charm gives: the charm's name and quip, the trait, and (from Groot Night) its own stats. */
+export const emblem = (grants: TraitId, name: string, quip: string, stats: Partial<ItemStats> = {}): ItemSpec => ({
   sort: "emblem",
   name,
-  stats: NO_STATS,
+  stats: { ...NO_STATS, ...stats },
   grants,
   text: "",
   short: "",

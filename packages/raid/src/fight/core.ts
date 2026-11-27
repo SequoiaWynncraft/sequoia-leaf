@@ -1,6 +1,6 @@
 /**
- * The small verbs a fight is written in: hurt, heal, shield, stun, slow, burn, taunt, hide, leap,
- * knock back, summon, and "this lands in a moment". Attacks, abilities, traits and items are all
+ * The small verbs a fight is written in: hurt, heal, shield, stun, slow, burn, crack, taunt, hide,
+ * leap, knock back, summon, give mana, and "this lands in a moment". Attacks, abilities, traits and items are all
  * made of these, and each one writes down what it did as an event.
  */
 import { boonNumber } from "../content/boons.ts";
@@ -169,6 +169,48 @@ export function knockBack(f: Fight, target: Unit, from: number, hexes: number): 
 
 export function gainMana(u: Unit, amount: number): void {
   if (u.manaFull > 0 && u.alive) u.mana = Math.min(u.manaFull, u.mana + amount);
+}
+/**
+ * Mana from a friend's ability: never to its giver, never to one with no mana bar, and at most
+ * `FIGHT.giftMost` received by one figure in any `FIGHT.giftOver` seconds, whoever gives it. Gives
+ * back what it received.
+ */
+export function giveMana(f: Fight, to: Unit, n: number, by: Unit): number {
+  if (to.id === by.id || to.manaFull <= 0 || !to.alive || n <= 0) return 0;
+  to.gifts = to.gifts.filter((g) => f.tick - g.at < secs(FIGHT.giftOver));
+  const given = to.gifts.reduce((sum, g) => sum + g.n, 0);
+  const amount = Math.min(n, FIGHT.giftMost - given);
+  if (amount <= 0) return 0;
+  // What it received, which a full bar may make less than what it was given: that is what counts.
+  const had = to.mana;
+  gainMana(to, amount);
+  const got = to.mana - had;
+  if (got > 0) to.gifts.push({ at: f.tick, n: got });
+  return got;
+}
+
+// ---------- cracking ----------
+
+/**
+ * Cracks a figure: `n` less armour and `n` less ward for the rest of the fight, never below 0. Its
+ * `cracked` is the total asked for, which Grooter's own cracking stops at (`crackMost`), and which
+ * it says as a status.
+ */
+export function crack(f: Fight, target: Unit, n: number, by: Unit | null): void {
+  // Only on one a hit can land on: never the fallen, nor one nothing can reach (hidden).
+  if (!targetable(f, target) || n <= 0) return;
+  target.armour = Math.max(0, target.armour - n);
+  target.ward = Math.max(0, target.ward - n);
+  target.cracked += n;
+  emit(f, {
+    t: "status",
+    id: target.id,
+    status: "cracked",
+    on: true,
+    ticks: 0,
+    amount: target.cracked,
+    by: by?.id ?? -1,
+  });
 }
 
 // ---------- statuses ----------
@@ -353,10 +395,17 @@ export function hurt(
   if (soaked > 0 && target.shield === 0) {
     emit(f, { t: "status", id: target.id, status: "shield", on: false, ticks: 0, amount: 0, by: -1 });
   }
-  if (direct && by && by.ember > 0 && target.hp > 0) burn(f, target, by.ember, by);
+  if (direct && by && target.hp > 0) leaves(f, target, by);
   if (target.hp <= 0) fall(f, target, by);
   else answer(f, target);
   return n;
+}
+
+/** What an attack or ability leaves on whoever it hit, still up: Ember's burn, and Grooter's crack up to its most. */
+function leaves(f: Fight, target: Unit, by: Unit): void {
+  if (by.ember > 0) burn(f, target, by.ember, by);
+  if (by.crack > 0 && target.cracked < by.crackMost)
+    crack(f, target, Math.min(by.crack, by.crackMost - target.cracked), by);
 }
 
 /** What a figure does about having been hurt and still being up. */

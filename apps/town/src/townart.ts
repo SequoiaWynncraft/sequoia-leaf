@@ -18,11 +18,11 @@ import { type FlatKind, isFlat, type StandingKind } from "@sequoia-leaf/town/map
 import { CRAB_HOMES, GLINTS, KEEPERS, LIGHTS, type Piece, PIECES, pondD, SHADOWS } from "@sequoia-leaf/town/map/map.ts";
 import type { PlaceId } from "@sequoia-leaf/town/map/rows.ts";
 
-import { unread } from "./board.ts";
 import { flutter } from "./fx.ts";
 import { G, SEED, today } from "./game.ts";
 import { GROUND, paintTrunk, TRUNKS, trunkTall } from "./ground.ts";
 import { mine } from "./leaf.ts";
+import { unreadNow } from "./players.ts";
 import { flame, type Light, type Prop, type Standing } from "./props.ts";
 import type { Sprite, Sprites } from "./sprites.ts";
 import { tallyNew } from "./tally.ts";
@@ -228,7 +228,7 @@ const PARTS: Readonly<Record<StandingKind, Part>> = {
       sfx.paper();
       nudge(q);
     },
-    extra: bang(20, -56, unread),
+    extra: bang(20, -56, unreadNow),
   },
   // The Tally, where the town keeps count: a mark over it until the member has looked.
   tally: {

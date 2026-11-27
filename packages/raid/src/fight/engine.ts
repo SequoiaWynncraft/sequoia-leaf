@@ -13,7 +13,7 @@ import { chance, mix } from "@sequoia-leaf/core";
 import { boonNumber } from "../content/boons.ts";
 import { catalogOf } from "../content/catalog.ts";
 import { abilityNumber, figureIn, isFigureId, specOf, type Stars, starScale } from "../content/figures.ts";
-import { carries, type ItemId, itemNumber as numberOf, itemStats } from "../content/items.ts";
+import { carries, isFinishedId, type ItemId, itemNumber as numberOf, itemStats } from "../content/items.ts";
 import { FIGHT, levelBoost } from "../content/rooms.ts";
 import { traitNumber } from "../content/traits.ts";
 import { backRow, cellAt, colOf, distance, HOME_ROWS, seatCell, type Side, stepToward } from "../hex.ts";
@@ -47,9 +47,10 @@ import type { Fight, FightEvent, FightResult, FightSetup, FightSummary, Pending,
 
 // ---------- sitting down ----------
 
-/** What an item does besides its stats, as numbers on whoever holds it. */
+/** What a finished item does besides its stats, as numbers on whoever holds it. A component's or an emblem's is all in its stats and the trait it grants. */
 function equip(f: Fight, u: Unit, item: ItemId): void {
   const itemNumber = (id: ItemId, name: string): number => numberOf(f.cat, id, name);
+  if (!isFinishedId(item)) return;
   switch (item) {
     case "blackthorn":
       u.pierce = itemNumber(item, "pierce");
@@ -100,20 +101,6 @@ function equip(f: Fight, u: Unit, item: ItemId): void {
       break;
     case "hoard":
       u.regrow += itemNumber(item, "regrow");
-      break;
-    case "thorn":
-    case "plume":
-    case "glowcap":
-    case "bark":
-    case "chestnut":
-    // An emblem's trait is in what its holder carries, and its stats are counted with everyone's.
-    case "embercharm":
-    case "mosscharm":
-    case "mistcharm":
-    case "burrowcharm":
-    case "feathercharm":
-    case "crabcharm":
-    case "gnomecharm":
       break;
   }
 }
@@ -174,8 +161,9 @@ function seat(f: Fight, side: Side, p: Placed, party: Party): Unit {
 }
 
 /**
- * Roll call: a crab nobody counted turns up beside the first of a side's crabs (whoever carries Crab,
- * a Crab emblem's holder too), as starry as the best of them.
+ * Roll call: the crabs nobody counted turn up beside the first of a side's crabs (whoever carries
+ * Crab, a Crab emblem's holder too), as starry as the best of them: as many big and small as the
+ * step says.
  */
 function rollCall(f: Fight, side: Side): void {
   const step = f.traits[side].crab ?? 0;
@@ -184,9 +172,9 @@ function rollCall(f: Fight, side: Side): void {
   const anchor = crabs[0] ?? f.units.find((u) => u.side === side);
   if (!anchor) return;
   const stars = crabs.reduce<Stars>((most, u) => (u.stars > most ? u.stars : most), 1);
-  if (traitNumber(f.cat, "crab", "big", step) > 0)
+  for (let n = traitNumber(f.cat, "crab", "big", step); n > 0; n--)
     summon(f, "biguncounted", stars, side, freeNear(f, anchor.cell, 4), null);
-  if (traitNumber(f.cat, "crab", "small", step) > 0)
+  for (let n = traitNumber(f.cat, "crab", "small", step); n > 0; n--)
     summon(f, "uncounted", stars, side, freeNear(f, anchor.cell, 4), null);
 }
 

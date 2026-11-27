@@ -18,19 +18,23 @@ import { traitIn } from "@sequoia-leaf/raid/content/traits.ts";
 import { distance } from "@sequoia-leaf/raid/hex.ts";
 
 import { aimAt, handAt } from "./acting.ts";
+import { turnsUp } from "./arrivals.ts";
 import { itemPic, traitPic } from "./art/icons.ts";
 import { TRAIT_COLOUR } from "./art/pal.ts";
 import { clockNow, colourOf, face, feetAt, fightNow, FV, travel } from "./board.ts";
+import { hangCall, stepCalls } from "./call.ts";
 import { showMark } from "./fightmarks.ts";
 import { burst, gather, motes, ring, say } from "./fx.ts";
 import type { Pt } from "./geometry.ts";
+import { cracked } from "./litter.ts";
 import { ownOf } from "./livery.ts";
 import { ATTACK_SHOT, type Look, LOOKS, puffOf, VOICES } from "./looks.ts";
 import { arcOf, type At, MARKS, puff, type Shot } from "./marks.ts";
-import { type Actor, actorFor, TUMBLE } from "./motion.ts";
+import { type Actor, TUMBLE } from "./motion.ts";
 import type { Cue, Lead } from "./playback.ts";
 import { fallsToRise, isRising, risesUp, stepRisings } from "./rising.ts";
 import { reachOut, rootsUp, stepRoots } from "./roots.ts";
+import { cutTo, hangShell, stepShells } from "./shell.ts";
 import { snd } from "./sounds.ts";
 import { hang, stepSpells } from "./spells.ts";
 import { bump, weigh } from "./weight.ts";
@@ -185,6 +189,7 @@ const ON: On = {
       burst(a.x, a.y - 4, 6, [CREAM, STONE[3]], { speed: 30, ttl: 0.3 });
       return;
     }
+    if (ev.why === "ability" && LOOKS[a.unit.kind]?.cut) return cutTo(a, feetAt(ev.from), to, at);
     // An ability's leap was begun ahead and comes down now; a Sneak's, as the fight opens, starts now.
     if (ev.why === "sneak") travel(a, to, at, 8, 18);
     else if (!a.move || a.move.t0 + a.move.dur > at + 1) travel(a, to, at - 3, 3, 8);
@@ -265,7 +270,7 @@ const ON: On = {
     fallsToRise(ev, at);
   },
   rise: (ev, at) => rise(ev, at),
-  summon: (ev, at, cat) => summon(cat, ev, at),
+  summon: (ev, at, cat) => turnsUp(cat, ev, at),
   trait: (ev, at, cat) => trait(cat, ev, at),
   item: (ev, at) => {
     const a = actor(ev.id);
@@ -298,7 +303,7 @@ function coloursOf(
 const handOr = (a: Actor, at: number, from: Pt): Pt =>
   handAt(a, at, fightNow()?.tick ?? 0) ?? { x: from.x, y: from.y - 11 };
 
-/** The mark a thrown ability leaves where it lands on `t`. */
+/** The mark a thrown ability leaves where it lands on `t` (and one whose hits each leave it, where each lands). */
 function markAt(cat: Catalog, a: Actor, t: Actor): () => void {
   const look = LOOKS[a.unit.kind];
   const col = colourOf(cat, a.unit.kind);
@@ -316,6 +321,13 @@ function markAt(cat: Catalog, a: Actor, t: Actor): () => void {
       shiny: t.unit.items.length > 0,
     });
   };
+}
+
+/** Where a hit of an ability whose mark each of its hits leaves (Munch's bites) lands, that mark. */
+function eachMark(ev: Events["hit"], t: Actor): void {
+  const by = actor(ev.by);
+  const cat = FV.pb?.fight.cat;
+  if (by && cat && ev.source === "ability" && LOOKS[by.unit.kind]?.each) markAt(cat, by, t)();
 }
 
 /** Back up: a true form rising (`rising.ts`), the fallen one Seqwawa's roots stand up (`roots.ts`), or a Second Wind. */
@@ -373,6 +385,7 @@ function struck(a: Actor, ev: Events["hit"], at: number): void {
     },
   );
   snd.hit(ev.kind, ev.hard);
+  eachMark(ev, a);
   if (ev.hard) weigh("hard");
   if (ev.source === "ability" && countHit(ev.by, at) === 2) weigh("many");
 }
@@ -386,8 +399,10 @@ function cast(cat: Catalog, ev: Events["cast"], at: number): void {
   if (a.fallAt > at) a.castUntil = at + 9;
   const t = actor(ev.targets[0] ?? -1);
   if (t && t !== a) face(a, t);
-  // The hexes it covers light one after another, nearest first: a ring, a cone or a line spreading.
-  for (const cell of ev.cells) FV.flashes.push({ cell, t0: at + distance(a.unit.cell, cell) * 1.5, col });
+  // The hexes it covers light one after another, nearest first (a ring, a cone or a line spreading); places somebody
+  // is called to are marked by their corners instead.
+  if (look?.lands !== "call")
+    for (const cell of ev.cells) FV.flashes.push({ cell, t0: at + distance(a.unit.cell, cell) * 1.5, col });
   // Its name, small, so that it never covers what it does.
   if (ev.name) say(a.x, a.y - framesOf(ev.kind).tall - 8, ev.name, col, { small: true, ttl: 0.8, rise: 6 });
   if (look?.lands) hold(cat, ev, look, a, t, at);
@@ -401,23 +416,38 @@ function cast(cat: Catalog, ev: Events["cast"], at: number): void {
  * All of it is counted from the step it went off at, `at`.
  */
 function hold(cat: Catalog, ev: Events["cast"], look: Look, a: Actor, t: Actor | undefined, at: number): void {
-  showMark({ t: "telegraph", id: ev.id, cells: ev.cells, ticks: ev.ticks }, MARKED);
-  if (t) a.held = { at, lands: at + ev.ticks, aim: aimAt(t.x - a.x, t.y - a.y), left: a.left };
-  hang(ev.kind, { by: ev.id, to: ev.targets[0] ?? -1 }, at, ev.ticks, () => {
-    for (const cell of ev.cells) FV.flashes.push({ cell, t0: at + ev.ticks, col: colourOf(cat, ev.kind) });
-    goesOff(cat, ev, look);
+  const land = (weight: boolean) => (): void => {
+    if (weight) for (const cell of ev.cells) FV.flashes.push({ cell, t0: at + ev.ticks, col: colourOf(cat, ev.kind) });
+    goesOff(cat, ev, look, weight);
     const landing = VOICES[ev.kind]?.lands;
     if (landing) snd.ability(landing);
-  });
+  };
+  // The Commodore's weight comes as the grooters he called arrive (`call.ts`).
+  if (look.lands === "call") return hangCall(ev, at, land(false));
+  if (look.lands === "shell") return hangShell(ev, at, land(true));
+  showMark({ t: "telegraph", id: ev.id, cells: ev.cells, ticks: ev.ticks }, MARKED);
+  if (t) a.held = { at, lands: at + ev.ticks, aim: aimAt(t.x - a.x, t.y - a.y), left: a.left };
+  hang(ev.kind, { by: ev.id, to: ev.targets[0] ?? -1 }, at, ev.ticks, land(true));
 }
 
-/** An ability going off: its mark (a thrown one leaves its mark where each thing lands instead), and the weight it lands with. */
-function goesOff(cat: Catalog, ev: Events["cast"], look: Look): void {
+/**
+ * An ability going off: its mark (a thrown one leaves its mark where each thing lands instead, and
+ * one whose hits each leave it, where each lands), what it gives whoever it is for, and the weight
+ * it lands with.
+ */
+function goesOff(cat: Catalog, ev: Events["cast"], look: Look, weight = true): void {
   const where = atOf(cat, ev);
-  if (where && !look.shot) MARKS[look.mark](where);
+  if (where && !look.shot && !look.each) MARKS[look.mark](where);
+  if (look.gives === "mana") for (const id of ev.targets) gifted(id);
+  if (!weight) return;
   if (look.bump) bump(look.bump);
   const stop = look.stop ?? (look.bump ? "big" : null);
   if (stop !== null) weigh(stop);
+}
+/** Its mana bar ticks up: given mana by a friend. */
+function gifted(id: number): void {
+  const a = actor(id);
+  if (a) a.giftAt = clockNow();
 }
 
 function status(ev: Events["status"], at: number): void {
@@ -442,34 +472,7 @@ function status(ev: Events["status"], at: number): void {
   } else if (ev.status === "haste")
     burst(a.x, a.y - 6, 6, [CREAM, GOLD[2]], { speed: 26, grav: -50, ttl: 0.4, toward: UP, spread: 0.6 });
   else if (ev.status === "braced") ring(a.x, a.y, 11, STONE[3], 0.35);
-}
-
-function summon(cat: Catalog, ev: Events["summon"], at: number): void {
-  const u = FV.pb?.fight.units[ev.id];
-  if (!u) return;
-  const from = actor(ev.by);
-  const spot = feetAt(ev.cell);
-  let a = actor(ev.id);
-  if (!a) {
-    a = actorFor(u, from ? { x: from.x, y: from.y } : spot, at);
-    FV.actors[ev.id] = a;
-  }
-  a.bornAt = at;
-  // A bit of somebody comes off them; anyone else just turns up.
-  if (from && ev.kind === "glorplet") {
-    a.x = from.x;
-    a.y = from.y;
-    travel(a, spot, at, 5, 8);
-    a.landAt = at + 5;
-  } else {
-    a.x = spot.x;
-    a.y = spot.y;
-    a.move = null;
-  }
-  burst(spot.x, spot.y - 4, 10, [colourOf(cat, ev.kind), CREAM], { speed: 28, ttl: 0.4 });
-  if (ev.kind === "uncounted" || ev.kind === "biguncounted")
-    say(spot.x, spot.y - 16, "Nobody counted this one.", CREAM, { ttl: 1.3 });
-  snd.summon();
+  else if (ev.status === "cracked") cracked(a, ev.amount);
 }
 
 function trait(cat: Catalog, ev: Events["trait"], at: number): void {
@@ -527,6 +530,8 @@ function on<K extends keyof Events>(t: K, ev: Events[K], at: number, cat: Catalo
 /** Things thrown follow whoever they are thrown at, and land; a fallen figure, its tumble over, goes in a puff. */
 export function stepShown(c: number, cat: Catalog): void {
   stepSpells(c);
+  stepCalls(c);
+  stepShells(c);
   stepRisings(c);
   stepRoots(c);
   FV.shots = FV.shots.filter((s) => {

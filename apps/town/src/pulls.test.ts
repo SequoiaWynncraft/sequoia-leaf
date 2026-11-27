@@ -1,12 +1,25 @@
 import { expect, test } from "bun:test";
 
 import { type Ctx, isRefused } from "@sequoia-leaf/core";
+import { bannersIn, makePeople } from "@sequoia-leaf/figures/people.ts";
 import { pressedTwice } from "@sequoia-leaf/kit/dom.ts";
+import type { Answer } from "@sequoia-leaf/kit/net.ts";
 import { scope } from "@sequoia-leaf/kit/scope.ts";
 import { press } from "@sequoia-leaf/kit/standin.ts";
-import { BANNERS, draw, EARLIER, headliner, prizesOf, PULLS, type Rarity, RATES } from "@sequoia-leaf/pulls";
+import {
+  type Banner,
+  BANNERS,
+  draw,
+  EARLIER,
+  headliner,
+  prizesOf,
+  PULLS,
+  type PullsView,
+  type Rarity,
+  RATES,
+} from "@sequoia-leaf/pulls";
 import type { BannerPerson } from "@sequoia-leaf/pulls/wire.ts";
-import { catalogAt } from "@sequoia-leaf/raid/content/catalog.ts";
+import { catalogAt, catalogOf } from "@sequoia-leaf/raid/content/catalog.ts";
 import { eraAt, RELEASES } from "@sequoia-leaf/raid/content/releases.ts";
 import { CAT } from "@sequoia-leaf/raid/testkit.ts";
 
@@ -41,15 +54,24 @@ import {
   viewKey,
 } from "./pulls.ts";
 
-const banner = BANNERS[0] ?? { id: "banner-1", opens: "base", from: 0, until: 0, headliner: "banner-1", look: "skin" };
+const banner: Banner = BANNERS[0] ?? {
+  id: "banner-1",
+  opens: "base",
+  from: 0,
+  until: 0,
+  headliner: "banner-1",
+  look: "skin",
+  shows: "name",
+  featured: [],
+};
 /** Wednesday 25 November 2026, 12:00 UTC: banner-1 is open, and its era; what its pools give then. */
 const T0 = Date.UTC(2026, 10, 25, 12);
 const ERA = eraAt(T0);
 const GROVE_PRIZES = prizesOf(catalogAt(ERA), "grove");
 const BANNER_PRIZES = prizesOf(catalogAt(ERA), banner.id);
 /** A banner with a made-up headliner, and the same banner with nobody yet. */
-const WITH: BannerPerson[] = [{ ...banner, headliner: { id: "mossback", name: "Mossback" } }];
-const WITHOUT: BannerPerson[] = [{ ...banner, headliner: null }];
+const WITH: BannerPerson[] = [{ ...banner, headliner: { id: "mossback", name: "Mossback" }, called: [] }];
+const WITHOUT: BannerPerson[] = [{ ...banner, headliner: null, called: [] }];
 
 test("what a reveal says of a prize: its name, whether it is new, and the Seeds it gave; never how a 50/50 fell", () => {
   expect(
@@ -96,6 +118,7 @@ test("a banner is shown only while Leaf's view has it open, a member's once Leaf
     id: banner.id,
     until: banner.until,
     name: "Mossback",
+    title: "Mossback",
     person: { id: "mossback", name: "Mossback" },
     headliner: banner.headliner,
   });
@@ -112,19 +135,33 @@ test("a banner whose headliner the set draws is shown at once: nobody has to be 
     until: banner.until,
     headliner: "greg",
     look: "set",
+    shows: "name",
+    featured: [],
   } as const;
   const open = { open: [{ id: penguins.id, until: penguins.until }], era: CAT.era };
   // Leaf's people name nobody for it; the set's own figure is the headliner, by its own name.
-  const people: BannerPerson[] = [{ id: penguins.id, from: 0, until: penguins.until, headliner: null }];
+  const people: BannerPerson[] = [{ id: penguins.id, from: 0, until: penguins.until, headliner: null, called: [] }];
   expect(showing(open, people, [penguins])).toEqual({
     id: penguins.id,
     until: penguins.until,
     name: "Greg",
+    title: "Greg",
     person: null,
     headliner: "greg",
   });
   // A member's banner still waits for Leaf to say who.
   expect(showing(open, people, [{ ...penguins, look: "skin" }])).toBeNull();
+});
+
+test("a banner that shows its headliner by a title is called by its own name, the headliner by the rules', and the member only lends a skin", () => {
+  const night = { ...banner, id: "a-title-banner", name: "A Night Of It", shows: "title" } as const;
+  const open = { open: [{ id: night.id, until: night.until }], era: CAT.era };
+  const lent: BannerPerson = { ...night, headliner: { id: "mossback", name: "Mossback" }, called: [] };
+  const shown = showing(open, [lent], [night]);
+  expect([shown?.title, shown?.name, shown?.person?.id]).toEqual(["A Night Of It", "A guild member", "mossback"]);
+  expect(bannerLine(shown, "UTC")).toBe("A Night Of It is open until 8 December, 00:00.");
+  // Until Leaf says whose skin it is, it waits, as any member's banner does.
+  expect(showing(open, [{ ...lent, headliner: null }], [night])).toBeNull();
 });
 
 test("the chances shown are what RATES makes of a pull with no guarantee near", () => {
@@ -158,6 +195,10 @@ test("the rules are written from RATES", () => {
   ]);
   expect(rules(null)).toHaveLength(4);
   expect(rules(null)[0]).toStartWith("Top prize (Treant): ");
+  // A banner with featured figures says their odds as the draw makes them: half featured, half the rest.
+  expect(rules("Mossback", ["Leafkin", "Sprite"])[2]).toBe(
+    "Featured: 50% of the Leafkin or Sprite drawn here are featured figures, and 50% are the other figures of that rarity, each as likely as the others in its half.",
+  );
 });
 
 /** The numbers in a line, in order, a percentage as a share. */
@@ -398,11 +439,44 @@ test("a view of a new era draws the Grove's words again, and the page asks Leaf 
   expect(askAgain({ ...view, free: { waiting: 1, next: Infinity } }, night)).toBe(true);
 });
 
+test("an open Grove crossing 8 December 00:00 shows Groot Night as the Commodore once Leaf's next answer opens it, with no reload", async () => {
+  const night = Date.UTC(2026, 11, 8);
+  const answers: ((a: Answer) => void)[] = [];
+  const store = makePeople(
+    () => new Promise<Answer>((done) => answers.push(done)),
+    () => night,
+  );
+  const answer = async (banners: object[]): Promise<void> => {
+    answers.shift()?.({ status: 200, body: { banners } });
+    await Bun.sleep(0);
+  };
+  const moss = { id: "banner-1", headliner: { id: "mossback", name: "Mossback" } };
+  // What the Grove does with each of Leaf's answers: tells the page's store the banners its era has open.
+  const answered = (now: number): PullsView => {
+    const view = PULLS.view(PULLS.create(ctxAt(night - 60_000)), ctxAt(now));
+    store.see(bannersIn(catalogOf(view)));
+    return view;
+  };
+  const eve = answered(night - 1);
+  await answer([moss]);
+  expect(showing(eve, store.people(), BANNERS)?.id).not.toBe("groot-night");
+  // The idle tab's next answer is after midnight: the store asks Leaf at once, and the Grove shows its word.
+  const view = answered(night);
+  expect(answers).toHaveLength(1);
+  await answer([moss, { id: "groot-night", headliner: { id: "p-gaz", name: "Gazzy" } }]);
+  expect(showing(view, store.people(), BANNERS)).toMatchObject({
+    id: "groot-night",
+    name: "Commodore",
+    title: "Groot Night",
+    person: { id: "p-gaz", name: "Gazzy" },
+  });
+});
+
 test("the clearing: the always-open pool's first three Treants on their stands, or a banner's own headliner the set draws", () => {
   const night = Date.UTC(2026, 11, 8);
   const view = PULLS.view(PULLS.create(ctxAt(night)), ctxAt(night));
-  // From 8 December the grove gives four Treants; three stand, and the prize book counts all four.
-  expect(prizeBook(view, GROVE).find(([rarity]) => rarity === "Treant")?.[1]).toHaveLength(4);
+  // From 8 December the grove gives five Treants, Seqwawa and Crab #8 with them; three stand, and the prize book counts all five.
+  expect(prizeBook(view, GROVE).find(([rarity]) => rarity === "Treant")?.[1]).toHaveLength(5);
   expect(clearing(view, null)).toHaveLength(3);
   const book = prizeBook(view, GROVE);
   expect(bookCount({ have: { "figure:seqwawa": 1, "figure:greg": 2, "look:baize": 1 } }, book)).toBe(

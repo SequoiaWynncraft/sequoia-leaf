@@ -200,7 +200,7 @@ const moveLikes = (sql: SqlClient.SqlClient, from: PlayerId, into: PlayerId) =>
  */
 const moveHistory = (sql: SqlClient.SqlClient, from: PlayerId, into: PlayerId) =>
   Effect.gen(function* () {
-    for (const table of ["events", "banner_people", "sign_ins"]) {
+    for (const table of ["events", "banner_people", "banner_called", "sign_ins"]) {
       yield* sql`UPDATE ${sql(table)} SET player_id = ${into} WHERE player_id = ${from}`;
     }
     // Somebody at `from`'s camp is at `into`'s, where that camp now is.

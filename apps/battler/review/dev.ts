@@ -13,10 +13,11 @@ import { recordShifts } from "./shifts.ts";
 import { openStandIn } from "./standin.ts";
 import { openTablesHandle } from "./tables.ts";
 
-if (new URLSearchParams(location.search).has("steady")) recordShifts();
-if (new URLSearchParams(location.search).has("sheet")) {
+const asked = new URLSearchParams(location.search);
+if (asked.has("steady")) recordShifts();
+if (asked.has("sheet")) {
   await fontsReady();
-  showSheet();
+  showSheet((asked.get("sheet") ?? "").split(",").filter(Boolean), Number(asked.get("zoom") ?? 3));
 } else {
   await (
     await import("../src/main.ts")

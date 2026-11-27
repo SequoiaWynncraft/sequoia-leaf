@@ -23,6 +23,7 @@
  */
 
 import { away } from "@sequoia-leaf/core";
+import { builtAt } from "@sequoia-leaf/core/build/moment.ts" with { type: "macro" };
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { type Emote, EMOTES } from "@sequoia-leaf/kit/emotes.ts";
 import { type LetGo, letGoCard, member, where } from "@sequoia-leaf/kit/live.ts";
@@ -30,6 +31,7 @@ import { CREAM } from "@sequoia-leaf/kit/palette.ts";
 import {
   joinLive,
   leafClock,
+  leafKnown,
   type LiveEars,
   type LiveMember,
   type LiveRoom,
@@ -45,6 +47,7 @@ import { TOWN } from "@sequoia-leaf/town/map/map.ts";
 
 import { cardLine } from "./about.ts";
 import { face, feet, footfall, headOf, hop, makeActor, onScreen, putAs, say, stepActor } from "./actors.ts";
+import { unread } from "./board.ts";
 import { emoteOver, float } from "./fx.ts";
 import { type Actor, G, hooks, ROOM, type Seat, SEED, toPage } from "./game.ts";
 import { guild } from "./guild.ts";
@@ -62,6 +65,7 @@ import {
   sameLive,
   stepOf,
 } from "./motion.ts";
+import { newsMoment } from "./notes.ts";
 import type { Place } from "./screen.ts";
 import { touchThing } from "./town.ts";
 import { dozy, followLive } from "./visitors.ts";
@@ -262,6 +266,12 @@ export function inRoom(): boolean {
 
 /** Leaf's clock now, as far as this page can tell: out of a room, as it last heard. */
 export const leafNow = (): number => room?.serverNow() ?? leafClock(Date.now());
+/** The moment this page was built, written into it then. */
+const BUILT = builtAt();
+/** The moment the News tab shows notes at (`newsMoment`): Leaf's clock once known, the page's build before. */
+export const newsNow = (): number => newsMoment(leafNow(), leafKnown(), BUILT);
+/** Whether there is news out by that moment the member has not opened. */
+export const unreadNow = (): boolean => unread(newsNow());
 
 // ---------- each moment ----------
 

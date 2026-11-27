@@ -31,8 +31,11 @@ import { decodeSitting, encodeSitting } from "./sitting/keep.ts";
  * old id reads as Graid and is written back so.
  */
 
-/** "Groot" as a word of its own: not in Grootslang, and not the Groot Night banner, which is about the Nest. */
-const SAYS_GROOT = /groot(?!slang)(?! night)/i;
+/**
+ * "Groot" as a word of its own: not in Grootslang, not the Groot Night banner, which is about the
+ * Nest, and not a grooter, who raids the Nest (Groot Night's origin, and the Commodore's callers).
+ */
+const SAYS_GROOT = /groot(?!slang)(?! night)(?!er)/i;
 
 /** A release's id is its own (`groot`, `groot-night`), never shown, and stays as it is. */
 const RELEASE_IDS = new Set<string>(RELEASES.map((r) => r.id));
@@ -85,6 +88,7 @@ describe("Groot, renamed Graid", () => {
     expect(said.filter((s) => SAYS_GROOT.test(s) && !RELEASE_IDS.has(s))).toEqual([]);
     expect(traits.traitIn(EVERY, "graid").name).toBe("Graid");
     expect(SAYS_GROOT.test("Groot Night") || SAYS_GROOT.test("Nest of the Grootslangs")).toBe(false);
+    expect(SAYS_GROOT.test("Any grooters in chat?") || SAYS_GROOT.test("Grooter Ping")).toBe(false);
     expect(SAYS_GROOT.test("Every Groot figure gets back up")).toBe(true);
   });
 

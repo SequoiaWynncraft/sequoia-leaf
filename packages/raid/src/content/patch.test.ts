@@ -152,10 +152,12 @@ describe("the fold", () => {
         if (gives) expect(cat.items[gives]).toBeDefined();
       }
       for (const id of cat.order) for (const t of traitsOf(cat, id)) expect(cat.traits[t]).toBeDefined();
-      // Items and boons are all the base's so far; a release that brings one adds it here.
-      const counts: number[] = [COMPONENT_IDS.length, FINISHED_IDS.length, EMBLEM_IDS.length, BOON_IDS.length];
+      // Items and boons are the base's, and from Groot Night its four emblems and their charms; a release that brings one adds it here.
+      const night = cat.era >= eraOf("groot-night") ? 4 : 0;
+      const counts: number[] = [COMPONENT_IDS.length, FINISHED_IDS.length, 7 + night, 20 + night];
       const { components, finished, emblems, boons } = cat.ids;
       expect([components, finished, emblems, boons].map((kind) => kind.length)).toEqual(counts);
+      expect([EMBLEM_IDS.length, BOON_IDS.length]).toEqual([11, 24]);
     }
   });
 });

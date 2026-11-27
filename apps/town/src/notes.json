@@ -1,5 +1,43 @@
 [
   {
+    "id": "groot-night",
+    "at": "2026-12-08T00:00Z",
+    "title": "Groot Night",
+    "lines": [
+      "Groot Night is open until 22 December: the Commodore is its top prize, and of the pulls that give the rarity of Crab #8, Clutch, Crab #31, Munch, Peep or Seqwawa, half give one of them and half another figure of that rarity.",
+      "In The Little Raid, Grooter is a new origin whose hits take armour and ward off what they hit, and Chorus is a new class that gives the party mana every second."
+    ],
+    "more": [
+      {
+        "head": "New figures",
+        "points": [
+          "Peep (1 acorn, Grooter Slinger) throws its hat at the enemy in reach with the most armour, and takes 10 armour and ward off it.",
+          "Crab #31 (3 acorns, Crab Chorus) gives its 2 nearest friends 25 mana and shields itself.",
+          "Munch (3 acorns, Grooter Fang) bites its target 3 times in 1 second, each bite taking 6 armour and ward off it.",
+          "Clutch (4 acorns, Grooter Bulwark) hatches Hatchlings beside it, up to 3 at a time.",
+          "Crab #8 (5 acorns, Crab Sneak) hides in its shell for 1 second, then hits the enemy with the least health, and again if it falls. It takes none of your places on the board; a second Crab #8 does.",
+          "The Commodore, Groot Night's top prize for runs with your own figures, calls up to 3 grooters onto free hexes within 2 of him, and heals those still standing to full."
+        ]
+      },
+      {
+        "head": "Traits",
+        "points": [
+          "Grooter: with 2, 3 and 4, each hit by a Grooter figure or what it summons takes 4, 6 and 8 armour and ward off its target, up to 30, 50 and 80.",
+          "Chorus: with 2, 3 and 4, the whole party gains 1, 2 and 3 mana a second, and Chorus figures 2, 4 and 6. Twig, Brew and Drizzle are Chorus as well.",
+          "Crab's top step needs 7 now, not 5: with 2 a Crab #?? joins, with 4 a Big Crab #??, and with 7 a Big Crab #?? and two Crab #??.",
+          "Sneak's first hits do 35% and 60% more, from 40% and 70%."
+        ]
+      },
+      {
+        "head": "Emblems",
+        "points": [
+          "Four new charms: Grooter Ping (Grooter), Tin Whistle (Chorus), Party Finder (Graid: its holder gets back up as itself) and False Moustache (Sneak).",
+          "Every emblem gives its holder 10% more health."
+        ]
+      }
+    ]
+  },
+  {
     "id": "raid-front-steady",
     "at": "2026-11-27T17:11Z",
     "title": "The raid holds still",

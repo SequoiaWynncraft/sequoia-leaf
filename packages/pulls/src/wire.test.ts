@@ -16,7 +16,17 @@ const ctx: Ctx = {
   postcards: {},
 };
 const wire = (v: unknown): unknown => JSON.parse(JSON.stringify(v));
-const banner: Banner = BANNERS[0] ?? { id: "", opens: "base", from: 0, until: 0, headliner: "banner-1", look: "skin" };
+const banner: Banner = BANNERS[0] ?? {
+  id: "",
+  opens: "base",
+  from: 0,
+  until: 0,
+  headliner: "banner-1",
+  look: "skin",
+  shows: "name",
+  featured: [],
+};
+const night = BANNERS[1];
 
 test("a view and a pull's notes read back as Leaf made them, and nothing else reads", () => {
   const answer = PULLS.apply(
@@ -37,16 +47,43 @@ test("a view and a pull's notes read back as Leaf made them, and nothing else re
   expect(readNotes([{ t: "pull", prize: "thing:fountain", rarity: "Leafkin", have: 1 }])).toBeNull();
 });
 
-const sent = (headliner: unknown) => ({
+const sent = (headliner: unknown, called?: unknown) => ({
   banners: [
-    { id: "banner-1", from: "2026-11-23T00:00:00.000Z", until: "2026-12-08T00:00:00.000Z", headliner },
+    { id: "banner-1", from: "2026-11-23T00:00:00.000Z", until: "2026-12-08T00:00:00.000Z", headliner, called },
     { id: "a-banner-these-rules-do-not-know", from: "", until: "", headliner: null },
   ],
 });
-test("the banners route reads into this package's banners, each with its headliner or none", () => {
+test("the banners route reads into this package's banners, each with its headliner or none, and whom it calls", () => {
   expect(readBanners(sent({ id: "mossback", name: "Mossback" }))).toEqual([
-    { ...banner, headliner: { id: "mossback", name: "Mossback" } },
+    { ...banner, headliner: { id: "mossback", name: "Mossback" }, called: [] },
   ]);
-  expect(readBanners(sent(null))).toEqual([{ ...banner, headliner: null }]);
+  expect(readBanners(sent(null))).toEqual([{ ...banner, headliner: null, called: [] }]);
   expect(readBanners({})).toBeNull();
+  // Groot Night calls players besides its headliner, each in their seat: grooterN is seat N.
+  const calls = [
+    { seat: 1, id: "a", name: "Ash" },
+    { seat: 3, id: "b", name: "Birch" },
+  ];
+  const groot = { id: "groot-night", from: "", until: "", headliner: { id: "c", name: "Cedar" }, called: calls };
+  if (!night) throw new Error("no second banner");
+  expect(readBanners({ banners: [groot] })).toEqual([{ ...night, headliner: groot.headliner, called: calls }]);
+  // Anything but players there does not read.
+  expect(readBanners({ banners: [{ ...groot, called: [{ seat: 1, id: 1 }] }] })).toBeNull();
+  expect(readBanners({ banners: [{ ...groot, called: "Ash" }] })).toBeNull();
+});
+
+test("a called player with no seat, or a seat that is no seat, is left out: nobody moves into it", () => {
+  const said = [
+    { seat: 2, id: "p2", name: "Nettlebark" },
+    { id: "p0", name: "Seatless" },
+    { seat: 0, id: "p9", name: "Nowhere" },
+    { seat: 1.5, id: "p8", name: "Halfway" },
+    { seat: "4", id: "p4", name: "Wordy" },
+    { seat: 4, id: "p5", name: "Fernwhistle" },
+  ];
+  expect(readBanners(sent(null, said))?.[0]?.called).toEqual([
+    { seat: 2, id: "p2", name: "Nettlebark" },
+    { seat: 4, id: "p5", name: "Fernwhistle" },
+  ]);
+  expect(readBanners(sent(null, [{ seat: 1, id: "p1" }]))).toBeNull();
 });

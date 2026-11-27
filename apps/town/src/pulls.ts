@@ -42,12 +42,15 @@ const seeds = (n: number): string => `${whole(n)} ${n === 1 ? "Seed" : "Seeds"}`
 
 /**
  * A banner that can be shown: open by Leaf's view, with its headliner's name: a figure of the set's
- * own by its name at once, one drawn from a member's skin once Leaf has said who (`person`).
+ * own by its name at once, one drawn from a member's skin once Leaf has said who (`person`), by the
+ * member's name or (`shows: "title"`) the rules' name for the figure. `title` is what its pool is
+ * called: the banner's own name where it has one, else its headliner's.
  */
 export interface Showing {
   readonly id: string;
   readonly until: number;
   readonly name: string;
+  readonly title: string;
   readonly person: { readonly id: string; readonly name: string } | null;
   readonly headliner: FigureId;
 }
@@ -61,8 +64,9 @@ export function showing(
   for (const { id, until } of view.open) {
     const row = rows.find((b) => b.id === id);
     const person = row?.look === "skin" ? (people.find((b) => b.id === id)?.headliner ?? null) : null;
-    const name = row && (row.look === "set" ? figureIn(catalogOf(view), row.headliner).name : person?.name);
-    if (row && name) return { id, until, name, person, headliner: row.headliner };
+    const ruled = row && figureIn(catalogOf(view), row.headliner).name;
+    const name = row?.look === "set" ? ruled : person && (row?.shows === "title" ? ruled : person.name);
+    if (row && name) return { id, until, name, title: row.name ?? name, person, headliner: row.headliner };
   }
   return null;
 }
@@ -74,16 +78,16 @@ export function showing(
  */
 function headlinerName(banner: string, people: readonly BannerPerson[]): string | null {
   const row = BANNERS.find((b) => b.id === banner);
-  if (row?.look === "set") return figureIn(catalogAt(LAST_ERA), row.headliner).name;
+  if (row?.look === "set" || row?.shows === "title") return figureIn(catalogAt(LAST_ERA), row.headliner).name;
   return people.find((b) => b.id === banner)?.headliner?.name ?? null;
 }
 /** The figure of the set's own that a banner's headliner is, for its picture; null for one drawn from a member's skin. */
 export const setHeadliner = (banner: string): FigureId | null =>
   BANNERS.find((b) => b.id === banner && b.look === "set")?.headliner ?? null;
 
-/** A pool's name: the always-open one's own, or its banner's headliner's. */
+/** A pool's name: the always-open one's own, its banner's own, or its banner's headliner's. */
 export const poolName = (pool: string, banners: readonly BannerPerson[]): string =>
-  pool === GROVE ? EVERGREEN : (headlinerName(pool, banners) ?? "A banner");
+  pool === GROVE ? EVERGREEN : (BANNERS.find((b) => b.id === pool)?.name ?? headlinerName(pool, banners) ?? "A banner");
 
 // ---------- a prize ----------
 
@@ -160,13 +164,16 @@ export function chances(banner: boolean): Record<Rarity, number> {
   };
 }
 
-const named = (tier: Tier): string => {
-  const names = RARITY_NAMES.filter((r) => tierOf(r) === tier);
-  return names.length > 1 ? `${names.slice(0, -1).join(", ")} or ${names.at(-1)}` : (names[0] ?? "");
-};
+/** Names said as a choice: "A, B or C". */
+const either = (names: readonly string[]): string =>
+  names.length > 1 ? `${names.slice(0, -1).join(", ")} or ${names.at(-1)}` : (names[0] ?? "");
+const named = (tier: Tier): string => either(RARITY_NAMES.filter((r) => tierOf(r) === tier));
 
-/** The rules in numbers, each from `RATES`: for a banner whose headliner is `headliner`, or the always-open pool. */
-export function rules(headliner: string | null): string[] {
+/**
+ * The rules in numbers, each from `RATES`: for a banner whose headliner is `headliner` (and the
+ * rarities it has featured figures of), or the always-open pool.
+ */
+export function rules(headliner: string | null, featured: readonly Rarity[] = []): string[] {
   const { top, mid, seeds: s, free } = RATES;
   const ramp = top.rampAfter + 1;
   return [
@@ -175,6 +182,11 @@ export function rules(headliner: string | null): string[] {
       ? []
       : [
           `Here a top prize is ${headliner} or a Treant, ${percent(top.headliner)} each. After a Treant, the next top prize here is ${headliner}.`,
+        ]),
+    ...(featured.length === 0
+      ? []
+      : [
+          `Featured: ${percent(RATES.featured)} of the ${either(featured)} drawn here are featured figures, and ${percent(1 - RATES.featured)} are the other figures of that rarity, each as likely as the others in its half.`,
         ]),
     `${named("mid")}: ${percent(mid.chance)} of the pulls that are not a top prize, so ${percent((1 - top.chance) * mid.chance)} a pull while a top prize is ${percent(top.chance)}. At least 1 pull in every ${mid.certainAt} is ${RARITY_NAMES.find((r) => tierOf(r) === "mid")} or better.`,
     `Seeds: ${s.filler} for ${named("filler")}, ${s.mid} for ${named("mid")}, ${s.top} for a top prize.`,
@@ -252,7 +264,7 @@ export const pullSpend = (pool: string, n: number): Spend => ({ on: `pull:${pool
 
 /** The banner open now, for the Grove's card in town: whose it is and until when. */
 export const bannerLine = (b: Showing | null, zone?: string): string | null =>
-  b && `${b.name}'s banner is open until ${dayAndTime(b.until, zone)}.`;
+  b && `${b.title === b.name ? `${b.name}'s banner` : b.title} is open until ${dayAndTime(b.until, zone)}.`;
 
 /**
  * Whether to ask Leaf for the pulls again, by the page's clock: a free pull has fallen due, a banner

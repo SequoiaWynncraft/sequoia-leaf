@@ -6,7 +6,8 @@
  *
  * The figures here are the twenty-eight the raid opened with and the first banner's member, as the
  * base release brought them (`releases/base.ts`); later releases bring more and change these in
- * their patches (`releases/`). A figure is read from a catalogue (`catalog.ts`), as its era has it.
+ * their patches (`releases/`), and `FIGURE_IDS` names every one any release brings everyone. A
+ * figure is read from a catalogue (`catalog.ts`), as its era has it.
  *
  * Every number is for one star. Two stars multiply health and attack by `STAR[1]`, three by
  * `STAR[2]`; an ability's own numbers are written out for each star. In an ability's sentence,
@@ -19,6 +20,7 @@
 import type { Catalog, Figure } from "./catalog.ts";
 import { MEMBER_IDS, type MemberId, MEMBERS } from "./members.ts";
 import { opened } from "./patch.ts";
+import { isSummonId, type SummonId, SUMMONS } from "./summons.ts";
 import type { CallingId, KinId, TraitId } from "./traits.ts";
 
 /** What health and attack are multiplied by at one, two and three stars. */
@@ -59,6 +61,8 @@ export interface UnitSpec {
   /** Too big to push about: stuns last half as long and nothing knocks it back. */
   readonly steady?: boolean;
 }
+
+export { GROOTER_IDS, type GrooterId, isGrooterId, isSummonId, SUMMON_IDS, type SummonId, SUMMONS } from "./summons.ts";
 
 export const TIERS = [1, 2, 3, 4, 5] as const;
 export type Tier = (typeof TIERS)[number];
@@ -102,8 +106,13 @@ export const FIGURE_IDS = [
   "whitefox",
   "hearthcat",
   "seqwawa",
+  "peep",
+  "crab31",
+  "munch",
+  "clutch",
+  "crab8",
 ] as const;
-/** A figure a member can field: one of the twenty-eight, or a banner's member (`members.ts`). */
+/** A figure a member can field: one of everyone's, or a banner's member (`members.ts`). */
 export type FigureId = (typeof FIGURE_IDS)[number] | MemberId;
 
 /** The figures the base release brought, as it brought them: read only by its patch (`releases/base.ts`). */
@@ -737,67 +746,6 @@ export const BASE_FIGURES: Readonly<Partial<Record<FigureId, FigureSpec>>> = {
   },
 };
 
-// ---------- the ones that are only ever summoned ----------
-
-export const SUMMON_IDS = ["glorplet", "uncounted", "biguncounted", "sprout"] as const;
-export type SummonId = (typeof SUMMON_IDS)[number];
-export const SUMMONS: Record<SummonId, UnitSpec> = {
-  glorplet: {
-    name: "Glorplet",
-    hp: 160,
-    attack: 20,
-    speed: 0.7,
-    range: 1,
-    armour: 10,
-    ward: 10,
-    mana: [0, 0],
-    ability: null,
-    quip: "A bit of Glorp, out on its own.",
-  },
-  uncounted: {
-    name: "Crab #??",
-    hp: 300,
-    attack: 28,
-    speed: 0.7,
-    range: 1,
-    armour: 30,
-    ward: 20,
-    mana: [0, 0],
-    ability: null,
-    quip: "Was not on the list. Is here anyway.",
-  },
-  biguncounted: {
-    name: "Big Crab #??",
-    hp: 600,
-    attack: 44,
-    speed: 0.65,
-    range: 1,
-    armour: 45,
-    ward: 30,
-    mana: [0, 0],
-    ability: null,
-    quip: "Was not on the list. The list was not long enough.",
-  },
-  sprout: {
-    name: "Runner",
-    hp: 150,
-    attack: 18,
-    speed: 0.6,
-    range: 1,
-    armour: 20,
-    ward: 10,
-    mana: [0, 0],
-    ability: {
-      name: "Thorny",
-      shape: "always",
-      text: "Whoever attacks it up close takes {thorns} damage.",
-      n: { thorns: [8, 14, 25] },
-      short: "Enemies hitting it up close take {thorns}.",
-    },
-    quip: "Where there was one bramble, there are now two.",
-  },
-};
-
 // ---------- the forest's trouble, and its bosses ----------
 
 export const TROUBLE_IDS = [
@@ -1040,7 +988,6 @@ export type UnitKind = FigureId | SummonId | TroubleId;
 const EVERY_FIGURE: ReadonlySet<string> = new Set([...FIGURE_IDS, ...MEMBER_IDS]);
 /** Whether stored data names a figure: one any release has, open or not (`everyFigure`). */
 export const isFigureId = (v: unknown): v is FigureId => typeof v === "string" && EVERY_FIGURE.has(v);
-export const isSummonId = (v: unknown): v is SummonId => typeof v === "string" && Object.hasOwn(SUMMONS, v);
 export const isTroubleId = (v: unknown): v is TroubleId => typeof v === "string" && Object.hasOwn(TROUBLE, v);
 export const isUnitKind = (v: unknown): v is UnitKind => isFigureId(v) || isSummonId(v) || isTroubleId(v);
 export const isBossId = (v: unknown): v is BossId => BOSS_IDS.some((b) => b === v);

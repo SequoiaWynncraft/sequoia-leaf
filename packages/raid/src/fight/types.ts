@@ -17,7 +17,7 @@ export type DamageKind = "physical" | "magic" | "true";
 /** Where damage came from. Only attacks and abilities fill mana and set off the things that answer a hit. */
 export type DamageSource = "attack" | "ability" | "burn" | "thorns" | "item" | "dusk";
 export type HealSource = "ability" | "regrow" | "burrow" | "item" | "leech";
-export type StatusId = "burn" | "stun" | "slow" | "shield" | "taunt" | "hidden" | "haste" | "braced";
+export type StatusId = "burn" | "stun" | "slow" | "shield" | "taunt" | "hidden" | "haste" | "braced" | "cracked";
 /** How a fight went, for the party at the table (side 0). */
 export type FightResult = "win" | "loss" | "draw";
 /** Why somebody changed hex without walking: a Sneak's opening leap, an ability, knocked back, dashing, or pulled. */
@@ -160,12 +160,21 @@ export interface Unit {
   digFor: number;
   /** Health regrown each second, in percent. */
   regrow: number;
+  /** Grooter: the armour and ward each of its hits cracks, and the most it cracks a target to (of its `cracked`). */
+  crack: number;
+  crackMost: number;
 
   // From what it is.
   /** Damage to whoever attacks it up close. */
   thorns: number;
   /** The big crab has called the roll. */
   called: boolean;
+  /** Armour and ward cracked off it so far (`crack`): the total asked for, whatever its numbers came down to. */
+  cracked: number;
+  /** Mana friends' abilities gave it, and at which step, while it still counts against the gift cap (`giveMana`). */
+  gifts: { at: number; n: number }[];
+  /** The Commodore: the grooter he called last (`GROOTER_IDS`), -1 before his first. */
+  calledLast: number;
 
   // From items.
   pierce: number;

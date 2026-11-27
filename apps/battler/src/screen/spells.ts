@@ -182,15 +182,28 @@ function seal(g: Ctx, s: Spell, c: number): void {
  * standing on it, so nobody is darkened.
  */
 export function dimRound(g: Ctx, x: number, y: number, rx: number, ry: number, k: number): void {
-  if (k <= 0) return;
+  dimRounds(g, [{ x, y }], rx, ry, k);
+}
+/** The same round several pools at once, each `rx` and `ry` round its screen point: the places somebody is called to. */
+export function dimRounds(g: Ctx, pools: readonly Pt[], rx: number, ry: number, k: number): void {
+  if (k <= 0 || pools.length === 0) return;
   g.fillStyle = INK;
   g.globalAlpha = HUSH * clamp(k, 0, 1);
-  g.fillRect(0, 0, V.w, y - ry);
-  g.fillRect(0, y + ry + 1, V.w, V.h);
-  for (let dy = -ry; dy <= ry; dy++) {
-    const half = Math.round(rx * Math.sqrt(1 - (dy / ry) ** 2));
-    g.fillRect(0, y + dy, x - half, 1);
-    g.fillRect(x + half + 1, y + dy, V.w, 1);
+  for (let y = 0; y < V.h; y++) {
+    // The row lit where any pool crosses it; dark everywhere else on it.
+    const lit = pools
+      .filter((p) => Math.abs(y - p.y) <= ry)
+      .map((p) => {
+        const half = Math.round(rx * Math.sqrt(1 - ((y - p.y) / ry) ** 2));
+        return [p.x - half, p.x + half + 1] as const;
+      })
+      .toSorted((a, b) => a[0] - b[0]);
+    let from = 0;
+    for (const [a, b] of lit) {
+      if (a > from) g.fillRect(from, y, a - from, 1);
+      from = Math.max(from, b);
+    }
+    g.fillRect(from, y, V.w - from, 1);
   }
   g.globalAlpha = 1;
 }
@@ -201,6 +214,9 @@ function hush(g: Ctx, s: Spell, c: number): void {
   const y = Math.round(V.by + s.spot.y) - FOOT;
   dimRound(g, x, y, SEAL.rx, SEAL.ry, (c - s.hung.at) / FALLS);
 }
+
+/** Whether a seal hangs over the table now, dark round it: the one dark at a time, which others leave be. */
+export const hushing = (): boolean => spells.some((s) => s.fight === fightNow() && !s.done);
 
 /** The seals, on the ground under everyone standing on it, and the dark round the first of them. */
 export function drawSeals(g: Ctx): void {
@@ -287,9 +303,11 @@ function beam(g: Ctx, s: Spell, c: number): void {
 /** The corners marking whoever is caught: they close in, then stay, blinking as it comes. */
 function corners(g: Ctx, s: Spell, c: number): void {
   if (s.hung.lands - c < 6 && Math.floor(c) % 2 === 0) return;
-  const out = Math.max(0, 4 - Math.floor(c - s.hung.at)) * 2;
-  const x = Math.round(V.bx + s.spot.x);
-  const y = Math.round(V.by + s.spot.y);
+  goldCorners(g, Math.round(V.bx + s.spot.x), Math.round(V.by + s.spot.y), c - s.hung.at);
+}
+/** Gold corners round somebody standing with their feet at the screen point `x`, `y`, closing in over the first steps `since` they were marked. */
+export function goldCorners(g: Ctx, x: number, y: number, since: number): void {
+  const out = Math.max(0, 4 - Math.floor(since)) * 2;
   for (const sx of [-1, 1] as const)
     for (const sy of [-1, 1] as const) {
       const cx = x + sx * (9 + out) - (sx === 1 ? 1 : 0);

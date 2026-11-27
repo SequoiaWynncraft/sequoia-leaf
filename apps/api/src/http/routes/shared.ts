@@ -101,6 +101,8 @@ export const seconds = (ms: number): number => Math.floor(ms / 1000);
 
 /** A row of `banner_people`: a banner, and the player who is its headliner. */
 export const BannerPerson = Schema.Struct({ banner: Schema.String, playerId: Schema.String });
+/** A row of `banner_called`: a banner, a seat of the four it calls, and the player in it. */
+export const BannerCalled = Schema.Struct({ banner: Schema.String, seat: Schema.Number, playerId: Schema.String });
 
 /** Who calls a game, as the play service needs to know them. */
 export const playingOf = (identity: Identity): Playing => ({ playerId: identity.playerId, guest: isGuest(identity) });

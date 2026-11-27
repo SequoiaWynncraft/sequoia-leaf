@@ -343,6 +343,18 @@ export const THINGS: readonly Thing[] = [
 
 const BY_ID = new Map(THINGS.map((t) => [t.id, t]));
 
+/**
+ * Whether a thing is open in a catalogue's era: a figure's carving once its figure is, a banner's
+ * member once its banner is; every other thing always. What a page shows that is not yet in the game
+ * reads from this, with the era Leaf gave it.
+ */
+export function thingOpen(cat: Catalog, id: string): boolean {
+  if (id.startsWith(figureThing("")))
+    return everyShared().some((f) => figureThing(f) === id && cat.figures[f] !== undefined);
+  if (isMemberThing(id)) return cat.banners.some((b) => memberThing(b.id) === id);
+  return true;
+}
+
 /** A thing by its name in the record, if there is such a thing. */
 export const thingOf = (id: string): Thing | null => BY_ID.get(id) ?? null;
 

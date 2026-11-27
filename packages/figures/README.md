@@ -22,9 +22,11 @@ this is only how they look.
   over time: standing, walking, throwing, raising an ability, holding whoever it is for, bringing it
   down, reeling, dazed, falling, cheering. `rigOf` in `sprites.ts` is the body of a figure that is
   one; whoever only shows them gets the same pictures as for everyone else (`person`), and a fight
-  poses them a stance at a time (`Shown.act`). `src/member.ts` asks Leaf who each
-  banner's member is (`meetMembers`) for any page that shows one, the raid's table and the town's
-  camps alike: nobody yet, then their name and made-up look, then their own skin. `nameOf` is what
+  poses them a stance at a time (`Shown.act`). `src/people.ts` is a page's one store of who each
+  banner's people are (`PEOPLE`): told which banners each of Leaf's answers has open, it asks Leaf
+  for any with nobody kept, one question at a time. `src/member.ts` wears them (`wearPeople`) for
+  the raid's table and the town's camps alike: nobody yet, then their name and made-up look, then
+  their own skin. `nameOf` is what
   anyone on the stump is called, and `shownAs` changes when a figure's name or pictures do.
 - `src/move.ts`: a figure going from one point to another in an arc (`Move`, `moveAt`), which every
   table moves its figures by.

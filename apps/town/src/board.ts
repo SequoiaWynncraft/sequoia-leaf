@@ -4,8 +4,8 @@
  * expired, or was swapped from another page, and another took its slot), the board is drawn again
  * whole, so that no note is left up for a quest that is gone.
  *
- * The board's news (`notes.ts`) is unread while its newest note is not the one the member last
- * opened, which the browser keeps under `town.notes.seen`.
+ * The board's news (`notes.ts`) is unread while its newest note out by Leaf's clock is not the one
+ * the member last opened, which the browser keeps under `town.notes.seen`.
  */
 
 import { pressedTwice, type Spend } from "@sequoia-leaf/kit/dom.ts";
@@ -13,7 +13,7 @@ import { keepText, keptText } from "@sequoia-leaf/kit/keep.ts";
 import type { Scope } from "@sequoia-leaf/kit/scope.ts";
 
 import type { Quest } from "./guild.ts";
-import { NOTES } from "./notes.ts";
+import { notesAt } from "./notes.ts";
 
 /** Quest ids as a set, written out the same whatever order they came in. */
 const setOf = (ids: readonly string[]): string => [...new Set(ids)].toSorted((a, b) => a.localeCompare(b)).join("\n");
@@ -38,19 +38,22 @@ export function redrawn(ids: () => readonly string[], draw: () => () => void): (
 
 export const SEEN = "town.notes.seen";
 
-/** Whether there is news on the board the member has not opened. */
-export const unread = (): boolean => NOTES[0] !== undefined && NOTES[0].id !== keptText(SEEN);
+/** Whether there is news out at a moment of Leaf's clock (`notesAt`) that the member has not opened. */
+export function unread(now: number): boolean {
+  const newest = notesAt(now)[0];
+  return newest !== undefined && newest.id !== keptText(SEEN);
+}
 
-/** The member has opened the news: all of it is read. */
-export function readNews(): void {
-  if (unread()) keepText(SEEN, NOTES[0]?.id ?? null);
+/** The member has opened the news out at a moment of Leaf's clock: all of it is read. */
+export function readNews(now: number): void {
+  if (unread(now)) keepText(SEEN, notesAt(now)[0]?.id ?? null);
 }
 
 /** The board's tabs, in order. */
 export const TABS = ["Quests", "News"] as const;
 
-/** The tab the board opens on: News while there is news unread, and Quests otherwise. */
-export const openingTab = (): (typeof TABS)[number] => (unread() ? "News" : "Quests");
+/** The tab the board opens on at a moment of Leaf's clock: News while there is news unread, and Quests otherwise. */
+export const openingTab = (now: number): (typeof TABS)[number] => (unread(now) ? "News" : "Quests");
 
 /** What a paid reroll spends on: that quest, at the price its button says. */
 export const rerollSpend = (id: string, cost: number): Spend => ({ on: `reroll:${id}`, price: cost });
@@ -62,19 +65,19 @@ export interface QuestBoard {
 }
 
 /**
- * The board while it is open (`life`): the tab on show, and what that tab holds while it is on
- * show. `show` turns to a tab (opening News reads it). `reroll` says whether a press on a quest's
+ * The board while it is open (`life`), by Leaf's clock (`now`): the tab on show, and what that tab
+ * holds while it is on show. `show` turns to a tab (opening News reads it). `reroll` says whether a press on a quest's
  * Reroll goes ahead: a free one at once; one that costs Leaf on its second press, for that quest at
  * that price, while Quests stays on show. Turned to News and back, the next press only asks.
  */
-export function questBoard(life: Scope): QuestBoard {
+export function questBoard(life: Scope, now: () => number): QuestBoard {
   const onShow = life.turns();
-  let tab: (typeof TABS)[number] = openingTab();
+  let tab: (typeof TABS)[number] = openingTab(now());
   return {
     show(to: (typeof TABS)[number]): void {
       tab = to;
       onShow(to);
-      if (to === "News") readNews();
+      if (to === "News") readNews(now());
     },
     reroll(q: Pick<Quest, "id" | "reroll">, redraw: () => void): boolean {
       const cost = q.reroll;

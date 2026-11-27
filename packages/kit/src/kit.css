@@ -245,6 +245,12 @@ button.k-label:hover {
   gap: calc(var(--u) * 2);
   color: var(--k-leaf);
 }
+/* A number cracked for the rest of a fight: its edge broken under it. */
+.k-cracked {
+  text-decoration: underline dashed var(--k-cream);
+  text-decoration-thickness: var(--u);
+  text-underline-offset: var(--u);
+}
 .k-coral {
   color: var(--k-coral);
 }

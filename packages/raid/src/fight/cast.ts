@@ -8,6 +8,9 @@ import { emit } from "./clock.ts";
 import type { Channel } from "./moves.ts";
 import type { Fight, Unit } from "./types.ts";
 
+/** An ability: the fight, whose it is, and its numbers at that figure's stars by name. */
+export type Cast = (f: Fight, u: Unit, n: (name: string) => number) => boolean;
+
 export const ids = (units: readonly Unit[]): number[] => units.map((o) => o.id);
 
 /** Announces an ability: the hexes it covers, who it is aimed at, how long before it lands, and its pulses if it is channelled. */
