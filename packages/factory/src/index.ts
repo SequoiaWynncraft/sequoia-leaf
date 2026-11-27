@@ -56,7 +56,7 @@ export * from "./page.ts";
 export * from "./pieces.ts";
 export * from "./planner.ts";
 export * from "./postcard.ts";
-export { litOf, repower, squared } from "./power.ts";
+export { litAt, litOf, repower, squared } from "./power.ts";
 export { type Leg, legKind, legPiece, legSpan, route } from "./route.ts";
 export * from "./status.ts";
 export * from "./tables.ts";

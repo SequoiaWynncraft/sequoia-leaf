@@ -39,8 +39,8 @@ export interface Remembered {
 /**
  * What drawing a piece standing on a tile is given, filled afresh for each piece (`scene.ts`): the
  * tile and the way it faces, its grade and the look of it, its tunnel's span and a crate open; where
- * its tile is in the picture (`x`, `top`; `cx` its middle, `foot` its bottom, `z` how near it stands)
- * and how faint (`a`); whether it is real or a piece not yet built (`ghost` above 0); whether power
+ * it is in the picture (`x`, `top`, `w`, `h`: its tile, or for a piece of more than one tile the box
+ * of tiles it covers; `cx` its middle, `foot` its bottom, `z` how near it stands) and how faint (`a`); whether it is real or a piece not yet built (`ghost` above 0); whether power
  * reaches it and it is at work; its holder's row and what that holds ready, makes and has done of it;
  * the screen's clock and the yard's pace; how the yard's pixels sit in the view (`seenX`, `seenY`, for
  * what flies off it); the frame's memory of the tile; and how a picture is put into the frame.
@@ -54,6 +54,8 @@ export interface Drawn {
   open: boolean;
   x: number;
   top: number;
+  w: number;
+  h: number;
   foot: number;
   cx: number;
   z: number;
@@ -64,6 +66,8 @@ export interface Drawn {
   working: boolean;
   r: number;
   out: number;
+  /** What it made beside what it finished (a by-product), waiting to leave by its own way out, or `NONE`. */
+  also: number;
   making: number;
   work: number;
   t: number;

@@ -26,6 +26,8 @@ import {
   type Yard,
 } from "@sequoia-leaf/factory";
 
+import { drawnFrom } from "./big.ts";
+
 /** Ticks trouble must have lasted to be listed, and ticks a listed piece must have been out of it to be dropped. */
 const LASTS = 15;
 const HOLDS = 60;
@@ -102,7 +104,8 @@ export function troubled(y: Yard): Found {
   const mended = f.yard !== y || f.rev !== y.rev;
   let count = 0;
   for (let i = 0; i < n; i++) {
-    const wrong = y.kind[i] !== NONE && condition(y, i) >= TROUBLE;
+    // A piece of more than one tile is listed once, by its own tile.
+    const wrong = y.kind[i] !== NONE && drawnFrom(y, i) && condition(y, i) >= TROUBLE;
     const was = f.listed[i] ?? 0;
     if (wrong) {
       if (was === 0) {

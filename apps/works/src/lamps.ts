@@ -6,10 +6,11 @@
  * lamp does not come and go as the view moves (`scene.ts` cuts them out of its dusk).
  */
 
-import { litOf, NONE, REACH, type Yard } from "@sequoia-leaf/factory";
+import { litAt, litOf, NONE, REACH, type Yard } from "@sequoia-leaf/factory";
 import type { Pt } from "@sequoia-leaf/kit/util.ts";
 
 import { TILE } from "./art/belts.ts";
+import { drawnFrom, pieceBox } from "./big.ts";
 import { pageOf } from "./kinds/index.ts";
 import type { LampsAt } from "./kinds/kind.ts";
 
@@ -61,8 +62,16 @@ export function lampsIn(
     for (let tx = tx0; tx <= tx1; tx++) {
       const i = ty * land.w + tx;
       // Each kind's own lamps and fires, where power reaches it (`KindPage.lamps`).
-      const lamps = powered[i] === 1 ? pageOf(w.kind[i] ?? NONE)?.lamps : undefined;
-      if (lamps) lamps(w, i, tx * TILE + 8, (ty + 1) * TILE, at, out);
+      if (w.part[i] !== 0) bigLamps(w, i, at, out);
+      else if (powered[i] === 1) pageOf(w.kind[i] ?? NONE)?.lamps?.(w, i, tx * TILE + 8, (ty + 1) * TILE, at, out);
     }
   return out;
+}
+
+/** A piece of more than one tile's lamps, once, from its own tile: from the middle of the foot of its box, where power reaches any of its tiles. */
+function bigLamps(w: Yard, i: number, at: LampsAt, out: Lamp[]): void {
+  const lamps = drawnFrom(w, i) && litAt(w, i) ? pageOf(w.kind[i] ?? NONE)?.lamps : undefined;
+  if (!lamps) return;
+  const b = pieceBox(w, i);
+  lamps(w, i, b.x * TILE + (b.w * TILE) / 2, (b.y + b.h) * TILE, at, out);
 }
