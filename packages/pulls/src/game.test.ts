@@ -9,12 +9,14 @@ import { TOWN } from "@sequoia-leaf/town";
 import { figureThing, isThing, memberThing } from "@sequoia-leaf/town/things.ts";
 
 import {
+  awardsBetween,
   BANNERS,
   type Counters,
   draw,
   EARLIER,
   headliner,
   HISTORY,
+  opensAt,
   type Prizes,
   prizesOf,
   PULLS,
@@ -24,6 +26,7 @@ import {
   type Rarity,
   rarityOf,
   RATES,
+  readStaffCommand,
   topChance,
 } from "./game.ts";
 
@@ -279,6 +282,39 @@ describe("a pull", () => {
     expect(state.counters.banner).toEqual(counters(0, 0, note?.fifty === "lost"));
     expect(state.seeds).toBe(RATES.seeds.top);
     expect(PULLS.standing?.(state)).toEqual({ score: 1, also: { pulls: 1, top: 1 } });
+  });
+});
+
+describe("a staff grant", () => {
+  const grant = { do: "grant", prize: "figure:crab40", copies: 2, by: "steward", name: "Steward" } as const;
+  it("is never read off a page's wire, only off Leaf's staff route", () => {
+    expect(PULLS.command({ ...grant, id: "g-1" })).toBeNull();
+    expect(readStaffCommand({ ...grant, id: "g-1" })).toEqual(grant);
+    expect(readStaffCommand({ do: "pull", pool: "grove", n: 1, with: "free", era: eraAt(T0) })).toBeNull();
+    expect(readStaffCommand({ ...grant, copies: 8 })).toBeNull();
+  });
+  it("adds copies as a pull would, for nothing: no Leaf, no Seeds, no counter or history, and the awards follow", () => {
+    const s = PULLS.create(ctx());
+    const granted = PULLS.apply(s, grant, ctx());
+    if (isRefused(granted)) throw new Error(granted.refused);
+    expect(granted.state.have).toEqual({ "figure:crab40": 2 });
+    expect({ ...granted.state, have: s.have }).toEqual(s);
+    expect(granted.leaf ?? []).toEqual([]);
+    expect(granted.notes).toEqual([{ t: "grant", prize: "figure:crab40", rarity: "Druid", have: 2 }]);
+    expect(granted.log).toEqual([
+      { kind: "pulls_granted", data: { prize: "figure:crab40", copies: 2, have: 2, by: "steward", name: "Steward" } },
+    ]);
+    expect(PULLS.awards?.(granted.state)).toEqual(awardsBetween("figure:crab40", 0, 2));
+    expect(awardsBetween("figure:crab40", 2, 3)).toEqual(["copies:figure:crab40:3"]);
+    expect(awardsBetween("figure:crab40", 7, 9)).toEqual([]);
+  });
+  it("is refused for a prize not open yet by Leaf's clock, and for one no release has", () => {
+    const s = PULLS.create(ctx());
+    const banner = { ...grant, prize: headliner("banner-1") };
+    expect(opensAt(banner.prize)).toBe(Date.UTC(2026, 10, 23));
+    expect(PULLS.apply(s, banner, ctx(Date.UTC(2026, 10, 22)))).toEqual({ refused: "not_released" });
+    expect(isRefused(PULLS.apply(s, banner, ctx()))).toBe(false);
+    expect(PULLS.apply(s, { ...grant, prize: "figure:nobody" }, ctx())).toEqual({ refused: "no_such_prize" });
   });
 });
 

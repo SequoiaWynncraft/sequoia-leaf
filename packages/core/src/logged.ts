@@ -16,7 +16,9 @@
  * story order finished (`order`, its number in the story, `title`, `pay`); the town logs
  * `town_bought` and `town_pet`, `town_crab` for each sighting of the missing crab and
  * `town_greeted` for each caller greeted (`by`, who called); the pulls log `pulls_top`
- * for each top-tier prize won (`prize`, `pool`, and the pulls since the last one, `top`). The play
+ * for each top-tier prize won (`prize`, `pool`, and the pulls since the last one, `top`) and
+ * `pulls_granted` for each prize the staff gave (`prize`, `copies`, `have` after it, and who gave it,
+ * `by` and `name`). The play
  * service itself logs `leaf_spent` for each Leaf a command took (`leaf`, and the `reason` it was taken for).
  */
 export const LOGGED = {
@@ -33,5 +35,6 @@ export const LOGGED = {
   townCrab: "town_crab",
   townGreeted: "town_greeted",
   pullsTop: "pulls_top",
+  pullsGranted: "pulls_granted",
   leafSpent: "leaf_spent",
 } as const;

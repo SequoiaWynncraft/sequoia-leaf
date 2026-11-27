@@ -9,6 +9,7 @@ import { GameCampsHandlers } from "./routes/camps.ts";
 import { MeHandlers } from "./routes/me.ts";
 import {
   BodyLimitLive,
+  GrantBodyErrorsLive,
   PageErrorBodyErrorsLive,
   PlayBodyErrorsLive,
   PlayerLive,
@@ -63,6 +64,7 @@ export const ApiRoutes = HttpApiBuilder.layer(LeafApi, { openapiPath: "/openapi.
     SittingBodyErrorsLive,
     PageErrorBodyErrorsLive,
     RequestBodyErrorsLive,
+    GrantBodyErrorsLive,
     BackendLive,
     PurchaseBodyErrorsLive,
     UnexpectedLive,

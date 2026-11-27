@@ -3923,5 +3923,81 @@
       "won": 1,
       "top_four": 1
     }
+  },
+  "POST /v1/game/admin/grants, a member": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/admin/grants",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000002",
+        "figure": "crab40"
+      }
+    },
+    "status": 403,
+    "body": {
+      "code": "staff_only",
+      "message": "This is for the guild's staff"
+    }
+  },
+  "POST /v1/game/admin/grants, dry": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/admin/grants",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000002",
+        "figure": "crab40",
+        "copies": 2,
+        "dry": true
+      }
+    },
+    "status": 200,
+    "body": {
+      "dry": true,
+      "player": {
+        "id": "10000000-0000-0000-0000-000000000002",
+        "name": "Bob"
+      },
+      "prize": "figure:crab40",
+      "rarity": "Druid",
+      "copies": 2,
+      "had": 0,
+      "have": 2,
+      "awards": ["pull:figure:crab40", "copies:figure:crab40:2"],
+      "by": {
+        "id": "10000000-0000-0000-0000-000000000004",
+        "name": "Steward"
+      },
+      "at": "2026-11-25T12:55:00.000Z"
+    }
+  },
+  "POST /v1/game/admin/grants": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/admin/grants",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000002",
+        "figure": "crab40",
+        "copies": 2
+      }
+    },
+    "status": 200,
+    "body": {
+      "dry": false,
+      "player": {
+        "id": "10000000-0000-0000-0000-000000000002",
+        "name": "Bob"
+      },
+      "prize": "figure:crab40",
+      "rarity": "Druid",
+      "copies": 2,
+      "had": 0,
+      "have": 2,
+      "awards": ["pull:figure:crab40", "copies:figure:crab40:2"],
+      "by": {
+        "id": "10000000-0000-0000-0000-000000000004",
+        "name": "Steward"
+      },
+      "at": "2026-11-25T12:55:00.000Z"
+    }
   }
 }

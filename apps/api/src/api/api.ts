@@ -15,6 +15,7 @@ import type { DiscordId } from "../wire.ts";
 import {
   BadOrigin,
   BodyTooLarge,
+  GrantRefused,
   IdentityUnavailable,
   InternalError,
   Invalid,
@@ -40,6 +41,8 @@ import {
   CampVisitors,
   Events,
   GameMe,
+  GrantBody,
+  Granted,
   GuildEvents,
   Health,
   Hello,
@@ -182,6 +185,11 @@ export class SittingBodyErrors extends HttpApiMiddleware.Service<SittingBodyErro
 
 /** Answers a guild request whose body is not an aspect, a tome or so many LE (`RequestBody`) with `invalid_request`. */
 export class RequestBodyErrors extends HttpApiMiddleware.Service<RequestBodyErrors>()("leaf/api/RequestBodyErrors", {
+  error: Invalid,
+}) {}
+
+/** Answers a staff grant whose body is not one (`GrantBody`) with `invalid_grant`. */
+export class GrantBodyErrors extends HttpApiMiddleware.Service<GrantBodyErrors>()("leaf/api/GrantBodyErrors", {
   error: Invalid,
 }) {}
 
@@ -438,6 +446,11 @@ export class GameAdminApi extends HttpApiGroup.make("gameAdmin")
       success: ActivityReport,
       error: [Invalid, StaffOnly],
     }),
+    HttpApiEndpoint.post("grant", "/grants", {
+      payload: GrantBody,
+      success: Granted,
+      error: [Invalid, StaffOnly, Missing, GrantRefused, StateUnreadable, SlowDown],
+    }).middleware(GrantBodyErrors),
   )
   .middleware(Player)
   .prefix("/v1/game/admin") {}

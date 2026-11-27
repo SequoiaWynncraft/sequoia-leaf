@@ -5,6 +5,7 @@ import { HttpApiBuilder, HttpApiError, HttpApiSecurity } from "effect/http-api";
 import {
   BodyLimit,
   CurrentIdentity,
+  GrantBodyErrors,
   type Identity,
   isGuest,
   PageErrorBodyErrors,
@@ -285,6 +286,17 @@ export const RequestBodyErrorsLive = Layer.succeed(RequestBodyErrors)(
       code: "invalid_request",
       message:
         'Send a request as { "type": "aspect" }, { "type": "tome", "reason": "<what it is for>" } or { "type": "le", "amount": <whole LE, 1 or more> }',
+    }),
+  ),
+);
+
+/** A staff grant whose body is not one (`GrantBody`) gets `invalid_grant`. */
+export const GrantBodyErrorsLive = Layer.succeed(GrantBodyErrors)(
+  payloadError(
+    new Invalid({
+      code: "invalid_grant",
+      message:
+        'Send { "player": "<Leaf id>", "figure": "<figure id>" } or "banner": "<banner id>" for its headliner, with "copies" 1 to 7 and "dry": true to see what it would do',
     }),
   ),
 );

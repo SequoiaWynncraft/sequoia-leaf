@@ -88,6 +88,7 @@ describe("HTTP", () => {
       "/internal/v1/players/{player}/leaf",
       "/internal/v1/purchases/{key}",
       "/v1/game/admin/activity",
+      "/v1/game/admin/grants",
       "/v1/game/banners",
       "/v1/game/camps",
       "/v1/game/camps/visitors",

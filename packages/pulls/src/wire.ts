@@ -9,6 +9,7 @@ import { BANNERS, decodePulls, type Fifty, PULLS_VERSION, type PullsNote, type P
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const isFifty = (v: unknown): v is Fifty => v === "won" || v === "lost" || v === "owed";
+const isNoteKind = (v: unknown): v is PullsNote["t"] => v === "pull" || v === "exchange" || v === "grant";
 
 /** The view, read as the state is read from what Leaf stored (the stream it leaves out stands at 0). */
 export function readView(v: unknown): PullsView | null {
@@ -35,7 +36,7 @@ export function readView(v: unknown): PullsView | null {
 }
 
 function readNote(v: unknown): PullsNote | null {
-  if (!isRecord(v) || (v.t !== "pull" && v.t !== "exchange")) return null;
+  if (!isRecord(v) || !isNoteKind(v.t)) return null;
   const { prize, have, top, fifty } = v;
   const rarity = typeof prize === "string" ? rarityOf(prize) : undefined;
   if (typeof prize !== "string" || rarity === undefined || rarity !== v.rarity || typeof have !== "number") return null;
