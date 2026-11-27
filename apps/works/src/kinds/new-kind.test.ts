@@ -1,0 +1,272 @@
+/**
+ * A new kind of piece is one module of the rules and one of the page, each with its line in its
+ * registry, and nothing else changes. The test proves it on a copy of the repository: it adds a
+ * throwaway kind (a sieve, which lets each item through after a second where power reaches it) as
+ * those two modules and those two lines, and nothing else; then the copy type-checks, the sieve plays
+ * by the rules beside the other kinds (built, fed, worked, handed on, standing and said, counted a
+ * minute, priced and taken up), and the page builds it, counts it in the dock and draws its card's
+ * numbers, its map colour and its lamp from its module. Anything else that had to change to have a
+ * kind fails here.
+ *
+ * A save keeps a kind in 4 bits (step F3 of tiers 5 to 8 widens them), so a 17th kind is refused
+ * there, out loud.
+ */
+import { describe, expect, test } from "bun:test";
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+
+import { KIND_DEFS, KINDS } from "@sequoia-leaf/factory";
+
+import { PAGES } from "./index.ts";
+
+const root = join(import.meta.dir, "..", "..", "..", "..");
+const RULES_KINDS = join(root, "packages", "factory", "src", "kinds");
+
+/** The throwaway kind's rules: one module, as any kind's. */
+const RULES_SIEVE = `/** A throwaway kind for the test that a kind is one module: a sieve lets each item through after a second. */
+import { handOut, keep, readyOut } from "./holder.ts";
+import { kind } from "./kind.ts";
+import type { Kit } from "./kit.ts";
+import { aheadOf, anything, behindOnly } from "./line.ts";
+import { as } from "./say.ts";
+import type { Yard } from "../yard.ts";
+
+/** Room for one thing, while it holds nothing and has nothing out. */
+function room(k: Kit, y: Yard, i: number): boolean {
+  const r = k.holderOf(y, i);
+  return (y.holders.count[r] ?? 0) === 0 && y.holders.out[r] === k.NONE;
+}
+
+/** It works on what it holds for a second, and then holds it out to hand on. */
+function work(k: Kit, y: Yard, _i: number, r: number, speed: number): void {
+  const h = y.holders;
+  if ((h.count[r] ?? 0) === 0) return;
+  h.work[r] = (h.work[r] ?? 0) + speed;
+  if ((h.work[r] ?? 0) < 20) return;
+  h.work[r] = 0;
+  for (let n = 0; n < k.ITEM_COUNT; n++)
+    if (k.held(h, r, n) > 0) {
+      k.take(h, r, n);
+      h.out[r] = n;
+      return;
+    }
+}
+
+export const sieve = kind({
+  name: "sieve",
+  info: { name: "Sieve", cost: 5, draw: 1, gives: 0, what: "Lets each item through after a second." },
+  graded: true,
+  holds: true,
+  work: 20,
+  does: ["Sifts", "items"],
+  rules: {
+    sides: behindOnly,
+    next: aheadOf,
+    wants: anything,
+    room,
+    give: keep,
+    work,
+    hands: handOut,
+    ready: readyOut,
+    condition: (_k, _y, _i, lit) => (lit ? as("working") : as("unpowered", true)),
+    words: (_k, _y, _i, state) => ({ line: state === "working" ? "Sifting." : "No power here." }),
+    most: () => 1,
+  },
+});
+`;
+
+/** The throwaway kind on the page: one module, as any kind's, with a picture of its own. */
+const PAGE_SIEVE = `/** A throwaway kind for the test that a kind is one module: a sieve, a mesh in a frame. */
+import { CREAM, GOLD } from "@sequoia-leaf/kit/palette.ts";
+
+import { bm } from "../art/pal.ts";
+import type { KindPage } from "./kind.ts";
+
+const MESH = ["nnnnnn", "nynyny", "nnnnnn", "nynyny", "nnnnnn"];
+
+export const sieve: KindPage = {
+  picture: () => bm(MESH, 3, 5).c,
+  draw(art, _y, at) {
+    at.stand(art.zed, at.cx, at.foot - 4, at.z, at.a);
+    return at.foot - 8;
+  },
+  pointer: "bare",
+  lamps: (_y, _i, x, foot, _at, out) => out.push({ x, y: foot - 4, r: 9, power: 0.4, reach: false }),
+  map: [GOLD[1], CREAM],
+  dot: GOLD[2],
+  dock: 15,
+  pace: () => ({ label: "Sifts", value: "60 /min" }),
+  faces: true,
+};
+`;
+
+/** The tracked files of the repository, the packages and the Works' page, copied to a new folder, with each workspace's links to the others as they are and the installed packages shared. */
+function copy(): string {
+  const to = mkdtempSync(join(tmpdir(), "works-kind-"));
+  const listed = Bun.spawnSync(
+    ["git", "ls-files", "packages", "apps/works", "package.json", "tsconfig.base.json", "bunfig.toml"],
+    {
+      cwd: root,
+    },
+  );
+  for (const file of listed.stdout.toString().split("\n").filter(Boolean)) {
+    mkdirSync(dirname(join(to, file)), { recursive: true });
+    cpSync(join(root, file), join(to, file));
+  }
+  // Each workspace's own links, as they stand, point within the copy; the installed packages are shared.
+  for (const at of ["apps/works", ...readdirSync(join(root, "packages")).map((p) => `packages/${p}`)])
+    try {
+      cpSync(join(root, at, "node_modules"), join(to, at, "node_modules"), { recursive: true, verbatimSymlinks: true });
+    } catch {
+      // A workspace with nothing installed has no links to copy.
+    }
+  symlinkSync(join(root, "node_modules"), join(to, "node_modules"));
+  return to;
+}
+
+/** Adds one line to a file of the copy after the last line that matches. */
+function addAfter(file: string, last: RegExp, line: string): void {
+  const lines = readFileSync(file, "utf8").split("\n");
+  const at = lines.findLastIndex((l) => last.test(l));
+  lines.splice(at + 1, 0, line);
+  writeFileSync(file, lines.join("\n"));
+}
+
+/** Runs Bun in the copy; what it printed, and whether it ended well. */
+function bun(at: string, ...args: string[]): { ok: boolean; out: string } {
+  const run = Bun.spawnSync([process.execPath, ...args], { cwd: at, stdout: "pipe", stderr: "pipe" });
+  return { ok: run.exitCode === 0, out: `${run.stdout.toString()}${run.stderr.toString()}` };
+}
+
+/** What plays the sieve by the rules, in the copy. */
+const PLAY = `import * as F from "./packages/factory/src/index.ts";
+import { bareLand } from "./packages/factory/test/land.ts";
+
+const k = F.kindNamed("sieve");
+if (k === null || k !== F.KIND_COUNT - 1) throw new Error("the sieve is not the last kind");
+const y = F.create({ land: bareLand(20, 9, [], [15, 4]), tier: 4, seed: 1 });
+// As if a goal had unlocked it: no goal names a throwaway kind.
+y.open.kinds[k] = 1;
+const built = [F.CRATE, k, F.BELT, F.BELT, F.BELT].map((kind, n) => F.build(y, kind, 9 + n, 4, 0, Infinity).ok);
+const crate = F.holderOf(y, F.at(y, 9, 4));
+for (let n = 0; n < 10; n++) F.put(y.holders, crate, F.item("plank"));
+const sieve = F.at(y, 10, 4);
+let says = "";
+for (let t = 0; t < 400; t++) {
+  F.step(y);
+  if (t === 50) says = F.status(y, sieve)?.line ?? "";
+}
+const made = F.counts();
+const needed = F.counts();
+F.flow(y, made, needed);
+let kept = "";
+try {
+  F.encode(y);
+} catch (e) {
+  kept = String(e);
+}
+console.log(
+  JSON.stringify({
+    built,
+    through: y.depot[F.item("plank")],
+    says,
+    perMinute: F.makes(k, 1, null),
+    rate: F.machineRate(y, sieve).nominal,
+    draws: F.powerSummary(y).draws.some((d) => d.kind === k),
+    taken: F.takes(y, sieve, F.at(y, 9, 4)),
+    behindOnly: !F.takes(y, sieve, F.at(y, 10, 3)),
+    over: F.refusal(y, k, 10, 4, Infinity, 1),
+    refund: F.remove(y, 10, 4),
+    kept: kept.includes("4 bits"),
+  }),
+);
+`;
+
+/** What the page makes of the sieve, in the copy: the dock, its card's numbers, its map colour and its lamp. */
+const PAGE = `import * as F from "./packages/factory/src/index.ts";
+import { bareLand } from "./packages/factory/test/land.ts";
+import { PAGES } from "./apps/works/src/kinds/index.ts";
+import { lampsIn } from "./apps/works/src/lamps.ts";
+import { blockColour } from "./apps/works/src/plan.ts";
+import { DRAWN } from "./apps/works/src/state.ts";
+import { paceOf } from "./apps/works/src/ui/cards.ts";
+
+const k = F.kindNamed("sieve");
+if (k === null) throw new Error("no sieve");
+const y = F.create({ land: bareLand(20, 9, [], [15, 4]), tier: 4, seed: 1 });
+y.open.kinds[k] = 1;
+F.build(y, k, 10, 4, 0, Infinity);
+const lamps = lampsIn(y, { x: 0, y: 0 }, { x: 0, y: 0, w: 320, h: 144 }, 1, () => true, () => false);
+console.log(
+  JSON.stringify({
+    docked: DRAWN.at(-1) === k,
+    pace: paceOf(k, 1)?.value,
+    colour: blockColour(k) === PAGES.sieve.map?.[0],
+    lamp: lamps.some((l) => l.x === 10 * 16 + 8 && l.r === 9),
+  }),
+);
+`;
+
+describe("a new kind of piece", () => {
+  test("is one module of the rules and one of the page, and a line in each list: nothing else changes", () => {
+    const at = copy();
+    try {
+      writeFileSync(join(at, "packages/factory/src/kinds/sieve.ts"), RULES_SIEVE);
+      const list = join(at, "packages/factory/src/kinds/list.ts");
+      addAfter(list, /^import \{ \w+ \} from "\.\/\w+\.ts";$/, 'import { sieve } from "./sieve.ts";');
+      addAfter(list, /^ {2}\w+,$/, "  sieve,");
+      writeFileSync(join(at, "apps/works/src/kinds/sieve.ts"), PAGE_SIEVE);
+      const pages = join(at, "apps/works/src/kinds/index.ts");
+      addAfter(pages, /^import \{ \w+ \} from "\.\/\w+\.ts";$/, 'import { sieve } from "./sieve.ts";');
+      addAfter(pages, /^ {2}\w+,$/, "  sieve,");
+
+      for (const project of ["packages/factory", "packages/factory/tsconfig.test.json", "apps/works"]) {
+        const checked = bun(at, "check", "-p", project, "--no-pretty");
+        expect([project, checked.ok ? "" : checked.out]).toEqual([project, ""]);
+      }
+      writeFileSync(join(at, "play.ts"), PLAY);
+      const played = bun(at, "play.ts");
+      expect(played.out).not.toContain("error");
+      expect(JSON.parse(played.out.trim().split("\n").at(-1) ?? "{}")).toEqual({
+        built: [true, true, true, true, true],
+        through: 10,
+        says: "Sifting.",
+        perMinute: 60,
+        rate: 60,
+        draws: true,
+        taken: true,
+        behindOnly: true,
+        over: null,
+        refund: { ok: true, refund: 5 },
+        kept: true,
+      });
+      writeFileSync(join(at, "page.ts"), PAGE);
+      const paged = bun(at, "page.ts");
+      expect(JSON.parse(paged.out.trim().split("\n").at(-1) ?? "{}")).toEqual({
+        docked: true,
+        pace: "60 /min",
+        colour: true,
+        lamp: true,
+      });
+    } finally {
+      rmSync(at, { recursive: true, force: true });
+    }
+  }, 60_000);
+
+  test("is listed once in each list: every kind's module of the rules and of the page, and only they", () => {
+    // The rules: each module that says a kind (`kind({`) is in the list, once, in its order.
+    const modules = readdirSync(RULES_KINDS).filter(
+      (f) =>
+        f.endsWith(".ts") && !f.endsWith(".test.ts") && readFileSync(join(RULES_KINDS, f), "utf8").includes("= kind({"),
+    );
+    expect(modules.map((f) => f.replace(".ts", "")).toSorted()).toEqual([...KINDS].toSorted());
+    expect(new Set(KIND_DEFS.map((d) => d.name)).size).toBe(KIND_DEFS.length);
+    // The page: a module of the same name for each, and it is the one listed.
+    for (const name of KINDS) {
+      const text = readFileSync(join(import.meta.dir, `${name}.ts`), "utf8");
+      expect([name, text.includes(`export const ${name}: KindPage`)]).toEqual([name, true]);
+      expect(typeof PAGES[name].picture).toBe("function");
+    }
+  });
+});

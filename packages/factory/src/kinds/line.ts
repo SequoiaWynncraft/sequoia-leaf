@@ -1,8 +1,8 @@
 /**
  * The carriers' way of playing, shared by every kind that carries one thing across its tile at a
  * time (a belt, a joiner, a tunnel mouth, a splitter, a sorter): what such a tile takes and how, how
- * it hands on what has crossed it, and how it stands. A kind takes what it uses of this through the
- * kit, and its own module says the rest.
+ * it hands on what has crossed it, and how it stands. A kind imports what it uses of this, and its
+ * own module says the rest.
  */
 import type { Wire, Yard } from "../yard.ts";
 import type { Words } from "./kind.ts";

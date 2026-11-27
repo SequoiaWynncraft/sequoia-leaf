@@ -8,28 +8,29 @@ page (`apps/works`) holds a copy and draws it; the town reads its standing's wor
 
 ## What to read for which kind of work
 
-| To work on                                                                    | Read                                                                          |
-| ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| what things, machines, grades, recipes, plots, nodes, research and askers are | `src/content/*.ts` (data only)                                                |
-| how a name becomes a number; what is open once some goals are done; `locked`  | `src/tables.ts`                                                               |
-| what a yard holds, and its side tables                                        | `src/yard.ts`, then `src/land.ts`                                             |
-| one tick                                                                      | `src/tick.ts`, `src/wire.ts` (who hands to whom), `src/power.ts`              |
-| building, raising, removing, turning, setting pieces, plots                   | `src/build.ts`; many pieces at once: `src/pieces.ts`; colours: `src/lines.ts` |
-| a plan of the whole yard: kept, and put back over the yard                    | `src/whole.ts`                                                                |
-| where a figure may stand in a yard, and how its walking is checked            | `src/footing.ts`                                                              |
-| the node in hand, the line of research, the board                             | `src/orders.ts`, `src/clock.ts`                                               |
-| Leaf's game: commands, Coins, time, the view and the answer                   | `src/game.ts`                                                                 |
-| keeping a yard, and the check                                                 | `src/codec.ts`, `src/bytes.ts`, `src/check.ts`                                |
-| the route for a run of belt and its legs; what a piece is doing               | `src/route.ts`; `src/status.ts` (`condition` decides, `status` words it)      |
-| what a machine or a line makes and needs a minute                             | `src/planner.ts`, and `plan.ts` for the table of the slice                    |
-| what an unlock is, for a screen: a typed list, each with its made sentence    | `src/unlocks.ts`; what a tier is called: `src/content/tiers.ts`               |
-| what a yard as it stands can make and needs a minute                          | `flow`, in `src/status.ts`                                                    |
-| the wire from the page's side: a command written, what Leaf sends read back   | `src/page.ts`                                                                 |
-| what the town is told: the postcard, the standing's words                     | `src/postcard.ts`, `src/stats.ts`                                             |
-| yards built with commands, for the tests and the play server's tours          | `test/yards.ts` (`delivering`, `generated`, `staged`)                         |
-| how long the slice takes a player                                             | `pace.ts` (its settings), then `pace/`                                        |
-| what it costs                                                                 | `bench.ts`, and `test/budgets.test.ts` for the budgets                        |
-| that a change to the tick leaves every yard as it was, to the bit             | `test/replays.ts` (`bun test/replays.ts --write` writes the record again)     |
+| To work on                                                                   | Read                                                                          |
+| ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| what things, grades, recipes, plots, nodes, research and askers are          | `src/content/*.ts` (data only)                                                |
+| what a kind of piece is and how it plays (and adding one)                    | `src/kinds/<kind>.ts`, numbered in `src/kinds/list.ts`; `src/kinds/kind.ts`   |
+| how a name becomes a number; what is open once some goals are done; `locked` | `src/tables.ts`                                                               |
+| what a yard holds, and its side tables                                       | `src/yard.ts`, then `src/land.ts`                                             |
+| one tick                                                                     | `src/tick.ts`, `src/wire.ts` (who hands to whom, the kit), `src/power.ts`     |
+| building, raising, removing, turning, setting pieces, plots                  | `src/build.ts`; many pieces at once: `src/pieces.ts`; colours: `src/lines.ts` |
+| a plan of the whole yard: kept, and put back over the yard                   | `src/whole.ts`                                                                |
+| where a figure may stand in a yard, and how its walking is checked           | `src/footing.ts`                                                              |
+| the node in hand, the line of research, the board                            | `src/orders.ts`, `src/clock.ts`                                               |
+| Leaf's game: commands, Coins, time, the view and the answer                  | `src/game.ts`                                                                 |
+| keeping a yard, and the check                                                | `src/codec.ts`, `src/bytes.ts`, `src/check.ts`                                |
+| the route for a run of belt and its legs; what a piece is doing              | `src/route.ts`; `src/status.ts` (`condition` decides, `status` words it)      |
+| what a machine or a line makes and needs a minute                            | `src/planner.ts`, and `plan.ts` for the table of the slice                    |
+| what an unlock is, for a screen: a typed list, each with its made sentence   | `src/unlocks.ts`; what a tier is called: `src/content/tiers.ts`               |
+| what a yard as it stands can make and needs a minute                         | `flow`, in `src/status.ts`                                                    |
+| the wire from the page's side: a command written, what Leaf sends read back  | `src/page.ts`                                                                 |
+| what the town is told: the postcard, the standing's words                    | `src/postcard.ts`, `src/stats.ts`                                             |
+| yards built with commands, for the tests and the play server's tours         | `test/yards.ts` (`delivering`, `generated`, `staged`)                         |
+| how long the slice takes a player                                            | `pace.ts` (its settings), then `pace/`                                        |
+| what it costs                                                                | `bench.ts`, and `test/budgets.test.ts` for the budgets                        |
+| that a change to the tick leaves every yard as it was, to the bit            | `test/replays.ts` (`bun test/replays.ts --write` writes the record again)     |
 
 ```sh
 bun test       # every rule, the tables, the budgets and the record of the tick (about 50 seconds)
@@ -39,6 +40,32 @@ bun bench.ts --hours --lines   # lines that never wait alone: three of 41 belts 
 bun plan.ts    # the planner's table for every thing the slice can make
 bun pace.ts    # tiers 0 to 3 played as a careful player would, and how long each goal took (about 3 seconds)
 ```
+
+## Kinds of piece
+
+Each kind of piece is one module (`src/kinds/<kind>.ts`): what it is called and costs, the power it
+draws and gives, what the rest of the rules read of it as data (`KindDef`: it holds things, carries
+them across its tile, keeps a line's colour, has ways, cannot be turned, runs under tiles, ...), and
+how it plays (`Hooks`): the sides it takes things in from and where it hands them, what it wants and
+has room for, its step in the tick, its checks where it is set down, how it stands and its words,
+what it does a minute, and what it keeps and is put back with. `src/kinds/list.ts` numbers them in
+kind order (a save's numbers: a new kind goes at the end) and fills in what a module leaves out. The
+loops (`tick.ts`, `wire.ts`, `status.ts`, `build.ts`, `cells.ts`, `pieces.ts` and the rest) ask each
+piece's kind and name none, but the router, which lays belts and tunnels, and the yard, which puts
+the depot down as land. A kind's page module is beside it in `apps/works/src/kinds/`.
+
+A kind's module imports nothing of the rules at run time, only their types: the tables number the
+kinds from their modules, so a kind that imported them would be a loop. Each hook is handed the kit
+first (`src/kinds/kit.ts` says what is in it; `KIT` in `wire.ts` is it). What kinds share is a module
+of its own they import: a carrier (`line.ts`), a holder, a maker of recipes, a sink, the words
+(`say.ts`). The tick looks each kind's step up by its number; the steps many kinds share are called by
+their own names, so that one call site for every kind's step does not slow the tick
+(`test/budgets.test.ts` holds its speed, and its allocation guard follows the hooks and the kit).
+
+Adding a kind is its module and its line in `list.ts`, and its page module and its line in the
+page's `kinds/index.ts`: `apps/works/src/kinds/new-kind.test.ts` does exactly that to a copy of the
+repository and fails if anything else has to change. A save keeps a kind in 4 bits, so a 17th kind is
+refused there until the kind field is widened.
 
 ## The yard
 
