@@ -7,7 +7,7 @@
 import { describe, expect, test } from "bun:test";
 
 import * as F from "../src/index.ts";
-import { RINGED } from "./ring.ts";
+import { RING, RINGED } from "./ring.ts";
 import { delivering, junctions, saved, SAVES, staged } from "./yards.ts";
 
 const read8: unknown = await Bun.file(`${import.meta.dir}/saves/read-v8.json`).json();
@@ -62,7 +62,7 @@ describe("a ring of plots round the land", () => {
     expect([RINGED.w, RINGED.h]).toEqual([F.LAND.w + 2 * F.PLOT_W, F.LAND.h + 2 * F.PLOT_H]);
     expect(RINGED.origin).toEqual([F.LAND.origin[0] + F.PLOT_W, F.LAND.origin[1] + F.PLOT_H]);
     expect(fromDepot(staged("new"), ...F.LAND.origin)).toEqual([-8, -6]);
-    expect(RINGED.trees.length).toBe(F.LAND.trees.length + 16);
+    expect(RINGED.trees.length).toBe(F.LAND.trees.length + RING.length);
   });
 
   for (const [name, make] of YARDS)

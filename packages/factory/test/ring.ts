@@ -1,14 +1,18 @@
 /**
- * A throwaway ring of plots round the guild's land, as the land will grow: the sixteen plots two
- * from the yard, each a plot of the plots table's size with deadfall, a pool and a redwood standing
- * where a yard might build. They are added to the plots table (`RINGED_IDS`) and the land is put
- * together from all of them (`RINGED`), as the land is: 5 plots by 5.
+ * A throwaway ring of plots round the guild's land, as the land will grow: the plots one further
+ * from the yard than any the plots table has (sixteen round today's nine), each a plot of the plots
+ * table's size with deadfall, a pool and a redwood standing where a yard might build. They are added
+ * to the plots table (`RINGED_IDS`) and the land is put together from all of them (`RINGED`), as the
+ * land is.
  */
 import * as F from "../src/index.ts";
 
+/** How far from the yard the ring is, in plots: one past the plots table's furthest. */
+const OUT = 1 + Math.max(...F.PLOTS.map((p) => Math.max(Math.abs(p.col), Math.abs(p.row))));
+const SIDE = Array.from({ length: 2 * OUT + 1 }, (_, k) => k - OUT);
 /** The plots of the ring, each from the yard as the plots table places them. */
-const AROUND: readonly (readonly [number, number])[] = [-2, -1, 0, 1, 2].flatMap((col) =>
-  [-2, -1, 0, 1, 2].flatMap((row) => (Math.max(Math.abs(col), Math.abs(row)) === 2 ? [[col, row] as const] : [])),
+const AROUND: readonly (readonly [number, number])[] = SIDE.flatMap((col) =>
+  SIDE.flatMap((row) => (Math.max(Math.abs(col), Math.abs(row)) === OUT ? [[col, row] as const] : [])),
 );
 
 /** A ring plot's ground: a redwood, deadfall and a pool, each a little further along by the plot's place in the ring. */

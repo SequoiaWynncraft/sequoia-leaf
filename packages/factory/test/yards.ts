@@ -29,6 +29,7 @@ import { readFileSync } from "node:fs";
 import * as F from "../src/index.ts";
 import { type Gen, generate } from "./gen.ts";
 import { bareLand, makeLand } from "./land.ts";
+import { near, xy } from "./near.ts";
 
 type Rec = Record<string, unknown>;
 
@@ -78,17 +79,17 @@ export function delivering(seed = 1): F.Yard {
   const y = F.create({ seed, tier: 4 });
   const depot = y.land.depot;
   // Deadfall north-west of the depot, gathered straight in.
-  must(y, { do: "build", kind: "gatherer", x: 19, y: 15, dir: 0 });
-  lay(y, [20, 15], depot);
+  must(y, { do: "build", kind: "gatherer", ...near(-5, -3), dir: 0 });
+  lay(y, xy(-4, -3), depot);
   // Deadfall south-east, sawn into planks on the way.
-  must(y, { do: "build", kind: "gatherer", x: 29, y: 21, dir: 3 });
-  must(y, { do: "build", kind: "mill", x: 29, y: 20, dir: 2 });
-  lay(y, [28, 20], depot);
+  must(y, { do: "build", kind: "gatherer", ...near(5, 3), dir: 3 });
+  must(y, { do: "build", kind: "mill", ...near(5, 2), dir: 2 });
+  lay(y, xy(4, 2), depot);
   // Ore north-east, beyond the depot's reach: a pylon, and a crate on the line.
-  must(y, { do: "build", kind: "pylon", x: 27, y: 15, dir: 0 });
-  must(y, { do: "build", kind: "gatherer", x: 30, y: 14, dir: 2 });
-  must(y, { do: "build", kind: "crate", x: 29, y: 14, dir: 2 });
-  lay(y, [28, 14], depot);
+  must(y, { do: "build", kind: "pylon", ...near(3, -3), dir: 0 });
+  must(y, { do: "build", kind: "gatherer", ...near(6, -4), dir: 2 });
+  must(y, { do: "build", kind: "crate", ...near(5, -4), dir: 2 });
+  lay(y, xy(4, -4), depot);
   for (let k = 0; k < 600; k++) F.step(y);
   return y;
 }
@@ -97,6 +98,7 @@ let small: Gen | null = null;
 /** A yard of about 1,000 pieces on 48 by 36 tiles, made once by the generator. */
 export const generated = (): Gen => (small ??= generate(makeLand(3, 3, 7), 1000));
 
+/** A piece to build: its kind, its place from the depot (`near`), its way and its grade if above the first. */
 type Placed = readonly [F.KindName, number, number, F.Dir, number?];
 
 /**
@@ -111,64 +113,64 @@ type Placed = readonly [F.KindName, number, number, F.Dir, number?];
 export function junctions(): F.Yard {
   const y = F.create({ seed: 31, tier: 5 });
   const pieces: Placed[] = [
-    ["gatherer", 19, 15, 1],
-    ["mill", 19, 20, 0],
-    ["belt", 20, 20, 1, 3],
-    ["gatherer", 18, 21, 0],
-    ["belt", 19, 21, 0, 2],
-    ["gatherer", 18, 22, 0],
-    ["belt", 19, 22, 0],
-    ["belt", 20, 22, 3],
-    ["joiner", 20, 21, 0],
-    ["sorter", 21, 21, 0],
-    ["crate", 21, 22, 1],
-    ["belt", 21, 23, 0],
-    ["stop", 22, 23, 0],
-    ["belt", 22, 21, 3, 3],
-    ["belt", 22, 20, 3, 3],
-    ["belt", 22, 19, 0, 3],
-    ["gatherer", 30, 13, 2],
-    ["belt", 29, 13, 2],
-    ["gatherer", 29, 12, 2],
-    ["belt", 28, 12, 1],
-    ["splitter", 28, 13, 2],
-    ["joiner", 27, 13, 2],
-    ["belt", 26, 13, 2],
-    ["belt", 25, 13, 1],
-    ["belt", 25, 14, 1],
-    ["belt", 25, 15, 1],
-    ["belt", 25, 16, 1],
-    ["belt", 28, 14, 1],
-    ["crate", 28, 15, 2],
-    ["belt", 27, 15, 3],
-    ["belt", 27, 14, 3],
-    ["pylon", 27, 12, 0],
-    ["pylon", 17, 20, 0],
-    ["gatherer", 19, 14, 0],
-    ["boiler", 20, 14, 0],
-    ["gatherer", 18, 16, 1, 3],
-    ["mill", 18, 17, 2, 3],
-    ["belt", 17, 17, 2, 3],
-    ["belt", 16, 17, 2, 3],
-    ["belt", 15, 17, 1, 3],
-    ["belt", 15, 18, 1, 3],
-    ["belt", 15, 19, 1, 3],
-    ["gatherer", 12, 20, 0],
-    ["mill", 13, 20, 0],
-    ["splitter", 14, 20, 0],
-    ["stop", 14, 19, 0],
-    ["bench", 15, 20, 1],
-    ["stop", 15, 21, 0],
-    ["pylon", 13, 18, 0],
+    ["gatherer", -5, -3, 1],
+    ["mill", -5, 2, 0],
+    ["belt", -4, 2, 1, 3],
+    ["gatherer", -6, 3, 0],
+    ["belt", -5, 3, 0, 2],
+    ["gatherer", -6, 4, 0],
+    ["belt", -5, 4, 0],
+    ["belt", -4, 4, 3],
+    ["joiner", -4, 3, 0],
+    ["sorter", -3, 3, 0],
+    ["crate", -3, 4, 1],
+    ["belt", -3, 5, 0],
+    ["stop", -2, 5, 0],
+    ["belt", -2, 3, 3, 3],
+    ["belt", -2, 2, 3, 3],
+    ["belt", -2, 1, 0, 3],
+    ["gatherer", 6, -5, 2],
+    ["belt", 5, -5, 2],
+    ["gatherer", 5, -6, 2],
+    ["belt", 4, -6, 1],
+    ["splitter", 4, -5, 2],
+    ["joiner", 3, -5, 2],
+    ["belt", 2, -5, 2],
+    ["belt", 1, -5, 1],
+    ["belt", 1, -4, 1],
+    ["belt", 1, -3, 1],
+    ["belt", 1, -2, 1],
+    ["belt", 4, -4, 1],
+    ["crate", 4, -3, 2],
+    ["belt", 3, -3, 3],
+    ["belt", 3, -4, 3],
+    ["pylon", 3, -6, 0],
+    ["pylon", -7, 2, 0],
+    ["gatherer", -5, -4, 0],
+    ["boiler", -4, -4, 0],
+    ["gatherer", -6, -2, 1, 3],
+    ["mill", -6, -1, 2, 3],
+    ["belt", -7, -1, 2, 3],
+    ["belt", -8, -1, 2, 3],
+    ["belt", -9, -1, 1, 3],
+    ["belt", -9, 0, 1, 3],
+    ["belt", -9, 1, 1, 3],
+    ["gatherer", -12, 2, 0],
+    ["mill", -11, 2, 0],
+    ["splitter", -10, 2, 0],
+    ["stop", -10, 1, 0],
+    ["bench", -9, 2, 1],
+    ["stop", -9, 3, 0],
+    ["pylon", -11, 0, 0],
   ];
   must(y, { do: "buyPlot", plot: "bank" });
-  for (const [kind, x, z, dir, grade] of pieces)
-    must(y, { do: "build", kind, x, y: z, dir, ...(grade === undefined ? {} : { grade }) });
-  must(y, { do: "stand", pieces: [{ kind: "tunnel", x: 19, y: 16, dir: 1, span: 2, grade: 2 }] });
-  must(y, { do: "sort", x: 21, y: 21, item: "plank" });
-  must(y, { do: "side", x: 21, y: 21, right: true });
-  must(y, { do: "wayIn", x: 28, y: 13, way: 2, on: true });
-  must(y, { do: "first", x: 28, y: 13, way: 1 });
+  for (const [kind, dx, dy, dir, grade] of pieces)
+    must(y, { do: "build", kind, ...near(dx, dy), dir, ...(grade === undefined ? {} : { grade }) });
+  must(y, { do: "stand", pieces: [{ kind: "tunnel", ...near(-5, -2), dir: 1, span: 2, grade: 2 }] });
+  must(y, { do: "sort", ...near(-3, 3), item: "plank" });
+  must(y, { do: "side", ...near(-3, 3), right: true });
+  must(y, { do: "wayIn", ...near(4, -5), way: 2, on: true });
+  must(y, { do: "first", ...near(4, -5), way: 1 });
   return y;
 }
 
@@ -182,24 +184,24 @@ export function junctions(): F.Yard {
  */
 export const JUNCTION_HOURS: readonly (readonly Rec[])[] = [
   [],
-  [{ do: "crate", x: 28, y: 15, open: false }],
-  [{ do: "crate", x: 21, y: 22, open: false }],
-  [{ do: "tipOut", x: 21, y: 22, item: null }],
+  [{ do: "crate", ...near(4, -3), open: false }],
+  [{ do: "crate", ...near(-3, 4), open: false }],
+  [{ do: "tipOut", ...near(-3, 4), item: null }],
   [
-    { do: "crate", x: 21, y: 22, open: true },
-    { do: "crate", x: 28, y: 15, open: true },
-    { do: "first", x: 28, y: 13, way: null },
-    { do: "wayIn", x: 28, y: 13, way: 2, on: false },
+    { do: "crate", ...near(-3, 4), open: true },
+    { do: "crate", ...near(4, -3), open: true },
+    { do: "first", ...near(4, -5), way: null },
+    { do: "wayIn", ...near(4, -5), way: 2, on: false },
   ],
   [
-    { do: "side", x: 21, y: 21, right: false },
-    { do: "build", kind: "belt", x: 21, y: 20, dir: 0 },
+    { do: "side", ...near(-3, 3), right: false },
+    { do: "build", kind: "belt", ...near(-3, 2), dir: 0 },
   ],
   [
-    { do: "recipe", x: 19, y: 20, item: "plank" },
-    { do: "sort", x: 21, y: 21, item: "stone" },
+    { do: "recipe", ...near(-5, 2), item: "plank" },
+    { do: "sort", ...near(-3, 3), item: "stone" },
   ],
-  [{ do: "remove", x: 19, y: 22 }],
+  [{ do: "remove", ...near(-5, 4) }],
 ];
 
 /**
@@ -279,29 +281,29 @@ function workOn(y: F.Yard, ids: readonly string[], most = 20_000): void {
 /** The lessons' first lines, each into the depot: planks; ingots past a pylon; bricks past another. */
 function firstLines(y: F.Yard): void {
   const depot = y.land.depot;
-  must(y, { do: "build", kind: "gatherer", x: 19, y: 15, dir: 0 });
-  must(y, { do: "build", kind: "mill", x: 20, y: 15, dir: 0 });
-  lay(y, [21, 15], depot);
-  must(y, { do: "build", kind: "pylon", x: 27, y: 15, dir: 0 });
-  must(y, { do: "build", kind: "gatherer", x: 30, y: 14, dir: 2 });
-  must(y, { do: "build", kind: "mill", x: 29, y: 14, dir: 2 });
-  lay(y, [28, 14], depot);
-  must(y, { do: "build", kind: "pylon", x: 19, y: 23, dir: 0 });
-  must(y, { do: "build", kind: "gatherer", x: 18, y: 21, dir: 0 });
-  must(y, { do: "build", kind: "mill", x: 19, y: 21, dir: 0 });
-  lay(y, [20, 21], depot);
+  must(y, { do: "build", kind: "gatherer", ...near(-5, -3), dir: 0 });
+  must(y, { do: "build", kind: "mill", ...near(-4, -3), dir: 0 });
+  lay(y, xy(-3, -3), depot);
+  must(y, { do: "build", kind: "pylon", ...near(3, -3), dir: 0 });
+  must(y, { do: "build", kind: "gatherer", ...near(6, -4), dir: 2 });
+  must(y, { do: "build", kind: "mill", ...near(5, -4), dir: 2 });
+  lay(y, xy(4, -4), depot);
+  must(y, { do: "build", kind: "pylon", ...near(-5, 5), dir: 0 });
+  must(y, { do: "build", kind: "gatherer", ...near(-6, 3), dir: 0 });
+  must(y, { do: "build", kind: "mill", ...near(-5, 3), dir: 0 });
+  lay(y, xy(-4, 3), depot);
 }
 
 /** A bench for tools north of the depot, fed planks from the west and ingots from the east. */
 function toolsLine(y: F.Yard): void {
-  must(y, { do: "build", kind: "gatherer", x: 19, y: 14, dir: 0 });
-  must(y, { do: "build", kind: "mill", x: 20, y: 14, dir: 3 });
-  must(y, { do: "build", kind: "bench", x: 21, y: 13, dir: 1 });
-  lay(y, [20, 13], [21, 13]);
-  must(y, { do: "build", kind: "gatherer", x: 30, y: 12, dir: 2 });
-  must(y, { do: "build", kind: "mill", x: 29, y: 12, dir: 2 });
-  lay(y, [28, 12], [21, 13]);
-  lay(y, [21, 14], y.land.depot);
+  must(y, { do: "build", kind: "gatherer", ...near(-5, -4), dir: 0 });
+  must(y, { do: "build", kind: "mill", ...near(-4, -4), dir: 3 });
+  must(y, { do: "build", kind: "bench", ...near(-3, -5), dir: 1 });
+  lay(y, xy(-4, -5), xy(-3, -5));
+  must(y, { do: "build", kind: "gatherer", ...near(6, -6), dir: 2 });
+  must(y, { do: "build", kind: "mill", ...near(5, -6), dir: 2 });
+  lay(y, xy(4, -6), xy(-3, -5));
+  lay(y, xy(-3, -4), y.land.depot);
 }
 
 /**
@@ -311,31 +313,31 @@ function toolsLine(y: F.Yard): void {
  * makes the folio of a frame and a pot and hands it to the Study beside it.
  */
 function folioLine(y: F.Yard): void {
-  const pieces: [F.KindName, number, number, F.Dir][] = [
-    ["gatherer", 28, 21, 2],
-    ["boiler", 27, 21, 0],
-    ["gatherer", 29, 21, 3],
-    ["boiler", 29, 20, 0],
-    ["pylon", 15, 18, 0],
-    ["gatherer", 18, 16, 1],
-    ["mill", 18, 17, 2],
-    ["belt", 17, 17, 1],
-    ["belt", 17, 18, 1],
-    ["gatherer", 17, 22, 3],
-    ["mill", 17, 21, 3],
-    ["belt", 17, 20, 3],
-    ["bench", 17, 19, 2],
-    ["belt", 16, 19, 2],
-    ["belt", 15, 19, 2],
-    ["gatherer", 12, 20, 0],
-    ["mill", 13, 20, 0],
-    ["belt", 14, 20, 3],
-    ["bench", 14, 19, 3],
-    ["study", 14, 18, 0],
+  const pieces: Placed[] = [
+    ["gatherer", 4, 3, 2],
+    ["boiler", 3, 3, 0],
+    ["gatherer", 5, 3, 3],
+    ["boiler", 5, 2, 0],
+    ["pylon", -9, 0, 0],
+    ["gatherer", -6, -2, 1],
+    ["mill", -6, -1, 2],
+    ["belt", -7, -1, 1],
+    ["belt", -7, 0, 1],
+    ["gatherer", -7, 4, 3],
+    ["mill", -7, 3, 3],
+    ["belt", -7, 2, 3],
+    ["bench", -7, 1, 2],
+    ["belt", -8, 1, 2],
+    ["belt", -9, 1, 2],
+    ["gatherer", -12, 2, 0],
+    ["mill", -11, 2, 0],
+    ["belt", -10, 2, 3],
+    ["bench", -10, 1, 3],
+    ["study", -10, 0, 0],
   ];
-  for (const [kind, x, z, dir] of pieces) must(y, { do: "build", kind, x, y: z, dir });
-  must(y, { do: "recipe", x: 17, y: 19, item: "frame" });
-  must(y, { do: "recipe", x: 14, y: 19, item: F.itemName(F.FOLIOS[0] ?? F.item("timber")) });
+  for (const [kind, dx, dy, dir] of pieces) must(y, { do: "build", kind, ...near(dx, dy), dir });
+  must(y, { do: "recipe", ...near(-7, 1), item: "frame" });
+  must(y, { do: "recipe", ...near(-10, 1), item: F.itemName(F.FOLIOS[0] ?? F.item("timber")) });
 }
 
 /** Fills the line of research with what may be studied now, in the table's order. */
@@ -391,10 +393,10 @@ function built(name: Stage, seed: number): F.Yard {
   finishBelow(y, 2);
   for (const plot of ["meadow", "bank", "stream"]) must(y, { do: "buyPlot", plot });
   // The bricks' line splits at its second belt: its right way to a crate, its left way shut.
-  must(y, { do: "build", kind: "splitter", x: 21, y: 21, dir: 0 });
-  must(y, { do: "build", kind: "crate", x: 21, y: 22, dir: 1 });
-  must(y, { do: "way", x: 21, y: 21, way: 1, open: false });
-  must(y, { do: "paint", x: 22, y: 15, tint: 2 });
+  must(y, { do: "build", kind: "splitter", ...near(-3, 3), dir: 0 });
+  must(y, { do: "build", kind: "crate", ...near(-3, 4), dir: 1 });
+  must(y, { do: "way", ...near(-3, 3), way: 1, open: false });
+  must(y, { do: "paint", ...near(-2, -3), tint: 2 });
   for (let k = 0; k < 600; k++) F.step(y);
   if (name === "mid") return y;
   finishBelow(y, 3);
@@ -413,9 +415,9 @@ function built(name: Stage, seed: number): F.Yard {
   studyFor(y, "lanterns");
   fillHand(y);
   // A splitter on the ingots' line to the tools' bench, its left way down to the depot's line of ore.
-  must(y, { do: "build", kind: "splitter", x: 26, y: 13, dir: 2 });
-  lay(y, [26, 14], [26, 17]);
-  must(y, { do: "way", x: 26, y: 13, way: 2, open: false });
+  must(y, { do: "build", kind: "splitter", ...near(2, -5), dir: 2 });
+  lay(y, xy(2, -4), xy(2, -1));
+  must(y, { do: "way", ...near(2, -5), way: 2, open: false });
   for (let k = 0; k < 1200; k++) F.step(y);
   return y;
 }

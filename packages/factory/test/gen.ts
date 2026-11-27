@@ -56,6 +56,8 @@ export class Gen {
   /** Every command given, in order: the same commands build the same yard on today's rules. */
   readonly commands: Rec[] = [];
   patches: { kind: Raw; tiles: number[]; cx: number; cy: number }[] = [];
+  /** 1 for each tile on a plot the yard owns or may buy, as it began. */
+  readonly plays: Uint8Array;
   docks: number[] = [];
   pyloned = new Set<number>();
   corridor = new Map<number, number>();
@@ -68,7 +70,13 @@ export class Gen {
     this.W = land.w;
     this.H = land.h;
     this.r = rng(seed);
-    const seen = new Uint8Array(land.w * land.h);
+    // Only the plots the yard owns or may buy are on its map (`idx`): plots further out are no part of
+    // its play, so the generator makes the same yard on a land with more of them.
+    this.plays = Uint8Array.from(land.plot, (n) => {
+      const plot = land.plots[n];
+      return plot === undefined || F.plotState(this.y, plot.plot).state === "not yet" ? 0 : 1;
+    });
+    const seen = this.plays.map((v) => 1 - v);
     for (let i = 0; i < land.w * land.h; i++) {
       const kind = this.deposit(i);
       if (!kind || seen[i]) continue;
@@ -117,8 +125,10 @@ export class Gen {
   lit(i: number): boolean {
     return F.litOf(this.y)[i] === 1;
   }
+  /** The tile at (x, z), or -1 off the map or on a plot the yard does not play on. */
   idx(x: number, z: number): number {
-    return x < 0 || z < 0 || x >= this.W || z >= this.H ? -1 : z * this.W + x;
+    const i = x < 0 || z < 0 || x >= this.W || z >= this.H ? -1 : z * this.W + x;
+    return i >= 0 && this.plays[i] === 1 ? i : -1;
   }
   xy(i: number): [number, number] {
     return [i % this.W, Math.floor(i / this.W)];
@@ -573,10 +583,10 @@ export class Gen {
     }
     const plain = (i: number, d: number): boolean =>
       y.kind[i] === F.BELT && y.dir[i] === d && y.tint[i] === 0 && feeders[i] === 1;
-    const order = Array.from({ length: n }, (_, i) => i).toSorted(() => this.r() - 0.5);
-    for (const i of order) {
+    // The belts in a random order: only the belts, so that the order is the same on a land of any size.
+    const belts = Array.from({ length: n }, (_, i) => i).filter((i) => y.kind[i] === F.BELT);
+    for (const i of belts.toSorted(() => this.r() - 0.5)) {
       if (mouths >= share * pieces) break;
-      if (y.kind[i] !== F.BELT) continue;
       const d = dirOf(y.dir[i]);
       const behind = this.step(i, BACK[d] ?? 0);
       if (!plain(i, d) || behind < 0 || F.nextOf(y, behind) !== i || y.kind[behind] !== F.BELT) continue;

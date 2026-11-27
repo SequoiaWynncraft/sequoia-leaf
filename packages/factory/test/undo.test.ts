@@ -10,6 +10,7 @@ import { describe, expect, test } from "bun:test";
 import * as F from "../src/index.ts";
 import { generate } from "./gen.ts";
 import { bareLand } from "./land.ts";
+import { near, xy } from "./near.ts";
 import { Player } from "./player.ts";
 import { rng } from "./random.ts";
 import { delivering, give, junctions, lay, must, saved, staged } from "./yards.ts";
@@ -38,15 +39,15 @@ function large(): F.Yard {
 function knowing(seed: number): F.Yard {
   const y = F.create({ seed, tier: 5 });
   const depot = y.land.depot;
-  must(y, { do: "build", kind: "gatherer", x: 19, y: 15, dir: 0 });
-  lay(y, [20, 15], depot);
-  must(y, { do: "build", kind: "gatherer", x: 29, y: 21, dir: 3 });
-  must(y, { do: "build", kind: "mill", x: 29, y: 20, dir: 2 });
-  lay(y, [28, 20], depot);
-  must(y, { do: "build", kind: "pylon", x: 27, y: 15, dir: 0 });
-  must(y, { do: "build", kind: "gatherer", x: 30, y: 14, dir: 2 });
-  must(y, { do: "build", kind: "crate", x: 29, y: 14, dir: 2 });
-  lay(y, [28, 14], depot);
+  must(y, { do: "build", kind: "gatherer", ...near(-5, -3), dir: 0 });
+  lay(y, xy(-4, -3), depot);
+  must(y, { do: "build", kind: "gatherer", ...near(5, 3), dir: 3 });
+  must(y, { do: "build", kind: "mill", ...near(5, 2), dir: 2 });
+  lay(y, xy(4, 2), depot);
+  must(y, { do: "build", kind: "pylon", ...near(3, -3), dir: 0 });
+  must(y, { do: "build", kind: "gatherer", ...near(6, -4), dir: 2 });
+  must(y, { do: "build", kind: "crate", ...near(5, -4), dir: 2 });
+  lay(y, xy(4, -4), depot);
   for (let k = 0; k < 600; k++) F.step(y);
   return y;
 }
@@ -244,7 +245,7 @@ describe("Undo", () => {
       // laid that may put a plan of the whole yard back.
       const start =
         [F.create({ seed, tier: 4 }), delivering(seed), junctions(), knowing(seed)][seed % 4] ?? delivering(seed);
-      if (seed % 4 === 0) must(start, { do: "build", kind: "gatherer", x: 19, y: 15, dir: 0 });
+      if (seed % 4 === 0) must(start, { do: "build", kind: "gatherer", ...near(-5, -3), dir: 0 });
       const got = undoneAll(start, seed);
       undone += got.undone;
       short += got.short;
@@ -286,11 +287,11 @@ describe("Undo", () => {
     y.history = [];
     const first = settings(y);
     for (const c of [
-      { do: "side", right: false, x: 21, y: 21 },
-      { do: "way", way: 0, open: false, x: 28, y: 13 },
-      { do: "first", way: null, x: 28, y: 13 },
-      { do: "wayIn", way: 2, on: false, x: 28, y: 13 },
-      { do: "turn", dir: 1, x: 14, y: 20 },
+      { do: "side", right: false, ...near(-3, 3) },
+      { do: "way", way: 0, open: false, ...near(4, -5) },
+      { do: "first", way: null, ...near(4, -5) },
+      { do: "wayIn", way: 2, on: false, ...near(4, -5) },
+      { do: "turn", dir: 1, ...near(-10, 2) },
     ]) {
       const was = settings(y);
       must(y, c);
@@ -313,7 +314,7 @@ describe("Undo", () => {
       .filter((i) => may(F.BELT, i) && may(F.BELT, i + 3))
       .map((i) => F.route(y, [i % w, Math.floor(i / w)], [(i % w) + 3, Math.floor(i / w)]))
       .find((l) => l !== null && l.length > 0);
-    const xy = (i: number): Rec => ({ x: i % w, y: Math.floor(i / w) });
+    const placeOf = (i: number): Rec => ({ x: i % w, y: Math.floor(i / w) });
     // Each on bare ground as the yard stands once the one before is done.
     const tunnel = (): number =>
       tiles.find((i) => may(F.TUNNEL, i) && F.tunnelExit(y, i % w, Math.floor(i / w), 0)) ?? 0;
@@ -321,8 +322,8 @@ describe("Undo", () => {
     let net = 0;
     for (const c of [
       () => F.writeAct({ do: "lay", legs: legs ?? [] }),
-      () => ({ do: "build", kind: "tunnel", dir: 0, ...xy(tunnel()) }),
-      () => ({ do: "copy", tiles: [F.at(y, 29, 14)], turns: 0, ...xy(to()) }),
+      () => ({ do: "build", kind: "tunnel", dir: 0, ...placeOf(tunnel()) }),
+      () => ({ do: "copy", tiles: [F.at(y, ...xy(5, -4))], turns: 0, ...placeOf(to()) }),
     ]) {
       const did = give(y, c());
       expect(did).not.toHaveProperty("refused");
@@ -335,9 +336,9 @@ describe("Undo", () => {
 
   test("the till is counted once: a purse and the till's whole Coins pay for it exactly, and a Coin less is short by one", () => {
     const y = F.create({ seed: 1 });
-    must(y, { do: "build", kind: "mill", x: 21, y: 15, dir: 0 });
-    must(y, { do: "build", kind: "mill", x: 24, y: 12, dir: 0 });
-    must(y, { do: "remove", x: 24, y: 12 });
+    must(y, { do: "build", kind: "mill", ...near(-3, -3), dir: 0 });
+    must(y, { do: "build", kind: "mill", ...near(0, -6), dir: 0 });
+    must(y, { do: "remove", ...near(0, -6) });
     // 5 whole Coins and a part in the till: with 14 in the purse, 19 of the 20 to take back.
     y.till = 5 * F.MILLI + 400;
     expect(undo(y, 14)).toEqual({ refused: "cannot_undo", why: "Not enough Coins: 1 short" });
@@ -352,7 +353,7 @@ describe("Undo", () => {
   test("short of Coins, the whole Undo is refused and nothing of it is done; with enough, all of it is, as one command", () => {
     const y = laid();
     y.till = 0;
-    const tiles = F.within(y, 27, 13, 31, 15);
+    const tiles = F.within(y, ...xy(3, -5), ...xy(7, -3));
     const pieces = F.piecesAt(y, tiles).length;
     const gave = coinsOf(play(y, { do: "clear", tiles }));
     expect([pieces > 2, gave > 0]).toEqual([true, true]);
@@ -367,10 +368,10 @@ describe("Undo", () => {
   test("short of Coins, it says how many for the whole Undo, not for one piece of it", () => {
     const y = F.create({ seed: 1, tier: 4 });
     // The mill to hand first, then two paid for, 20 Coins each, taken away together.
-    must(y, { do: "build", kind: "mill", x: 21, y: 15, dir: 0 });
-    must(y, { do: "build", kind: "mill", x: 24, y: 12, dir: 0 });
-    must(y, { do: "build", kind: "mill", x: 25, y: 12, dir: 0 });
-    expect(coinsOf(play(y, { do: "clear", tiles: [F.at(y, 24, 12), F.at(y, 25, 12)] }))).toBe(40);
+    must(y, { do: "build", kind: "mill", ...near(-3, -3), dir: 0 });
+    must(y, { do: "build", kind: "mill", ...near(0, -6), dir: 0 });
+    must(y, { do: "build", kind: "mill", ...near(1, -6), dir: 0 });
+    expect(coinsOf(play(y, { do: "clear", tiles: [F.at(y, ...xy(0, -6)), F.at(y, ...xy(1, -6))] }))).toBe(40);
     expect(undo(y, 16)).toEqual({ refused: "cannot_undo", why: "Not enough Coins: 24 short" });
     expect(undo(y, 16)).toEqual({ refused: "cannot_undo", why: "Not enough Coins: 24 short" });
     expect(undo(y, 40)).not.toHaveProperty("refused");
@@ -378,21 +379,21 @@ describe("Undo", () => {
 
   test("the mill to hand comes back to hand, and the paid one paid for: undone, neither swaps with the other", () => {
     const y = F.create({ seed: 1 });
-    const hand = F.at(y, 21, 15);
-    const paid = F.at(y, 24, 12);
-    must(y, { do: "build", kind: "mill", x: 21, y: 15, dir: 0 });
-    must(y, { do: "build", kind: "mill", x: 24, y: 12, dir: 0 });
+    const hand = F.at(y, ...xy(-3, -3));
+    const paid = F.at(y, ...xy(0, -6));
+    must(y, { do: "build", kind: "mill", ...near(-3, -3), dir: 0 });
+    must(y, { do: "build", kind: "mill", ...near(0, -6), dir: 0 });
     expect([y.free[hand], y.free[paid], y.spare[F.MILL]]).toEqual([1, 0, 0]);
     // Taken away one at a time, the paid one first: only it gives Coins back.
-    expect(coinsOf(play(y, { do: "remove", x: 24, y: 12 }))).toBe(20);
-    expect(coinsOf(play(y, { do: "remove", x: 21, y: 15 }))).toBe(0);
+    expect(coinsOf(play(y, { do: "remove", ...near(0, -6) }))).toBe(20);
+    expect(coinsOf(play(y, { do: "remove", ...near(-3, -3) }))).toBe(0);
     expect(y.spare[F.MILL]).toBe(1);
     expect(coinsOf(undo(y))).toBe(0);
     expect(coinsOf(undo(y))).toBe(-20);
     expect([y.free[hand], y.free[paid], y.spare[F.MILL]]).toEqual([1, 0, 0]);
     // And so taking them away again gives back what it gave the first time.
-    expect(coinsOf(play(y, { do: "remove", x: 21, y: 15 }))).toBe(0);
-    expect(coinsOf(play(y, { do: "remove", x: 24, y: 12 }))).toBe(20);
+    expect(coinsOf(play(y, { do: "remove", ...near(-3, -3) }))).toBe(0);
+    expect(coinsOf(play(y, { do: "remove", ...near(0, -6) }))).toBe(20);
   });
 });
 
@@ -412,11 +413,11 @@ const xyOf = (y: F.Yard, i: number): Rec => ({ x: i % y.land.w, y: Math.floor(i 
 describe("what Undo puts back", () => {
   test("a piece taken away comes back as new, holding nothing; pieces moved go back with what they hold now", () => {
     const y = laid();
-    const crate = F.at(y, 29, 14);
+    const crate = F.at(y, ...xy(5, -4));
     const plank = F.item("plank");
     for (let k = 0; k < 6; k++) F.put(y.holders, F.holderOf(y, crate), plank);
     const holds = (i: number): number => F.held(y.holders, F.holderOf(y, i), plank);
-    must(y, { do: "remove", x: 29, y: 14 });
+    must(y, { do: "remove", ...near(5, -4) });
     undo(y);
     expect([y.kind[crate], holds(crate)]).toEqual([F.CRATE, 0]);
     // Holding planks again, moved to bare ground, some tipped out: moved back, it holds what it holds now.
@@ -451,12 +452,12 @@ describe("what Undo puts back", () => {
 
   test("a command with no Undo that changes a piece or the Coins forgets them all; one that does not, keeps them", () => {
     const y = laid();
-    must(y, { do: "turn", x: 29, y: 20, dir: 1 });
-    F.put(y.holders, F.holderOf(y, F.at(y, 29, 14)), F.item("plank"));
-    must(y, { do: "tipOut", item: null, x: 29, y: 14 });
+    must(y, { do: "turn", ...near(5, 2), dir: 1 });
+    F.put(y.holders, F.holderOf(y, F.at(y, ...xy(5, -4))), F.item("plank"));
+    must(y, { do: "tipOut", item: null, ...near(5, -4) });
     must(y, { do: "collect" });
     expect(y.history.length).toBe(1);
-    must(y, { do: "crate", open: false, x: 29, y: 14 });
+    must(y, { do: "crate", open: false, ...near(5, -4) });
     expect(y.history).toEqual([]);
   });
 
@@ -490,7 +491,7 @@ describe("what Undo puts back", () => {
 describe("the history", () => {
   test("is kept with the yard, and a yard kept before it had one reads with none", () => {
     const y = laid();
-    must(y, { do: "turn", x: 29, y: 20, dir: 1, id: "h-1" });
+    must(y, { do: "turn", ...near(5, 2), dir: 1, id: "h-1" });
     const back = F.decode(F.encode(y), y.land);
     expect(back?.history).toEqual(y.history);
     expect(back?.history.map((e) => e.id)).toEqual(["h-1"]);
@@ -525,8 +526,8 @@ describe("the history", () => {
 
   test("never outlives its rules: kept under other rules (a starter allowance since lowered), there is nothing to undo, and nothing changes", () => {
     const y = F.create({ seed: 1 });
-    must(y, { do: "build", kind: "mill", x: 21, y: 15, dir: 0 });
-    must(y, { do: "remove", x: 21, y: 15 });
+    must(y, { do: "build", kind: "mill", ...near(-3, -3), dir: 0 });
+    must(y, { do: "remove", ...near(-3, -3) });
     expect(y.history.length).toBe(2);
     const rec: Rec = JSON.parse(F.encode(y));
     expect(typeof rec.stamp).toBe("string");
@@ -534,13 +535,13 @@ describe("the history", () => {
     if (!back) throw new Error("the yard does not read back");
     const text = F.encode(back);
     expect([back.history, undo(back)]).toEqual([[], { refused: "cannot_undo", why: "Nothing to undo" }]);
-    expect([F.encode(back), back.kind[F.at(back, 21, 15)], back.spare[F.MILL]]).toEqual([text, F.NONE, 1]);
+    expect([F.encode(back), back.kind[F.at(back, ...xy(-3, -3))], back.spare[F.MILL]]).toEqual([text, F.NONE, 1]);
   });
 
   test("is undone newest first: an Undo naming another entry than the newest, as another tab would send, is refused", () => {
     const y = laid();
-    must(y, { do: "turn", x: 29, y: 20, dir: 1, id: "n-1" });
-    must(y, { do: "turn", x: 29, y: 20, dir: 2, id: "n-2" });
+    must(y, { do: "turn", ...near(5, 2), dir: 1, id: "n-1" });
+    must(y, { do: "turn", ...near(5, 2), dir: 2, id: "n-2" });
     expect(play(y, { do: "undo", entry: "n-1" })).toEqual({
       refused: "cannot_undo",
       why: "Cannot undo: that is no longer the last thing done",
@@ -552,8 +553,8 @@ describe("the history", () => {
 
   test("refuses an entry that no longer matches the yard: it never happens in play, and here a piece is turned behind the rules' back", () => {
     const y = laid();
-    must(y, { do: "turn", x: 29, y: 20, dir: 1 });
-    y.dir[F.at(y, 29, 20)] = 3;
+    must(y, { do: "turn", ...near(5, 2), dir: 1 });
+    y.dir[F.at(y, ...xy(5, 2))] = 3;
     const text = F.encode(y);
     expect(undo(y)).toEqual({ refused: "cannot_undo", why: "Cannot undo: it has changed since" });
     expect(F.encode(y)).toBe(text);
@@ -561,15 +562,18 @@ describe("the history", () => {
 
   test("keeps 20 entries at most and 32,768 bytes in all, the oldest let go first", () => {
     const y = F.create({ seed: 1, tier: 4 });
-    must(y, { do: "build", kind: "splitter", x: 24, y: 12, dir: 0 });
-    for (let k = 0; k < 30; k++) must(y, { do: "turn", x: 24, y: 12, dir: (k + 1) % 4 });
+    must(y, { do: "build", kind: "splitter", ...near(0, -6), dir: 0 });
+    for (let k = 0; k < 30; k++) must(y, { do: "turn", ...near(0, -6), dir: (k + 1) % 4 });
     expect(y.history.length).toBe(F.UNDO_MOST);
     for (let k = 0; k < F.UNDO_MOST; k++) undo(y);
     // The oldest ten turns and the splitter were let go: it faces as the tenth turn left it.
-    expect([y.history.length, y.dir[F.at(y, 24, 12)]]).toEqual([0, 10 % 4]);
+    expect([y.history.length, y.dir[F.at(y, ...xy(0, -6))]]).toEqual([0, 10 % 4]);
     const many = large();
     must(many, { do: "upgrade", tiles: F.within(many, 0, 0, many.land.w, many.land.h) });
-    must(many, { do: "turn", x: 24, y: 12, dir: 0 });
+    // And a belt of it turned.
+    const belt = many.kind.indexOf(F.BELT);
+    const turned = ((many.dir[belt] ?? 0) + 1) % 4;
+    must(many, { do: "turn", x: belt % many.land.w, y: Math.floor(belt / many.land.w), dir: turned });
     expect(many.history.reduce((n, e) => n + e.bytes.length, 0)).toBeLessThanOrEqual(F.UNDO_BYTES);
   });
 
@@ -608,29 +612,29 @@ describe("an entry's name", () => {
 
   test("a stale tab's Undo of a mill since undone and built again is refused: the mill built again stands", () => {
     const y = F.create({ seed: 1 });
-    must(y, { do: "build", kind: "mill", x: 21, y: 15, dir: 0, id: "a-1" });
+    must(y, { do: "build", kind: "mill", ...near(-3, -3), dir: 0, id: "a-1" });
     // Another tab undoes the mill and builds it again, the same mill on the same tile the same way.
     expect(play(y, { do: "undo", entry: "a-1", id: "b-1" })).not.toHaveProperty("refused");
-    must(y, { do: "build", kind: "mill", x: 21, y: 15, dir: 0, id: "b-2" });
+    must(y, { do: "build", kind: "mill", ...near(-3, -3), dir: 0, id: "b-2" });
     expect(play(y, { do: "undo", entry: "a-1", id: "a-2" })).toEqual({
       refused: "cannot_undo",
       why: "Cannot undo: that is no longer the last thing done",
     });
-    expect(y.kind[F.at(y, 21, 15)]).toBe(F.MILL);
+    expect(y.kind[F.at(y, ...xy(-3, -3))]).toBe(F.MILL);
   });
 
   test("an Undo naming a command that was turned down is refused: what another page built where it was aimed stands", () => {
     const y = F.create({ seed: 1 });
-    must(y, { do: "build", kind: "belt", x: 21, y: 15, dir: 0, id: "a-1" });
+    must(y, { do: "build", kind: "belt", ...near(-3, -3), dir: 0, id: "a-1" });
     // The other page, not yet told of the belt, builds a mill there and undoes it.
-    expect(play(y, { do: "build", kind: "mill", x: 21, y: 15, dir: 0, id: "b-1" })).toMatchObject({
+    expect(play(y, { do: "build", kind: "mill", ...near(-3, -3), dir: 0, id: "b-1" })).toMatchObject({
       refused: "cannot_build",
     });
     expect(play(y, { do: "undo", entry: "b-1", id: "b-2" })).toEqual({
       refused: "cannot_undo",
       why: "Cannot undo: that is no longer the last thing done",
     });
-    expect(y.kind[F.at(y, 21, 15)]).toBe(F.BELT);
+    expect(y.kind[F.at(y, ...xy(-3, -3))]).toBe(F.BELT);
   });
 });
 
@@ -664,8 +668,8 @@ describe("a stroke of the brush", () => {
   test("undone sets back the colour alone: a splitter's next way out is as the yard left it", () => {
     const y = junctions();
     y.history = [];
-    const splitter = F.at(y, 28, 13);
-    must(y, { do: "paint", tint: 5, x: 28, y: 13 });
+    const splitter = F.at(y, ...xy(4, -5));
+    must(y, { do: "paint", tint: 5, ...near(4, -5) });
     let ran = 0;
     for (const turn = y.turn[splitter]; y.turn[splitter] === turn && ran < 600; ran++) F.step(y);
     const turn = y.turn[splitter];
@@ -677,14 +681,14 @@ describe("a stroke of the brush", () => {
   test("gone on over a splitter after its next way moved on keeps that move: undone, the colours go back and the splitter's next way is as the yard left it", () => {
     const y = junctions();
     y.history = [];
-    const splitter = F.at(y, 28, 13);
+    const splitter = F.at(y, ...xy(4, -5));
     const [line = 0] = linesIn(y, 1);
     const tints = [y.tint[line], y.tint[splitter]];
     must(y, { do: "paint", tint: 6, ...xyOf(y, line), id: "g-1" });
     let ran = 0;
     for (const turn = y.turn[splitter]; y.turn[splitter] === turn && ran < 600; ran++) F.step(y);
     expect(ran).toBeLessThan(600);
-    must(y, { do: "paint", tint: 6, onto: "g-1", x: 28, y: 13, id: "g-2" });
+    must(y, { do: "paint", tint: 6, onto: "g-1", ...near(4, -5), id: "g-2" });
     for (let t = 0; t < 7; t++) F.step(y);
     const turn = y.turn[splitter];
     expect(y.history.map((e) => e.id)).toEqual(["g-1"]);

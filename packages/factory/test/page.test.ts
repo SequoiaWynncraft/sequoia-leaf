@@ -9,6 +9,7 @@ import { describe, expect, test } from "bun:test";
 import type { Ctx } from "@sequoia-leaf/core";
 
 import * as F from "../src/index.ts";
+import { near, xy } from "./near.ts";
 import { delivering, must } from "./yards.ts";
 
 const ctx = (now: number): Ctx => ({
@@ -121,9 +122,9 @@ describe("what the page writes for an act", () => {
 
   test("for a run of belt holds a span only on a tunnel's leg: as the router finds the legs, and as they are read", () => {
     const y = F.create({ seed: 2, tier: 2 });
-    // A wall of belts down the yard's own plot (rows 12 to 23), so the router goes under it by tunnel and on by belt.
-    for (let z = 12; z < 24; z++) F.build(y, F.BELT, 22, z, 1, Infinity);
-    const legs = F.route(y, [20, 13], [26, 13]) ?? [];
+    // A wall of belts down the yard's own plot (its twelve rows), so the router goes under it by tunnel and on by belt.
+    for (let dz = -6; dz < 6; dz++) F.build(y, F.BELT, ...xy(-2, dz), 1, Infinity);
+    const legs = F.route(y, xy(-4, -5), xy(2, -5)) ?? [];
     expect(legs.some((l) => l.tunnel) && legs.some((l) => !l.tunnel)).toBe(true);
     for (const l of legs) expect("span" in l).toBe(l.tunnel);
     expect(F.readLeg({ kind: "belt", x: 1, y: 1, dir: 0, span: 0 })).toEqual({
@@ -156,7 +157,7 @@ describe("what the page writes for an act", () => {
     const page = F.create({ seed: 2, tier: 2 });
     const leaf = F.decode(F.encode(page));
     if (!leaf) throw new Error("the yard does not read back");
-    const legs = F.route(page, [20, 15], page.land.depot) ?? [];
+    const legs = F.route(page, xy(-4, -3), page.land.depot) ?? [];
     // A colour, a recipe and a shut way on every leg, as a page holding pieces might pass them.
     const a: F.Act = {
       do: "lay",
@@ -166,7 +167,7 @@ describe("what the page writes for an act", () => {
     const read = readBack(a, leaf.tick);
     expect(read && "refused" in F.play(leaf, read)).toBe(false);
     expect([F.check(page), F.encode(page)]).toEqual([F.check(leaf), F.encode(leaf)]);
-    expect(page.tint[F.at(page, 20, 15)]).toBe(0);
+    expect(page.tint[F.at(page, ...xy(-4, -3))]).toBe(0);
   });
 
   test("names every thing, kind, plot and goal, and holds no number for one", () => {
@@ -181,9 +182,9 @@ describe("what the page writes for an act", () => {
 /** A yard of tier 3 with two crates on the yard's own plot, both kept as a blueprint. */
 function priced(): { y: F.Yard; crates: number[] } {
   const y = F.create({ seed: 2, tier: 3 });
-  must(y, { do: "build", kind: "crate", x: 18, y: 13, dir: 0 });
-  must(y, { do: "build", kind: "crate", x: 19, y: 13, dir: 0 });
-  const crates = [F.at(y, 18, 13), F.at(y, 19, 13)];
+  must(y, { do: "build", kind: "crate", ...near(-6, -5), dir: 0 });
+  must(y, { do: "build", kind: "crate", ...near(-5, -5), dir: 0 });
+  const crates = [F.at(y, ...xy(-6, -5)), F.at(y, ...xy(-5, -5))];
   must(y, { do: "saveBlueprint", slot: 0, tiles: crates });
   return { y, crates };
 }
@@ -194,21 +195,26 @@ const play = (y: F.Yard, a: F.Act, purse: number): ReturnType<typeof F.play> =>
 describe("a command played with the purse, as the page plays it", () => {
   test("refuses whatever costs more than the purse and the till's whole Coins, with the rules' own sentence, and changes nothing", () => {
     const { y, crates } = priced();
-    const crate = F.priceAt(y, F.kind("crate"), 20, 15);
+    const crate = F.priceAt(y, F.kind("crate"), ...xy(-4, -3));
     expect(crate).toBeGreaterThan(0);
     // Past the twelve belts to hand, a run's belts cost.
-    const legs: F.Leg[] = Array.from({ length: 14 }, (_, k) => ({ tunnel: false, x: 17 + k, y: 21, dir: 0, grade: 1 }));
+    const legs: F.Leg[] = Array.from({ length: 14 }, (_, k) => ({
+      tunnel: false,
+      ...near(-7 + k, 3),
+      dir: 0,
+      grade: 1,
+    }));
     const cases: [F.Act, string][] = [
-      [{ do: "build", kind: F.kind("crate"), x: 20, y: 15, dir: 0, grade: 1 }, "Not enough Coins"],
+      [{ do: "build", kind: F.kind("crate"), ...near(-4, -3), dir: 0, grade: 1 }, "Not enough Coins"],
       [{ do: "lay", legs }, `Not enough Coins: ${F.priceOf(y, legs.map(F.legPiece))} short`],
-      [{ do: "copy", tiles: crates, turns: 0, x: 18, y: 15 }, `Not enough Coins: ${2 * crate} short`],
-      [{ do: "placeBlueprint", slot: 0, turns: 0, x: 18, y: 16 }, `Not enough Coins: ${2 * crate} short`],
+      [{ do: "copy", tiles: crates, turns: 0, ...near(-6, -3) }, `Not enough Coins: ${2 * crate} short`],
+      [{ do: "placeBlueprint", slot: 0, turns: 0, ...near(-6, -2) }, `Not enough Coins: ${2 * crate} short`],
       [
         {
           do: "stand",
           pieces: [
-            { kind: F.kind("crate"), x: 20, y: 16, dir: 0, span: 0 },
-            { kind: F.kind("crate"), x: 21, y: 16, dir: 0, span: 0 },
+            { kind: F.kind("crate"), ...near(-4, -2), dir: 0, span: 0 },
+            { kind: F.kind("crate"), ...near(-3, -2), dir: 0, span: 0 },
           ],
         },
         `Not enough Coins: ${2 * crate} short`,
@@ -227,8 +233,8 @@ describe("a command played with the purse, as the page plays it", () => {
 
   test("counts the till's whole Coins, which a command that costs pays in first", () => {
     const { y } = priced();
-    const crate = F.priceAt(y, F.kind("crate"), 20, 15);
-    const build: F.Act = { do: "build", kind: F.kind("crate"), x: 20, y: 15, dir: 0, grade: 1 };
+    const crate = F.priceAt(y, F.kind("crate"), ...xy(-4, -3));
+    const build: F.Act = { do: "build", kind: F.kind("crate"), ...near(-4, -3), dir: 0, grade: 1 };
     y.till = 1.5 * F.MILLI;
     expect(play(y, build, crate - 2)).toMatchObject({ why: "Not enough Coins" });
     const did = play(y, build, crate - 1);

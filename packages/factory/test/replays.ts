@@ -3,9 +3,11 @@
  * results are held to, to the bit (`replays.test.ts`). A replay is a yard the tests make (every
  * staged yard, every save, the delivering and generated yards, random play from several starts, and
  * the largest staged yard tended in slices as Leaf tends it) run on for hours. After every tick of
- * the first minute of a run, every minute after, or after every command, what it is is digested: the
- * yard as kept (`encode`), the news since the last digest, and its power. The digests are gathered
- * into a line an hour, or fifty commands.
+ * the first minute of a run, every minute after, or after every command, what it is is digested: its
+ * check, the yard as kept but for what keeps a tile (`placeless`), the news since the last digest, and
+ * its power. The digests are gathered into a line an hour, or fifty commands. The check mixes in every
+ * tile from the yard plot's corner, so the record holds on a land of any size: more land round the
+ * yard changes no line of it.
  *
  * `bun test/replays.ts --write` writes the record again from the tick as it stands. A change to the
  * rules changes the record, and says so; a change only to how fast the tick runs leaves it as it is.
@@ -25,16 +27,27 @@ const HOUR = 60 * MINUTE;
 const HOURS = 8;
 export const RECORD = `${import.meta.dir}/replays.json`;
 
+/** What keeps a tile of the land, which the check takes in from the yard plot's corner instead. */
+const TILED = new Set(["land", "cells", "felled", "blueprints", "history", "stamp"]);
+/** A yard as kept, but for what keeps a tile: its numbers, goals, orders and books, and its seed, which the check leaves out. */
+function placeless(y: F.Yard): string {
+  const kept: unknown = JSON.parse(F.encode(y));
+  const fields = typeof kept === "object" && kept !== null ? Object.entries(kept) : [];
+  return JSON.stringify(Object.fromEntries(fields.filter(([k]) => !TILED.has(k))));
+}
+
 /** The digests of one replay, a line at a time. */
 class Digest {
   readonly lines: string[] = [];
   hash: Hash = createHash("sha1");
   /**
-   * Takes in what the yard is now: as kept, its news since the last, and its power. What Undo would
+   * Takes in what the yard is now: its check, as kept but for its tiles, its news since the last, and its power. What Undo would
    * undo is left out: it is no part of how the yard plays, and has tests of its own (`undo.test.ts`).
    */
   add(y: F.Yard): void {
-    this.hash.update(`${F.encode({ ...y, history: [] })}\n${JSON.stringify(F.drain(y))}\n${y.supply}\n`);
+    this.hash.update(
+      `${F.check({ ...y, history: [] })}\n${placeless(y)}\n${JSON.stringify(F.drain(y))}\n${y.supply}\n`,
+    );
   }
   /** Ends a line. */
   line(): void {
