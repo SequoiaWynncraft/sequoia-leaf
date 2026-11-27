@@ -37,14 +37,11 @@ import { type CoinEntry, Coins, payable } from "./coins.ts";
 import { Copies } from "./copies.ts";
 import { type Attempt, ctxOf, type Given, type Held, NOTHING_GIVEN, type Played, toRoom, unreadable } from "./games.ts";
 import { type Keeping, keptPieces } from "./kept.ts";
+import { PlayPace } from "./pace.ts";
 import { nextSlice } from "./slices.ts";
 import { PlayStore } from "./store.ts";
 
-/** How often a player may send a batch of commands: ten a second, bursts of twenty. */
-export const BATCHES = { rate: 10, burst: 20 } as const;
-/** How many commands a player may have done, across all games: ten a second, bursts of forty. */
-export const COMMANDS = { rate: 10, burst: 40 } as const;
-/** How many players' allowances are kept before those filled up again are let go. */
+/** How many players' differences logged are kept before those filled up again are let go. */
 const ALLOWANCES_KEPT = 1000;
 /** How often a page saying its copy was not Leaf's state is logged, for a player and a game: once a minute. */
 const DIFFERENCES = { rate: 1 / 60, burst: 1 } as const;
@@ -405,8 +402,8 @@ export class Play extends Context.Service<
       const meter = yield* PlayMeter;
       const scope = yield* Effect.scope;
       const dice = random.intBetween(0, 0xffffffff);
-      // Each player's batches and commands, across all games.
-      const pace = new Allowances([BATCHES, COMMANDS], ALLOWANCES_KEPT);
+      // Each player's batches and commands, across all games and the raid's tables.
+      const pace = yield* PlayPace;
       // Each player's and game's differences logged.
       const differed = new Allowances([DIFFERENCES], ALLOWANCES_KEPT);
       // Every lane, by `keyOf`; and how many jobs have arrived, in all of them.

@@ -69,6 +69,16 @@ import {
   Standings,
   Tally,
 } from "./schemas.ts";
+import {
+  OpenBody,
+  SittingMissing,
+  SittingPlayed,
+  SittingRead,
+  SittingRecord,
+  SittingRefused,
+  SittingShown,
+  SittingsListed,
+} from "./sittings.ts";
 
 // Leaf's HTTP API, declared once: the server implements it, and its OpenAPI
 // document (`/openapi.json`) is generated from it.
@@ -161,6 +171,11 @@ export class RerollBodyErrors extends HttpApiMiddleware.Service<RerollBodyErrors
 
 /** Answers a batch whose body is not `{ "commands": [...] }` with `invalid_command`. */
 export class PlayBodyErrors extends HttpApiMiddleware.Service<PlayBodyErrors>()("leaf/api/PlayBodyErrors", {
+  error: Invalid,
+}) {}
+
+/** Answers an opening of a sitting whose body is not `{ "player" }` with `invalid_command`. */
+export class SittingBodyErrors extends HttpApiMiddleware.Service<SittingBodyErrors>()("leaf/api/SittingBodyErrors", {
   error: Invalid,
 }) {}
 
@@ -326,6 +341,37 @@ export class GameRaidApi extends HttpApiGroup.make("gameRaid")
   .middleware(Player)
   .prefix("/v1/game") {}
 
+const SittingParams = { id: Schema.String };
+
+/**
+ * The raid's sittings (its live tables): those open to sit at, opening one, one as the caller is
+ * shown it (or unchanged since the `rev` the page has), commands at one, and the caller's record.
+ */
+export class GameSittingsApi extends HttpApiGroup.make("gameSittings")
+  .add(
+    HttpApiEndpoint.get("sittings", "/sittings", { success: SittingsListed }),
+    HttpApiEndpoint.post("openSitting", "/sittings", {
+      payload: OpenBody,
+      success: SittingShown,
+      error: [Invalid, NotYou, SittingRefused, SlowDown],
+    }).middleware(SittingBodyErrors),
+    HttpApiEndpoint.get("sittingRecord", "/sittings/record", { success: SittingRecord }),
+    HttpApiEndpoint.get("sitting", "/sittings/:id", {
+      params: SittingParams,
+      query: { rev: Schema.optional(Schema.String) },
+      success: SittingRead,
+      error: [SittingMissing, StateUnreadable],
+    }),
+    HttpApiEndpoint.post("sittingCommand", "/sittings/:id", {
+      params: SittingParams,
+      payload: PlayBody,
+      success: SittingPlayed,
+      error: [Invalid, NotYou, SittingMissing, StateUnreadable, SlowDown],
+    }).middleware(PlayBodyErrors),
+  )
+  .middleware(Player)
+  .prefix("/v1/game") {}
+
 const CampParams = { player: Schema.String };
 
 /** The camps: every one there is, likes given and taken back, and the caller's own camp's visitors. */
@@ -428,6 +474,7 @@ export class LeafApi extends HttpApi.make("sequoia-leaf")
   .add(GamePresenceApi)
   .add(GamePlayApi)
   .add(GameRaidApi)
+  .add(GameSittingsApi)
   .add(GameCampsApi)
   .add(GameRequestsApi)
   .add(GameTallyApi)

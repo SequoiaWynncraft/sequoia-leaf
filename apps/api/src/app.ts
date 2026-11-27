@@ -27,11 +27,13 @@ import { LiveRoute } from "./live/route.ts";
 import { Watchers } from "./live/watchers.ts";
 import { Coins } from "./play/coins.ts";
 import { RaidDepths } from "./play/depths.ts";
+import { PlayPace } from "./play/pace.ts";
 import { Play } from "./play/service.ts";
 import { PlayStore } from "./play/store.ts";
 import { Logins } from "./players/logins.ts";
 import { Purchases } from "./purchases/store.ts";
 import { Quests } from "./quests/store.ts";
+import { Sittings } from "./sittings/service.ts";
 import { Tallies } from "./tally/store.ts";
 
 /**
@@ -116,6 +118,7 @@ export const Stores = Layer.mergeAll(
   Camps.layer,
   PlayStore.layer,
   RaidDepths.layer,
+  PlayPace.layer,
   Coins.layer,
   Purchases.layer,
   SignIns.layer,
@@ -131,7 +134,12 @@ export const Stores = Layer.mergeAll(
  * machine's dice and its processes), the play service and the credit sync on the stores, and the live rooms, which the routes serve and
  * the server's farewell closes, and which write who is in them into the stores' presence and visits.
  */
-export const Services = Layer.mergeAll(Play.layer, Credits.layer, Live.layer.pipe(Layer.provide(LiveTuned))).pipe(
+export const Services = Layer.mergeAll(
+  Play.layer,
+  Sittings.layer,
+  Credits.layer,
+  Live.layer.pipe(Layer.provide(LiveTuned)),
+).pipe(
   Layer.provideMerge(Watchers.layer),
   Layer.provideMerge(Stores),
   Layer.provideMerge(Database),

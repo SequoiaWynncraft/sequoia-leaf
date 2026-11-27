@@ -41,8 +41,13 @@ function onFile<A, E>(path: string, program: Effect.Effect<A, E, SqlClient.SqlCl
 }
 
 /** Runs SQL against the database file at `path`. */
-/** Undoes migration 45: no raid fights kept. */
-const beforeRaidFights = (sql: SqlClient.SqlClient) => sql`DROP TABLE raid_fights`;
+/** Undoes migration 46: none of the raid's sittings kept. */
+const beforeRaidSittings = (sql: SqlClient.SqlClient) =>
+  Effect.all([sql`DROP TABLE raid_sitting_seats`, sql`DROP TABLE raid_sitting_places`, sql`DROP TABLE raid_sittings`]);
+
+/** Undoes migrations 46 and 45: no raid fights kept. */
+const beforeRaidFights = (sql: SqlClient.SqlClient) =>
+  Effect.andThen(beforeRaidSittings(sql), sql`DROP TABLE raid_fights`);
 
 /** Undoes migrations 45 and 43: the pieces players leave not indexed by game and slot (the pulls' counts it let go stay gone). */
 const beforePlayKeptMet = (sql: SqlClient.SqlClient) =>
@@ -259,6 +264,7 @@ describe("the database", () => {
       { migration_id: 43, name: "play_kept_met" },
       { migration_id: 44, name: "copies_awards" },
       { migration_id: 45, name: "raid_fights" },
+      { migration_id: 46, name: "raid_sittings" },
     ]);
     // Each feed has its own lease and cursor, not started yet.
     expect(await query(path, (sql) => sql`SELECT name, started_at, cursor FROM sync_state ORDER BY name`)).toEqual([
@@ -316,6 +322,9 @@ describe("the database", () => {
           "sign_ins",
           "merges",
           "raid_fights",
+          "raid_sitting_seats",
+          "raid_sitting_places",
+          "raid_sittings",
         ]) {
           yield* sql`DROP TABLE ${sql(table)}`;
         }
@@ -330,7 +339,7 @@ describe("the database", () => {
 
     expect(account.balance).toBe(110);
     expect(await query(path, (sql) => sql`SELECT max(migration_id) AS latest FROM effect_sql_migrations`)).toEqual([
-      { latest: 45 },
+      { latest: 46 },
     ]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM announcements`)).toEqual([{ n: 0 }]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM saves`)).toEqual([{ n: 0 }]);

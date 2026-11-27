@@ -87,6 +87,9 @@ const meWith = async (cookie: string) => {
   return { status: response.status, body };
 };
 
+/** How many merges Leaf has recorded. */
+const merges = () => leafs.query((sql) => sql`SELECT count(*) AS n FROM merges`);
+
 /** Where a sign-in begun for `to` says it will come back to. */
 async function comesBackTo(to: string): Promise<string | null> {
   const started = await app.request(`/v1/game/sign-in?to=${encodeURIComponent(to)}`);
@@ -471,6 +474,118 @@ describe("linking a Wynncraft account later", () => {
     expect(await leafs.query((sql) => sql`SELECT count(*) AS n FROM merges`)).toEqual([{ n: 0 }]);
     expect(await leafs.query((sql) => sql`SELECT player_id AS id FROM play_state`)).toEqual([{ id: account }]);
   });
+
+  /** Nuss signed in with Discord alone, with a Sequoia session on the account ready: their Leaf session's token and Discord player. */
+  async function nussBeforeLinking(): Promise<{ token: string; guestId: string }> {
+    const token = await signInNuss();
+    const guestId = idOf((await meWith(`__Host-leaf_session=${token}`)).body);
+    sequoiaSession("nuss-sequoia", account, "Nuss187");
+    return { token, guestId };
+  }
+
+  it("takes the Discord player's places at the raid's tables along, the better where both finished the same one", async () => {
+    const { guestId } = await nussBeforeLinking();
+    for (const [sitting, player, place] of [
+      ["s1", guestId, 3],
+      ["s2", guestId, 6],
+      ["s2", account, 2],
+      ["s3", account, 8],
+      ["s4", guestId, 1],
+      ["s4", account, 5],
+    ] as const) {
+      // oxlint-disable-next-line no-await-in-loop -- one after another
+      await leafs.query(
+        (sql) => sql`
+          INSERT INTO raid_sitting_places (sitting, player_id, place, seats, ended)
+          VALUES (${sitting}, ${player}, ${place}, 8, ${T0})
+        `,
+      );
+    }
+
+    await meWith("seq_session=nuss-sequoia");
+
+    expect(
+      await leafs.query(
+        (sql) => sql`SELECT sitting, player_id AS player, place FROM raid_sitting_places ORDER BY sitting, player_id`,
+      ),
+    ).toEqual([
+      { sitting: "s1", player: account, place: 3 },
+      { sitting: "s2", player: account, place: 2 },
+      { sitting: "s3", player: account, place: 8 },
+      { sitting: "s4", player: account, place: 1 },
+    ]);
+    const record = await app.request("/v1/game/sittings/record", { headers: { Cookie: "seq_session=nuss-sequoia" } });
+    expect(await record.json()).toEqual({ played: 4, won: 1, top_four: 3 });
+  });
+
+  it("takes the answers to the Discord player's commands at tables along, but one whose id the account used too", async () => {
+    const { guestId } = await nussBeforeLinking();
+    for (const [player, id, result] of [
+      [guestId, "g-1", '{"notes":[]}'],
+      [guestId, "both", '{"refused":"seated","why":"You are at that table already."}'],
+      [account, "both", '{"notes":[]}'],
+    ] as const) {
+      // oxlint-disable-next-line no-await-in-loop -- one after another
+      await leafs.query(
+        (sql) => sql`
+          INSERT INTO play_commands (player_id, game, command_id, rev, result) VALUES (${player}, 'sittings', ${id}, 1, ${result})
+        `,
+      );
+    }
+
+    await meWith("seq_session=nuss-sequoia");
+
+    expect(
+      await leafs.query(
+        (sql) => sql`
+          SELECT player_id AS player, command_id AS id, result FROM play_commands WHERE game = 'sittings' ORDER BY command_id
+        `,
+      ),
+    ).toEqual([
+      { player: account, id: "both", result: '{"notes":[]}' },
+      { player: account, id: "g-1", result: '{"notes":[]}' },
+    ]);
+  });
+
+  for (const whose of ["Discord", "account"] as const) {
+    it(`waits to take the Discord player in while the ${whose} player is at a live table, and does it once the table is over`, async () => {
+      const { token, guestId } = await nussBeforeLinking();
+      const seated = whose === "Discord" ? guestId : account;
+      await leafs.query(
+        (sql) => sql`
+          INSERT INTO play_state (player_id, game, rev, state, updated_at) VALUES (${guestId}, 'works', 4, '{}', ${T0})
+        `,
+      );
+      await leafs.query(
+        (sql) => sql`
+          INSERT INTO raid_sittings (id, state, rev, opened_by, opened_at, stage, due_at)
+          VALUES ('live', '{"a":"sitting"}', 3, ${seated}, ${T0}, 'plan', ${T0 + 60_000})
+        `,
+      );
+      await leafs.query(
+        (sql) => sql`INSERT INTO raid_sitting_seats (player_id, sitting, since) VALUES (${seated}, 'live', ${T0})`,
+      );
+
+      expect((await meWith("seq_session=nuss-sequoia")).body).toMatchObject({ player: { id: account } });
+
+      // Nothing taken in or linked, and the table as it was; the Discord account plays on as its own player.
+      expect(await merges()).toEqual([{ n: 0 }]);
+      expect(await leafs.query((sql) => sql`SELECT player_id AS id FROM play_state`)).toEqual([{ id: guestId }]);
+      expect(await leafs.query((sql) => sql`SELECT state, rev FROM raid_sittings`)).toEqual([
+        { state: '{"a":"sitting"}', rev: 3 },
+      ]);
+      expect(await leafs.query((sql) => sql`SELECT player_id AS id FROM raid_sitting_seats`)).toEqual([{ id: seated }]);
+      expect(idOf((await meWith(`__Host-leaf_session=${token}`)).body)).toBe(guestId);
+
+      // The table over, the next sign-in takes them in.
+      await leafs.query((sql) => sql`DELETE FROM raid_sitting_seats`);
+      sequoiaSession("nuss-sequoia-again", account, "Nuss187");
+      await meWith("seq_session=nuss-sequoia-again");
+      expect(await merges()).toEqual([{ n: 1 }]);
+      expect(await leafs.query((sql) => sql`SELECT player_id AS id FROM play_state`)).toEqual([{ id: account }]);
+      expect(idOf((await meWith(`__Host-leaf_session=${token}`)).body)).toBe(account);
+    });
+  }
 
   it("stops asking another browser to link once the account is linked", async () => {
     const token = await signInNuss(true);

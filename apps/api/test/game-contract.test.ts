@@ -7,6 +7,7 @@ import { blueprintCode, create as createYard, FACTORY, play, readCommand, within
 
 import { runAchievementSync } from "../src/achievements/run.ts";
 import { runCreditSync } from "../src/earning/run.ts";
+import { sittingExchanges } from "./sittings-contract.ts";
 import { fakeBackend, fakeMojang, MINUTE, rewardQueue, sessionOf, steadyDice, testLeaf } from "./support.ts";
 
 /**
@@ -371,6 +372,7 @@ async function exchanges(): Promise<Record<string, Exchange>> {
     },
     "bob-token",
   );
+  await sittingExchanges(call, recorded, (statement) => leaf.query(statement), { alice, bob, now: clock.now });
   await app.dispose();
   return recorded;
 }

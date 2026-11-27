@@ -2,8 +2,19 @@ import type { MinecraftId, PlayerId } from "@sequoia-leaf/core";
 import { Effect, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 
+import { LIVE_TABLE, moveSittings, seatedEither } from "../sittings/merge.ts";
+
 /** What a merge did with each game's state: moved over, kept beside the other's, or given up for it. */
 export type GameMoved = "moved" | "newer" | "older";
+
+/**
+ * What a merge came to: done, with what became of each game's state; not done, the two kept apart;
+ * or not done yet, and why, for the next sign-in to try again.
+ */
+export type Merged =
+  | { readonly status: "merged"; readonly games: Readonly<Record<string, GameMoved>> }
+  | { readonly status: "kept_apart" }
+  | { readonly status: "waits"; readonly why: string };
 
 const Game = Schema.Struct({ game: Schema.String, rev: Schema.Int, updatedAt: Schema.Int });
 const Count = Schema.Struct({ n: Schema.Int });
@@ -13,9 +24,11 @@ const Count = Schema.Struct({ n: Schema.Int });
  * account they have just linked, so that everything is in one place: the guild's Leaf and quests the
  * account earned (which are `into`'s and stay where they are) and what `from` played. `from` has no
  * Leaf (only a Minecraft account earns any), so nothing moves through the ledger; one that had some
- * is left as it is, and null is answered. Each game's state
+ * is left as it is, and they are kept apart. While either is seated at a raid sitting that is not
+ * over, it waits (`LIVE_TABLE`), moving nothing, and why is logged. Each game's state
  * moves over; where both have one, the one played last stays and the other is kept in save history,
- * for staff to bring back. Coins, counters and time add up; likes, stays and events move; `into`'s
+ * for staff to bring back. Coins, counters and time add up; likes, stays, events and the places and
+ * answers at the raid's sittings move (`sittings/merge.ts`); `into`'s
  * name and skin stay. The merge is recorded in `merges`. Run it in the transaction that links the
  * account. A database failure is a defect.
  */
@@ -34,18 +47,26 @@ export const mergeInto = Effect.fnUntraced(function* (
   if ((yield* ledgerOf(from)).n > 0) {
     // Only a Minecraft account earns Leaf, so this is not met; if it were, nothing is moved for it.
     yield* Effect.logWarning("A player with Leaf of their own was not taken into another", { from, into });
-    return null;
+    return { status: "kept_apart" } satisfies Merged;
+  }
+  if (yield* seatedEither(sql, from, into)) {
+    yield* Effect.annotateLogs(Effect.logWarning(`A player was not taken into another yet: ${LIVE_TABLE}`), {
+      from,
+      into,
+    });
+    return { status: "waits", why: LIVE_TABLE } satisfies Merged;
   }
 
   const games = yield* moveGames(sql, from, into, now);
   yield* addUp(sql, from, into, now);
   yield* moveLikes(sql, from, into);
   yield* moveHistory(sql, from, into);
+  yield* moveSittings(sql, from, into);
   yield* sql`
     INSERT INTO merges (from_id, into_id, account, moved, merged_at)
     VALUES (${from}, ${into}, ${account}, ${JSON.stringify({ games })}, ${now})
   `;
-  return games;
+  return { status: "merged", games } satisfies Merged;
 }, Effect.orDie);
 
 const gamesOf = (sql: SqlClient.SqlClient, player: PlayerId) =>
