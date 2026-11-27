@@ -1,0 +1,33 @@
+{
+  "run": 1,
+  "way": "deep",
+  "trail": 0,
+  "room": 2,
+  "kind": "spar",
+  "across": "regular:barrowgnome",
+  "result": "win",
+  "margin": 0.901,
+  "seconds": 7.7,
+  "resolve": 20,
+  "level": 3,
+  "acorns": 3,
+  "party": {
+    "figures": [
+      { "kind": "emberkit", "stars": 2, "seat": 2, "items": ["wasptail"], "fed": 0 },
+      { "kind": "crab7", "stars": 2, "seat": 3, "items": [], "fed": 0 },
+      { "kind": "crab12", "stars": 1, "seat": 23, "items": [], "fed": 0 },
+      { "kind": "crab12", "stars": 1, "seat": 24, "items": [], "fed": 0 }
+    ],
+    "traits": { "crab": 1, "fang": 1 },
+    "boons": ["extrachair"]
+  },
+  "against": {
+    "figures": [
+      { "kind": "emberkit", "stars": 1, "seat": 3, "items": [], "fed": 0 },
+      { "kind": "mossmote", "stars": 1, "seat": 24, "items": [], "fed": 0 },
+      { "kind": "crab23", "stars": 1, "seat": 10, "items": [], "fed": 0 }
+    ],
+    "traits": { "mender": 1 },
+    "boons": []
+  }
+}

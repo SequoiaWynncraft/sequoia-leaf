@@ -1,0 +1,28 @@
+figures emberkit mossmote moth worm finch crab7 barrowgnome kettle slug glorp chickaree jay crab12 lanterngnome leafling cindernewt drizzlefrog rock bushgnome crab23 badger fogowl heron crab40 apothecary greg whitefox hearthcat banner-1
+troubles gnat bramble wasp puddle toadstool gust magpie mud crab oldbramble hoardmagpie bigcrab
+trait ember emberkit kettle cindernewt hearthcat
+trait moss mossmote slug leafling greg
+trait mist moth glorp drizzlefrog whitefox
+trait burrow worm chickaree rock badger
+trait feather finch jay fogowl heron banner-1
+trait crab crab7 crab12 crab23 crab40
+trait gnome barrowgnome lanterngnome bushgnome apothecary
+trait bulwark barrowgnome slug glorp rock crab40 greg
+trait fang emberkit crab7 jay badger whitefox hearthcat
+trait slinger finch chickaree crab12 drizzlefrog heron
+trait sage moth lanterngnome leafling cindernewt whitefox banner-1
+trait mender mossmote kettle crab23 apothecary
+trait sneak worm bushgnome fogowl hearthcat
+trait greg greg
+components thorn plume glowcap bark chestnut
+finished blackthorn wasptail glowthorn hedgehog conker hummingbird mothlantern quilt honeycake fairyring lichen stewpot stump hollowlog hoard
+emblem embercharm ember
+emblem mosscharm moss
+emblem mistcharm mist
+emblem burrowcharm burrow
+emblem feathercharm feather
+emblem crabcharm crab
+emblem gnomecharm gnome
+boons secondwind headstart smallfry formation
+level 6
+fed 10
