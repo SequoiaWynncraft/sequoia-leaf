@@ -1,9 +1,10 @@
 /**
  * What a person on a rig (`rig.ts`) does, as stances over time: standing, walking, throwing,
- * the three parts of an ability that is aimed and lands later (raising it, holding whoever it is
- * for, bringing it down), being hit, being dazed, falling, cheering. Each is a function of how far
- * through it is, in the steps of whatever clock its table keeps (twenty to a second), so the same
- * moment always gives the same stance and nothing here keeps anything.
+ * the three parts of an ability that is aimed and lands later (gathering it at the hip, holding it
+ * there while it grows, pushing it out at whoever it is for), being hit, being dazed, falling,
+ * cheering. Each is a function of how far through it is, in the steps of whatever clock its table
+ * keeps (twenty to a second), so the same moment always gives the same stance and nothing here
+ * keeps anything.
  *
  * `aim` is the angle of the arm that points at somebody: 3 for somebody lower, 6 for somebody higher.
  */
@@ -61,46 +62,51 @@ export function throwing(k: number, since: number, left: boolean, aim: number): 
   return { ...REST, left, turn: 1, arm: Math.round(aim * (1 - ease((since - 3) / 4))), offArm: 1 };
 }
 
-/** Raising an ability: knees bent and head down, then both arms go up and out and the chin comes up. */
-export function raising(k: number, left: boolean): Stance {
-  const up = ease(k * 1.2);
+/**
+ * Gathering an ability (`k` from 0 to 1), its head turned to whoever it is for (on the side it
+ * leads with): a step back, the weight going off that side, knees bending, and both hands brought
+ * together at the other hip, the leading one across the body, cupped round what is coming.
+ */
+export function gathering(k: number, left: boolean): Stance {
+  const back = ease(k * 1.25);
+  const set = back > 0.35;
   return {
     ...REST,
     left,
-    arm: Math.round(6 * up),
-    offArm: Math.round(6 * up),
-    leg: k > 0.25 ? 1 : 0,
-    offLeg: k > 0.25 ? 1 : 0,
-    sink: k < 0.6 ? 1 : 0,
-    nod: k < 0.5 ? 1 : k > 0.85 ? -1 : 0,
+    turn: 1,
+    arm: 0 - Math.round(2 * back),
+    offArm: Math.round(back),
+    leg: set ? 1 : 0,
+    offLeg: set ? 1 : 0,
+    sway: set ? -1 : 0,
+    sink: k > 0.6 ? 1 : 0,
+    nod: k > 0.6 ? 1 : 0,
   };
 }
 
 /**
- * Holding whoever an ability is for until it lands: the arm it leads with snaps out to point at them
- * and stays there, shaking a little, while the other goes up over its head; `since` is the steps
- * since it pointed and `left` the steps until the ability lands. For the last three it rears back.
+ * Holding it at the hip while it grows, until it lands `toGo` steps on (`since` the steps since it
+ * went off): crouched and still, then trembling as it comes, and drawn right back for the last two.
  */
-export function holding(since: number, toGo: number, left: boolean, aim: number): Stance {
-  const feet = { leg: 1, offLeg: 1 };
-  if (toGo <= 3) return { ...REST, ...feet, left, turn: 1, arm: 6, offArm: 6, nod: -1, sway: -1 };
-  const shake = since > 3 && Math.floor(since / 2) % 3 === 0 ? 1 : 0;
-  return {
-    ...REST,
-    ...feet,
-    left,
-    turn: 1,
-    arm: aim,
-    offArm: since < 2 ? 4 : clamp(1 + Math.floor(since / 4), 1, 5),
-    sway: since < 2 ? 2 : 1,
-    sink: shake,
-  };
+export function charging(since: number, toGo: number, left: boolean): Stance {
+  const held: Stance = { ...REST, left, turn: 1, arm: -2, offArm: 1, leg: 1, offLeg: 1, sway: -1, sink: 1, nod: 1 };
+  if (toGo <= 2) return { ...held, sway: -2, nod: 0 };
+  const tremble = toGo <= 8 && Math.floor(since) % 2 === 1;
+  return tremble ? { ...held, sway: -2 } : held;
 }
 
-/** Bringing it down: both arms come down in front and the knees give, then it straightens. */
-export function slamming(since: number, left: boolean): Stance {
-  if (since < 4) return { ...REST, left, turn: 1, arm: 1, offArm: 1, leg: 1, offLeg: 1, sink: 2, nod: 1, sway: 1 };
-  return { ...REST, left, turn: 1, arm: 0, offArm: 0, sink: since < 8 ? 1 : 0, nod: since < 8 ? 1 : 0 };
+/**
+ * Pushing it out (`since` the steps since it landed): both hands thrust out at whoever it was for
+ * (`aim`), the leading arm straight at them and the other across the chest beside it, the weight
+ * onto that side; held there a moment, then let down.
+ */
+export function pushing(since: number, left: boolean, aim: number): Stance {
+  const across = -Math.min(aim, 5);
+  const pushed: Stance = { ...REST, left, turn: 1, arm: aim, offArm: across, leg: 1, sway: 1 };
+  if (since < 5) return pushed;
+  const down = 1 - ease((since - 5) / 6);
+  const lowered = (angle: number): number => Math.round(angle * down) || 0;
+  return { ...pushed, arm: lowered(aim), offArm: lowered(across), leg: 0, sway: down > 0.5 ? 1 : 0 };
 }
 
 /** Hit: knocked away from the blow (`left`: toward our left), arms thrown out and head back, then gathering itself. */

@@ -3,9 +3,11 @@
  * leg) put together at joints (neck, shoulders, hips) and posed, at the size the town draws people.
  * A `Stance` says how each piece is held; `rigPic` draws it, with the figure's dark edge.
  *
- * Pixel art this small does not turn smoothly, so a limb is drawn at one of sixteen angles, a pixel
- * of its length at a time from its joint, and everything else moves by whole pixels. What a figure
- * does over time is a run of stances (`acts.ts`).
+ * Each piece is the town's, at the town's width (`bake`), so standing at rest from the front a
+ * person here is the town's front picture of them pixel for pixel. A limb swings at its joint as
+ * the whole piece, turned to one of sixteen angles a pixel at a time, so it keeps its width and
+ * never thins to a line; everything else moves by whole pixels. What a figure does over time is a
+ * run of stances (`acts.ts`).
  */
 import { INK } from "@sequoia-leaf/kit/palette.ts";
 import { flipped, outlineInPlace } from "@sequoia-leaf/kit/pix.ts";
@@ -65,48 +67,47 @@ interface Pt {
   readonly y: number;
 }
 
-/** Where the `v`th pixel along a limb at an angle is from its joint: `fwd` is which way a positive angle swings. */
-function along(angle: number, v: number, fwd: 1 | -1): Pt {
+/** How far down a limb its joint is: an arm turns a pixel into the shoulder, a leg at its top. */
+const ARM_JOINT = 1;
+const LEG_JOINT = 0;
+
+/** Which way a limb points at an angle, a pixel along it, and a pixel across it (to our right at rest); `fwd` is which way a positive angle swings. */
+function turned(angle: number, fwd: 1 | -1): { readonly along: Pt; readonly across: Pt } {
   const a = (Math.round(angle) * Math.PI) / 8;
-  const sin = Math.sin(a);
-  return { x: fwd * Math.sign(sin) * Math.round(v * Math.abs(sin)), y: Math.round(v * Math.cos(a)) };
-}
-/** Whether a limb at an angle is nearer upright than level: its two pixels of width then lie side by side. */
-function upright(angle: number): boolean {
-  const a = (Math.round(angle) * Math.PI) / 8;
-  return Math.abs(Math.cos(a)) + 1e-9 >= Math.abs(Math.sin(a));
+  const sin = Math.round(Math.sin(a) * 1e9) / 1e9;
+  const cos = Math.round(Math.cos(a) * 1e9) / 1e9;
+  return { along: { x: fwd * sin, y: cos }, across: { x: cos, y: -fwd * sin } };
 }
 
 /**
- * Draws a limb two pixels wide from its joint: `sx` is the first of its two columns in `pic`, `x`
- * and `y` the joint's outer pixel, `inward` the way its second column lies from there.
+ * Draws a limb turned about its joint as the whole piece it is: `pic` holds it two pixels wide and
+ * hanging down (`sx` its first column), `lx`, `top` where its corner is at rest, `joint` how far
+ * down it the joint is. Every pixel round the joint takes the limb's pixel that turning it back
+ * puts under the pixel's middle, so the piece keeps its width at any angle and has no holes.
  */
 function limb(
   g: Ctx,
   pic: HTMLCanvasElement,
   sx: number,
-  x: number,
-  y: number,
+  lx: number,
+  top: number,
+  joint: number,
   angle: number,
   fwd: 1 | -1,
-  inward: 1 | -1,
 ): void {
-  const tall = upright(angle);
-  for (let v = 0; v < pic.height; v++) {
-    const at = along(angle, v, fwd);
-    for (let u = 0; u < 2; u++)
-      g.drawImage(
-        pic,
-        sx + (inward === 1 ? u : 1 - u),
-        v,
-        1,
-        1,
-        x + at.x + (tall ? u * inward : 0),
-        y + at.y + (tall ? 0 : u),
-        1,
-        1,
-      );
-  }
+  const { along, across } = turned(angle, fwd);
+  const jx = lx + 1;
+  const jy = top + joint;
+  const reach = pic.height + 2;
+  for (let dy = -reach; dy <= reach; dy++)
+    for (let dx = -reach; dx <= reach; dx++) {
+      const px = dx + 0.5;
+      const py = dy + 0.5;
+      const u = Math.floor(px * across.x + py * across.y + 1);
+      const v = Math.floor(px * along.x + py * along.y + joint);
+      if (u < 0 || u > 1 || v < 0 || v >= pic.height) continue;
+      g.drawImage(pic, sx + u, v, 1, 1, jx + dx, jy + dy, 1, 1);
+    }
 }
 
 /** The head seen from the front, its corner at `sway`, `y`: at us, half turned or turned all the way to the side it leads with. */
@@ -128,52 +129,54 @@ function fromFront(g: Ctx, body: Body, s: Stance): void {
   const top = Math.round(s.sink);
   // The sheet holds the right-hand limbs, which seen from the front are on our left.
   const sides = [
-    { on: -1, arm: p.armF, leg: p.legF },
-    { on: 1, arm: flipped(p.armF), leg: flipped(p.legF) },
+    { on: -1, arm: p.armF, leg: p.legF, lx: -2, ax: -4 },
+    { on: 1, arm: flipped(p.armF), leg: flipped(p.legF), lx: 0, ax: 2 },
   ] as const;
-  for (const side of sides) {
-    const lead = side.on === d;
-    limb(g, side.leg, 0, side.on === -1 ? -2 : 1, HIP, lead ? s.leg : s.offLeg, side.on, side.on === -1 ? 1 : -1);
-  }
+  for (const side of sides) limb(g, side.leg, 0, side.lx, HIP, LEG_JOINT, side.on === d ? s.leg : s.offLeg, side.on);
   g.drawImage(p.bodyF, -2 + sway, SHOULDER + top);
   head(g, p, s, sway, HEAD + top + Math.round(s.nod));
-  for (const side of sides) {
-    const lead = side.on === d;
-    limb(
-      g,
-      side.arm,
-      0,
-      (side.on === -1 ? -4 : 3) + sway,
-      SHOULDER + top,
-      lead ? s.arm : s.offArm,
-      side.on,
-      side.on === -1 ? 1 : -1,
-    );
-  }
+  for (const side of sides)
+    limb(g, side.arm, 0, side.ax + sway, SHOULDER + top, ARM_JOINT, side.on === d ? s.arm : s.offArm, side.on);
 }
 
 /** Seen from the side it faces: the far arm and leg behind, the near ones in front, each swinging about its joint. */
 function fromSide(g: Ctx, body: Body, s: Stance): void {
   const p = body.parts;
   const d = s.left ? -1 : 1;
+  const sway = Math.round(s.sway) * d;
   const top = Math.round(s.sink);
   const arm = s.left ? flipped(p.armO) : p.armO;
   const leg = s.left ? flipped(p.legO) : p.legO;
   // The leg's picture is both legs side by side: its front half leads.
-  limb(g, leg, s.left ? 2 : 0, s.left ? 1 : -2, HIP, s.offLeg, d, d);
-  limb(g, arm, 0, s.left ? 0 : -1, SHOULDER + top, s.offArm, d, d);
-  limb(g, leg, s.left ? 0 : 2, s.left ? -1 : 0, HIP, s.leg, d, d);
-  g.drawImage(s.left ? p.bodyL : p.bodyR, -2, SHOULDER + top);
-  g.drawImage(s.left ? p.headL : p.headR, -4, HEAD + top + Math.round(s.nod));
-  limb(g, arm, 0, s.left ? 0 : -1, SHOULDER + top, s.arm, d, d);
+  limb(g, leg, s.left ? 2 : 0, s.left ? 0 : -2, HIP, LEG_JOINT, s.offLeg, d);
+  limb(g, arm, 0, -1 + sway, SHOULDER + top, ARM_JOINT, s.offArm, d);
+  limb(g, leg, s.left ? 0 : 2, s.left ? -2 : 0, HIP, LEG_JOINT, s.leg, d);
+  g.drawImage(s.left ? p.bodyL : p.bodyR, -2 + sway, SHOULDER + top);
+  g.drawImage(s.left ? p.headL : p.headR, -4 + sway, HEAD + top + Math.round(s.nod));
+  limb(g, arm, 0, -1 + sway, SHOULDER + top, ARM_JOINT, s.arm, d);
+}
+
+/** Where the hand of an arm held at `angle` is, from the figure's feet: the leading arm's, or (`off`) the other. */
+function hand(s: Stance, angle: number, off: boolean): Pt {
+  const d = s.left ? -1 : 1;
+  const side = off === s.left ? 1 : -1;
+  const { along } = turned(angle, s.view === "front" ? side : d);
+  const reach = ARM - ARM_JOINT - 0.5;
+  const x = (s.view === "front" ? 3 * side : 0) + Math.round(s.sway) * d;
+  return {
+    x: Math.floor(x + along.x * reach),
+    y: Math.floor(SHOULDER + Math.round(s.sink) + ARM_JOINT + along.y * reach),
+  };
 }
 
 /** Where the hand of the leading arm is, from the figure's feet: where something it throws leaves it. */
-export function handOf(s: Stance): Pt {
-  const d = s.left ? -1 : 1;
-  const tip = along(s.arm, ARM - 1, d);
-  const x = s.view === "front" ? (s.left ? -4 : 3) + Math.round(s.sway) * d : 0;
-  return { x: x + tip.x, y: SHOULDER + Math.round(s.sink) + tip.y };
+export const handOf = (s: Stance): Pt => hand(s, s.arm, false);
+
+/** Halfway between its two hands, from its feet: where it holds something in both. */
+export function handsOf(s: Stance): Pt {
+  const one = hand(s, s.arm, false);
+  const other = hand(s, s.offArm, true);
+  return { x: Math.round((one.x + other.x) / 2), y: Math.round((one.y + other.y) / 2) };
 }
 
 const keyOf = (s: Stance): string =>

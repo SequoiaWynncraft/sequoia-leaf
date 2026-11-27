@@ -2,23 +2,24 @@
  * An ability that lands later, between going off and landing, in its owner's colours
  * (`livery.ts`): the table goes dark but for a pool of light round whoever it is for; a seal is
  * stamped on the ground round that pool, its studs lighting one after another until it lands, each
- * sending a spark in at them; a thread runs from its owner's hand to them and is drawn tight; and
- * gold corners close round them. As it lands the dark is gone at once and a bolt comes down the
- * middle of the seal. All of it lies on the ground or is a pixel wide, so the one caught is never
- * out of sight.
+ * sending a spark in at them; a ball grows between its owner's hands, held at the hip; and gold
+ * corners close round them. As it lands the dark is gone at once, its owner pushes both hands out
+ * at them and a beam runs from the hands to them for a moment, and embers fly. What hangs over
+ * them lies on the ground, or is no wider than the corners, so the one caught is never out of
+ * sight; only the beam crosses them, for as long as it lasts.
  *
  * When it lands is `hung.ts`'s to say, counted from the step it went off. Whoever it is for falling
- * first takes the thread and the corners with them; the seal stays and it still lands.
+ * first takes the corners with them; the seal stays, and it still lands where they stood.
  */
 import { framesOf } from "@sequoia-leaf/figures/sprites.ts";
-import { GOLD, INK } from "@sequoia-leaf/kit/palette.ts";
+import { CREAM, GOLD, INK } from "@sequoia-leaf/kit/palette.ts";
 import { R } from "@sequoia-leaf/kit/pix.ts";
 import { clamp, type Ctx } from "@sequoia-leaf/kit/util.ts";
 import type { Fight, UnitKind } from "@sequoia-leaf/raid";
 
 import { handAt } from "./acting.ts";
 import { clockNow, fightNow, FOOT, FV } from "./board.ts";
-import { burst, streak } from "./fx.ts";
+import { burst } from "./fx.ts";
 import type { Pt } from "./geometry.ts";
 import { fateOf, hangs, type Hung, stillCaught } from "./hung.ts";
 import { type Livery, liveryOf } from "./livery.ts";
@@ -46,8 +47,9 @@ interface Spell {
 const spells: Spell[] = [];
 
 const UP = -Math.PI / 2;
-/** The steps before it lands for which the thread is tight. */
-const TAUT = 6;
+/** How large the ball between its owner's hands grows (its radius in pixels), and the steps its beam lasts. */
+const BALL = 3;
+const BEAM = 5;
 /** The seal: half its width and its height, how many studs, and the steps it stays after landing. */
 const SEAL = { rx: 27, ry: 19 } as const;
 const STUDS = 12;
@@ -82,11 +84,10 @@ const studAt = (i: number, grown: number): Pt => {
   return { x: Math.round(Math.cos(a) * SEAL.rx * grown), y: Math.round(Math.sin(a) * SEAL.ry * grown) };
 };
 
-/** What is seen as it lands on whoever it was for: a bolt down the middle of the seal, and the ground thrown up. */
+/** What is seen as it lands where whoever it was for stands, or stood: the ground thrown up in embers of its owner's colours. */
 function strikes(s: Spell): void {
-  const { main, trim, core } = s.livery;
+  const { main, trim } = s.livery;
   const { x, y } = s.spot;
-  streak({ x, y: y - s.tall - 40 }, { x, y: y - 2 }, core[1], main[1], 0.22);
   burst(x, y - 4, 18, [main[1], main[0], trim[1]], {
     size: 2,
     speed: 70,
@@ -123,7 +124,7 @@ function step(s: Spell, c: number, fate: "hangs" | "lands"): void {
   if (a) a.dread = null;
   s.free = true;
   if (fate === "hangs") return;
-  if (under) strikes(s);
+  strikes(s);
   s.done = true;
   s.land();
 }
@@ -200,21 +201,77 @@ export function drawSeals(g: Ctx): void {
   for (const s of live) seal(g, s, c);
 }
 
-/** A thread from its owner's hand to whoever it is for: dashes running at them, and drawn tight as it comes. */
-function thread(g: Ctx, s: Spell, c: number): void {
-  const owner = FV.actors[s.by];
-  const hand = owner && c < owner.fallAt ? handAt(owner, c, s.fight.tick) : null;
-  if (!hand) return;
-  const to = { x: s.spot.x, y: s.spot.y - Math.round(s.tall / 2) };
-  const far = Math.hypot(to.x - hand.x, to.y - hand.y);
-  const taut = s.hung.lands - c <= TAUT;
-  for (let d = 3; d < far - 4; d++) {
-    if (!taut && (((d - Math.floor((c - s.hung.at) * 1.5)) % 4) + 4) % 4 >= 2) continue;
-    const k = d / far;
-    const x = Math.round(V.bx + hand.x + (to.x - hand.x) * k);
-    const y = Math.round(V.by + hand.y + (to.y - hand.y) * k);
-    R(g, x, y, 2, 1, taut ? s.livery.core[1] : s.livery.spark[1]);
+/** A round spot of a colour, `r` pixels out from the pixel at its middle. */
+function disc(g: Ctx, x: number, y: number, r: number, col: string): void {
+  if (r < 0) return;
+  for (let dy = -r; dy <= r; dy++) {
+    const half = Math.floor(Math.sqrt((r + 0.5) ** 2 - dy * dy));
+    R(g, x - half, y + dy, half * 2 + 1, 1, col);
   }
+}
+
+/** A ball of its owner's colours, edged dark and brightest in the middle, `r` pixels out. */
+function orb(g: Ctx, l: Livery, x: number, y: number, r: number, hot: boolean): void {
+  disc(g, x, y, r + 1, INK);
+  disc(g, x, y, r, l.main[0]);
+  disc(g, x, y, r - 1, l.main[1]);
+  disc(g, x, y, r - 2, l.core[1]);
+  if (hot) R(g, x, y, 1, 1, CREAM);
+}
+
+/** Where its owner's leading hand is at the clock `c` (`both`: halfway between their hands), on the screen; null once they have fallen. */
+function handsOf(s: Spell, c: number, both: boolean): Pt | null {
+  const owner = FV.actors[s.by];
+  const hands = owner && c < owner.fallAt ? handAt(owner, c, s.fight.tick, both) : null;
+  return hands && { x: Math.round(V.bx + hands.x), y: Math.round(V.by + hands.y) };
+}
+
+/** The ball growing between its owner's hands while it hangs, flickering as it comes, with sparks wheeling in to it. */
+function ball(g: Ctx, s: Spell, c: number): void {
+  const at = handsOf(s, c, true);
+  if (!at) return;
+  const k = clamp((c - s.hung.at) / (s.hung.lands - s.hung.at), 0, 1);
+  const flicker = k > 0.6 && Math.floor(c) % 2 === 0 ? 1 : 0;
+  const r = 1 + Math.floor(k * BALL) + flicker;
+  orb(g, s.livery, at.x, at.y, r, k > 0.5);
+  for (let i = 0; i < 3; i++) {
+    const turn = c * 0.6 + (i * Math.PI * 2) / 3;
+    const out = r + 2 + ((c * 0.5 + i) % 3);
+    R(g, Math.round(at.x + Math.cos(turn) * out), Math.round(at.y + Math.sin(turn) * out), 1, 1, s.livery.spark[1]);
+  }
+}
+
+/**
+ * As it lands: a beam from just past its owner's leading hand to where whoever it was for stands
+ * (or stood), white-hot and widest at first, so that the hands pushing it are seen at its foot.
+ */
+function beam(g: Ctx, s: Spell, c: number): void {
+  const since = c - s.hung.lands;
+  const hand = since >= 0 && since < BEAM ? handsOf(s, c, false) : null;
+  if (!hand) return;
+  const to = { x: Math.round(V.bx + s.spot.x), y: Math.round(V.by + s.spot.y - s.tall / 2) };
+  const w = since < 2 ? 3 : since < 4 ? 2 : 1;
+  const far = Math.hypot(to.x - hand.x, to.y - hand.y);
+  const gap = w + 3;
+  if (far <= gap) return;
+  const at = (d: number): Pt => ({
+    x: Math.round(hand.x + ((to.x - hand.x) * d) / far),
+    y: Math.round(hand.y + ((to.y - hand.y) * d) / far),
+  });
+  const layers: readonly (readonly [number, string])[] = [
+    [w + 1, INK],
+    [w, s.livery.main[1]],
+    [w - 1, s.livery.core[1]],
+    [since < 2 ? 0 : -1, CREAM],
+  ];
+  for (const [r, col] of layers)
+    for (let d = gap; d <= far; d++) {
+      const p = at(d);
+      disc(g, p.x, p.y, r, col);
+    }
+  if (since >= 2) return;
+  orb(g, s.livery, hand.x, hand.y, 1, true);
+  orb(g, s.livery, to.x, to.y, w + 2, true);
 }
 
 /** The corners marking whoever is caught: they close in, then stay, blinking as it comes. */
@@ -236,12 +293,13 @@ function corners(g: Ctx, s: Spell, c: number): void {
     }
 }
 
-/** What is drawn over everyone standing on the table: each thread, and the corners round whoever is caught. */
+/** What is drawn over everyone standing on the table: each ball and the corners round whoever is caught, and each beam as it lands. */
 export function drawSpells(g: Ctx): void {
   const c = clockNow();
   for (const s of spells) {
-    if (s.free || s.done || s.fight !== fightNow()) continue;
-    thread(g, s, c);
-    corners(g, s, c);
+    if (s.fight !== fightNow()) continue;
+    if (s.done) beam(g, s, c);
+    else ball(g, s, c);
+    if (!s.free && !s.done) corners(g, s, c);
   }
 }
