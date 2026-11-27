@@ -1,11 +1,11 @@
 /**
- * Groot's true forms: the five figures named after the guild's raids, as the raiders saw them. A
- * Groot figure that gets back up (the Groot trait, `traits.ts`) does so in its true form: the same
- * figure with the same ability, with more attack and ability power (Groot's `more`), and the one
+ * Graid's true forms: the five figures named after the guild's raids, as the raiders saw them. A
+ * Graid figure that gets back up (the Graid trait, `traits.ts`) does so in its true form: the same
+ * figure with the same ability, with more attack and ability power (Graid's `more`), and the one
  * change each has here. Words and numbers only; what a form changes in a fight is in `fight/`
  * (`enter.ts` for the Rock's numbers, `abilities.ts` for the rest).
  *
- * A figure that carries Groot and has no true form here (one made Groot by an emblem, when there is
+ * A figure that carries Graid and has no true form here (one made Graid by an emblem, when there is
  * one) gets back up as itself.
  */
 import type { FigureId } from "./figures.ts";

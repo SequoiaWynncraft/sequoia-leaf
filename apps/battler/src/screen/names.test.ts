@@ -5,8 +5,9 @@ import { join } from "node:path";
 import { abilityText, refusalText, TRAIT_IDS } from "@sequoia-leaf/raid";
 import { everyShared } from "@sequoia-leaf/raid/content/catalog.ts";
 import { BOSS_IDS, specOf, SUMMON_IDS } from "@sequoia-leaf/raid/content/figures.ts";
-import { TRUE_FORM_IDS, TRUE_FORMS } from "@sequoia-leaf/raid/content/groot.ts";
+import { TRUE_FORM_IDS, TRUE_FORMS } from "@sequoia-leaf/raid/content/graid.ts";
 import { LORE } from "@sequoia-leaf/raid/content/lore.ts";
+import { RELEASES } from "@sequoia-leaf/raid/content/releases.ts";
 import { HANDLES, nowCalled, regularOf } from "@sequoia-leaf/raid/content/rooms.ts";
 
 import { acrossName } from "./logic.ts";
@@ -188,8 +189,26 @@ describe("the words", () => {
     );
     expect(stale).toEqual([]);
     expect(TRAIT_IDS.map(sortWord).filter((w) => !["Origin", "Class", "Its own"].includes(w))).toEqual([]);
-    expect([sortWord("groot"), sortWord("bulwark"), sortWord("rooted")]).toEqual(["Origin", "Class", "Its own"]);
+    expect([sortWord("graid"), sortWord("bulwark"), sortWord("rooted")]).toEqual(["Origin", "Class", "Its own"]);
     expect(refusalText("already_kin")).toBe("It is of that origin already.");
+  });
+
+  test("the five named after the guild's raids are Graid: the page says Groot only for the Groot Night banner", () => {
+    // Groot is the Nest of the Grootslangs; a graid is any guild raid. Old names kept in `RENAMED`, and
+    // the releases' own ids (`groot`, `groot-night`, never shown), are let be.
+    const groot = [...PAGE_TEXT, ...filesUnder(join(ROOT, "packages/figures/src"))].flatMap((path) =>
+      stringsIn(textOf(path))
+        .filter((s) => /groot(?!slang)(?! night)/i.test(s) && !RELEASES.some((r) => r.id === s))
+        .map((s) => `${path.slice(ROOT.length + 1)}: ${s}`),
+    );
+    expect(groot).toEqual([]);
+    expect(TRUE_FORM_IDS.map((id) => TRUE_FORMS[id].name)).toEqual([
+      "Real Worm",
+      "Real Moth",
+      "Real Rock",
+      "Real Greg",
+      "Real Orphion",
+    ]);
   });
 
   test("Greg's card says what he has gained, and the most", () => {

@@ -1,5 +1,5 @@
 /**
- * When a Groot figure's true form rises, with nothing of the page in it, so that it can be tested.
+ * When a Graid figure's true form rises, with nothing of the page in it, so that it can be tested.
  *
  * The rules say it at the fall: `fall.back` is the steps until it gets back up. Everything is
  * counted on the fight's clock from that step, as `hung.ts` times gaz's cast, so it plays the same

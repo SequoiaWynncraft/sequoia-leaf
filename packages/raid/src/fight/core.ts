@@ -10,7 +10,7 @@ import { FIGHT } from "../content/rooms.ts";
 import { traitDraw, traitNumber, TRAITS } from "../content/traits.ts";
 import { distance, line, mirror, neighboursFor, type Side, within } from "../hex.ts";
 import { emit, FOREVER, secs } from "./clock.ts";
-import { freeNear, getUp, grootFalls, summon } from "./enter.ts";
+import { freeNear, getUp, graidFalls, summon } from "./enter.ts";
 import type { DamageKind, DamageSource, Fight, HealSource, LeapWhy, Unit } from "./types.ts";
 
 export { emit, flight, FOREVER, HZ, later, secs } from "./clock.ts";
@@ -385,8 +385,8 @@ function fall(f: Fight, u: Unit, by: Unit | null): void {
     getUp(f, u, (u.maxHp * boonNumber("secondwind", "health")) / 100, "wind");
     return;
   }
-  // A Groot figure with its getting back up to come is down for a moment, and still counts as standing.
-  const back = grootFalls(f, u);
+  // A Graid figure with its getting back up to come is down for a moment, and still counts as standing.
+  const back = graidFalls(f, u);
   u.alive = false;
   u.downs++;
   u.hp = 0;

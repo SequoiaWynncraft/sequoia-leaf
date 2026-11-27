@@ -10,7 +10,7 @@ import { advance, openPlayback } from "./playback.ts";
 
 /**
  * The banner's member behind a wall, against a party that lasts long enough to be caught several
- * times. (The wall has one Groot figure, Greg, so no figure gets back up and the opening is as long
+ * times. (The wall has one Graid figure, Greg, so no figure gets back up and the opening is as long
  * as this was written for: whether a cast is shown in a later frame turns on where frames fall.)
  */
 const SETUP: FightSetup = {

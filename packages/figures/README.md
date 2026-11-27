@@ -5,7 +5,7 @@ the raid's table, and the town. Which figures there are is the raid's rules' (`p
 this is only how they look.
 
 - `src/figures.txt`: every figure typed out as rows of letters, a block for each picture (and for
-  Groot's five a second figure, `<figure> true`: its true form); `src/figures.ts` reads them
+  Graid's five a second figure, `<figure> true`: its true form); `src/figures.ts` reads them
   (`artOf(kind, form)`) with what else is kept of each (where it breathes, whether it flies), and
   `src/rows.ts` reads any such text (the raid table's `icons.txt` too).
 - `src/pal.ts`: the letters' colours, which are the town's (`FIGURE_PAL`: the kit's palette and

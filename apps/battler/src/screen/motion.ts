@@ -50,7 +50,7 @@ export interface Actor {
   fallAt: number;
   tumble: 1 | -1;
   gone: boolean;
-  /** Down only for a moment: a Groot figure lying there until it rises in its true form (`rising.ts`), never puffed away. */
+  /** Down only for a moment: a Graid figure lying there until it rises in its true form (`rising.ts`), never puffed away. */
   rising: boolean;
   /** As itself, or in its true form: as it is drawn, which changes as it is seen to rise. */
   form: Form;

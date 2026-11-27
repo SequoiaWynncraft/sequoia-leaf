@@ -2,7 +2,7 @@
  * Traits switching on as the two parties sit down: what each does to the figures it touches, set on
  * them as numbers the fight reads from then on. One entry a trait (`ON`), so a new trait is a new
  * entry. Some do their part later: roll call once everyone is seated (`rollCall` in `engine.ts`),
- * Greg's meals as he sits down (`seat`), Groot's getting back up as one falls (`enter.ts`).
+ * Greg's meals as he sits down (`seat`), Graid's getting back up as one falls (`enter.ts`).
  */
 import { carries } from "../content/items.ts";
 import { TRAIT_IDS, type TraitId, traitNumber } from "../content/traits.ts";
@@ -62,7 +62,7 @@ const ON: Readonly<Record<TraitId, On>> = {
     }
     return members;
   },
-  groot: ({ members }) => {
+  graid: ({ members }) => {
     for (const u of members) u.rises = true;
     return members;
   },

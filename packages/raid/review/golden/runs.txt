@@ -10,7 +10,7 @@ run sensible 008 | trail 3: lost in room 10, WWLWWLWWLL, resolve 0, level 6, 219
 run sensible 009 | own figures: lost in room 13, WWLWWWWWLWWLL, resolve 0, level 6, 244 Coins | draws 0cde17f62fe4 end 5e667a511e0f
 run sensible 010 | the Wilds: lost in room 21, WWWWWWWWWWWWWWLWWLLWL, resolve 0, level 8, 324 Coins | draws 9acb95af0d0f end e003495d5139
 run sensible 011 | the Deep Woods: lost in room 15, WWWWWWWWLWWWLWL, resolve 0, level 7, 292 Coins | draws 7542dbe9c005 end cfa40e759651
-run sensible 012 | trail 1: won in room 15, WWLWWWWWWWWWWLW, resolve 13, level 7, 478 Coins | draws d69e5a73d62f end 1331571e4df7
+run sensible 012 | trail 1: won in room 15, WWLWWWWWWWWWWLW, resolve 13, level 7, 478 Coins | draws 0cf999323a8c end 4a3d33932ea1
 run sensible 013 | trail 2: lost in room 6, WLLLWL, resolve 0, level 4, 103 Coins | draws 071b22953a4b end 3faba0bf7501
 run sensible 014 | trail 3: lost in room 10, WWLWWLWWLL, resolve 0, level 6, 219 Coins | draws 9c4f9a792715 end 4e0439cf8f2d
 run sensible 015 | own figures: lost in room 15, WWWWWLWWWWWWLLL, resolve 0, level 7, 276 Coins | draws 41455fffc339 end 418b38d45ca6
@@ -27,7 +27,7 @@ run sensible 025 | trail 2: lost in room 7, WWLLWLL, resolve 0, level 5, 123 Coi
 run sensible 026 | trail 3: lost in room 8, WWLLLWWL, resolve 0, level 5, 96 Coins | draws e7d486d427f1 end 3df20ef72993
 run sensible 027 | own figures: lost in room 9, WWLWWLWLL, resolve 0, level 5, 130 Coins | draws 1f0202c8481e end 86e79c2b377d
 run sensible 028 | the Wilds: lost in room 10, WWWWWWLLLL, resolve 0, level 6, 146 Coins | draws c28cf71aaf06 end 4a95780353c2
-run sensible 029 | the Deep Woods: lost in room 23, WWWLWWWWWWLWWLLWWWWWWWL, resolve 0, level 8, 276 Coins | draws 50284b5ed487 end 4de8ef64ab58
+run sensible 029 | the Deep Woods: lost in room 23, WWWLWWWWWWLWWLLWWWWWWWL, resolve 0, level 8, 276 Coins | draws dc7c31628736 end 251cc8f9737a
 run sensible 030 | trail 1: lost in room 9, WWWWWLWLL, resolve 0, level 5, 146 Coins | draws 8a39c738b3ee end 971aa6e0d3b9
 run sensible 031 | trail 2: lost in room 12, WWWLWLWWLWWL, resolve 0, level 6, 285 Coins | draws 8959da9384ed end da562fb30270
 run sensible 032 | trail 3: lost in room 9, WWWWWLLLL, resolve 0, level 5, 195 Coins | draws 60217da483e4 end ba56bdebc799

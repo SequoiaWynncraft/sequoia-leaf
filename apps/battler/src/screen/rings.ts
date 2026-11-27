@@ -1,5 +1,5 @@
 /**
- * Groot's rings: each true form's own, lying flat on the ground round its hex, in its raid's idea,
+ * Graid's rings: each true form's own, lying flat on the ground round its hex, in its raid's idea,
  * tied by a gold stud at four points. Ours, not anybody else's frames:
  *
  * - Worm (the nest): broken eggshell, cream pieces on moss green, with gaps where it broke.
@@ -14,7 +14,7 @@
 import { CORAL, CREAM, EARTH, GOLD, GREEN, INK, SKY } from "@sequoia-leaf/kit/palette.ts";
 import { R } from "@sequoia-leaf/kit/pix.ts";
 import type { Ctx } from "@sequoia-leaf/kit/util.ts";
-import type { TrueFormId } from "@sequoia-leaf/raid/content/groot.ts";
+import type { TrueFormId } from "@sequoia-leaf/raid/content/graid.ts";
 
 import { STUDS } from "./risetime.ts";
 

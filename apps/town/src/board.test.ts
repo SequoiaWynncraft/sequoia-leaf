@@ -17,7 +17,7 @@ import {
 } from "./board.ts";
 import type { Quest } from "./guild.ts";
 import { readQuests } from "./live.ts";
-import { NOTES } from "./notes.ts";
+import { type Note, NOTES } from "./notes.ts";
 
 /** The member's quests as Leaf really sends them, from the contract its own tests write. */
 const contract: unknown = await Bun.file(new URL("../../../contracts/leaf-api-v1.json", import.meta.url)).json();
@@ -104,6 +104,10 @@ describe("what a quest's note says it is", () => {
   });
 });
 
+/** Everything a note says on the board: its title, its lines and its full notes. */
+const noteWords = (n: Note): string[] =>
+  [n.title, ...n.lines].concat((n.more ?? []).flatMap((p) => [p.head].concat(p.points)));
+
 describe("the board's news", () => {
   let world: Standin | null = null;
   afterEach(() => {
@@ -135,6 +139,20 @@ describe("the board's news", () => {
     expect(noteWhen("2026-11-22T05:05Z", "UTC")).toBe("22 Nov, 05:05");
     expect(noteWhen("2026-11-22")).toBe("22 Nov");
     expect(noteWhen("2027-01-05")).toBe("5 Jan");
+  });
+
+  test("the news calls Worm, Moth, Rock, Greg and Orphion Graid, and Groot only the Nest of the Grootslangs", () => {
+    // The one note that says why names Groot as the Nest; the Groot Night banner is about the Nest too.
+    const said = NOTES.flatMap((n) =>
+      noteWords(n)
+        .map((w) => w.replace("Groot is the Nest of the Grootslangs", ""))
+        .filter((w) => /groot(?!slang)(?! night)/i.test(w))
+        .map((w) => `${n.id}: ${w}`),
+    );
+    expect(said).toEqual([]);
+    expect(NOTES.find((n) => n.id === "raid-graid")?.lines).toEqual([
+      "The origin of Worm, Moth, Rock, Greg and Orphion is now called Graid: Groot is the Nest of the Grootslangs, not every guild raid.",
+    ]);
   });
 
   test("news is unread, and the board opens on it, until the newest note is opened", () => {

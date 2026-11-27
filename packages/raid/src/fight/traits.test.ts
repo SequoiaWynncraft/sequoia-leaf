@@ -63,10 +63,10 @@ describe("counting traits", () => {
       at("crab23", 2, 0),
       at("worm", 3, 0, 1, ["crabcharm"]),
     ]);
-    expect(countTraits(four.figures)).toMatchObject({ crab: 4, burrow: 1, sneak: 1, groot: 1 });
+    expect(countTraits(four.figures)).toMatchObject({ crab: 4, burrow: 1, sneak: 1, graid: 1 });
     expect(traitSteps(four).crab).toBe(2);
     // On the bench, where nobody else is, it is one of its kin alone.
-    expect(countTraits([{ kind: "worm", items: ["crabcharm"] }])).toEqual({ burrow: 1, sneak: 1, groot: 1, crab: 1 });
+    expect(countTraits([{ kind: "worm", items: ["crabcharm"] }])).toEqual({ burrow: 1, sneak: 1, graid: 1, crab: 1 });
   });
   test("two copies of one figure count once, however many emblems they hold", () => {
     const twins = [
@@ -74,7 +74,7 @@ describe("counting traits", () => {
       { kind: "worm", items: ["crabcharm", "mistcharm"] },
       { kind: "crab7", items: [] },
     ] satisfies Carrier[];
-    expect(countTraits(twins)).toEqual({ burrow: 1, sneak: 1, groot: 1, crab: 2, mist: 1, fang: 1 });
+    expect(countTraits(twins)).toEqual({ burrow: 1, sneak: 1, graid: 1, crab: 2, mist: 1, fang: 1 });
     // A copy holding nothing still counts the emblem the other copy holds, once.
     expect(
       countTraits([
@@ -85,7 +85,7 @@ describe("counting traits", () => {
   });
   test("a figure with a third trait counts toward all three", () => {
     const counts = countTraits(kinds("whitefox", "hearthcat", "greg"));
-    expect(counts).toEqual({ mist: 1, sage: 1, groot: 2, ember: 1, sneak: 1, fang: 1, bulwark: 1, greg: 1 });
+    expect(counts).toEqual({ mist: 1, sage: 1, graid: 2, ember: 1, sneak: 1, fang: 1, bulwark: 1, greg: 1 });
   });
   test("the states list what is on first", () => {
     const states = traitStates(kinds("crab7", "crab12", "emberkit"));

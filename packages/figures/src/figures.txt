@@ -1388,7 +1388,7 @@ NnbNnNmkkkkkkkkmbnBbnB
 .m...m....m.....m...m.
 
 # ---------- true forms ----------
-# Groot's five as the raiders saw them (`<figure> true`): the Rock stands up, the Worm is whole, the
+# Graid's five as the raiders saw them (`<figure> true`): the Rock stands up, the Worm is whole, the
 # Moth's wings open, Greg is unnamed, Orphion is alight.
 
 rock true

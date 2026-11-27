@@ -9,7 +9,7 @@
  * change it.
  */
 import { abilityNumber, type UnitKind } from "../content/figures.ts";
-import { formNumber } from "../content/groot.ts";
+import { formNumber } from "../content/graid.ts";
 import { cone, distance, line, neighbours } from "../hex.ts";
 import { around, ids, say, spread } from "./cast.ts";
 import {

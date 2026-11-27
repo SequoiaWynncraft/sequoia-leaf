@@ -234,7 +234,7 @@ export function wear(kind: MemberId, name: string, body: Body): void {
   worn.set(kind, { name, body, said: (worn.get(kind)?.said ?? 0) + 1 });
   baked.delete(kind);
 }
-/** A figure's pictures, facing right or left, as itself or (one of Groot's five) in its true form. */
+/** A figure's pictures, facing right or left, as itself or (one of Graid's five) in its true form. */
 export function framesOf(kind: UnitKind, left = false, form: Form = "plain"): Frames {
   const key = form === "true" ? `${kind} true` : kind;
   let f = baked.get(key);
@@ -265,7 +265,7 @@ export interface Bend {
 
 export interface Shown {
   pose?: Pose;
-  /** As itself, or (one of Groot's five) in its true form. */
+  /** As itself, or (one of Graid's five) in its true form. */
   form?: Form;
   /** Which of the two standing pictures. */
   beat?: 0 | 1;
