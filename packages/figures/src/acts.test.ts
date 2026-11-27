@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { dazed, falling, holding, raising, recoiling, slamming, standing, throwing, walking } from "./acts.ts";
-import { handOf, REST } from "./rig.ts";
+import { charging, dazed, falling, gathering, pushing, recoiling, standing, throwing, walking } from "./acts.ts";
+import { handOf, handsOf, REST } from "./rig.ts";
 
 describe("what a person on a rig does", () => {
   test("walks with arms and legs swinging in turn, each arm against the leg on its side", () => {
@@ -24,13 +24,28 @@ describe("what a person on a rig does", () => {
     expect(throwing(1, 9, false, 5).arm).toBe(0);
   });
 
-  test("raises an ability with both arms, points at whoever it is for until it lands, and brings it down", () => {
-    expect(raising(0, false)).toMatchObject({ arm: 0, offArm: 0 });
-    expect(raising(1, false)).toMatchObject({ arm: 6, offArm: 6 });
-    for (let since = 0; since < 16; since++) expect(holding(since, 20 - since, true, 4).arm).toBe(4);
-    expect(holding(18, 2, true, 4)).toMatchObject({ arm: 6, offArm: 6 });
-    expect(slamming(0, true).sink).toBe(2);
-    expect(slamming(11, true)).toMatchObject({ arm: 0, offArm: 0, sink: 0 });
+  test("gathers an ability at the far hip in both hands, holds it there, and pushes it out at whoever it is for", () => {
+    // Whoever it is for is on our right: the head turns to them, both hands go to the other hip.
+    expect(gathering(0, false)).toMatchObject({ arm: 0, offArm: 0, turn: 1 });
+    const gathered = gathering(1, false);
+    expect(gathered).toMatchObject({ view: "front", sway: -1, turn: 1 });
+    const hip = handsOf(gathered);
+    expect(hip.x).toBeLessThan(-1);
+    expect(hip.y).toBeGreaterThan(-9);
+    expect(hip.y).toBeLessThan(-3);
+    expect(handsOf(gathering(1, true)).x).toBeGreaterThan(1);
+    // Held there until it lands, trembling a pixel as it comes.
+    for (let since = 0; since < 20; since++) {
+      const held = handsOf(charging(since, 20 - since, false));
+      expect(Math.abs(held.x - hip.x) + Math.abs(held.y - hip.y)).toBeLessThanOrEqual(1);
+    }
+    // Pushed out: both hands on their side, the leading one well out, higher for somebody higher, then let down.
+    const level = pushing(0, false, 4);
+    expect(handsOf(level).x).toBeGreaterThan(2);
+    expect(handOf(level).x).toBeGreaterThan(6);
+    expect(handOf(pushing(0, false, 6)).y).toBeLessThan(handOf(level).y);
+    expect(handOf(pushing(0, true, 4)).x).toBeLessThan(-6);
+    expect(pushing(11, false, 5)).toMatchObject({ arm: 0, offArm: 0 });
   });
 
   test("reels from a blow, sways when dazed, and falls onto its back", () => {
