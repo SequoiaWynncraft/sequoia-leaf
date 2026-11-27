@@ -7,7 +7,8 @@
  * `joins` is when a release's figures join the pulls: as it opens, or (`next`) as the next release
  * that joins as it opens does, for one that opens while a banner is open, so that a banner's prizes
  * stay what it opened with. The expansion's first release opens on merge, during the first banner,
- * and so does `gaz-stall`, which puts the first banner's headliner on everyone's stall.
+ * and so does `gaz-stall`, which puts the first banner's headliner on everyone's stall: the eras
+ * before it are live at no moment, so no banner is open in them (`Figure.everyones`).
  */
 export const RELEASES = [
   { id: "base", at: 0, joins: "opening" },

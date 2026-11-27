@@ -5,10 +5,9 @@
  * but the name and the picture are not kept here: who a banner's member is comes from Leaf, and
  * the page gives the figure their name and their picture.
  *
- * It is not one of the twenty-eight (`FIGURE_IDS`), nor one of everyone's figures until a release
- * says so (`Figure.everyones`): till then the main way never offers it, the regulars never bring it
- * and the almanac does not count it. The first banner's is everyone's from `gaz-stall`, with the
- * numbers that release gives it. A run with the member's own figures sells it only to a member who
+ * It is not one of the twenty-eight (`FIGURE_IDS`), and is one of everyone's figures only while its
+ * banner is open (`Figure.everyones`): at any other time the main way never offers it, the regulars
+ * never bring it and the almanac does not count it. A run with the member's own figures sells it only to a member who
  * has pulled it, at its level (`own.ts`).
  */
 import type { FigureSpec } from "./figures.ts";

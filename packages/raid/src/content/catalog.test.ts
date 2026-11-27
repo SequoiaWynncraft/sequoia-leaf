@@ -10,12 +10,13 @@ import { join } from "node:path";
 
 import { type Ctx, isRefused } from "@sequoia-leaf/core";
 
+import { boardMet } from "../foe.ts";
 import { RAID, type Table } from "../game.ts";
 import { advance } from "../sitting/clock.ts";
 import { command, openSitting } from "../sitting/commands.ts";
 import type { Sitting } from "../sitting/sitting.ts";
-import { abc } from "../testkit.ts";
-import { BANNERS, GROVE } from "./banners.ts";
+import { abc, at as placed, partyOfFigures } from "../testkit.ts";
+import { type Banner, BANNERS, GROVE } from "./banners.ts";
 import {
   available,
   type Catalog,
@@ -113,21 +114,25 @@ function joins(f: Figure): number {
 /** A roster of every figure there is. */
 const EVERYTHING: Roster = Object.fromEntries(everyFigure().map((id) => [id, 0]));
 const shared = (f: Figure): boolean => f.access === "shared";
-/** One of everyone's figures: in the real catalogues and the made-up spread, every one is by the first moment looked at. */
-const everyones = (f: Figure): boolean => f.everyones;
+/** Whether a banner is open at a moment of Leaf's clock, by its own dates. */
+const openAt = (banner: Banner, t: number): boolean => banner.from <= t && t < banner.until;
+/** One of everyone's figures at a moment: a grove figure always, a banner's headliner while its banner is open. */
+function everyones({ access }: Figure, t: number): boolean {
+  return access === "shared" || BANNERS.some((b) => b.id === access.headliner && openAt(b, t));
+}
 
 /** A draw, and what it should give at a moment: every figure that suits it, once it is open (or has joined the pulls). */
 interface Case {
   readonly name: string;
   readonly purpose: Purpose;
-  readonly suits: (f: Figure) => boolean;
+  readonly suits: (f: Figure, t: number) => boolean;
   readonly from: (f: Figure) => number;
 }
 const CASES: readonly Case[] = [
   ...TIERS.map((tier): Case => ({
     name: `the stall at ${tier} acorns`,
     purpose: { for: "stall", figures: { pool: "fair" }, tier },
-    suits: (f) => everyones(f) && f.tier === tier,
+    suits: (f, t) => everyones(f, t) && f.tier === tier,
     from: opens,
   })),
   ...TIERS.map((tier): Case => ({
@@ -136,12 +141,17 @@ const CASES: readonly Case[] = [
     suits: (f) => f.tier === tier,
     from: opens,
   })),
-  { name: "the first pick", purpose: { for: "starter" }, suits: (f) => everyones(f) && f.tier === 1, from: opens },
+  {
+    name: "the first pick",
+    purpose: { for: "starter" },
+    suits: (f, t) => everyones(f, t) && f.tier === 1,
+    from: opens,
+  },
   { name: "a regular", purpose: { for: "regular" }, suits: everyones, from: opens },
   ...TIERS.map((tier): Case => ({
     name: `the carousel at ${tier} acorns`,
     purpose: { for: "carousel", tier },
-    suits: (f) => everyones(f) && f.tier === tier,
+    suits: (f, t) => everyones(f, t) && f.tier === tier,
     from: opens,
   })),
   ...RARITY_IDS.map((rarity): Case => ({
@@ -186,7 +196,7 @@ function differing(eras: (era: Era) => Catalog, ever: Catalog): string[] {
     CASES.flatMap((c) => {
       const want = ever.order.filter((id) => {
         const f = ever.figures[id];
-        return f !== undefined && c.suits(f) && c.from(f) <= t;
+        return f !== undefined && c.suits(f, t) && c.from(f) <= t;
       });
       const got = available(eras(eraAt(t)), c.purpose);
       return abc(got).join() === abc(want).join() ? [] : [`${c.name}, ${said}: ${got.join(" ")} for ${want.join(" ")}`];
@@ -215,7 +225,8 @@ function madeUp(era: Era): Catalog {
       const f = real.figures[id];
       const since = MOVED[id] ?? f?.since;
       if (!f || since !== release) continue;
-      figures[id] = { ...f, since };
+      // Who is everyone's is the era's own, by the banners' dates.
+      figures[id] = { ...f, since, everyones: catalogAt(era).figures[id]?.everyones ?? f.everyones };
       order.push(id);
     }
   }
@@ -223,35 +234,83 @@ function madeUp(era: Era): Catalog {
   return { ...catalogAt(era), figures, order, earlier: madeUp };
 }
 
-/** Whether everyone's stall at five acorns, their regulars, their carousel and the almanac have the first banner's headliner. */
-const everyonesWays = (cat: Catalog): boolean[] => [
-  available(cat, { for: "stall", figures: { pool: "fair" }, tier: 5 }).includes("banner-1"),
-  available(cat, { for: "regular" }).includes("banner-1"),
-  available(cat, { for: "carousel", tier: 5 }).includes("banner-1"),
-  available(cat, { for: "almanac", roster: {} }).includes("banner-1"),
-];
-describe("gaz-stall", () => {
-  test("makes the first banner's headliner one of everyone's figures: before it, only an owner's", () => {
-    const [before, at] = [catalogAt(LEGACY_ERA), catalogAt(eraOf("gaz-stall"))];
-    expect([everyonesWays(before), everyonesWays(at)]).toEqual([
-      [false, false, false, false],
-      [true, true, true, true],
+// ---------- a headliner is everyone's only while its banner is open ----------
+
+/** The headliners, and what everyone's ways have of them: the stall at five acorns, the regulars, the carousel, the almanac, a board met. */
+const HEADLINERS = BANNERS.map((b) => b.headliner);
+function everyonesWays(cat: Catalog): Record<string, FigureId[]> {
+  const of = (ids: readonly FigureId[]): FigureId[] => ids.filter((id) => HEADLINERS.includes(id));
+  const met = (id: FigureId): boolean =>
+    cat.figures[id] !== undefined &&
+    boardMet(cat, { player: "p", name: "A member", of: 1, data: partyOfFigures([placed(id, 3, 0)]) }) !== null;
+  return {
+    stall: of(available(cat, { for: "stall", figures: { pool: "fair" }, tier: 5 })),
+    regular: of(available(cat, { for: "regular" })),
+    carousel: of(available(cat, { for: "carousel", tier: 5 })),
+    starter: of(available(cat, { for: "starter" })),
+    almanac: of(available(cat, { for: "almanac", roster: {} })),
+    met: HEADLINERS.filter(met),
+  };
+}
+/** The grove's Treants in a release's era. */
+const groveTreants = (release: ReleaseId) =>
+  available(catalogAt(eraOf(release)), { for: "pull", pool: GROVE, rarity: "Treant" });
+/** Every one of everyone's ways with these headliners, and the starter with none: a headliner costs five acorns. */
+const all = (...ids: FigureId[]) => ({ stall: ids, regular: ids, carousel: ids, starter: [], almanac: ids, met: ids });
+
+describe("a headliner is everyone's only while its banner is open", () => {
+  test("every banner opens and closes on a release's moment, but the first's opening, inside gaz-stall's era", () => {
+    const moments = new Set<number>(RELEASES.map((r) => r.at));
+    const off = BANNERS.flatMap((b) => [
+      ...(moments.has(b.from) ? [] : [`${b.id} from`]),
+      ...(moments.has(b.until) ? [] : [`${b.id} until`]),
     ]);
-    // With the member's own figures, it is sold to whoever pulled it, at either era, and to nobody else.
-    for (const cat of [before, at]) {
+    expect(off).toEqual(["banner-1 from"]);
+    const first = BANNERS.find((b) => b.id === "banner-1");
+    expect(first && eraAt(first.from)).toBe(eraOf("gaz-stall"));
+  });
+
+  test("era by era: owners' only before gaz-stall, then each headliner for its banner's two weeks", () => {
+    expect(RELEASES.map((r) => everyonesWays(catalogAt(eraOf(r.id))))).toEqual([
+      all(),
+      all(),
+      all("banner-1"),
+      all("commodore"),
+      all(),
+      all(),
+    ]);
+  });
+
+  test("a millisecond before each release and at it, as Leaf's clock has the era", () => {
+    const got = MOMENTS.map(({ t, said }) => [said, everyonesWays(catalogAt(eraAt(t)))]);
+    const want = MOMENTS.map(({ t, said }) => [
+      said,
+      all(...BANNERS.filter((b) => openAt(b, t)).map((b) => b.headliner)),
+    ]);
+    expect(got).toEqual(want);
+    expect(got.slice(0, 2)).toEqual([
+      ["a millisecond before groot-night", all("banner-1")],
+      ["at groot-night", all("commodore")],
+    ]);
+  });
+
+  test("a member who pulled one keeps it for a run with their own figures, at every era, and nobody else has it there", () => {
+    for (const r of RELEASES) {
+      const cat = catalogAt(eraOf(r.id));
       const own = (roster: Roster): readonly FigureId[] =>
         available(cat, { for: "stall", figures: { pool: "own", roster }, tier: 5 });
       expect([own({ "banner-1": 2 }), own({ greg: 0 })]).toEqual([["banner-1"], ["greg"]]);
+      expect(available(cat, { for: "almanac", roster: { "banner-1": 2 } })).toContain("banner-1");
+      const board = { player: "p", name: "A member", of: 1, data: partyOfFigures([placed("banner-1", 3, 0, 1)]) };
+      expect(boardMet(cat, board, true)).not.toBeNull();
+      // It is still its banner's prize, and nothing else's.
+      expect(cat.figures["banner-1"]?.access).toEqual({ headliner: "banner-1" });
     }
-    // It is still its banner's prize, and nothing else's; and Seqwawa still joins the pulls on 8 December.
-    expect([before, at].map((cat) => cat.figures["banner-1"]?.access)).toEqual([
-      { headliner: "banner-1" },
-      { headliner: "banner-1" },
+    // Seqwawa still joins the pulls on 8 December.
+    expect([groveTreants("gaz-stall").includes("seqwawa"), groveTreants("groot-night").includes("seqwawa")]).toEqual([
+      false,
+      true,
     ]);
-    expect(available(at, { for: "pull", pool: GROVE, rarity: "Treant" })).not.toContain("seqwawa");
-    expect(available(catalogAt(eraOf("groot-night")), { for: "pull", pool: GROVE, rarity: "Treant" })).toContain(
-      "seqwawa",
-    );
   });
 });
 

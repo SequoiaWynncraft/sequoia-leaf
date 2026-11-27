@@ -166,7 +166,8 @@ export const GROOT_NIGHT: Patch = {
         chairs: 0,
       },
       // A member's figure, shown as the Commodore (the banner `shows` its title): never the member's name.
-      // Light himself and his grooters strong at one star: above Greg in a party by a headliner's margin, no better alone.
+      // Light himself, his grooters doing the work: on everyone's stall while his banner is open, so between Vesta and
+      // Greg at one star, as gaz is (`review/swap.ts`).
       commodore: {
         name: "Commodore",
         tier: 5,
@@ -179,12 +180,12 @@ export const GROOT_NIGHT: Patch = {
         range: 4,
         armour: 20,
         ward: 20,
-        mana: [55, 100],
+        mana: [35, 100],
         ability: {
           name: "Any grooters in chat?",
           shape: "summon",
           text: "Rings for the grooters, and {wait} seconds later up to {most} of them stand on free hexes within 2 of the Commodore, each the next in turn, with {health} health and {attack} attack. Any grooter standing then is healed to full.",
-          n: { health: [460, 600, 1180], attack: [75, 97, 190], most: [3, 3, 3], wait: [0.8, 0.8, 0.8] },
+          n: { health: [300, 440, 830], attack: [47, 70, 130], most: [3, 3, 3], wait: [0.8, 0.8, 0.8] },
           short: "Calls {most} grooters: {health} health, {attack} attack. Heals those still up to full.",
         },
         quip: "Calls the roll. Calls the raid.",

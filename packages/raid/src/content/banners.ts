@@ -3,7 +3,8 @@
  * banner opens with a release (`opens`): what its pulls give is what that release had brought
  * (`pullsEra`), and its headliner arrives with it. It is open on Leaf's clock from `from` until
  * `until`, opening no earlier than its release does; the first opened by a date of its own, during
- * the base. `banner-1` is gaz's figure's id as well as the banner's; a new headliner has its own id,
+ * the base. Every other `from` and `until` is a release's moment, so a banner is open for the whole
+ * of an era or none of it. `banner-1` is gaz's figure's id as well as the banner's; a new headliner has its own id,
  * and its banner names it.
  */
 import type { FigureId } from "./figures.ts";
@@ -18,7 +19,7 @@ export interface Banner {
   readonly until: number;
   /**
    * A five-acorn figure that a run with the member's own figures sells only to whoever pulled it,
-   * and everyone's ways sell once a release makes it one of everyone's figures (`Figure.everyones`).
+   * and everyone's ways sell in an era the banner is open in (`Figure.everyones`), and in no other.
    */
   readonly headliner: FigureId;
   /**

@@ -1065,12 +1065,13 @@ describe("another member's board in a sparring room", () => {
     }
   });
   test("the regular is one of the crowd: the board is a member's `of` times in `of + 1`", () => {
+    // Met in the era the board was kept in.
     const board = keptBoard();
     const share = (of: number): number => {
       const seeds = Array.from({ length: 600 }, (_, n) => n + 1);
       return (
-        seeds.filter((seed) => opposition(catalogAt(LEGACY_ERA), seed, 2, 0, metOf(board, of)).by === MEMBER).length /
-        seeds.length
+        seeds.filter((seed) => opposition(catalogAt(eraAt(ctx().now)), seed, 2, 0, metOf(board, of)).by === MEMBER)
+          .length / seeds.length
       );
     };
     expect(Math.abs(share(1) - 1 / 2)).toBeLessThan(0.06);
