@@ -142,7 +142,7 @@ guild's raids (Worm, Moth, Rock, Greg, Orphion), and has no emblem yet.
 | Mender  | 2, 3, 4 | Menders' healing and shields count for 20% more.                                                                                                                                          |
 | Sneak   | 2, 4    | When the fight starts, Sneaks leap to the enemy's back row, and their first 2 attacks do 40% more.                                                                                        |
 | Groot   | 2, 3, 5 | The first Groot figure to fall each fight gets back up 1 second later in its true form, with 15% of its health. A Groot figure in its true form has 10% more attack and ability power.    |
-| Greg    | 1       | Give Greg a figure from your bench: he eats it, and gains 2% health for good for each acorn it cost, up to 40%.                                                                           |
+| Greg    | 1       | Give Greg a figure from your bench: he eats it, and gains 2% health for good for each acorn of its price (its cost times its copies), up to 40%.                                          |
 | Rooted  | 1       | Does not move or attack, cannot be pushed or pulled, and gains 12 mana a second.                                                                                                          |
 
 The later steps: Ember burns from the whole party's hits and hotter; Moss regrows 2% at three and
@@ -199,7 +199,8 @@ ability is worth using are decided in `fight/mind.ts`, with the numbers in `FIGH
   owner standing in one are slowed (by the zone or a slow of their own, whichever is more), or hurt
   every second. A hex holds one zone, the newest.
 - Some abilities take time. A channelled one lands in pulses, the first at once, while its owner
-  stands still; a stun, a fall or being moved ends it and the pulses left are lost. A telegraphed one
+  stands still; a stun, a fall or being moved ends it and the pulses left are lost, and one stood
+  back up on the same hex does not carry on (`Unit.downs`: it lasts in the life it began in). A telegraphed one
   marks its hexes and lands some steps later on whoever is on them then. A dash runs along a free way,
   2 steps a hex, and can be hit on the way; a pull moves an enemy 1 hex nearer, onto a free hex.
 - After 30 seconds dusk falls: every second everyone loses 3% of their health more than the second
@@ -365,10 +366,11 @@ in code the traits keep their words (`kin`, `calling`), so stored runs and the w
 start of a fight. When it falls (`fight/enter.ts`, `grootFalls`) it is down for a moment: its `fall`
 says `back`, the steps until it gets back up, and it still counts as standing meanwhile, so a side
 whose last figure is a falling Groot has not lost. One second later it gets back up (`getUp`, the
-same verb Second Wind and Seqwawa use) on its hex, or the nearest free one, in its **true form**
+same verb Second Wind and Seqwawa use) on its hex, or the nearest free open hex anywhere on the
+board (`standOn`, beside where it fell when it can be), in its **true form**
 (`content/groot.ts`), with 15% of its health (30% at five), and at five its mana bar at least half
 full. At the first step only the first Groot figure of the side to fall does; from three on, every
-Groot figure, once. With nowhere free to stand it stays down. A true form has 10% more attack and
+Groot figure, once. With no free hex on the board it stays down. A true form has 10% more attack and
 ability power and one change each: Real Worm's Under And Up also bites every other enemy
 touching where it comes up; Real Moth covers the hexes two from its target, damage and dust;
 Real Rock has 60 attack and attacks 0.6 times a second, grown by its stars and might and its
@@ -380,19 +382,22 @@ back. A figure carrying Groot with no true form would get back up as itself.
 Rooted, 850 health, no attack, reach 4 (only so it sits in the back row: it never attacks). **Rooted**
 (its own trait): it never moves or attacks, nothing pushes or pulls it (`spec.rooted`, as the
 Rock's), and it gains 12 mana every second (`Unit.manaRate`, ticked with regrowth in `everySecond`;
-Chorus can add to it). Its ability waits like a heal, while every friend is above 85% health (`mind.ts`),
-then heals every friend 140, 245 or 560 by its stars, and gets the last of its party to fall back up
-with 200, 350 or 800 health, if that one is still down and fell in the last 3 seconds, never one that
-was summoned (`Unit.fellAt`, the step it fell for good). Ability power and Mender count in. Its mana
+Chorus can add to it). Its ability waits like a heal, while every friend is above 85% health
+(`mind.ts`), unless a friend that fell in the last 3 seconds could be stood back up; then heals every
+friend 140, 245 or 560 by its stars, and gets the last of its party to fall back up with 200, 350 or
+800 health, if that one is still down, fell in the last 3 seconds and has somewhere to stand, never one
+that was summoned (`lastFallen`: the last by the order the falls happened, `Unit.fallNo`, so of two on
+one step the later). Ability power and Mender count in. Its mana
 bar is 115, from 20. Its lore line is in `content/lore.ts`.
 
 **Feeding Greg** (`feed.ts`). Greg no longer eats after a fight. `Piece.fed` (and `Placed.fed`) is
 now what he has gained, in percent of his health: a figure from the bench given to a Greg on the
-board or the bench adds 2% for each acorn it cost (what was spent on it: a two-star of one-acorn
-figures is 3, so 6%), up to 40%. The figure is gone, what it held goes to the rack, and no acorns come
+board or the bench adds 2% for each acorn of its price, its cost times its copies (a two-star of
+one-acorn figures is 3, so 6%, whatever was paid for them: one a boon gave free feeds at its price too), up to 40%. The figure is gone, what it held goes to the rack, and no acorns come
 back. Copies of Greg merging into a star keep the sum, up to 40%; selling him loses it. A table kept
 before version 5 (version 4 is the Wilds' wing), or a sitting before version 2, kept meals of 3%; it is read as meals × 3 (`save.ts`,
-`checkRun(v, old, meals)`), capped at 40 by `settle`. Boards Leaf kept for sparring are not versioned:
+`checkRun(v, old, meals)`), capped at 40 by `settle`; so is every Greg in the run's parties (who waits in the
+room, the last fight's sides, the fight being fought) and on a seat's shown board (`partyAsShare`). Boards Leaf kept for sparring are not versioned:
 an old board's Greg reads his meals as percent, a little weaker, until it is replaced.
 
 **Moss and Mender at 2, 3, 4.** Moss regrows 1.2%, 2%, 3% a second. Mender counts for 20%, 30%,

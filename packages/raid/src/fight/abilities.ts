@@ -30,6 +30,7 @@ import {
   hide,
   hurt,
   knockBack,
+  lastFallen,
   later,
   leap,
   mostHurt,
@@ -418,11 +419,8 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
   },
   seqwawa: (f, u, n) => {
     const friends = alliesOf(f, u.side);
-    // The last of its party to fall, if still down and fallen within the window; never one that was summoned.
-    const last = f.units
-      .filter((o) => o.side === u.side && !o.summoned && o.fellAt >= 0)
-      .toSorted((a, b) => b.fellAt - a.fellAt || a.id - b.id)[0];
-    const back = last && f.tick - last.fellAt <= secs(n("window")) ? last : undefined;
+    // The last of its party to fall, if still down, fallen within the window and with somewhere to stand.
+    const back = lastFallen(f, u.side, secs(n("window")));
     const aimed = back ? [...friends, back] : friends;
     const cells = aimed.map((o) => o.cell);
     say(f, u, cells, ids(aimed), 0);

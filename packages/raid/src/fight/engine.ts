@@ -219,6 +219,7 @@ export function openFight(setup: FightSetup): Fight {
     opening,
     traits: [{}, {}],
     dusk: 0,
+    falls: 0,
     wilds: wildsOf(setup),
     out: opening,
     pending: [],

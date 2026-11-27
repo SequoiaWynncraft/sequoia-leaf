@@ -9,7 +9,7 @@ import { isComponentId } from "../content/items.ts";
 import { isTraitId } from "../content/traits.ts";
 import { isParty } from "../party.ts";
 import { endingOf } from "../run.ts";
-import { checkRun, fields, Nonsense } from "../save.ts";
+import { checkRun, fields, Nonsense, partyAsShare } from "../save.ts";
 import {
   CHAIRS,
   type Member,
@@ -66,10 +66,12 @@ function readSeat(v: unknown, meals: boolean): Seat {
   const s = record(v, "a seat");
   const run = checkRun(s.run, false, meals);
   if (!run.ok) return bad("a seat's run");
+  const shown = one(s.shown, isParty, "a seat's board");
   return {
     who: readWho(s.who),
     run: run.run,
-    shown: one(s.shown, isParty, "a seat's board"),
+    // Its board as shown across the table, its Greg's meals read as shares as the run's are.
+    shown: meals ? partyAsShare(shown) : shown,
     place: s.place === null ? null : whole(s.place, 1, CHAIRS, "a place"),
   };
 }

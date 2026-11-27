@@ -356,10 +356,38 @@ function readParts(
   return { run, afresh };
 }
 
+/**
+ * A party kept when Greg ate a meal after every fight: each Greg's meals read as the share of his
+ * health they gave him (`MEAL` each). Any other party, as it is.
+ */
+export const partyAsShare = (p: Party): Party => ({
+  ...p,
+  figures: p.figures.map((x) => (x.kind === "greg" ? { ...x, fed: x.fed * MEAL } : x)),
+});
+const setupAsShare = (s: FightSetup): FightSetup => ({
+  ...s,
+  sides: [partyAsShare(s.sides[0]), partyAsShare(s.sides[1])],
+});
+/**
+ * A run's Gregs that sit in its parties rather than on its board (who waits in the room, the last
+ * fight's and the fight being fought's), read as shares when the run was kept as meals (`meals`), as
+ * its own pieces are (`readPiece`). A fight being fought then plays again as Leaf decided it.
+ */
+function partiesAsShare(run: RunView, meals: boolean): void {
+  if (!meals) return;
+  run.foe = partyAsShare(run.foe);
+  if (run.last) run.last = setupAsShare(run.last);
+  if (run.stage.phase === "fight") {
+    const fight = run.stage.fight;
+    run.stage = { phase: "fight", fight: { ...fight, setup: setupAsShare(fight.setup) } };
+  }
+}
+
 /** A run as Leaf keeps it, of table version 1 (`old`) or since, kept as meals or not: with its streams, under today's numbers. */
 function readRun(v: unknown, old: boolean, meals: boolean): Run {
   const r = record(v, "the run");
   const { run: parts, afresh } = readParts(r, old, false, meals);
+  partiesAsShare(parts, meals);
   const run: Run = {
     seed: whole(r.seed, 0, UINT, "the seed"),
     rng: whole(r.rng, 0, UINT, "the random stream"),

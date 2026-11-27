@@ -7,10 +7,11 @@
  * 3. Nobody wastes a blow on the fallen: damage already thrown at a figure counts (`fly`), and a
  *    figure whose health it covers is passed over while anybody else is in reach (`covered`).
  */
-import type { UnitKind } from "../content/figures.ts";
+import { abilityNumber, type UnitKind } from "../content/figures.ts";
 import { FIGHT } from "../content/rooms.ts";
 import { CELLS, distance } from "../hex.ts";
-import { foesOf, later, order, otherSide, targetable } from "./core.ts";
+import { foesOf, later, order, otherSide, secs, targetable } from "./core.ts";
+import { lastFallen } from "./enter.ts";
 import { attackReach } from "./rules.ts";
 import type { DamageKind, Fight, Unit } from "./types.ts";
 
@@ -96,12 +97,20 @@ const MENDS: Partial<Record<UnitKind, number>> = {
   apothecary: 2,
   seqwawa: CELLS,
 };
-/** Whether a figure's ability is worth using now: always, unless it mends and every friend it reaches is above `mendUnder`. */
+/**
+ * Whether a figure's ability is worth using now: always, unless it mends and every friend it reaches
+ * is above `mendUnder`; and for Seqwawa, also when a friend has just fallen that it could stand back
+ * up (`lastFallen`).
+ */
 export function wanted(f: Fight, u: Unit): boolean {
   const reach = MENDS[u.kind];
   if (reach === undefined) return true;
-  return f.units.some(
+  const hurt = f.units.some(
     (o) => o.side === u.side && o.alive && distance(u.cell, o.cell) <= reach && o.hp * 100 <= o.maxHp * FIGHT.mendUnder,
+  );
+  return (
+    hurt ||
+    (u.kind === "seqwawa" && lastFallen(f, u.side, secs(abilityNumber(u.kind, "window", u.stars))) !== undefined)
   );
 }
 

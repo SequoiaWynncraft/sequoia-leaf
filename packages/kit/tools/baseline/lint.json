@@ -69,19 +69,18 @@
     "packages/factory/src/tick.ts": 121,
     "packages/factory/src/unlocks.ts": 42,
     "packages/factory/src/wire.ts": 37,
-    "packages/kit/src/card.ts": 89,
     "packages/kit/src/play.ts": 48,
     "packages/kit/src/realtime.ts": 82,
     "packages/kit/src/skin.ts": 49,
     "packages/pulls/src/game.ts": 21,
     "packages/raid/src/bot.ts": 22,
     "packages/raid/src/fight/core.ts": 25,
-    "packages/raid/src/fight/engine.ts": 84,
+    "packages/raid/src/fight/engine.ts": 51,
     "packages/raid/src/outside.ts": 19,
-    "packages/raid/src/run.ts": 70,
+    "packages/raid/src/run.ts": 66,
     "packages/raid/src/save.ts": 23,
     "packages/raid/src/spar.ts": 24,
-    "packages/raid/src/tally.ts": 38,
+    "packages/raid/src/tally.ts": 18,
     "packages/raid/src/wire.ts": 28,
     "packages/town/src/game.ts": 97
   },
@@ -101,10 +100,9 @@
     "apps/works/src/scene.ts": 1555,
     "apps/works/src/tools.ts": 724,
     "apps/works/src/ui/cards.ts": 589,
-    "packages/kit/src/card.ts": 741,
-    "packages/raid/src/content/figures.ts": 1009,
-    "packages/raid/src/fight/engine.ts": 560,
-    "packages/raid/src/run.ts": 698,
+    "packages/kit/src/card.ts": 623,
+    "packages/raid/src/content/figures.ts": 1007,
+    "packages/raid/src/run.ts": 697,
     "packages/town/src/game.ts": 550
   },
   "max-lines-per-function": {
@@ -135,7 +133,7 @@
     "apps/town/src/groveui.ts": 300,
     "apps/town/src/hud.ts": 103,
     "apps/town/src/live.ts": 167,
-    "apps/town/src/main.ts": 353,
+    "apps/town/src/main.ts": 352,
     "apps/town/src/touch.ts": 147,
     "apps/town/src/town.ts": 104,
     "apps/town/src/townscene.ts": 370,
@@ -150,7 +148,6 @@
     "packages/factory/src/route.ts": 103,
     "packages/kit/src/play.ts": 264,
     "packages/kit/src/realtime.ts": 220,
-    "packages/raid/src/fight/core.ts": 99,
     "packages/raid/src/wire.ts": 115,
     "packages/town/src/game.ts": 112
   },
@@ -200,7 +197,6 @@
     "apps/works/src/ui/views.ts": 5,
     "apps/works/src/yard.ts": 10,
     "packages/figures/src/sprites.ts": 2,
-    "packages/kit/src/card.ts": 7,
     "packages/kit/src/dialog.ts": 2,
     "packages/kit/src/dom.ts": 2,
     "packages/kit/src/keys.ts": 1,
@@ -212,7 +208,6 @@
     "packages/kit/src/report.ts": 1,
     "packages/kit/src/skin.ts": 1,
     "packages/kit/src/sound.ts": 4,
-    "packages/kit/src/tip.ts": 4,
     "packages/raid/src/hex.ts": 1
   },
   "raw-browser": {
@@ -239,7 +234,6 @@
     "apps/works/src/plan.ts": 1,
     "apps/works/src/scene.ts": 2,
     "apps/works/src/tools.ts": 2,
-    "apps/works/src/ui/card.ts": 1,
     "apps/works/src/ui/dock.ts": 4,
     "apps/works/src/ui/hud.ts": 1,
     "apps/works/src/ui/notes.ts": 5,
@@ -248,7 +242,6 @@
     "apps/works/src/ui/table.ts": 1,
     "apps/works/src/ui/views.ts": 1,
     "apps/works/src/yard.ts": 2,
-    "packages/kit/src/card.ts": 18,
     "packages/kit/src/dialog.ts": 2,
     "packages/kit/src/dom.ts": 1,
     "packages/kit/src/keys.ts": 3,
@@ -260,7 +253,6 @@
     "packages/kit/src/realtime.ts": 9,
     "packages/kit/src/report.ts": 7,
     "packages/kit/src/shell.ts": 4,
-    "packages/kit/src/skin.ts": 1,
-    "packages/kit/src/tip.ts": 12
+    "packages/kit/src/skin.ts": 1
   }
 }

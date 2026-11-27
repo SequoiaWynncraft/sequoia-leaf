@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { beatOf, dimAt, fateOf, quartersAt, risingAt, STUDS } from "./risetime.ts";
 
-const playing = { over: false, tick: 0 };
+const playing = { over: false, tick: 119 };
 
 describe("a true form rising", () => {
   test("goes through its five beats on the fight's clock, in the second the rules give it", () => {
@@ -24,14 +24,14 @@ describe("a true form rising", () => {
     expect(at4).toEqual(at1);
   });
 
-  test("stands when the rules get it up, and still stands if the fight ends first; stays down if the fight went on without it", () => {
+  test("stands only when the rules get it up; a fight that ends first, or a step played without it, leaves it down", () => {
     const r = risingAt(100, 20);
-    expect(fateOf(r, 110, { over: false, tick: 110 }, false)).toBe("waits");
-    expect(fateOf(r, 120, { over: false, tick: 120 }, true)).toBe("stands");
-    // The fight was won before its step: it still gets up, for the end of it.
-    expect(fateOf(r, 120, { over: true, tick: 112 }, false)).toBe("stands");
+    expect(fateOf(r, { over: false, tick: 110 }, false)).toBe("waits");
+    expect(fateOf(r, { over: false, tick: 120 }, true)).toBe("stands");
+    // The fight was decided before its step: there is no rise, and it stays down.
+    expect(fateOf(r, { over: true, tick: 112 }, false)).toBe("stays down");
     // Its step came and went and it did not get up: nowhere was free to stand.
-    expect(fateOf(r, 121, { over: false, tick: 121 }, false)).toBe("stays down");
-    expect(fateOf(r, 119, playing, false)).toBe("waits");
+    expect(fateOf(r, { over: false, tick: 121 }, false)).toBe("stays down");
+    expect(fateOf(r, playing, false)).toBe("waits");
   });
 });

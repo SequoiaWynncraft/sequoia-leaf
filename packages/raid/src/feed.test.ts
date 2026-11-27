@@ -7,7 +7,7 @@ import { planRoom, SENSIBLE } from "./bot.ts";
 import { readCommand, type RunCommand } from "./command.ts";
 import type { FigureId, Stars } from "./content/figures.ts";
 import type { ItemId } from "./content/items.ts";
-import { traitNumber } from "./content/traits.ts";
+import { traitNumber, traitShort, traitText } from "./content/traits.ts";
 import { feed } from "./feed.ts";
 import { applyCommand, decodeTable, encodeTable, newTable, predict, tableView } from "./game.ts";
 import { merge, type Note, type Piece, pieces, type Run, sell, type Spot, startRun } from "./run.ts";
@@ -51,7 +51,7 @@ function sittingPlanning(): { t: Sitting; run: Run } {
 }
 
 describe("feeding Greg", () => {
-  test("he eats a figure from the bench and gains 2% health for good for each acorn it cost; it is gone, and no acorns come back", () => {
+  test("he eats a figure from the bench and gains 2% health for good for each acorn of its price; it is gone, and no acorns come back", () => {
     const run = planning();
     const greg = put(run, board(3), "greg");
     const worm = put(run, bench(0), "worm");
@@ -76,7 +76,7 @@ describe("feeding Greg", () => {
     expect(greg.fed).toBe(2);
     expect(run.bench[0]).toBeNull();
     expect(run.acorns).toBe(acorns);
-    // What a figure cost is what was spent on it: a two-star of one-acorn figures cost 3, a five-acorn figure 5.
+    // A figure's price is its cost times its copies: a two-star of one-acorn figures is 3, a five-acorn figure 5.
     put(run, bench(1), "moth", 2);
     put(run, bench(2), "hearthcat");
     expect(feed(run, bench(1), board(3)).ok && greg.fed).toBe(2 + 3 * 2);
@@ -220,6 +220,18 @@ const gregOf = (loaded: ReturnType<typeof checkRun>): number => (loaded.ok ? (lo
 const benchOf = (text: string): number =>
   decodeSitting(text)?.seats.find((s) => s.who.is === "member")?.run.bench[8]?.fed ?? -1;
 
+test("Greg's card and almanac say a meal is worth its price, its cost times its copies, not what was paid", () => {
+  expect(traitText("greg", 1)).toContain("for each acorn of its price (its cost times its copies)");
+  expect(traitShort("greg", 1)).toBe("Eats: +2% health per acorn of price, up to 40%.");
+});
+
+/** What the Greg in a run's parties has eaten: who waits in the room, then each side of the last fight. */
+const fedIn = (loaded: ReturnType<typeof checkRun>): number[] =>
+  loaded.ok ? [loaded.run.foe, ...(loaded.run.last?.sides ?? [])].map((p) => p.figures[0]?.fed ?? -1) : [];
+/** What the Greg on the board the member's seat shows across the table has eaten, read back from the text kept. */
+const shownOf = (text: string): number =>
+  decodeSitting(text)?.seats.find((s) => s.who.is === "member")?.shown.figures[0]?.fed ?? -1;
+
 describe("a run kept when Greg ate after every fight", () => {
   test("each meal is the 3% it gave him, never more than 40%; a run kept since is read as it is", () => {
     expect(gregOf(checkRun(kept(10), false, true))).toBe(30);
@@ -250,5 +262,25 @@ describe("a run kept when Greg ate after every fight", () => {
     const v2 = encodeSitting(t);
     expect(benchOf(v2)).toBe(10);
     expect(benchOf(v2.replace('"v":2', '"v":1'))).toBe(30);
+  });
+  test("so is a Greg in the run's parties: who waits in the room, and the last fight's sides", () => {
+    const greg = { kind: "greg" as const, stars: 1 as const, seat: 3, items: [], fed: 10 };
+    const party = { who: "Greg", title: "brought Moss Bulwarks", figures: [greg], boons: [], might: 100 };
+    const run = planning();
+    put(run, board(3), "worm");
+    run.foe = party;
+    run.last = { seed: 1, sides: [party, party] };
+    const raw = JSON.parse(JSON.stringify(run));
+    expect(fedIn(checkRun(raw, false, true))).toEqual([30, 30, 30]);
+    expect(fedIn(checkRun(raw, false, false))).toEqual([10, 10, 10]);
+  });
+  test("and the board a seat of a sitting of version 1 shows across the table", () => {
+    const { t } = sittingPlanning();
+    const seat = t.seats.find((s) => s.who.is === "member");
+    if (!seat) throw new Error("no member");
+    seat.shown = { ...seat.shown, figures: [{ kind: "greg", stars: 1, seat: 3, items: [], fed: 10 }] };
+    const v2 = encodeSitting(t);
+    expect(shownOf(v2)).toBe(10);
+    expect(shownOf(v2.replace('"v":2', '"v":1'))).toBe(30);
   });
 });

@@ -1,7 +1,8 @@
 /**
  * Feeding Greg, a planning command beside selling (`{ do: "feed", from, to }`): a figure from the
  * bench is eaten by a Greg on the board or the bench. Greg gains a share of his health for good for
- * each acorn the figure cost (what was spent on it: a two-star of one-acorn figures cost 3), up to
+ * each acorn of the figure's price, its cost times its copies (a two-star of one-acorn figures is 3,
+ * whatever was paid for them: one a boon gave free feeds at its price as well), up to
  * Greg's most. The figure is gone; what it held goes back to the rack, as selling sends it; no acorns
  * come back. What Greg has gained lives on that Greg (`Piece.fed`): copies merging into a star keep
  * the sum of theirs, up to the most, and selling him loses it.

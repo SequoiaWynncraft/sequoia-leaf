@@ -106,6 +106,10 @@ export interface Unit {
   rises: boolean;
   /** The step it fell, while it is down for good; -1 while it is up, or down and getting back up. */
   fellAt: number;
+  /** Which fall for good of the fight it was, counting in the order they happen (`Fight.falls`); 0 while it is up. */
+  fallNo: number;
+  /** How many times it has fallen this fight, for a moment or for good: what it does lasts only in the life it began in. */
+  downs: number;
 
   stunUntil: number;
   slowUntil: number;
@@ -213,6 +217,8 @@ export interface Fight {
   zones: (Zone | null)[];
   /** How many are still up on each side. */
   standing: [number, number];
+  /** How many falls for good there have been, in the order they happened: a fallen figure's `fallNo`. */
+  falls: number;
   over: boolean;
   result: FightResult | null;
   /** What happened as the two parties sat down: traits, summons, leaps. A screen plays these before the first step. */

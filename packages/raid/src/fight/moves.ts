@@ -137,14 +137,19 @@ export const over = (seconds: number, pulses: number): Channel => ({
   pulses,
   every: Math.round(secs(seconds) / Math.max(1, pulses - 1)),
 });
-/** Lands an ability in pulses while its owner stands still. A stun, a fall or being moved ends it, and the pulses left are lost. */
+/**
+ * Lands an ability in pulses while its owner stands still. A stun, a fall or being moved ends it, and
+ * the pulses left are lost: it lasts only in the life it began in, so one stood back up on the same
+ * hex before its next pulse does not carry on with it.
+ */
 export function channel(f: Fight, u: Unit, c: Channel, pulse: () => void): void {
   const start = f.tick;
   const cell = u.cell;
+  const life = u.downs;
   u.busyUntil = Math.max(u.busyUntil, start + c.every * (c.pulses - 1));
   let on = true;
   const next = (): void => {
-    on = on && u.alive && u.stunUntil <= start && u.cell === cell;
+    on = on && u.alive && u.downs === life && u.stunUntil <= start && u.cell === cell;
     if (on) pulse();
   };
   next();

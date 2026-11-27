@@ -10,6 +10,9 @@
  * 3. Dread: its raid's ring draws round it one gold stud at a time; friends lean away.
  * 4. Release (the step it gets back up): it stands in its new shape, the ring snaps shut, a bump.
  * 5. Aftermath: the ring stays, faint, under it until it falls again.
+ *
+ * It stands only when the rules stand it up (their `rise`). A fight that ends before then, or a step
+ * that passes without it (nowhere free to stand), leaves it down, and its ring goes out.
  */
 
 /** A true form on its way back up: the step it fell, and the step it gets back up. */
@@ -51,19 +54,18 @@ export function quartersAt(r: Rising, c: number): number {
 }
 
 /**
- * What becomes of it at `c`: still waiting; it stands (the rules got it up, or the fight ended before
- * its step: it still plays); or it stays down (the fight went on past its step without it getting up:
- * there was nowhere for it to stand).
+ * What becomes of it: still waiting; it stands (the rules got it up); or it stays down (the fight
+ * ended before its step, or its step was played without it getting up: nowhere was free).
  */
 export function fateOf(
   r: Rising,
-  c: number,
   fight: { readonly over: boolean; readonly tick: number },
   risen: boolean,
 ): "waits" | "stands" | "stays down" {
   if (risen) return "stands";
-  if (c < r.up) return "waits";
-  // The step it was due at has been played without it: it is down for good.
-  if (fight.tick >= r.up) return "stays down";
-  return fight.over ? "stands" : "waits";
+  if (fight.over || fight.tick >= r.up) return "stays down";
+  return "waits";
 }
+
+/** Steps a ring takes to go out once its figure stays down. */
+export const GOES_OUT = 10;

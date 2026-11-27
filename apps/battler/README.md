@@ -127,7 +127,8 @@ kit's card: "The table needs the guild's server."
   round it a gold stud at a time while friends lean away, it stands in its new shape as the ring
   snaps shut with a bump and a low horn, and the ring stays faint under it until it falls again
   (`rings.ts`: eggshell for the Worm, strata for the Rock, a missing ring of static for Greg, a gold
-  halo for Orphion, torn cloth for the Moth); it still stands if the fight ends first. Seqwawa never
+  halo for Orphion, torn cloth for the Moth). It stands only when the rules stand it up: a fight
+  that ends first leaves it down, and its ring, half drawn, goes out. Seqwawa never
   moves: its sprout shakes, roots run out along the hexes to every friend, wait coiled at the
   fallen one's hex, flash as it goes off and stand that one back up, and stay faint under those
   hexes for the fight (`roots.ts`). A hard hit, an ability that

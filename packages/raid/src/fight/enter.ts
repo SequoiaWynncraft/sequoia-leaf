@@ -8,7 +8,7 @@ import { formNumber, hasTrueForm } from "../content/groot.ts";
 import { type ItemId, itemStats } from "../content/items.ts";
 import { FIGHT } from "../content/rooms.ts";
 import { traitNumber } from "../content/traits.ts";
-import { type Side, within } from "../hex.ts";
+import { CELLS, distance, type Side, within } from "../hex.ts";
 import { emit, later, secs } from "./clock.ts";
 import type { Fight, Form, RiseWhy, Unit } from "./types.ts";
 
@@ -55,6 +55,8 @@ const PLAIN = {
   manaRate: 0,
   rises: false,
   fellAt: -1,
+  fallNo: 0,
+  downs: 0,
   stunUntil: 0,
   slowUntil: 0,
   slowBy: 0,
@@ -188,13 +190,43 @@ export function summon(
 // ---------- getting back up ----------
 
 /**
+ * Where a figure that is down gets back up: its own hex if it is free, else the nearest free open hex
+ * anywhere on the board, of two as near the one `freeNear` would take (so it gets up where it fell or
+ * right beside it, never sent home); -1 when the board has none.
+ */
+export function standOn(f: Fight, u: Unit): number {
+  if (f.taken[u.cell] === -1) return u.cell;
+  for (let d = 1; d < CELLS; d++) {
+    let found = false;
+    for (let cell = 0; cell < CELLS; cell++) {
+      if (distance(u.cell, cell) !== d) continue;
+      found = true;
+      if (f.taken[cell] === -1) return cell;
+    }
+    if (!found) break;
+  }
+  return -1;
+}
+
+/**
+ * The last of a side to fall for good, if it fell within `window` steps and has somewhere to stand
+ * (`standOn`): the one Seqwawa's No GG Left Behind stands back up. Never one that was summoned.
+ */
+export function lastFallen(f: Fight, side: Side, window: number): Unit | undefined {
+  const last = f.units
+    .filter((o) => o.side === side && !o.summoned && o.fellAt >= 0)
+    .toSorted((a, b) => b.fallNo - a.fallNo)[0];
+  return last && f.tick - last.fellAt <= window && standOn(f, last) >= 0 ? last : undefined;
+}
+
+/**
  * Gets a figure back up with some health, in a form, shaken free of what was on it (burning, stunned,
  * slowed, taunted). One still up (Second Wind, as it would fall) stays where it is; one that is down
- * comes back on its hex, or the nearest free one, and finds its feet for a moment. False, and nothing
- * done, when there is nowhere free for it to stand.
+ * comes back on its hex, or the nearest free open hex anywhere on the board (`standOn`), and finds
+ * its feet for a moment. False, and nothing done, when there is nowhere free for it to stand.
  */
 export function getUp(f: Fight, u: Unit, hp: number, why: RiseWhy, form: Form = u.form): boolean {
-  const cell = u.alive ? u.cell : freeNear(f, u.cell, 3);
+  const cell = u.alive ? u.cell : standOn(f, u);
   if (cell < 0) return false;
   if (!u.alive) {
     // One that was down for good counts as standing again; one down for a moment never stopped.
@@ -206,6 +238,7 @@ export function getUp(f: Fight, u: Unit, hp: number, why: RiseWhy, form: Form = 
     u.target = -1;
   }
   u.fellAt = -1;
+  u.fallNo = 0;
   u.hp = Math.max(1, Math.min(u.maxHp, Math.round(hp)));
   u.burnUntil = 0;
   u.stunUntil = 0;
@@ -240,6 +273,7 @@ function grootUp(f: Fight, u: Unit, step: number): void {
     // Nowhere to stand: it is down for good after all.
     f.standing[u.side]--;
     u.fellAt = f.tick;
+    u.fallNo = ++f.falls;
     return;
   }
   if (form === "true") standTrue(u);

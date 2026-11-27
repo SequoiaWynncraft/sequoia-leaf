@@ -8,8 +8,9 @@ import { describe, expect, test } from "bun:test";
 import { abilityNumber, FIGURES, type UnitKind } from "../content/figures.ts";
 import { formNumber } from "../content/groot.ts";
 import { traitNumber } from "../content/traits.ts";
-import { distance } from "../hex.ts";
+import { distance, neighbours, SEATS } from "../hex.ts";
 import { playsAsKept } from "../run.ts";
+import { tally } from "../tally.ts";
 import { at, fightOf, inOrder, only, partyOfFigures, steps, stepUntil, still, stillSide, unitOf } from "../testkit.ts";
 import { cast } from "./abilities.ts";
 import { heal, hurt, knockBack, secs } from "./core.ts";
@@ -138,6 +139,31 @@ describe("Groot", () => {
     expect(only(steps(f, secs(1)), "rise")).toEqual([]);
     expect(worm.alive).toBe(false);
     expect(worm.fellAt).toBeGreaterThanOrEqual(0);
+  });
+
+  test("it gets up on the nearest free open hex anywhere on the board, however far, across the middle too; with none it stays down", () => {
+    const f = ours("worm", "moth");
+    const worm = unitOf(f, "worm");
+    fell(f, worm);
+    // Every hex taken but one on their half, five hexes from where it fell, across the middle line.
+    const far = Array.from({ length: SEATS }, (_, cell) => cell).find((cell) => distance(worm.cell, cell) === 5) ?? -1;
+    expect(far).toBeGreaterThanOrEqual(0);
+    f.taken = f.taken.map((id, cell) => (cell === far ? -1 : id === -1 ? 999 : id));
+    expect(only(steps(f, secs(1)), "rise")).toMatchObject([{ id: worm.id, cell: far }]);
+    // Of two free hexes, the nearer; of two as near, the one the fight would take beside it (the lower).
+    const g = ours("worm", "moth");
+    const w = unitOf(g, "worm");
+    fell(g, w);
+    const [a, b] = [neighbours(w.cell)[0] ?? -1, neighbours(w.cell)[1] ?? -1];
+    g.taken = g.taken.map((id, cell) => (cell === far || cell === a || cell === b ? -1 : id === -1 ? 999 : id));
+    expect(only(steps(g, secs(1)), "rise")).toMatchObject([{ id: w.id, cell: Math.min(a, b) }]);
+    // A full board: it stays down.
+    const h = ours("worm", "moth");
+    const x = unitOf(h, "worm");
+    fell(h, x);
+    h.taken = h.taken.map((id) => (id === -1 ? 999 : id));
+    expect(only(steps(h, secs(1)), "rise")).toEqual([]);
+    expect(x.alive).toBe(false);
   });
 
   test("a fight with figures getting back up plays the same, step by step or straight to its end", () => {
@@ -358,6 +384,35 @@ describe("No GG Left Behind", () => {
     const { f, seq } = stump();
     expect(cast(f, seq)).toBe(false);
   });
+  test("it does not wait while a friend that fell in the last 3 seconds could be stood back up, though nobody is hurt", () => {
+    const { f, seq, crab } = stump();
+    fell(f, crab);
+    f.tick += secs(1);
+    const events = said(f, () => expect(cast(f, seq)).toBe(true));
+    expect(only(events, "rise").map((r) => r.id)).toEqual([crab.id]);
+  });
+  test("of two friends falling on the same step, it stands up the one that fell last", () => {
+    const { f, seq, crab, ember } = stump();
+    expect(crab.id).toBeLessThan(ember.id);
+    fell(f, crab);
+    fell(f, ember);
+    expect(
+      only(
+        said(f, () => cast(f, seq)),
+        "rise",
+      ).map((r) => r.id),
+    ).toEqual([ember.id]);
+    // And the other way round.
+    const other = stump();
+    fell(other.f, other.ember);
+    fell(other.f, other.crab);
+    expect(
+      only(
+        said(other.f, () => cast(other.f, other.seq)),
+        "rise",
+      ).map((r) => r.id),
+    ).toEqual([other.crab.id]);
+  });
 });
 
 describe("Moss and Mender at 2, 3 and 4", () => {
@@ -382,12 +437,16 @@ describe("Moss and Mender at 2, 3 and 4", () => {
       {
         t: "shield",
         id: rock.id,
-        by: -1,
+        by: kettle.id,
         amount: Math.min(135 - 30, most),
         shield: Math.min(135 - 30, most),
         ticks: secs(4),
       },
     ]);
+    // The shield is the healer's shielding in the tally, not the one it covers.
+    const did = tally(events);
+    expect(did.find((d) => d.id === kettle.id)?.shielded).toBe(Math.min(135 - 30, most));
+    expect(did.find((d) => d.id === rock.id)?.shielded ?? 0).toBe(0);
     // Up to 15%, shields already on it counted: more healing at full health tops it up to that, and no further.
     expect(
       only(

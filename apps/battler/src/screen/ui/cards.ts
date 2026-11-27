@@ -65,6 +65,7 @@ import {
 import { boonIcon, glyph, itemIcon, traitIcon } from "../art/icons.ts";
 import { FV } from "../board.ts";
 import { fightUnits } from "../fightview.ts";
+import { attacks, formLines, formOf, shownName } from "../forms.ts";
 import {
   acrossName,
   combosWithHeld,
@@ -182,7 +183,7 @@ function statsOf(kind: UnitKind, stars: Stars, extras: FigureExtras, level: numb
   return NUMBER_KEYS.map((key) => {
     const value =
       key === "speed"
-        ? specOf(kind).speed > 0
+        ? attacks(kind, u)
           ? `${now.speed.toFixed(2)}/s`
           : "none"
         : key === "health" && u
@@ -228,6 +229,8 @@ export function figureDesc(kind: UnitKind, stars: Stars, extras: FigureExtras = 
       ...(spec.mana[1] > 0 ? { note: `mana ${spec.mana[1]}` } : {}),
       body: rich(abilityShort(kind, stars)),
     });
+  // In its true form, the one change that form brings.
+  blocks.push(...formLines(kind, u).map((body) => ({ body })));
   if (kind === "greg" && (extras.fed ?? 0) > 0) blocks.push({ body: fedLine(extras.fed ?? 0) });
   if (extras.lore) {
     if (spec.ability) blocks.push({ body: abilityText(kind, stars) });
@@ -242,8 +245,8 @@ export function figureDesc(kind: UnitKind, stars: Stars, extras: FigureExtras = 
   blocks.push(...held.blocks);
   const draw = u ? u.draw : drawOf(kind, items);
   return {
-    name: nameOf(kind),
-    icon: portrait(kind),
+    name: shownName(kind, u),
+    icon: portrait(kind, { form: formOf(u) }),
     tag: isFigureId(kind) ? roleLine(kind) : "",
     aside: el(
       "span",

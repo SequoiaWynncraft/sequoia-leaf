@@ -9,7 +9,7 @@ run sensible 007 | trail 2: lost in room 11, WWLWWWWLLWL, resolve 0, level 6, 26
 run sensible 008 | trail 3: lost in room 10, WWLWWLWWLL, resolve 0, level 6, 219 Coins | draws 56c95c79cb6c end 296db4cb47fa
 run sensible 009 | own figures: lost in room 13, WWLWWWWWLWWLL, resolve 0, level 6, 244 Coins | draws 0cde17f62fe4 end 5e667a511e0f
 run sensible 010 | the Wilds: lost in room 21, WWWWWWWWWWWWWWLWWLLWL, resolve 0, level 8, 324 Coins | draws 099d60bd3725 end e003495d5139
-run sensible 011 | the Deep Woods: lost in room 15, WWWWWWWWLWWWLWL, resolve 0, level 7, 292 Coins | draws beefe5d15462 end cfa40e759651
+run sensible 011 | the Deep Woods: lost in room 15, WWWWWWWWLWWWLWL, resolve 0, level 7, 292 Coins | draws 3b08ebab67ff end cfa40e759651
 run sensible 012 | trail 1: won in room 15, WWLWWWWWWWWWWLW, resolve 13, level 7, 478 Coins | draws d69e5a73d62f end 1331571e4df7
 run sensible 013 | trail 2: lost in room 6, WLLLWL, resolve 0, level 4, 103 Coins | draws 071b22953a4b end 3faba0bf7501
 run sensible 014 | trail 3: lost in room 10, WWLWWLWWLL, resolve 0, level 6, 219 Coins | draws 9c4f9a792715 end 4e0439cf8f2d
@@ -38,7 +38,7 @@ run sensible 036 | trail 1: lost in room 11, WWWWWWLLWDL, resolve 0, level 6, 16
 run sensible 037 | trail 2: lost in room 12, WWWWWWWLLLLL, resolve 0, level 6, 203 Coins | draws 65a95dd343d8 end 3a7bac9a0d1e
 run sensible 038 | trail 3: lost in room 9, WWLLWWWLL, resolve 0, level 5, 195 Coins | draws 1a3fede0805d end 8b67910d46b5
 run sensible 039 | own figures: lost in room 9, WLLWWLWWL, resolve 0, level 5, 130 Coins | draws 4b1855116996 end 151a9b1d6944
-run sensible 040 | the Wilds: lost in room 21, WWWWWWWWWWWLWLLWWWWWL, resolve 0, level 8, 292 Coins | draws 995b645022c7 end f7fdc7e737b6
+run sensible 040 | the Wilds: lost in room 21, WWWWWWWWWWWLWLLWWWWWL, resolve 0, level 8, 292 Coins | draws ffe6825ae473 end f7fdc7e737b6
 run sensible 041 | the Deep Woods: lost in room 14, WWWWWWWWWWLLWL, resolve 0, level 7, 276 Coins | draws 0eca3467eba2 end d01f23ad33d7
 run sensible 042 | trail 1: lost in room 11, WWLWWWWWLWL, resolve 0, level 6, 228 Coins | draws 7a51de4e6623 end cfea7803a9c2
 run sensible 043 | trail 2: lost in room 8, WWLWWLWL, resolve 0, level 5, 163 Coins | draws 2dec423ae411 end 1419274debc5
@@ -102,7 +102,7 @@ run saver 000 | trail 1: lost in room 9, WLWWWWLLL, resolve 0, level 6, 130 Coin
 run saver 001 | trail 2: lost in room 8, WWLWWLWL, resolve 0, level 5, 163 Coins | draws aee08aa81e31 end ee648840a882
 run saver 002 | trail 3: lost in room 6, WWLLLL, resolve 0, level 5, 48 Coins | draws bcc62b1c3e81 end a13b99610e9c
 run saver 003 | own figures: won in room 15, WWWWWWWLLLWWWLW, resolve 1, level 7, 396 Coins | draws 43fc540c86dd end 3dd6a551b53b
-run saver 004 | the Wilds: lost in room 24, WWWWWWWWLWWWWWLWWWWWLWWD, resolve 0, level 8, 308 Coins | draws f02c844e854d end b3de9e991a71
+run saver 004 | the Wilds: lost in room 24, WWWWWWWWLWWWWWLWWWWWLWWD, resolve 0, level 8, 308 Coins | draws abfedf4ae13f end 188c6b3b9106
 run saver 005 | the Deep Woods: lost in room 15, WLLLWWWWWWWWWLL, resolve 0, level 7, 260 Coins | draws ae7c667a80ed end b56d1f1d8ff1
 run saver 006 | trail 1: lost in room 14, WWLLWLWWWWWWWL, resolve 0, level 7, 260 Coins | draws 3b14e93f053d end 7f6d6269c2ba
 run saver 007 | trail 2: lost in room 8, WWLWWLLL, resolve 0, level 6, 143 Coins | draws c40cc64d3cfa end dd4b67c2c18c
@@ -138,14 +138,14 @@ run saver 036 | trail 1: lost in room 14, WWLWWLWWWWWWLL, resolve 0, level 7, 26
 run saver 037 | trail 2: lost in room 9, WWWWWLLLL, resolve 0, level 6, 163 Coins | draws 6ffcca7c8966 end 7249937e0725
 run saver 038 | trail 3: lost in room 8, WLLWLWWD, resolve 0, level 5, 96 Coins | draws 8710ecfa2dbe end 7e55dcbc8681
 run saver 039 | own figures: lost in room 8, WLLWWLWL, resolve 0, level 5, 114 Coins | draws 556f8574e579 end 3fdf784ff35a
-run saver 040 | the Wilds: lost in room 33, WWWWWWWWWWWWWWLWWWLWWWLWWWWWWWWWL, resolve 0, level 8, 324 Coins | draws 2cca2a30eba7 end 174acb3a44ea
+run saver 040 | the Wilds: lost in room 33, WWWWWWWWWWWWWWLWWWLWWWLWWWWWWWWWL, resolve 0, level 8, 324 Coins | draws 7a617ab74d58 end cb563e6a9300
 run saver 041 | the Deep Woods: lost in room 12, WWWWWWWLLWLL, resolve 0, level 7, 228 Coins | draws 827e60a29c89 end 4ad5f0fbd9d8
 run saver 042 | trail 1: lost in room 8, WLLLWWWL, resolve 0, level 5, 114 Coins | draws bcffdcef470a end 52d947b1d4ac
 run saver 043 | trail 2: lost in room 8, WLWLWLWL, resolve 0, level 5, 143 Coins | draws 67561718fda7 end bec19dfc1b86
 run saver 044 | trail 3: lost in room 5, WLLLL, resolve 0, level 5, 24 Coins | draws 3f70d6db111e end 33108ebf0bf8
 run saver 045 | own figures: lost in room 11, WWWWWLLLLWL, resolve 0, level 6, 196 Coins | draws a3422f2e7e0f end 921e0cbe192f
 run saver 046 | the Wilds: lost in room 15, WWWWWWWWLLLWWLL, resolve 0, level 7, 210 Coins | draws b2ec7ba68d85 end 99c84d04cfa6
-run saver 047 | the Deep Woods: left in room 41, WWWWWWWWLWWWWWWWWWLWWWWWWWWWLWWWWWWWWWWW, resolve 6, level 8, 494 Coins | draws 861ee501d417 end e3e5e5dd4a54
+run saver 047 | the Deep Woods: left in room 41, WWWWWWWWLWWWWWWWWWLWWWWWWWWWLWWWWWWWWWWW, resolve 6, level 8, 494 Coins | draws fee83f564260 end e3e5e5dd4a54
 run saver 048 | trail 1: lost in room 11, WWWWWLWLLWL, resolve 0, level 6, 212 Coins | draws 461bf7777754 end e8408c4e7ba0
 run saver 049 | trail 2: lost in room 9, WWLLWLWLL, resolve 0, level 5, 143 Coins | draws c84ce8019c58 end 93d8b74148de
 run saver 050 | trail 3: lost in room 7, WWLWWLL, resolve 0, level 5, 171 Coins | draws 6a971f74a718 end 4acc792f7b42
@@ -156,7 +156,7 @@ run saver 054 | trail 1: lost in room 8, WLLWWLWL, resolve 0, level 5, 114 Coins
 run saver 055 | trail 2: lost in room 7, WLLWWLL, resolve 0, level 6, 123 Coins | draws 44f518c201f4 end 5f28fd6397b9
 run saver 056 | trail 3: lost in room 6, WLLLLL, resolve 0, level 5, 24 Coins | draws e4ba7965adca end 6831c5b1d4ad
 run saver 057 | own figures: lost in room 14, WWWWWLWLWWLWWL, resolve 0, level 6, 260 Coins | draws 043edccad10f end 7fe1aa2e21d6
-run saver 058 | the Wilds: lost in room 33, WWWWWLWLLWWWWWWWWWWWWWWLWWWWWWWWL, resolve 0, level 8, 462 Coins | draws 95e3bce6c54e end 8cc60068c5e9
+run saver 058 | the Wilds: lost in room 33, WWWWWLWLLWWWWWWWWWWWWWWLWWWWWWWWL, resolve 0, level 8, 462 Coins | draws 0ef601aab814 end 997486bf8573
 run saver 059 | the Deep Woods: lost in room 19, WWLWWLLWWWWWWWLWWWL, resolve 0, level 7, 276 Coins | draws 9b240a2d3280 end 755a35ab209c
 run saver 060 | trail 1: lost in room 15, WWLWWWWWLWLWWWL, resolve 0, level 7, 276 Coins | draws a65e00289fdb end 5b4e964e3af8
 run saver 061 | trail 2: lost in room 6, WLLLLL, resolve 0, level 5, 20 Coins | draws 22b45adf67c8 end ba8134774cf1
@@ -187,7 +187,7 @@ run saver 085 | trail 2: lost in room 8, WWLLLWWL, resolve 0, level 5, 80 Coins 
 run saver 086 | trail 3: lost in room 6, WLLLLL, resolve 0, level 5, 24 Coins | draws d4ea66530120 end 41a0b856e38e
 run saver 087 | own figures: lost in room 12, WLLLWWWWLWWL, resolve 0, level 6, 212 Coins | draws 3e1f59c274d2 end e954004e74f6
 run saver 088 | the Wilds: lost in room 18, WWWWWLWWLWWWWLDWWL, resolve 0, level 8, 276 Coins | draws 15deed421dd7 end 5bf296f51dcd
-run saver 089 | the Deep Woods: lost in room 23, WWWWWWWLWWWLWLWWWWWWWWL, resolve 0, level 8, 462 Coins | draws 8e557ff1f443 end a9a0336828a9
+run saver 089 | the Deep Woods: lost in room 23, WWWWWWWLWWWLWLWWWWWWWWL, resolve 0, level 8, 462 Coins | draws 1b5896eca7f5 end a9a0336828a9
 run saver 090 | trail 1: lost in room 14, WLWWWLWWWLLWWL, resolve 0, level 7, 194 Coins | draws f0cd083445ed end a6e127465b44
 run saver 091 | trail 2: lost in room 6, WWLLLL, resolve 0, level 5, 40 Coins | draws 131a8725435b end 5254ec8b788b
 run saver 092 | trail 3: lost in room 7, WWLLWLL, resolve 0, level 5, 147 Coins | draws ad14b3289351 end 53269693c5ca

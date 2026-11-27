@@ -11,7 +11,7 @@ import { FIGHT } from "../content/rooms.ts";
 import { cellAt, cone, distance, line, neighbours, rowOf, within } from "../hex.ts";
 import type { Placed } from "../party.ts";
 import { fightOf, inOrder, onCell, only, ready, steps, stepUntil, still, unitOf } from "../testkit.ts";
-import { hurt, HZ, leap as moveTo, targetable } from "./core.ts";
+import { getUp, hurt, HZ, leap as moveTo, targetable } from "./core.ts";
 import { speedNow } from "./engine.ts";
 import { slowNow } from "./moves.ts";
 import type { Fight, FightEvent, Unit } from "./types.ts";
@@ -356,6 +356,21 @@ describe("three-acorn figures", () => {
     expect(hitsOn(rest, target).length).toBe(n("cindernewt", "breaths") - 1);
     expect(hitsOn(rest, behind).length).toBe(0);
     expect(u.casts).toBe(1);
+  });
+  test("Cinder Newt: a fall ends its breath for good, though it is stood back up on its hex before the next", () => {
+    const { f, u } = scene("cindernewt", [NEAR, TWO]);
+    const target = foeAt(f, NEAR);
+    steps(f, 1);
+    expect(u.casts).toBe(1);
+    const cell = u.cell;
+    // It falls after its first breath, and is stood back up where it was before its second.
+    hurt(f, u, 1_000_000, "true", "ability", null);
+    expect(u.alive).toBe(false);
+    expect(getUp(f, u, u.maxHp, "seqwawa")).toBe(true);
+    expect(u.cell).toBe(cell);
+    u.mana = 0;
+    const rest = steps(f, n("cindernewt", "lasts") * HZ);
+    expect(hitsOn(rest, target).filter((h) => h.by === u.id && h.source === "ability")).toEqual([]);
   });
   test("Drizzle Frog: magic damage to its target, and a puddle round it where enemies are slower", () => {
     for (const stars of STARS) {

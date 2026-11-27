@@ -14,7 +14,7 @@ import { freeNear, getUp, grootFalls, summon } from "./enter.ts";
 import type { DamageKind, DamageSource, Fight, HealSource, LeapWhy, Unit } from "./types.ts";
 
 export { emit, flight, FOREVER, HZ, later, secs } from "./clock.ts";
-export { enter, freeNear, getUp, type Start, summon } from "./enter.ts";
+export { enter, freeNear, getUp, lastFallen, type Start, summon } from "./enter.ts";
 
 /** An amount made bigger by its owner's ability power. */
 export const powered = (u: Unit, amount: number): number => (amount * u.power) / 100;
@@ -273,15 +273,19 @@ export function heal(f: Fight, target: Unit, raw: number, source: HealSource, by
 function overflow(f: Fight, target: Unit, extra: number, by: Unit): void {
   const step = f.traits[by.side].mender ?? 0;
   const room = Math.floor((target.maxHp * traitNumber("mender", "over", step)) / 100 - target.shield);
+  // The healer's shield: theirs to count, already as strong as Mender makes it.
   if (Math.min(extra, room) >= 1)
-    shieldUp(f, target, Math.min(extra, room), traitNumber("mender", "lasts", step), null);
+    shieldOn(f, target, Math.round(Math.min(extra, room)), traitNumber("mender", "lasts", step), by);
 }
 /** Puts a shield up, or adds to the one there. `seconds` of 0 lasts until it is broken. */
 export function shieldUp(f: Fight, target: Unit, raw: number, seconds: number, by: Unit | null): number {
   if (!target.alive) return 0;
   let amount = raw;
   if (by && by.mending > 0) amount *= 1 + by.mending / 100;
-  const n = Math.round(amount);
+  return shieldOn(f, target, Math.round(amount), seconds, by);
+}
+/** Puts a shield of `n` up as it is, given by `by` (nobody for one a figure has of itself), and says so. */
+function shieldOn(f: Fight, target: Unit, n: number, seconds: number, by: Unit | null): number {
   if (n <= 0) return 0;
   const ticks = secs(seconds);
   const until = ticks <= 0 ? FOREVER : f.tick + ticks;
@@ -384,12 +388,14 @@ function fall(f: Fight, u: Unit, by: Unit | null): void {
   // A Groot figure with its getting back up to come is down for a moment, and still counts as standing.
   const back = grootFalls(f, u);
   u.alive = false;
+  u.downs++;
   u.hp = 0;
   u.shield = 0;
   if (f.taken[u.cell] === u.id) f.taken[u.cell] = -1;
   if (back === 0) {
     f.standing[u.side]--;
     u.fellAt = f.tick;
+    u.fallNo = ++f.falls;
   }
   emit(f, { t: "fall", id: u.id, by: by?.id ?? -1, cell: u.cell, ...(back > 0 && { back }) });
   if (u.kind === "toadstool") {

@@ -245,9 +245,9 @@ export const TRAITS = {
     steps: [1],
     gist: "There is one Greg.",
     text: [
-      "Give Greg a figure from your bench: he eats it, and gains {grows}% health for good for each acorn it cost, up to {most}%.",
+      "Give Greg a figure from your bench: he eats it, and gains {grows}% health for good for each acorn of its price (its cost times its copies), up to {most}%.",
     ],
-    short: ["Eats bench figures: +{grows}% health an acorn, to {most}%."],
+    short: ["Eats: +{grows}% health per acorn of price, up to {most}%."],
     n: { grows: [2], most: [40] },
   },
   rooted: {

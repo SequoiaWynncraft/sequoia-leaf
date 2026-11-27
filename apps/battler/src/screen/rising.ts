@@ -4,12 +4,12 @@
  * gold stud at a time while friends lean away; it stands in its new shape, the ring snaps shut, the
  * board bumps and a low horn sounds; and the ring stays, faint, under it until it falls again.
  *
- * It is begun by the rules' `fall` that says `back`, and stood up by their `rise`; if the fight
- * ends before the step it was due, it still stands. If the fight goes on past that step without it
- * (nowhere free to stand), it is down for good and goes in its puff as anyone does.
+ * It is begun by the rules' `fall` that says `back`, and stood up only by their `rise`. If the fight
+ * ends first, or goes on past that step without it (nowhere free to stand), it is down for good: it
+ * goes in its puff as anyone does, and its ring, half drawn, goes out.
  */
 import { GOLD, STONE } from "@sequoia-leaf/kit/palette.ts";
-import type { Ctx } from "@sequoia-leaf/kit/util.ts";
+import { clamp, type Ctx } from "@sequoia-leaf/kit/util.ts";
 import type { Fight, FightEvent } from "@sequoia-leaf/raid";
 import { hasTrueForm, TRUE_FORMS, type TrueFormId } from "@sequoia-leaf/raid/content/groot.ts";
 
@@ -18,7 +18,7 @@ import { burst, ring, say } from "./fx.ts";
 import type { Pt } from "./geometry.ts";
 import type { Actor } from "./motion.ts";
 import { drawRing, RING } from "./rings.ts";
-import { beatOf, dimAt, fateOf, quartersAt, type Rising, risingAt } from "./risetime.ts";
+import { beatOf, dimAt, fateOf, GOES_OUT, quartersAt, type Rising, risingAt } from "./risetime.ts";
 import { snd } from "./sounds.ts";
 import { dimRound } from "./spells.ts";
 import { V } from "./stage.ts";
@@ -37,6 +37,8 @@ interface Riser {
   leant: boolean;
   /** It has been seen to stand: its ring lies faint under it from then, until it falls again. */
   stood: number | null;
+  /** It stays down: its ring, as far as it was drawn, goes out from then. */
+  out: number | null;
 }
 const risers: Riser[] = [];
 
@@ -65,6 +67,7 @@ export function fallsToRise(ev: Extract<FightEvent, { t: "fall" }>, at: number):
     risen: null,
     leant: false,
     stood: null,
+    out: null,
   });
 }
 
@@ -126,13 +129,21 @@ function crumble(r: Riser, c: number): void {
   });
 }
 
+/** It is down for good: it goes in its puff, friends stand up straight, and its ring goes out. */
+function staysDown(r: Riser, c: number): void {
+  r.out = c;
+  const a = actor(r.id);
+  if (a) a.rising = false;
+  for (const o of FV.actors) if (o?.shy) o.shy = null;
+}
+
 /** Moves each true form on its way up through its beats at the fight's clock `c`. */
 export function stepRisings(c: number): void {
   const fight = fightNow();
   for (let i = risers.length - 1; i >= 0; i--) {
     const r = risers[i];
     if (!r) continue;
-    if (r.fight !== fight) {
+    if (r.fight !== fight || (r.out !== null && c >= r.out + GOES_OUT)) {
       risers.splice(i, 1);
       continue;
     }
@@ -140,13 +151,10 @@ export function stepRisings(c: number): void {
       crumble(r, c);
       continue;
     }
-    const fate = fateOf(r.when, c, fight, r.risen !== null);
-    if (fate === "stands") stand(r, Math.max(c, r.when.up));
-    else if (fate === "stays down") {
-      const a = actor(r.id);
-      if (a) a.rising = false;
-      risers.splice(i, 1);
-    } else if (!r.leant && beatOf(r.when, c) === "draws") leanAway(r, c);
+    if (r.out !== null || !fight) continue;
+    const fate = fateOf(r.when, fight, r.risen !== null);
+    if (fate === "stays down") staysDown(r, c);
+    else if (!r.leant && beatOf(r.when, c) === "draws") leanAway(r, c);
   }
 }
 
@@ -159,9 +167,11 @@ export function drawRisings(g: Ctx): void {
     if (r.stood === null) {
       const x = Math.round(V.bx + r.spot.x);
       const y = Math.round(V.by + r.spot.y) - FOOT;
-      dimRound(g, x, y, RING.rx + 5, RING.ry + 4, dimAt(r.when, c));
-      const quarters = quartersAt(r.when, c);
+      if (r.out === null) dimRound(g, x, y, RING.rx + 5, RING.ry + 4, dimAt(r.when, c));
+      const quarters = quartersAt(r.when, r.out ?? c);
+      g.globalAlpha = r.out === null ? 1 : clamp(1 - (c - r.out) / GOES_OUT, 0, 1);
       if (quarters > 0) drawRing(g, r.kind, x, y, quarters, c);
+      g.globalAlpha = 1;
       continue;
     }
     if (!a || a.gone || c >= a.fallAt) continue;

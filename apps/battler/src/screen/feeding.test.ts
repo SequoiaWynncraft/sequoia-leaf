@@ -13,7 +13,7 @@ import {
   type TableView,
 } from "@sequoia-leaf/raid";
 
-import { feedOffer, feedWords, gregOf } from "./feeding.ts";
+import { feedOffer, feedWords, gregsOf } from "./feeding.ts";
 
 /** A run in its first room, planning, with these on the board from seat 0 and these on the bench from hollow 0. */
 function planning(board: FigureId[], bench: FigureId[], fed = 0): RunView {
@@ -36,14 +36,25 @@ const bench = (at: number) => ({ on: "bench", at }) as const;
 const board = (at: number) => ({ on: "board", at }) as const;
 
 describe("the feed target", () => {
-  test("says what this figure would add before it is let go: 2% for each acorn it cost", () => {
+  test("says what this figure would add before it is let go: 2% for each acorn of its price", () => {
     const run = planning(["greg"], ["worm", "chickaree", "badger"]);
-    expect(gregOf(run)).toEqual(board(0));
+    expect(gregsOf(run)).toEqual([board(0)]);
     expect([0, 1, 2].map((at) => feedWords(feedOffer(run, bench(at)) ?? { full: true }))).toEqual([
       "Feed Greg +2%",
       "Feed Greg +4%",
       "Feed Greg +8%",
     ]);
+  });
+
+  test("a full Greg does not hide another who can still eat: the target feeds him, with his number", () => {
+    const run = planning(["greg"], ["badger", "greg"], 40);
+    // The fielded Greg is full; the one on the bench has eaten nothing.
+    const benched = run.bench[1];
+    if (benched) benched.fed = 0;
+    expect(feedOffer(run, bench(0))).toEqual({ to: bench(1), gained: 8 });
+    // Only when every Greg is full is he full.
+    if (benched) benched.fed = 40;
+    expect(feedOffer(run, bench(0))).toEqual({ full: true });
   });
 
   test("shows no more than he can still eat, and says he is full, with no target, at 40%", () => {
@@ -57,8 +68,8 @@ describe("the feed target", () => {
     expect(feedOffer(planning(["worm"], ["badger"]), bench(0))).toBeNull();
     expect(feedOffer(planning(["greg", "worm"], ["badger"]), board(1))).toBeNull();
     expect(feedOffer(planning(["greg"], ["greg"]), bench(0))).toBeNull();
-    // A Greg on the bench is fed too; one on the board first, the most stars first.
-    expect(gregOf(planning(["worm"], ["badger", "greg"]))).toEqual(bench(1));
+    // A Greg on the bench is fed too; those on the board first, the most stars first.
+    expect(gregsOf(planning(["worm"], ["badger", "greg"]))).toEqual([bench(1)]);
   });
 
   test("letting go does as the rules do, and what they turn down reads as their sentence", () => {
