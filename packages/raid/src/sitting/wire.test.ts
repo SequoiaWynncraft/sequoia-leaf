@@ -27,6 +27,15 @@ function stages(): Sitting[] {
 }
 const STAGES = stages();
 const wire = (v: unknown): unknown => JSON.parse(JSON.stringify(v));
+/** The member's view of the first stage `at` as an older Leaf would show it: without `key` in its stage. */
+function older(at: string, key: string): unknown {
+  const t = STAGES.find((s) => s.stage.at === at);
+  if (!t) throw new Error(`no ${at}`);
+  const view = wire(sittingView(t, "leaf-1"));
+  const stage = { ...Object(Object(view).stage) };
+  delete stage[key];
+  return { ...Object(view), stage };
+}
 
 describe("a sitting's view off the wire", () => {
   test("reads back as it was sent, at every stage, for the member and for somebody not seated", () => {
@@ -46,5 +55,11 @@ describe("a sitting's view off the wire", () => {
     expect(readSittingView({ ...Object(view), run: null })).toBeNull();
     expect(readSittingView({ ...Object(view), stage: { at: "lunch", until: 1 } })).toBeNull();
     expect(readSittingView({ ...Object(view), seats: [{ name: "Greg" }] })).toBeNull();
+  });
+
+  test("a view from an older Leaf, with no early ends in it (no `ready`, `done` or `ends`), is no view: the page loads again", () => {
+    expect(readSittingView(older("plan", "ready"))).toBeNull();
+    expect(readSittingView(older("fight", "done"))).toBeNull();
+    expect(readSittingView(older("carousel", "ends"))).toBeNull();
   });
 });

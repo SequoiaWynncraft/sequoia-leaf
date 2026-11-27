@@ -23,15 +23,21 @@ export const CHAIRS = 8;
 /** The trail every seat's run is on: the first, where the forest is plain. */
 export const TRAIL = 0;
 
-/** The clock, in milliseconds. With no member still in, every wait is 0: the regulars play straight to the end. */
+/**
+ * The clock, in milliseconds. With no member still in, every wait is 0: the regulars play straight to
+ * the end. Every wait is the most a stage or a turn can last: it ends sooner once nobody in it has
+ * anything left to do (`settle`).
+ */
 export const CLOCK = {
   /** An open sitting nobody started closes after this. */
   open: 30 * 60_000,
-  /** The first carousel, open to everyone at once. */
+  /** The first carousel's members, who choose at once, before the regulars. */
   together: 12_000,
-  /** A later carousel lets a pair in this long after the pair before, and ends this long after the last pair. */
+  /** A later carousel's pair, and its last one. */
   pair: 5_000,
   last: 8_000,
+  /** A regular takes this long after its turn opens, or after the regular before it took: each take is seen on its own. */
+  take: 700,
   /** Planning: the first `early` rooms, and the rooms after. */
   early: 5,
   plan: 30_000,
@@ -79,19 +85,25 @@ export interface Offer {
 }
 
 /**
- * Where a sitting stands, and the moment that ends (Leaf's clock, in milliseconds):
+ * Where a sitting stands, and the next moment something happens by itself (Leaf's clock, in
+ * milliseconds):
  *
  * - `open`: waiting to start, with who has sat down, in the order they did;
- * - `carousel`: the ring, the seats in the order of their turns, and how many of them may take now;
- * - `plan`: everyone plans the room;
- * - `fight`: the boards are locked and the fights decided, and are being watched;
+ * - `carousel`: the ring, the seats in the order of their turns, how many of them may take now, and
+ *   when the turn of the last let in is up (`ends`); `until` is that, or sooner a regular's take;
+ * - `plan`: everyone plans the room, and the seats of the members who said they are ready;
+ * - `fight`: the boards are locked and the fights decided, and are being watched; the seats of the
+ *   members who have watched theirs, or skipped it;
  * - `over`: and when it ended. A sitting over with no seats was never started.
+ *
+ * A stage whose members have all done what they do in it ends at that moment: its `until` is brought
+ * forward to it (`settle`).
  */
 export type Stage =
   | { at: "open"; until: number; sat: Member[] }
-  | { at: "carousel"; until: number; ring: Offer[]; turns: number[]; open: number }
-  | { at: "plan"; until: number }
-  | { at: "fight"; until: number }
+  | { at: "carousel"; until: number; ring: Offer[]; turns: number[]; open: number; ends: number }
+  | { at: "plan"; until: number; ready: number[] }
+  | { at: "fight"; until: number; done: number[] }
   | { at: "over"; ended: number };
 
 /** Coins a member's seat has earned and Leaf has not paid yet, under a key Leaf pays once (`seat:<n>`, beside the sitting's id). */
@@ -126,6 +138,29 @@ export interface Sitting {
 export const seatsIn = (t: Pick<Sitting, "seats">): Seat[] => t.seats.filter((seat) => seat.place === null);
 /** Whether a member is still in. If none is, nothing waits. */
 export const watched = (t: Pick<Sitting, "seats">): boolean => seatsIn(t).some((seat) => seat.who.is === "member");
+/** Seats as a sitting or a page's view of one has them: whose each is, and whether it is still in. */
+type Seats = { readonly seats: readonly Pick<Seat, "who" | "place">[] };
+/** The numbers of the members' seats still in. */
+export const membersIn = (t: Seats): number[] =>
+  t.seats.flatMap((seat, i) => (seat.place === null && seat.who.is === "member" ? [i] : []));
+/** A list of seats with one marked in it (`on`) or not, once each, in seat order: who is ready, who has watched. */
+export const marked = (seats: readonly number[], seat: number, on: boolean): number[] =>
+  [...seats.filter((s) => s !== seat), ...(on ? [seat] : [])].toSorted((a, b) => a - b);
+/**
+ * The seats a stage still waits on: in planning the members still in who have not said they are
+ * ready; in a fight those who have not watched theirs or skipped it; in a carousel everyone let in
+ * and still in who has not taken (a regular takes at its own moment). None in any other stage. Leaf
+ * ends a stage early by it (`settle`), and the page says who it waits for.
+ */
+export function waitingOn(t: Seats & { readonly stage: Stage }): number[] {
+  const { stage } = t;
+  if (stage.at === "plan") return membersIn(t).filter((seat) => !stage.ready.includes(seat));
+  if (stage.at === "fight") return membersIn(t).filter((seat) => !stage.done.includes(seat));
+  if (stage.at !== "carousel") return [];
+  return stage.turns
+    .slice(0, stage.open)
+    .filter((seat) => t.seats[seat]?.place === null && !stage.ring.some((offer) => offer.by === seat));
+}
 /** The moment a wait of `ms` from `at` ends: at once, when no member is still in. */
 export const later = (t: Pick<Sitting, "seats">, at: number, ms: number): number => (watched(t) ? at + ms : at);
 /** What kind of room one is: the raid's fifteen, and sparring rooms after them. */
@@ -187,6 +222,8 @@ export const SITTING_REFUSALS = {
   out: "You are out.",
   carousel: "The carousel is not over yet.",
   no_carousel: "There is no carousel now.",
+  no_fight: "There is no fight now.",
+  moved_on: "The table has moved on.",
   not_your_turn: "It is not your turn yet.",
   picked: "You have taken a figure already.",
   taken: "Somebody took that one.",
@@ -208,6 +245,14 @@ export const refuse = (code: SittingWhy | Why): Refusal => ({
   why: isWhy(code) ? REFUSALS[code] : SITTING_REFUSALS[code],
 });
 
+/** The stage each of a seat's own moves at a started sitting is for: a pick in a carousel, ready while planning, watched in a fight. */
+const MOVES = { pick: "carousel", ready: "plan", watched: "fight" } as const;
+/** Why one of those is not taken in a stage, or null in its own. Leaf and the page's prediction both ask this. */
+export function notNow(at: Stage["at"], move: keyof typeof MOVES): SittingWhy | Why | null {
+  if (at === MOVES[move]) return null;
+  if (move === "ready") return notPlanning(at);
+  return at === "over" ? "table_over" : move === "pick" ? "no_carousel" : "no_fight";
+}
 /** Why a seat's planning commands are not taken in a stage, or null in planning. Leaf and the page's prediction both ask this. */
 export function notPlanning(at: Stage["at"]): SittingWhy | Why | null {
   if (at === "plan") return null;

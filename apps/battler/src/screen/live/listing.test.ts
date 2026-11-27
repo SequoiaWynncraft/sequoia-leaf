@@ -1,8 +1,8 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, test } from "bun:test";
 
 import { isRecord } from "@sequoia-leaf/kit/net.ts";
 import { scope } from "@sequoia-leaf/kit/scope.ts";
-import { type Reply, type Sent, type Standin, standin } from "@sequoia-leaf/kit/standin.ts";
+import { type Reply, type Sent, type Standin, standin, until } from "@sequoia-leaf/kit/standin.ts";
 import { type Call, command, openSitting } from "@sequoia-leaf/raid/sitting/commands.ts";
 import type { Sitting } from "@sequoia-leaf/raid/sitting/sitting.ts";
 import { sittingView } from "@sequoia-leaf/raid/sitting/view.ts";
@@ -33,14 +33,9 @@ function must(a: ReturnType<typeof command>): Sitting {
   return a.sitting;
 }
 
-/** Waits until something holds, a millisecond at a time (at most `tries`). */
-async function until(holds: () => boolean, tries = 50): Promise<void> {
-  if (tries === 0 || holds()) return;
-  await Bun.sleep(1);
-  await until(holds, tries - 1);
-}
-
 let world: Standin | null = null;
+// Each test starts with no table held, whatever ran before it in the process (test files share it).
+beforeEach(() => doneWithTable());
 afterEach(() => {
   doneWithTable();
   hearFresh();
@@ -60,7 +55,7 @@ test("a list read answered after Leave is let go: the table just left is not fol
   // Two reads of the list on their way: the page opening, and the card's own.
   const first = readList();
   const second = readList();
-  await until(() => lists.length >= 2);
+  await until(() => lists.length >= 2, "both list reads to reach Leaf");
   lists[0]?.({ status: 200, body: { open: [], yours: "s1" } });
   await first;
   expect(liveLine()?.id).toBe("s1");
@@ -90,7 +85,7 @@ test("a first list read Leaf did not answer is tried again on the kit's timer, w
     () => undefined,
     () => false,
   );
-  await until(() => liveLine() !== null, 2000);
+  await until(() => liveLine() !== null, "the member's table to be followed");
   expect(asked).toBe(2);
   expect(liveLine()?.id).toBe("s1");
   held.close();
@@ -137,7 +132,7 @@ test("a member's own table that did not read at first is read again on the kit's
     () => undefined,
     () => false,
   );
-  await until(() => liveLine() !== null, 2000);
+  await until(() => liveLine() !== null, "the member's table to be followed");
   expect(reads).toBe(2);
   expect(liveLine()?.id).toBe("s1");
   held.close();

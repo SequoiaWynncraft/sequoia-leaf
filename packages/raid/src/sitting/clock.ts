@@ -47,6 +47,8 @@ import {
   type Sitting,
   STEP_MS,
   TRAIL,
+  waitingOn,
+  watched,
   type Who,
 } from "./sitting.ts";
 
@@ -70,7 +72,7 @@ export function begin(t: Sitting, sat: readonly Member[], at: number): void {
   });
   t.room = 0;
   const first = CAROUSELS[0];
-  if (first) layCarousel(t, at, first, true);
+  if (first) layCarousel(t, at, first);
   else layRoom(t, at);
 }
 
@@ -133,7 +135,7 @@ export function layRoom(t: Sitting, at: number): void {
     const forest = opposition(catalogOf(t), draw32(t), t.room, TRAIL);
     for (const { run } of seatsIn(t)) run.foe = structuredClone(forest);
   }
-  t.stage = { at: "plan", until: later(t, at, planMs(t.room)) };
+  t.stage = { at: "plan", until: later(t, at, planMs(t.room)), ready: [] };
 }
 
 // ---------- the lock ----------
@@ -192,7 +194,7 @@ function lock(t: Sitting, at: number): void {
   }
   const longest =
     kindOf(t.room) === "spar" ? spar(t) : Math.max(0, ...here.map((seat) => fight(t, seat, seat.run.foe, null)));
-  t.stage = { at: "fight", until: later(t, at, longest * STEP_MS + CLOCK.after) };
+  t.stage = { at: "fight", until: later(t, at, longest * STEP_MS + CLOCK.after), done: [] };
 }
 
 // ---------- the takings ----------
@@ -263,11 +265,24 @@ function takings(t: Sitting, at: number): void {
   const boss = BOSS_ROOMS.indexOf(t.room);
   const ring = boss < 0 ? undefined : CAROUSELS[boss + 1];
   t.room += 1;
-  if (ring) layCarousel(t, at, ring, false);
+  if (ring) layCarousel(t, at, ring);
   else layRoom(t, at);
 }
 
 // ---------- to a moment ----------
+
+/**
+ * A stage nobody in it has anything left to do in ends at this moment: its deadline is brought
+ * forward to `now` and kept, so that `advance` does it at its own moment, as it does any deadline.
+ * With no member still in, nothing waits at all. The deadline set when the stage began stays the
+ * most it can last.
+ */
+export function settle(t: Sitting, now: number): void {
+  const { stage } = t;
+  if (stage.at === "open" || stage.at === "over") return;
+  if (watched(t) && waitingOn(t).length > 0) return;
+  stage.until = Math.min(stage.until, now);
+}
 
 const due = (t: Sitting, now: number): boolean => t.stage.at !== "over" && t.stage.until <= now;
 

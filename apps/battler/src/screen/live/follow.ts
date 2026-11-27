@@ -16,8 +16,8 @@ import { backoff } from "@sequoia-leaf/kit/net.ts";
 import { RETRY } from "@sequoia-leaf/kit/play.ts";
 import type { Scope } from "@sequoia-leaf/kit/scope.ts";
 
-/** How long after an ask the read starts, so that asks close together make one read. */
-export const GATHER_MS = 100;
+/** How long after an ask the read starts, so that asks close together (one write's words, a deadline as one comes) make one read. */
+export const GATHER_MS = 25;
 
 /** How a read went: landed, failed, not now, or the end of following. */
 export type Went = "landed" | "failed" | "later" | "stop";

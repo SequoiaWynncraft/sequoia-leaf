@@ -1,8 +1,8 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { isRecord } from "@sequoia-leaf/kit/net.ts";
 import { scope } from "@sequoia-leaf/kit/scope.ts";
-import { type Reply, type Route, type Sent, type Standin, standin } from "@sequoia-leaf/kit/standin.ts";
+import { type Reply, type Route, type Sent, type Standin, standin, until } from "@sequoia-leaf/kit/standin.ts";
 import {
   COMMANDS,
   foughtOf,
@@ -23,7 +23,19 @@ import { EVERY_COMMAND, EVERY_PLANNING } from "@sequoia-leaf/raid/testkit.ts";
 import { ask, doNow, go, onNotes, onRefused, openTable, S, tableNow } from "../state.ts";
 import { openLine } from "./line.ts";
 import { CLOSED_UNSTARTED, NOT_SEATED } from "./reads.ts";
-import { liveLine, liveView, onDone, paidFor, shownRun, sitAt, stepBack, takeUp } from "./seated.ts";
+import {
+  doneWithTable,
+  liveLine,
+  liveView,
+  onDone,
+  onSeatView,
+  paidFor,
+  readyUp,
+  shownRun,
+  sitAt,
+  stepBack,
+  takeUp,
+} from "./seated.ts";
 
 const ME = { id: "leaf-0", name: "Mossback" };
 const call = (now: number, seed: number): Call => ({ now, seed, player: ME });
@@ -61,16 +73,13 @@ const refused: string[] = [];
 onNotes((notes) => heard.push(...notes));
 onRefused((why) => refused.push(why));
 
-/** Waits until something holds, a millisecond at a time (at most 50). */
-async function until(holds: () => boolean, tries = 50): Promise<void> {
-  if (tries === 0 || holds()) return;
-  await Bun.sleep(1);
-  await until(holds, tries - 1);
-}
-
 let world: Standin | null = null;
+// Each test starts with no table held, whatever ran before it in the process (test files share it).
+beforeEach(() => doneWithTable());
 afterEach(() => {
   stepBack();
+  // Whatever a test left it at, the table is put away: nothing of one test's carries into the next, nor into the next file.
+  doneWithTable();
   world?.done();
   heard.length = 0;
   refused.length = 0;
@@ -116,7 +125,7 @@ describe("an answer for the live seat", () => {
     const leaf = sittingLeaf(t, now);
     await seated(t, now, leaf.routes);
     const pending = ask({ do: "rustle" });
-    await until(() => leaf.posted.length > 0);
+    await until(() => leaf.posted.length > 0, "the command to reach Leaf");
     stepBack();
     const solo = S.run;
     expect(solo?.stall).toEqual(startRun(5, { era: LEGACY_ERA }).stall);
@@ -135,7 +144,7 @@ describe("an answer for the live seat", () => {
     const leaf = sittingLeaf(t, now);
     await seated(t, now, leaf.routes);
     const pending = ask({ do: "rustle" });
-    await until(() => leaf.posted.length > 0);
+    await until(() => leaf.posted.length > 0, "the command to reach Leaf");
     leaf.answerRustle();
     expect((await pending)?.ok).toBe(true);
     expect(S.run).toEqual(shownRun(leaf.after));
@@ -176,7 +185,7 @@ describe("the run's commands at the live seat", () => {
       await seated(t, now, leaf.routes);
       const did = COMMANDS[c.do].draws ? await ask(c) : doNow(c);
       expect(did).toEqual({ ok: true, notes: done.notes });
-      await until(() => leaf.posted.length > 0 && liveLine()?.waiting() === false);
+      await until(() => leaf.posted.length > 0 && liveLine()?.waiting() === false, "Leaf to answer it");
       const sent = leaf.posted.map((v) =>
         isRecord(v) ? Object.fromEntries(Object.entries(v).filter(([k]) => k !== "id")) : v,
       );
@@ -198,7 +207,7 @@ describe("the run's commands at the live seat", () => {
     await seated(t, now, leaf.routes);
     expect(doNow(forging)).toEqual({ ok: true, notes: done.notes });
     expect(S.run?.items).toEqual(["hedgehog"]);
-    await until(() => leaf.posted.length > 0 && liveLine()?.waiting() === false);
+    await until(() => leaf.posted.length > 0 && liveLine()?.waiting() === false, "Leaf to answer it");
     expect(leaf.posted).toMatchObject([forging]);
     expect(liveView()).toEqual(sittingView(done.sitting, ME.id));
     expect(refused).toEqual([]);
@@ -236,7 +245,7 @@ test("a table that closed before it started lets the member go, and says so", as
   const told: (string | null)[] = [];
   onDone((why) => told.push(why));
   line.read();
-  await until(() => liveLine() === null, 500);
+  await until(() => liveLine() === null, "the table to be let go");
   expect(liveLine()).toBeNull();
   expect(told).toEqual([CLOSED_UNSTARTED]);
 });
@@ -255,7 +264,7 @@ test("opened during a fight, the room's takings are told when the table goes on"
   // The page is opened now: the member sits down to the fight already being fought.
   expect(sitAt()).toBe(true);
   line.read();
-  await until(() => liveView()?.stage.at !== "fight", 500);
+  await until(() => liveView()?.stage.at !== "fight", "the table to go on from the fight");
   const view = liveView();
   if (!view) throw new Error("no sitting");
   const paid = paidFor(view);
@@ -283,7 +292,54 @@ test("left in another tab: the next read shows the member without a seat, and th
   const told: (string | null)[] = [];
   onDone((why) => told.push(why));
   line.read();
-  await until(() => liveLine() === null, 500);
+  await until(() => liveLine() === null, "the table to be let go");
   expect(liveLine()).toBeNull();
   expect(told).toEqual([NOT_SEATED]);
+});
+
+test("Ready is a state the page wants: turned down (an older Leaf's `invalid_command`, mid-deploy), it is sent again with the next read until Leaf shows it", async () => {
+  const { t, now } = planning();
+  const posted: { body: unknown; reply: (r: Reply) => void }[] = [];
+  const ready = command(t, { do: "ready", on: true, room: t.room }, call(now + 2, 21));
+  if (!ready.ok) throw new Error(ready.why);
+  await seated(t, now, {
+    "GET /v1/game/play/raid": { status: 200, body: soloTable() },
+    "GET /v1/game/sittings/s1": {
+      status: 200,
+      body: { id: "s1", rev: 1, now: new Date(now).toISOString(), unchanged: true },
+    },
+    "POST /v1/game/sittings/s1": (sent: Sent) => new Promise<Reply>((reply) => posted.push({ body: sent.body, reply })),
+  });
+  const readies = () =>
+    posted.filter(
+      (p) => isRecord(p.body) && Array.isArray(p.body.commands) && JSON.stringify(p.body.commands).includes('"ready"'),
+    );
+  expect(readyUp(true)?.ok).toBe(true);
+  await until(() => readies().length === 1, "Ready to be sent");
+  readies()[0]?.reply({
+    status: 400,
+    body: { code: "invalid_command", message: "Command x is not one of the table's" },
+  });
+  await until(() => !liveLine()?.waiting(), "Leaf to answer it");
+  // Leaf has not taken it: the next read the page makes sends it again, with the room it is for,
+  // and the seat is drawn again as Ready at once, as the first press drew it.
+  const drawn: boolean[] = [];
+  onSeatView((view) => drawn.push(view.stage.at === "plan" && view.stage.ready.includes(view.you ?? -1)));
+  liveLine()?.read();
+  await until(() => readies().length === 2, "Ready to be sent again");
+  expect(readies().length).toBe(2);
+  expect(JSON.stringify(readies()[1]?.body)).toContain(`"room":${t.room}`);
+  expect(drawn.at(-1)).toBe(true);
+  // Taken: Leaf shows it, and nothing more is sent.
+  const id = (() => {
+    const body = readies()[1]?.body;
+    const c = isRecord(body) && Array.isArray(body.commands) ? body.commands[0] : null;
+    return isRecord(c) ? c.id : "";
+  })();
+  readies()[1]?.reply({ status: 200, body: answer("s1", 2, ready.sitting, now + 2, [{ id, notes: [] }]) });
+  await until(() => !liveLine()?.waiting(), "Leaf to answer it");
+  // A read after it lands with nothing owed: what the page wants is shown, and nothing is sent again.
+  liveLine()?.read();
+  await until(() => liveLine()?.owed() === false, "the read to land");
+  expect(readies().length).toBe(2);
 });

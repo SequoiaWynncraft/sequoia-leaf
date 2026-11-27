@@ -11,8 +11,9 @@ import type { FightSetup } from "../fight/types.ts";
 import { runView } from "../game.ts";
 import type { Party } from "../party.ts";
 import { foughtOf, type Note, type RunView } from "../run.ts";
+import { cannotTake, join } from "./carousel.ts";
 import type { SittingCommand } from "./commands.ts";
-import { facing, kindOf, nameOf, notPlanning, type Sitting, type Stage, type Who } from "./sitting.ts";
+import { facing, kindOf, marked, nameOf, notNow, notPlanning, type Sitting, type Stage, type Who } from "./sitting.ts";
 
 /** A seat as anyone at the sitting sees it. */
 export interface SeatView {
@@ -73,15 +74,54 @@ export function sittingView(t: Sitting, viewer: string | null): SittingView {
   };
 }
 
+type Predicted = { view: SittingView; notes: Note[] } | { refused: string };
+
+type Own = Extract<SittingCommand, { do: "pick" | "ready" | "watched" }>;
+const isOwn = (c: SittingCommand): c is Own => c.do === "pick" || c.do === "ready" || c.do === "watched";
+
+/** What one of the sitting's own moves does to the viewer's copy, their seat being `you` and still in. */
+function ownMove(view: SittingView, c: Own, you: number, run: RunView): Predicted | null {
+  const { stage } = view;
+  if (stage.at === "carousel" && c.do === "pick") {
+    const cannot = cannotTake(stage, you, c.offer);
+    const wanted = stage.ring[c.offer];
+    if (cannot || !wanted) return { refused: cannot ?? "not_in_ring" };
+    const after = structuredClone(run);
+    const notes = join(after, wanted.kind, wanted.item);
+    const ring = stage.ring.map((offer, i) => (i === c.offer ? { ...offer, by: you } : offer));
+    return { view: { ...view, stage: { ...stage, ring }, run: after }, notes };
+  }
+  if (stage.at === "plan" && c.do === "ready")
+    return { view: { ...view, stage: { ...stage, ready: marked(stage.ready, you, c.on) } }, notes: [] };
+  if (stage.at === "fight")
+    return { view: { ...view, stage: { ...stage, done: marked(stage.done, you, true) } }, notes: [] };
+  return null;
+}
+
+/**
+ * The sitting's own moves the page shows before Leaf answers, as Leaf does them: a figure taken from
+ * the ring (it joins the viewer's run), ready or not, and a fight watched. Ending a stage early is
+ * Leaf's alone. Null for any other command.
+ */
+function predictOwn(view: SittingView, c: SittingCommand): Predicted | null {
+  if (!isOwn(c)) return null;
+  const { stage, you, run } = view;
+  const stop = notNow(stage.at, c.do);
+  if (stop) return { refused: stop };
+  if (c.do !== "pick" && c.room !== view.room) return { refused: "moved_on" };
+  if (you === null || !run) return { refused: "not_seated" };
+  if (view.seats[you]?.place !== null) return { refused: "out" };
+  return ownMove(view, c, you, run);
+}
+
 /**
  * What one of the viewer's own commands that draws nothing does to the page's copy, by the rules
  * Leaf will use: the copy after it and what happened, or the refusal Leaf would give. Null for a
  * command that must wait for Leaf.
  */
-export function predict(
-  view: SittingView,
-  c: SittingCommand,
-): { view: SittingView; notes: Note[] } | { refused: string } | null {
+export function predict(view: SittingView, c: SittingCommand): Predicted | null {
+  const own = predictOwn(view, c);
+  if (own) return own;
   if (!isPredicted(c)) return null;
   const stop = notPlanning(view.stage.at);
   if (stop) return { refused: stop };

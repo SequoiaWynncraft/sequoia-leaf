@@ -76,7 +76,8 @@ async function pick(i?: number): Promise<string> {
   const view = liveView();
   if (!view || view.stage.at !== "carousel") return state();
   const at = i ?? view.stage.ring.findIndex((o) => o.by === null);
-  await takeFromRing(at);
+  takeFromRing(at);
+  await settled();
   return state();
 }
 
@@ -108,9 +109,9 @@ async function to(where: Where, room?: number, plans = true, guard = 300): Promi
   return state();
 }
 
-/** In a carousel, moves Leaf's clock on a pair at a time until the member may choose. */
+/** In a carousel, moves Leaf's clock on a take at a time until the member may choose. */
 async function turn(): Promise<string> {
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 24; i++) {
     const view = liveView();
     if (!view || view.stage.at !== "carousel" || turnOf(view, liveLine()?.now() ?? 0).at !== "waiting") break;
     // oxlint-disable-next-line no-await-in-loop -- a pair after another

@@ -4,10 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { EARNINGS, type PlayerId, playerId } from "@sequoia-leaf/core";
-import { payout, summariseRun } from "@sequoia-leaf/raid";
+import { foughtOf, payout, summariseRun } from "@sequoia-leaf/raid";
 import { advance } from "@sequoia-leaf/raid/sitting/clock.ts";
 import { decodeSitting, SITTING_VERSION } from "@sequoia-leaf/raid/sitting/keep.ts";
-import { CLOCK, type Sitting } from "@sequoia-leaf/raid/sitting/sitting.ts";
+import { CLOCK, type Sitting, STEP_MS } from "@sequoia-leaf/raid/sitting/sitting.ts";
 import { Effect, Option, Schema } from "effect";
 import type { SqlClient } from "effect/sql";
 
@@ -245,8 +245,8 @@ describe("Sittings through the routes", () => {
     expect((await look(id, alice, 0)).body).toMatchObject({ rev: 1, state: { stage: { at: "open" } } });
     expect((await look(id, alice, 1)).body).toMatchObject({ rev: 1, unchanged: true });
     await act(id, alice, [{ id: "a-1", do: "start" }]);
-    // The first carousel ends: the same rev is a sitting that has moved on since.
-    clock.now = T0 + CLOCK.together;
+    // The first carousel ends, the regulars taking one by one: the same rev is a sitting that has moved on since.
+    clock.now = T0 + CLOCK.together + 7 * CLOCK.take;
     expect((await look(id, alice, 2)).body).toMatchObject({ rev: 3, state: { stage: { at: "plan" } } });
     expect((await look(id, alice, 3)).body).toMatchObject({ rev: 3, unchanged: true });
     // A rev that is not one is no rev.
@@ -265,7 +265,7 @@ describe("Sittings through the routes", () => {
     expect(again.body).toEqual(first.body);
     expect((await stored(id)).rev).toBe(1);
     await act(id, alice, [{ id: "a-1", do: "start" }]);
-    clock.now = T0 + CLOCK.together;
+    clock.now = T0 + CLOCK.together + 7 * CLOCK.take;
     // The figure from the carousel stands in the front row's middle: benched, there is nobody there to bench again.
     const bench = [{ id: "a-2", do: "move", from: { on: "board", at: 3 }, to: { on: "bench", at: 0 } }];
     const moved = await act(id, alice, bench);
@@ -458,6 +458,85 @@ describe("The clock", () => {
       { stage: "over" },
     ]);
     expect(await look(spoilt, bob)).toMatchObject({ status: 409, body: { code: "state_unreadable" } });
+  });
+});
+
+/** Alice and Bob at a started sitting, the clock moved to each deadline (read by Alice) until it stands at `stage`. */
+async function standingAt(stage: string): Promise<{ id: string; t: Sitting }> {
+  const id = await opened(alice);
+  await act(id, bob, [{ id: "b-1", do: "sit" }]);
+  await act(id, alice, [{ id: "a-1", do: "start" }]);
+  for (let n = 0; n < 40; n++) {
+    // oxlint-disable-next-line no-await-in-loop -- one deadline after another
+    const { sitting } = await stored(id);
+    if (sitting.stage.at === stage) return { id, t: sitting };
+    if (sitting.stage.at === "over") break;
+    clock.now = Math.max(clock.now, sitting.stage.until);
+    // oxlint-disable-next-line no-await-in-loop -- one deadline after another
+    await look(id, alice);
+  }
+  throw new Error(`The sitting never stood at ${stage}`);
+}
+/** Where a sitting stands as stored, and when it is next due. */
+const due = async (id: string) =>
+  (await rowsOf((sql) => sql`SELECT stage, due_at AS dueAt FROM raid_sittings WHERE id = ${id}`))[0];
+
+describe("Early ends, decided by Leaf at their moment", () => {
+  it("ends the first carousel's members' turn when both have taken, and the carousel with the last regular", async () => {
+    const id = await opened(alice);
+    await act(id, bob, [{ id: "b-1", do: "sit" }]);
+    await act(id, alice, [{ id: "a-1", do: "start" }]);
+    clock.now = T0 + 1000;
+    await act(id, alice, [{ id: "a-2", do: "pick", offer: 0 }]);
+    expect(await due(id)).toEqual({ stage: "carousel", dueAt: T0 + CLOCK.together });
+    clock.now = T0 + 1500;
+    const both = await act(id, bob, [{ id: "b-2", do: "pick", offer: 1 }]);
+    // Bob's take ends it for the members: the regulars are let in at that moment, the first to take a moment later.
+    expect(both.body).toMatchObject({ state: { stage: { at: "carousel", open: 8, until: T0 + 1500 + CLOCK.take } } });
+    expect(await due(id)).toEqual({ stage: "carousel", dueAt: T0 + 1500 + CLOCK.take });
+    // The last regular takes six takes' length after Bob, and the room is laid out a take's length later.
+    clock.now = T0 + 1500 + 7 * CLOCK.take;
+    expect((await look(id, alice)).body).toMatchObject({
+      state: { stage: { at: "plan", until: T0 + 1500 + 7 * CLOCK.take + CLOCK.plan, ready: [] } },
+    });
+  });
+
+  it("locks the boards the moment both members are ready, and not before", async () => {
+    const { id, t } = await standingAt("plan");
+    const deadline = t.stage.at === "plan" ? t.stage.until : 0;
+    clock.now = deadline - 20_000;
+    await act(id, alice, [{ id: "a-r", do: "ready", on: true, room: t.room }]);
+    expect(await due(id)).toEqual({ stage: "plan", dueAt: deadline });
+    clock.now += 500;
+    const both = await act(id, bob, [{ id: "b-r", do: "ready", on: true, room: t.room }]);
+    expect(both.body).toMatchObject({
+      results: [{ id: "b-r", notes: [] }],
+      state: { stage: { at: "fight", done: [] } },
+    });
+    // Locked then: the fights last from that moment as long as the longest of them, and a little more.
+    const { sitting } = await stored(id);
+    const ticks = Math.max(...sitting.seats.map((seat) => foughtOf(seat.run)?.outcome.ticks ?? 0));
+    const until = clock.now + ticks * STEP_MS + CLOCK.after;
+    expect(sitting.stage).toEqual({ at: "fight", until, done: [] });
+    expect(await due(id)).toEqual({ stage: "fight", dueAt: until });
+  });
+
+  it("goes on from the fights the moment both members have watched theirs", async () => {
+    const { id, t } = await standingAt("fight");
+    const deadline = t.stage.at === "fight" ? t.stage.until : 0;
+    clock.now = deadline - 3000;
+    await act(id, bob, [{ id: "b-w", do: "watched", room: t.room }]);
+    expect(await due(id)).toEqual({ stage: "fight", dueAt: deadline });
+    clock.now += 100;
+    const both = await act(id, alice, [{ id: "a-w", do: "watched", room: t.room }]);
+    expect(both.body).toMatchObject({ state: { stage: { at: "plan", until: clock.now + CLOCK.plan, ready: [] } } });
+    expect(await due(id)).toEqual({ stage: "plan", dueAt: clock.now + CLOCK.plan });
+    // Late, after it went on: turned down, and nothing changes.
+    const rev = (await stored(id)).rev;
+    expect((await act(id, bob, [{ id: "b-w2", do: "watched", room: t.room }])).body).toMatchObject({
+      results: [{ id: "b-w2", refused: "no_fight" }],
+    });
+    expect((await stored(id)).rev).toBe(rev);
   });
 });
 

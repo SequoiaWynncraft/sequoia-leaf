@@ -7,12 +7,12 @@ sitting regulars seat 4 | jay, fond of fang: place 7, WWWLWLWLL, resolve 0, leve
 sitting regulars seat 5 | drizzlefrog, fond of slinger: place 6, WWLWLWWWLWLL, resolve 0, level 6 | end 92a26dd19475
 sitting regulars seat 6 | worm, fond of graid: place 2, WWWLWWWWWWWWWWWLLL, resolve 0, level 7 | end 130dea4a4b20
 sitting regulars seat 7 | crab12, fond of crab: place 8, WWWLWLWLL, resolve 0, level 5 | end 5e11a91fa327
-sitting members | 17 rooms, over after 1049s, 2 owed | draws fc9e320ea5dc end 50ce40685689
-sitting members seat 0 | Golden one: place 7, WWLLWLWL, resolve 0, level 5 | end dbc7c7fc486b
-sitting members seat 1 | Golden two: place 3, WWWWWWWWWWWLWLLL, resolve 0, level 7 | end 18de8eb189d7
-sitting members seat 2 | bushgnome, fond of sneak: place 2, WWWLWWWWWWLLWWWWL, resolve 0, level 7 | end 22763a7443ff
-sitting members seat 3 | emberkit, fond of ember: place 4, WWWWWWWLLLWWWLL, resolve 0, level 7 | end 56a7cb694329
-sitting members seat 4 | seqwawa, fond of moss: place 5, WWWLWLWWLWL, resolve 0, level 6 | end 548ab2ef52e7
-sitting members seat 5 | crab12, fond of crab: place 1, WWLWWWWWWWLWWWWWW, resolve 12, level 7 | end c6381d87e925
+sitting members | 17 rooms, over after 1105s, 2 owed | draws 4dad77fbd27c end 4fb2c5271b5e
+sitting members seat 0 | Golden one: place 7, WWLLWLWWL, resolve 0, level 5 | end b9c0fa436f92
+sitting members seat 1 | Golden two: place 1, WWWWWWWWWWLLWWWWW, resolve 6, level 7 | end 8f7ac990db74
+sitting members seat 2 | bushgnome, fond of sneak: place 6, WWWLWWWLWWLL, resolve 0, level 6 | end e1a1730c28c7
+sitting members seat 3 | emberkit, fond of ember: place 5, WWWWWWWLLWLLL, resolve 0, level 6 | end 1baa0ec84e8b
+sitting members seat 4 | seqwawa, fond of moss: place 4, WWWLWLWLWWWWWL, resolve 0, level 6 | end cc0945d55056
+sitting members seat 5 | crab12, fond of crab: place 2, WWLWWWWWWWWWLWWLL, resolve 0, level 7 | end c4ce2b7a748f
 sitting members seat 6 | barrowgnome, fond of bulwark: place 8, WWLLWLWL, resolve 0, level 5 | end 41146af43778
-sitting members seat 7 | lanterngnome, fond of sage: place 6, WWLWWLWLLL, resolve 0, level 5 | end c63cdf6b441c
+sitting members seat 7 | lanterngnome, fond of sage: place 3, WWLWWLWWLWWWWLL, resolve 0, level 6 | end ce23afb5fa33

@@ -9,7 +9,7 @@ import { framesOf } from "@sequoia-leaf/figures/sprites.ts";
  * Everything is measured from the board's corner, in art pixels.
  */
 import { GOLD } from "@sequoia-leaf/kit/palette.ts";
-import { catalogOf, type Note, type RaidNote, type RunView, type Spot, type Stars } from "@sequoia-leaf/raid";
+import { catalogOf, type Note, pieces, type RaidNote, type RunView, type Spot, type Stars } from "@sequoia-leaf/raid";
 import type { FigureId } from "@sequoia-leaf/raid/content/figures.ts";
 import { carries } from "@sequoia-leaf/raid/content/items.ts";
 import type { TraitId } from "@sequoia-leaf/raid/content/traits.ts";
@@ -18,7 +18,7 @@ import { glyphPic, itemPic } from "./art/icons.ts";
 import { TRAIT_COLOUR } from "./art/pal.ts";
 import { burst, fly, later, ring, say } from "./fx.ts";
 import { type Pt, seatAtPoint, seatXY, slotAtPoint, slotXY } from "./geometry.ts";
-import { fadingOf, goneOnLanding, type Life, lifeAfter, type LifeEvent, placeOf } from "./pawnlife.ts";
+import { fadingOf, goneOnLanding, type Life, lifeAfter, type LifeEvent, outOfStep, placeOf } from "./pawnlife.ts";
 import { signal } from "./signals.ts";
 import { snd } from "./sounds.ts";
 import { boardSpot, V } from "./stage.ts";
@@ -106,10 +106,10 @@ export function clearPawns(): void {
  * is. Pawns going (into another, or back to the stall) are left to finish.
  */
 export function syncPawns(run: RunView | null, settle = false): void {
-  const seen = new Set<number>();
+  // A pawn whose piece is gone, or is now another figure, is let go of first: the run is taken whole.
+  for (const id of outOfStep(pawns, run ? pieces(run) : [])) pawns.delete(id);
   const visit = (piece: RunView["board"][number], spot: Spot): void => {
     if (!piece) return;
-    seen.add(piece.id);
     const at = spotXY(spot);
     let p = pawns.get(piece.id);
     if (!p) {
@@ -136,9 +136,6 @@ export function syncPawns(run: RunView | null, settle = false): void {
   if (run) {
     run.board.forEach((piece, at) => visit(piece, { on: "board", at }));
     run.bench.forEach((piece, at) => visit(piece, { on: "bench", at }));
-  }
-  for (const [id, p] of pawns) {
-    if (!seen.has(id) && p.life.is !== "going") pawns.delete(id);
   }
 }
 

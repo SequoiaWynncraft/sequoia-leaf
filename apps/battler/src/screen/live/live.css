@@ -25,7 +25,20 @@ body[data-live] #setout {
 body[data-live] #plan {
   grid-template-areas:
     "rustle stall acorns levelup"
-    "hold stall level levelup";
+    "hold stall level ready";
+}
+/* Ready takes Set out's place, and keeps it outside planning so that nothing moves. */
+#live-ready {
+  display: none;
+}
+body[data-live] #live-ready {
+  display: flex;
+  grid-area: ready;
+  min-width: calc(var(--u) * 62);
+  visibility: hidden;
+}
+body[data-live="plan"] #live-ready {
+  visibility: visible;
 }
 /* The rack sits beside the players' list. */
 body[data-live] #rack {
@@ -75,6 +88,10 @@ body[data-live] #resolve {
   text-align: right;
   font: var(--f-name);
   color: var(--k-gold);
+}
+/* With no seconds to count (a carousel while others choose) it keeps its line, so the stage's name stays put. */
+#live-clock .secs:empty::before {
+  content: "\00a0";
 }
 #live-clock.short .secs {
   color: var(--k-coral, #e67967);
@@ -229,49 +246,54 @@ body[data-live] #resolve {
   height: calc(var(--u) * 5);
 }
 
+/* ---------- the line under the board ---------- */
+
+/* The clock's second line again, between the board and the bench: always on a phone, where the clock is small; elsewhere only while the table waits on the others. */
+body[data-live] #live-say.waiting:not([hidden]) {
+  display: block;
+}
+#live-say {
+  position: fixed;
+  z-index: 5;
+  left: 50%;
+  translate: -50% -50%;
+  max-width: calc(100vw - var(--u) * 8);
+  margin: 0;
+  padding: calc(var(--u) / 2) calc(var(--u) * 3);
+  font: var(--f-small);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* ---------- the carousel ---------- */
 
+/* The figures are drawn on the table; a button over each follows it round (`ring.ts` moves them). */
 #live-ring {
   position: fixed;
+  left: 0;
+  top: 0;
   z-index: 6;
   width: 0;
   height: 0;
 }
 #live-ring .ring-offer {
   position: absolute;
-  left: calc(cos(var(--a)) * var(--rx));
-  top: calc(sin(var(--a)) * var(--ry));
-  translate: -50% -50%;
-  display: grid;
-  place-items: center;
-  width: calc(var(--u) * 32);
-  height: calc(var(--u) * 32);
+  left: 0;
+  top: 0;
   padding: 0;
   border: 0;
   background: none;
-  --fs: 1.5;
-}
-#live-ring button.ring-offer {
   cursor: default;
 }
-#live-ring.mine button.ring-offer {
+#live-ring .ring-offer[hidden] {
+  display: none;
+}
+#live-ring.mine .ring-offer {
   cursor: pointer;
-  animation: bob 1s steps(2) infinite;
 }
-#live-ring.mine button.ring-offer:hover,
-#live-ring.mine button.ring-offer:focus-visible {
-  filter: brightness(1.25);
-}
-#live-ring .ring-offer .holds {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  padding: calc(var(--u) / 2);
-  background: var(--k-ink);
-  box-shadow: 0 0 0 var(--u) var(--k-gold);
-}
-#live-ring .ring-offer.gone {
-  visibility: hidden;
+#live-ring .ring-offer:focus-visible {
+  outline: var(--u) solid var(--k-gold);
 }
 
 /* ---------- the papers: going out, and the end ---------- */
@@ -312,7 +334,10 @@ body[data-live] #resolve {
     grid-template-areas:
       "stall stall stall stall"
       "acorns acorns level hold"
-      "rustle rustle levelup levelup";
+      "rustle levelup ready ready";
+  }
+  body[data-live] #live-ready {
+    min-width: 0;
   }
   body[data-live] #rack {
     right: var(--edge);
@@ -357,19 +382,6 @@ body[data-live] #resolve {
   }
   body[data-live] #live-say:not([hidden]) {
     display: block;
-  }
-  #live-say {
-    position: fixed;
-    z-index: 5;
-    left: 50%;
-    translate: -50% -50%;
-    max-width: calc(100vw - var(--u) * 8);
-    margin: 0;
-    padding: calc(var(--u) / 2) calc(var(--u) * 3);
-    font: var(--f-small);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
   /* The players: a row of small health chips over the board, after the clock. */
   #live-players {
@@ -419,11 +431,6 @@ body[data-live] #resolve {
   /* Who took what is the ring's to show on a phone: a chip has room for its number only. */
   .player .took {
     display: none;
-  }
-  #live-ring .ring-offer {
-    --fs: 1;
-    width: calc(var(--u) * 22);
-    height: calc(var(--u) * 22);
   }
 
   .player .hp {

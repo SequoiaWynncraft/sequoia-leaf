@@ -5,6 +5,7 @@
  * sold back to the stall), and gone once its last hop has landed.
  */
 import type { Spot } from "@sequoia-leaf/raid";
+import type { FigureId } from "@sequoia-leaf/raid/content/figures.ts";
 
 export type Life =
   | { is: "here"; spot: Spot }
@@ -37,3 +38,19 @@ export const placeOf = (life: Life): Spot | null => (life.is === "here" ? life.s
 export const goneOnLanding = (life: Life): boolean => life.is === "going" && life.hopping;
 /** Whether it fades as it hops: one sold back to the stall. */
 export const fadingOf = (life: Life): boolean => life.is === "going" && life.to === "stall";
+
+/**
+ * The pawns that no longer stand for a piece of the run: their piece gone (unless the pawn is going,
+ * finishing its act), or another figure now under the same id (a guess of the page's Leaf did not
+ * take). Each is let go of; the piece, if there is one, gets a pawn of its own, Leaf's whole.
+ */
+export function outOfStep(
+  pawns: Iterable<readonly [number, { readonly kind: FigureId; readonly life: Life }]>,
+  pieces: Iterable<{ readonly id: number; readonly kind: FigureId }>,
+): number[] {
+  const kinds = new Map([...pieces].map((p) => [p.id, p.kind]));
+  return [...pawns].flatMap(([id, p]) => {
+    const kind = kinds.get(id);
+    return (kind === undefined && p.life.is !== "going") || (kind !== undefined && kind !== p.kind) ? [id] : [];
+  });
+}

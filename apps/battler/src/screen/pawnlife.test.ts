@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { fadingOf, goneOnLanding, type Life, lifeAfter, type LifeEvent, placeOf } from "./pawnlife.ts";
+import { fadingOf, goneOnLanding, type Life, lifeAfter, type LifeEvent, outOfStep, placeOf } from "./pawnlife.ts";
 
 const after = (life: Life, ...events: LifeEvent[]): Life => events.reduce(lifeAfter, life);
 const seat = { on: "board", at: 3 } as const;
@@ -37,5 +37,24 @@ describe("a pawn's life", () => {
     const going = after({ is: "here", spot: seat }, { e: "spoken", to: "merge" }, { e: "last hop" });
     expect(after(going, { e: "placed", spot: seat })).toEqual({ is: "here", spot: seat });
     expect(after(going, { e: "spoken", to: "stall" })).toBe(going);
+  });
+});
+
+describe("pawns against Leaf's run", () => {
+  test("a pawn whose piece is now another figure under the same id is let go of, and the piece drawn as itself", () => {
+    const here: Life = { is: "here", spot: seat };
+    const going: Life = { is: "going", to: "merge", hopping: false };
+    const pawns: [number, { kind: "emberkit" | "mossmote" | "moth"; life: Life }][] = [
+      [1, { kind: "emberkit", life: here }],
+      [2, { kind: "moth", life: here }],
+      [3, { kind: "moth", life: here }],
+      [4, { kind: "moth", life: going }],
+    ];
+    // The page guessed Emberkit for piece 1; Leaf gave Mossmote. Piece 3 is gone; 4 is finishing its act.
+    const pieces = [
+      { id: 1, kind: "mossmote" as const },
+      { id: 2, kind: "moth" as const },
+    ];
+    expect(outOfStep(pawns, pieces)).toEqual([1, 3]);
   });
 });

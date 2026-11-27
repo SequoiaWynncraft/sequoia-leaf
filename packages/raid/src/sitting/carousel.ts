@@ -1,10 +1,12 @@
 /**
  * The carousel: nine figures in a ring, each holding a component, and everyone still in takes one.
- * The first, before room 1, is open to everyone at once, and its figure is who a seat sets out
- * with, in place of the run's own first pick; the regulars wait for the members, and take theirs
- * when it ends. The later ones let seats in two at a time, lowest resolve first, and a regular takes
- * one by the dice as its turn opens. Whoever has taken none when it ends gets one of what is left,
- * by the dice.
+ * Seats are let in a group at a time: in the first, before room 1, the members all at once and then
+ * the regulars, and its figure is who a seat sets out with, in place of the run's own first pick; in
+ * the later ones two at a time, lowest resolve first. A regular takes one by the dice a moment after
+ * its turn opens (`CLOCK.take`, and as long again after the regular before it), so each take is seen
+ * on its own. A group's turn ends as soon as everyone in it has taken, or when its time is up, and
+ * then whoever in it has taken none gets one of what is left by the dice; the next is let in at that
+ * moment, and the carousel ends a take's length after the last group's turn, its last take seen.
  */
 import { pick, shuffled } from "@sequoia-leaf/core";
 
@@ -12,10 +14,19 @@ import { available, catalogOf } from "../content/catalog.ts";
 import type { FigureId, Tier } from "../content/figures.ts";
 import type { ComponentId } from "../content/items.ts";
 import { COLS } from "../hex.ts";
-import { fielded, merge, newPiece, type Note, pieces, type Run, sellValue } from "../run.ts";
-import { CLOCK, later, type Offer, ringItems, type Sitting, type Stage } from "./sitting.ts";
+import { fielded, merge, newPiece, type Note, pieces, type RunView, sellValue } from "../run.ts";
+import {
+  CLOCK,
+  later,
+  type Offer,
+  ringItems,
+  type Sitting,
+  type SittingWhy,
+  type Stage,
+  waitingOn,
+} from "./sitting.ts";
 
-type Carousel = Extract<Stage, { at: "carousel" }>;
+export type Carousel = Extract<Stage, { at: "carousel" }>;
 
 /**
  * A figure joins a run, holding a component: on the bench, or in the middle of the front row when
@@ -24,7 +35,7 @@ type Carousel = Extract<Stage, { at: "carousel" }>;
  * acorns and its component put on the item bench. The first pick of a run (who sets out) is settled
  * by it.
  */
-export function join(run: Run, kind: FigureId, item: ComponentId): Note[] {
+export function join(run: RunView, kind: FigureId, item: ComponentId): Note[] {
   if (run.stage.phase === "plan" && run.stage.picks[0]?.kind === "starter") run.stage.picks.shift();
   const twins = pieces(run).filter((p) => p.kind === kind && p.stars === 1).length;
   const slot = run.bench.indexOf(null);
@@ -48,6 +59,16 @@ const left = (ring: readonly Offer[]): number[] => ring.flatMap((offer, i) => (o
 /** Whether a seat has taken its figure. */
 export const hasTaken = (stage: Carousel, seat: number): boolean => stage.ring.some((offer) => offer.by === seat);
 
+/** Why a seat may not take an offer of the ring now, or null if it may. Leaf and the page's prediction both ask this. */
+export function cannotTake(stage: Carousel, seat: number, offer: number): SittingWhy | null {
+  const turn = stage.turns.indexOf(seat);
+  if (turn < 0 || turn >= stage.open) return "not_your_turn";
+  if (hasTaken(stage, seat)) return "picked";
+  const wanted = stage.ring[offer];
+  if (!wanted) return "not_in_ring";
+  return wanted.by === null ? null : "taken";
+}
+
 /** A seat takes an offer of the ring: it is theirs, and joins their run. */
 export function take(t: Sitting, stage: Carousel, seat: number, at: number): Note[] {
   const offer = stage.ring[at];
@@ -63,26 +84,44 @@ function takeAny(t: Sitting, stage: Carousel, seat: number): void {
   if (free.length > 0) take(t, stage, seat, pick(t, free));
 }
 
+const isRegular = (t: Sitting, seat: number): boolean => t.seats[seat]?.who.is === "regular";
+/** The regulars let in and still in that have not taken, in the order of the turns: the first takes at the stage's next moment. */
+const regularsDue = (t: Sitting): number[] => waitingOn(t).filter((seat) => isRegular(t, seat));
+
+/** Where the group let in from turn `from` ends: in the first carousel the members, then everyone; in a later one, two. */
+function groupFrom(t: Sitting, stage: Carousel, from: number): number {
+  if (t.room !== 0) return Math.min(stage.turns.length, from + 2);
+  const regular = stage.turns.findIndex((seat) => isRegular(t, seat));
+  return from === 0 && regular > 0 ? regular : stage.turns.length;
+}
+
 /**
- * Lets the next `count` seats in: each may take from then on, and a regular among them takes at
- * once, but when everyone is let in together (`together`: then the regulars take when it ends). The
- * stage then waits for the next pair, or `last` for the end when everyone has been let in.
+ * Lets the next group in at a moment: each may take from then on, its time is up after its wait
+ * (and never before each regular in it has had its moment), and the stage's next moment is its
+ * first regular's take, or the end of its time; with nobody in it still in, that moment.
  */
-export function letIn(t: Sitting, stage: Carousel, count: number, last: number, together = false): void {
+function letIn(t: Sitting, stage: Carousel, at: number): void {
   const from = stage.open;
-  stage.open = Math.min(stage.turns.length, from + count);
-  for (const seat of stage.turns.slice(from, stage.open)) {
-    if (!together && t.seats[seat]?.who.is === "regular") takeAny(t, stage, seat);
-  }
-  stage.until = later(t, stage.until, stage.open < stage.turns.length ? CLOCK.pair : last);
+  const to = groupFrom(t, stage, from);
+  const regulars = stage.turns.slice(from, to).filter((seat) => isRegular(t, seat)).length;
+  const most = from === 0 && t.room === 0 ? CLOCK.together : to >= stage.turns.length ? CLOCK.last : CLOCK.pair;
+  stage.open = to;
+  stage.ends = later(t, at, Math.max(most, (regulars + 1) * CLOCK.take));
+  waitFrom(t, stage, at);
+  // Nobody let in still to take (all of them gone out since it was laid out): the turn is over at once.
+  if (waitingOn(t).length === 0) stage.until = at;
+}
+/** The stage's next moment from `at`: the next regular's take, or the end of the group's time, never past it. */
+function waitFrom(t: Sitting, stage: Carousel, at: number): void {
+  stage.until = Math.min(stage.ends, regularsDue(t).length > 0 ? later(t, at, CLOCK.take) : stage.ends);
 }
 
 /**
  * Lays a carousel out at a moment: the ring's figures by their costs, no figure twice while a cost
  * has others, each with a component dealt from two of each; and the turns, lowest resolve first,
- * the lower seat first among equals. `together` opens it to everyone at once; else to the first pair.
+ * the lower seat first among equals. Then the first group is let in.
  */
-export function layCarousel(t: Sitting, at: number, costs: readonly Tier[], together: boolean): void {
+export function layCarousel(t: Sitting, at: number, costs: readonly Tier[]): void {
   const items = shuffled(t, ringItems(catalogOf(t)));
   const piles = new Map<Tier, FigureId[]>();
   const ring = costs.flatMap((tier, i): Offer[] => {
@@ -97,19 +136,37 @@ export function layCarousel(t: Sitting, at: number, costs: readonly Tier[], toge
   const turns = t.seats
     .flatMap((seat, i) => (seat.place === null ? [i] : []))
     .toSorted((a, b) => resolve(a) - resolve(b) || a - b);
-  const stage: Carousel = { at: "carousel", until: at, ring, turns, open: 0 };
+  const stage: Carousel = { at: "carousel", until: at, ring, turns, open: 0, ends: at };
   t.stage = stage;
-  letIn(t, stage, together ? turns.length : 2, together ? CLOCK.together : CLOCK.last, together);
+  letIn(t, stage, at);
 }
 
-/** A carousel's deadline: the next pair is let in, or, with everyone in, it ends. Says whether it ended. */
+/**
+ * A carousel's next moment: the first regular due takes; then, with everyone let in taken or the
+ * group's time up, whoever has taken none gets one of what is left by the dice, and the next group is
+ * let in, or with none left it ends a take's length later, so that the last take is seen. Else it
+ * waits for the next regular, or the end of the group's time. Says whether it ended.
+ */
 export function turnCarousel(t: Sitting, stage: Carousel): boolean {
-  if (stage.open < stage.turns.length) {
-    letIn(t, stage, 2, CLOCK.last);
+  const at = stage.until;
+  const taken = stage.ring.filter((offer) => offer.by !== null).length;
+  const [regular] = regularsDue(t);
+  if (regular !== undefined) takeAny(t, stage, regular);
+  if (waitingOn(t).length > 0 && at < stage.ends) {
+    waitFrom(t, stage, at);
     return false;
   }
-  for (const seat of stage.turns) {
-    if (t.seats[seat]?.place === null && !hasTaken(stage, seat)) takeAny(t, stage, seat);
+  // The turn is over: whoever let in has taken none gets one of what is left.
+  for (const seat of waitingOn(t)) takeAny(t, stage, seat);
+  if (stage.open < stage.turns.length) {
+    letIn(t, stage, at);
+    return false;
   }
-  return true;
+  // Everyone has taken. The last take is seen before the room is laid out: the carousel ends a take's
+  // length after it (a member's take that ended it early, or one taken now).
+  const tookNow = stage.ring.filter((offer) => offer.by !== null).length > taken;
+  if (!tookNow && at >= stage.ends) return true;
+  stage.ends = later(t, at, CLOCK.take);
+  stage.until = stage.ends;
+  return false;
 }
