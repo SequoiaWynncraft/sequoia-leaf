@@ -10,6 +10,22 @@ export { blueprintCode, cleanCode, CODE_MOST, CODE_PREFIX, codePieces, codeRefus
 export * from "./clock.ts";
 export { type Act, type ActOf, COMMANDS, LOCKED, REFUSED, type Turned, type Wired, writeAct } from "./commands.ts";
 export { readLeg, readPiece } from "./fields.ts";
+export {
+  blocked,
+  FOOT,
+  freed,
+  kept,
+  type Place,
+  RUN,
+  type Solid,
+  SQUARE,
+  standOn,
+  SUB,
+  TILE_PX,
+  unsound,
+  WALK,
+  yardSolid,
+} from "./footing.ts";
 export * from "./content/asks.ts";
 export * from "./content/items.ts";
 export * from "./content/machines.ts";
