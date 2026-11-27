@@ -20,6 +20,9 @@ import { generate } from "@sequoia-leaf/factory/test/gen.ts";
 import { SEVEN } from "@sequoia-leaf/factory/test/ring.ts";
 import { fromLeaf } from "@sequoia-leaf/kit/purse.ts";
 
+import { makeGround } from "../src/art/ground.ts";
+import { holdView } from "../src/camera.ts";
+import { comeIn } from "../src/figure/you.ts";
 import { S } from "../src/state.ts";
 import { installHandles } from "./handles.ts";
 
@@ -28,10 +31,12 @@ const land = params.get("land") === "7" ? SEVEN : LAND;
 const own = Number(params.get("own") ?? land.plots.length);
 const start = create({ land, tier: 5, seed: 1758855484 });
 start.plots.splice(0, start.plots.length, ...land.plots.slice(0, own).map((p) => p.plot));
-for (const p of land.plots) start.open.plots[p.plot] = 1;
 start.till = 1_000_000_000 * MILLI;
 const made = generate(land, Number(params.get("pieces") ?? 1000), 1, () => undefined, start);
 for (let k = 0; k < 3000; k++) step(made.y);
+// Every plot open, the tests' rings too (the rules' table has room for today's plots alone), after
+// the goals the generator did opened what they open.
+made.y.open = { ...made.y.open, plots: new Uint8Array(land.plots.length).fill(1) };
 S.world = made.y;
 S.alone = true;
 fromLeaf({ coins: 1_000_000_000, leaf: 0, version: 0 });
@@ -50,7 +55,9 @@ const { page } = await import("../src/main.ts");
 const opened = await page;
 if (opened) {
   installHandles(opened);
-  opened.comeIn("Tamsin");
+  // You stand at the depot's door, as in your own yard, and the view goes with you.
+  comeIn("Tamsin", makeGround(S.world.land));
+  holdView(true);
   opened.draw(performance.now());
   hold.opened = performance.now() - began;
 }

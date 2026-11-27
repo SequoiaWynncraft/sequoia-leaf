@@ -68,13 +68,15 @@ export function dot(colour: string, size: number): HTMLCanvasElement {
 /** The colour of the floor at a point, red, green and blue; nothing where there is no floor. */
 export type Floor = (x: number, y: number) => readonly [number, number, number] | null;
 
-/** The yard's floor as its kept picture has it (`art/ground.ts`): the picture a figure walks on. */
+/** The yard's floor as the yard keeps it (`art/ground.ts`), painted a pixel at a time where a foot falls: the picture a figure walks on. */
 export function floorOf(ground: Ground): Floor {
+  const { g } = makeCanvas(1, 1);
   return (x, y) => {
-    const [px, py] = [Math.floor(x - ground.x), Math.floor(y - ground.y)];
-    if (px < 0 || py < 0 || px >= ground.w || py >= ground.h) return null;
-    const d = ground.owned.getContext("2d")?.getImageData(px, py, 1, 1).data;
-    return d ? [d[0] ?? 0, d[1] ?? 0, d[2] ?? 0] : null;
+    const [px, py] = [Math.floor(x), Math.floor(y)];
+    if (px < ground.x || py < ground.y || px >= ground.x + ground.w || py >= ground.y + ground.h) return null;
+    ground.paint(g, { x: px, y: py, w: 1, h: 1 }, () => true);
+    const d = g.getImageData(0, 0, 1, 1).data;
+    return [d[0] ?? 0, d[1] ?? 0, d[2] ?? 0];
   };
 }
 

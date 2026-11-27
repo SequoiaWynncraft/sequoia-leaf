@@ -24,7 +24,7 @@ import { hash, makeCanvas, must, vnoise } from "@sequoia-leaf/kit/util.ts";
 import { pageOf } from "../kinds/index.ts";
 import type { Parts } from "../kinds/kind.ts";
 import { arms, TILE } from "./belts.ts";
-import { type Ground, paintGround } from "./ground.ts";
+import { type Ground, makeGround } from "./ground.ts";
 import { type ItemArt, makeItems, makePlain } from "./items.ts";
 import { type Machines, makeMachines } from "./machines.ts";
 import { headsOn, meeting } from "./meeting.ts";
@@ -226,7 +226,7 @@ export function makeArt(land: Land): Art {
   const item = makeItems();
   const sorter = sorterTops(makePlain());
   return {
-    ground: paintGround(land),
+    ground: makeGround(land),
     item,
     m,
     trunks: redwoods(land),
