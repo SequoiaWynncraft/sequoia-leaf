@@ -26,7 +26,7 @@ import { roomIcon } from "../art/icons.ts";
 import { acrossName } from "../logic.ts";
 import { S } from "../state.ts";
 import { pic } from "./cards.ts";
-import { ruleLine } from "./wilds.ts";
+import { ruleRow } from "./rulecards.ts";
 
 /** The rooms the track shows, counting from 0: the fifteen the run is among (for an endless run past the fifteenth, those it has come round to). */
 export function roomsShown(run: Pick<RunView, "room">): number[] {
@@ -144,13 +144,13 @@ function roomDesc(index: number, run: RunView): Description | null {
     run.endless && index >= ROOM_COUNT && room.kind !== "spar"
       ? `+${Math.round(room.might - 100)}% health and attack.`
       : null,
-    // The Wilds' rule for the wing the room is in, while it holds.
-    ruleLine(run, index),
   ];
+  // The Wilds' rules for the wing the room is in, while they hold: each a line of its own, with its picture.
+  const rules = room.named.map((rule) => ({ body: ruleRow(rule) }));
   return {
     name: `Room ${index + 1}`,
     icon: roomIcon(room.kind),
     tag: `${kind}, wing ${spec.wing}.`,
-    blocks: [{ body: lines.filter((l) => l !== null).join(" ") }],
+    blocks: [{ body: lines.filter((l) => l !== null).join(" ") }, ...rules],
   };
 }

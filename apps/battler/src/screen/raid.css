@@ -1285,6 +1285,16 @@ b.dmg.true {
 body[data-rule] #says {
   margin-bottom: calc(var(--rule-band, 0px) + var(--u) * 5);
 }
+/* A rule as a line with its picture before it: on the room's card, the fight's line, and the card that picks a run back up. */
+.rule-said {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 3);
+  text-align: left;
+}
+.rule-said > canvas {
+  flex: none;
+}
 /* Beside the two rules, the boss their rooms end with: a third place in the row, not a card to pick. */
 #picks .ahead {
   flex-direction: column;

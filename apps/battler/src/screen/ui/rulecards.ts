@@ -1,25 +1,32 @@
 import { portrait } from "@sequoia-leaf/figures/sprites.ts";
 /**
  * The Wilds' rules on the table (`wilds.ts` has the words): a rule's card on the pick and the boss
- * beside the two cards, the rule's line in a fight played under it, and the line said when figures
- * move off hexes that closed. The two lines never share a place: the moved-off line is planning's,
- * among the table's toasts, and gone once a fight starts; the rule's line is the fight's, on a line
- * of its own just above the stall, and while it is up the toasts stand above it.
+ * beside the two cards, a rule as a line with its picture (`ruleIcon`) wherever else it is shown, the
+ * rules' line in a fight played under them, and the line said when figures move off hexes that
+ * closed. The two lines never share a place: the moved-off line is planning's, among the table's
+ * toasts, and gone once a fight starts; the rules' line is the fight's, on a line of its own just
+ * above the stall, and while it is up the toasts stand above it.
  */
 import { el } from "@sequoia-leaf/kit/dom.ts";
 import { type Release, scope } from "@sequoia-leaf/kit/scope.ts";
 import { type RaidNote, ROOM_RULES, type RuleId } from "@sequoia-leaf/raid";
 
+import { ruleIcon } from "../art/icons.ts";
 import { ruleShown } from "../closed.ts";
 import { onChange, S } from "../state.ts";
 import { pic } from "./cards.ts";
 import { bossOfWing, ruleSaid, shiftedLine } from "./wilds.ts";
 
-/** A rule's card on the pick: its name and its sentence. */
+/** A rule's card on the pick: its picture, its name and its sentence. */
 export const ruleCard = (rule: RuleId): HTMLElement[] => [
+  el("span", "art", {}, pic(ruleIcon(rule), 3)),
   el("b", "k-gold", { text: ROOM_RULES[rule].name }),
   el("p", "k-d", { text: ROOM_RULES[rule].text }),
 ];
+
+/** A rule as one line with its picture before it: on the room's card, the fight's line and the card that picks a run back up. */
+export const ruleRow = (rule: RuleId, cls = ""): HTMLElement =>
+  el("div", `rule-said ${cls}`.trim(), {}, pic(ruleIcon(rule)), el("span", "", { text: ruleSaid(rule) }));
 
 /** Beside the cards, the boss the wing ends with, so both can be judged against it. */
 export function bossAhead(room: number): HTMLElement {
@@ -49,7 +56,12 @@ export function ruleSign(): HTMLElement {
   onChange(() => {
     const shown = S.run && S.screen.at === "fight" ? ruleShown(S.run) : null;
     sign.hidden = shown === null;
-    if (shown) sign.textContent = shown.named.map(ruleSaid).join(" ");
+    // Drawn again only for other rules: the line holds still while the fight goes on.
+    const named = shown?.named.join() ?? "";
+    if (shown && sign.dataset.named !== named) {
+      sign.dataset.named = named;
+      sign.replaceChildren(...shown.named.map((rule) => ruleRow(rule)));
+    }
     placeRule();
     showShifted();
   });
