@@ -344,6 +344,7 @@ export const PAGE_BIG = `import * as F from "./packages/factory/src/index.ts";
 import { bareLand } from "./packages/factory/test/land.ts";
 import { aimBox, drawnFrom, pieceBox } from "./apps/works/src/big.ts";
 import { asIf } from "./apps/works/src/layout.ts";
+import { pickFrom, turnAt } from "./apps/works/src/tools.ts";
 import { footprint } from "./apps/works/src/figure/reach.ts";
 import { PAGES } from "./apps/works/src/kinds/index.ts";
 import { lampsIn } from "./apps/works/src/lamps.ts";
@@ -371,9 +372,16 @@ F.build(built, FORGE, 10, 5, 1, Infinity);
 const laid = (v) => { const out = []; for (let z = 4; z <= 6; z++) for (let x = 9; x <= 11; x++) out.push([v.kind[F.at(v, x, z)], v.part[F.at(v, x, z)]]); return JSON.stringify(out); };
 const previewOnce = [...preview.kind.keys()].filter((t) => preview.kind[t] === FORGE && drawnFrom(preview, t)).length;
 const boxes = [aimBox(y, FORGE, 1, 10, 5), aimBox(y, "remove", 0, 21, 11)].map((b) => JSON.stringify(b));
+// Q over a corner of a forge facing south takes it up facing south, at its grade; R over another turns
+// it on to the west. (The page's own yard, as a review page's: what it does is done to it.)
+S.alone = true;
+F.build(y, FORGE, 10, 15, 1, Infinity);
+const picked = pickFrom(11, 16) && S.dir === 1 && S.grades[FORGE] === 1;
+const turnedOn = turnAt(9, 14) && y.dir[F.at(y, 10, 15)] === 2;
 console.log(
   JSON.stringify({
     preview: laid(preview) === laid(built) && previewOnce === 2,
+    pointerPiece: picked && turnedOn,
     aimBoxes: boxes[0] === JSON.stringify({ x: 9, y: 4, w: 3, h: 3 }) && boxes[1] === JSON.stringify({ x: 19, y: 9, w: 3, h: 3 }),
     docked: DRAWN.includes(FORGE) && DRAWN.includes(SIFTER),
     card: tiles.every((t) => refAt(t % 34, Math.floor(t / 34)) === tileRef(own)),
@@ -387,9 +395,19 @@ console.log(
 );
 `;
 export const PAGED_BIG = Object.fromEntries(
-  ["preview", "aimBoxes", "docked", "card", "drawnOnce", "box", "reachBuild", "reachRemove", "colour", "lamp"].map(
-    (k) => [k, true],
-  ),
+  [
+    "preview",
+    "aimBoxes",
+    "pointerPiece",
+    "docked",
+    "card",
+    "drawnOnce",
+    "box",
+    "reachBuild",
+    "reachRemove",
+    "colour",
+    "lamp",
+  ].map((k) => [k, true]),
 );
 
 /** Every part `PLAY_BIG` prints, each to hold. */
