@@ -89,6 +89,7 @@ export {
   FACING,
   type Facing,
   isBig,
+  layOver,
   OWN,
   type Out,
   outsOf,

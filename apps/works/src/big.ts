@@ -31,6 +31,10 @@ export function pieceBox(y: Yard, i: number): Box {
   return boxAt(y.kind[own] ?? 0, y.dir[own] ?? 0, own % W, Math.floor(own / W));
 }
 
+/** The box a tool's aim marks on (tx, ty), at any zoom: the spade, the whole piece there; a kind in hand facing `d`, every tile it would cover. */
+export const aimBox = (y: Yard, tool: number | "remove", d: number, tx: number, ty: number): Box =>
+  tool === "remove" ? pieceBox(y, ty * y.land.w + tx) : boxAt(tool, d, tx, ty);
+
 /** Whether a piece is drawn from a tile: its own tile, for one of more than one; every tile of one of one. */
 export const drawnFrom = (y: Yard, i: number): boolean => y.part[i] === 0 || y.part[i] === OWN;
 

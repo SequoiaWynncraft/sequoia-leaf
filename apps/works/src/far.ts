@@ -26,6 +26,7 @@ import { CORAL, CREAM, GOLD, INK } from "@sequoia-leaf/kit/palette.ts";
 import type { Ctx } from "@sequoia-leaf/kit/util.ts";
 
 import { PAINTS, TILE } from "./art/belts.ts";
+import { aimBox } from "./big.ts";
 import { you } from "./figure/you.ts";
 import { heldBox, takenUp } from "./held.ts";
 import type { Layout } from "./layout.ts";
@@ -218,15 +219,19 @@ export function drawPlanMarks(g: Ctx, y: Yard, dx: number, dy: number): void {
     const x = dx + on.x * P;
     const top = dy + on.y * P;
     const bad = S.aim.why !== null;
-    if (tool === "remove") box(g, x, top, P, P, CORAL, true);
-    else if (tool === "paint") {
+    if (tool === "remove") {
+      // The whole piece the spade would take up, whichever of its tiles is aimed at.
+      const b = aimBox(y, "remove", 0, on.x, on.y);
+      box(g, dx + b.x * P, dy + b.y * P, b.w * P, b.h * P, CORAL, true);
+    } else if (tool === "paint") {
       if (!bad) box(g, x, top, P, P, PAINTS[S.tint - 1]?.lit ?? CREAM, true);
     } else if (tool === "select") {
       if (S.group) handMarks(g, y, S.group, dx, dy, P);
     } else if (!S.run) {
-      // One piece about to be built: its block, and for a tunnel the mouth it would come up at.
+      // One piece about to be built: its block over every tile it would cover, and for a tunnel the mouth it would come up at.
       g.fillStyle = bad ? CORAL : blockColour(tool);
-      g.fillRect(x, top, P, P);
+      const b = aimBox(y, tool, S.dir, on.x, on.y);
+      g.fillRect(dx + b.x * P, dy + b.y * P, b.w * P, b.h * P);
       const far = S.aim.far ?? -1;
       if (far >= 0) g.fillRect(X(far), Y(far), P, P);
       if (REACHES[tool] === 1) {

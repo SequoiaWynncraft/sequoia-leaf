@@ -342,7 +342,8 @@ console.log(JSON.stringify(out));
  */
 export const PAGE_BIG = `import * as F from "./packages/factory/src/index.ts";
 import { bareLand } from "./packages/factory/test/land.ts";
-import { drawnFrom, pieceBox } from "./apps/works/src/big.ts";
+import { aimBox, drawnFrom, pieceBox } from "./apps/works/src/big.ts";
+import { asIf } from "./apps/works/src/layout.ts";
 import { footprint } from "./apps/works/src/figure/reach.ts";
 import { PAGES } from "./apps/works/src/kinds/index.ts";
 import { lampsIn } from "./apps/works/src/lamps.ts";
@@ -361,8 +362,19 @@ const tiles = [];
 for (let z = 9; z <= 11; z++) for (let x = 19; x <= 21; x++) tiles.push(F.at(y, x, z));
 const nine = (list) => list.length === 9 && tiles.every((t) => list.includes(t));
 const lamps = lampsIn(y, { x: 0, y: 0 }, { x: 0, y: 0, w: 34 * 16, h: 20 * 16 }, 1, () => true, () => false).filter((l) => l.r === 9);
+// A forge in hand, turned south, aimed at (10, 5): the preview lays it as building it lays it, each of its
+// tiles its kind and part, and draws it once; the aim marks its whole box, and the spade's the whole forge.
+const hand = { kind: FORGE, x: 10, y: 5, dir: 1, span: 0 };
+const preview = asIf(y, { as: "copy", tiles: [], at: [hand] });
+const built = F.create({ land: bareLand(34, 20, [], [26, 10]), tier: 4, seed: 1 });
+F.build(built, FORGE, 10, 5, 1, Infinity);
+const laid = (v) => { const out = []; for (let z = 4; z <= 6; z++) for (let x = 9; x <= 11; x++) out.push([v.kind[F.at(v, x, z)], v.part[F.at(v, x, z)]]); return JSON.stringify(out); };
+const previewOnce = [...preview.kind.keys()].filter((t) => preview.kind[t] === FORGE && drawnFrom(preview, t)).length;
+const boxes = [aimBox(y, FORGE, 1, 10, 5), aimBox(y, "remove", 0, 21, 11)].map((b) => JSON.stringify(b));
 console.log(
   JSON.stringify({
+    preview: laid(preview) === laid(built) && previewOnce === 2,
+    aimBoxes: boxes[0] === JSON.stringify({ x: 9, y: 4, w: 3, h: 3 }) && boxes[1] === JSON.stringify({ x: 19, y: 9, w: 3, h: 3 }),
     docked: DRAWN.includes(FORGE) && DRAWN.includes(SIFTER),
     card: tiles.every((t) => refAt(t % 34, Math.floor(t / 34)) === tileRef(own)),
     drawnOnce: tiles.filter((t) => drawnFrom(y, t)).length === 1 && drawnFrom(y, own),
@@ -375,7 +387,9 @@ console.log(
 );
 `;
 export const PAGED_BIG = Object.fromEntries(
-  ["docked", "card", "drawnOnce", "box", "reachBuild", "reachRemove", "colour", "lamp"].map((k) => [k, true]),
+  ["preview", "aimBoxes", "docked", "card", "drawnOnce", "box", "reachBuild", "reachRemove", "colour", "lamp"].map(
+    (k) => [k, true],
+  ),
 );
 
 /** Every part `PLAY_BIG` prints, each to hold. */

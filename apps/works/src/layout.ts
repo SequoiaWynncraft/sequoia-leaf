@@ -10,6 +10,7 @@
 import {
   FIXED,
   gradeOf,
+  layOver,
   litOf,
   nextOf,
   NONE,
@@ -19,6 +20,7 @@ import {
   REACH,
   REACHES,
   redwoodAt,
+  SPANS,
   squared,
   tilesOf,
   wayOut,
@@ -259,6 +261,7 @@ let own: {
   grade: Uint8Array;
   set: Uint8Array;
   row: Int32Array;
+  part: Uint8Array;
 } | null = null;
 
 /**
@@ -266,9 +269,10 @@ let own: {
  * from where they stand (for a plan of the whole yard, the pieces it takes up gone): for drawing them as they would stand, belts joined to each other and
  * to the lines already there. It shares everything with the real yard but the arrays a drawing
  * changes (what stands where, which way, a tunnel's span, a splitter's ways, a colour, a grade,
- * what a sorter is set to, and the rows, none for a piece in hand), which are its own, kept and
- * reused. Nothing is written to the real yard. It is made once for each place the pieces are aimed,
- * not each frame.
+ * what a sorter is set to, the rows, none for a piece in hand, and which piece of more than one tile
+ * a tile is part of), which are its own, kept and reused. A piece of more than one tile is laid over
+ * its tiles by the rules' own step (`layOver`), as the command will lay it. Nothing is written to the
+ * real yard. It is made once for each place the pieces are aimed, not each frame.
  */
 export function asIf(y: Yard, grp: Pick<Group, "as" | "tiles" | "at">): Yard {
   const n = y.kind.length;
@@ -284,6 +288,7 @@ export function asIf(y: Yard, grp: Pick<Group, "as" | "tiles" | "at">): Yard {
       grade: new Uint8Array(n),
       set: new Uint8Array(n),
       row: new Int32Array(n),
+      part: new Uint8Array(n),
     };
   const o = own;
   o.kind.set(y.kind);
@@ -296,6 +301,7 @@ export function asIf(y: Yard, grp: Pick<Group, "as" | "tiles" | "at">): Yard {
   o.grade.set(y.grade);
   o.set.set(y.set);
   o.row.set(y.row);
+  o.part.set(y.part);
   const empty = (i: number): void => {
     o.kind[i] = NONE;
     o.dir[i] = 0;
@@ -307,17 +313,22 @@ export function asIf(y: Yard, grp: Pick<Group, "as" | "tiles" | "at">): Yard {
     o.grade[i] = 0;
     o.set[i] = NONE;
     o.row[i] = -1;
+    o.part[i] = 0;
   };
   // A copy's tiles are what it copies, and stay; a blueprint's are none, but a plan of the whole yard's, which it takes up.
   if (grp.as !== "copy") for (const i of tilesOf(y, piecesAt(y, grp.tiles))) if (i >= 0) empty(i);
   for (const p of grp.at) {
-    const [near = -1, far = -1] = tilesOf(y, [p]);
-    for (const [i, span] of [
-      [near, p.span],
-      [far, -p.span],
-    ] as const) {
+    const tiles = tilesOf(y, [p]);
+    // Its own tile holds it; a tunnel's far mouth holds itself too, and the rest of a piece of more than one tile is laid over below.
+    for (const i of tiles) if (i >= 0) empty(i);
+    const [near = -1, far = -1] = tiles;
+    for (const [i, span] of SPANS[p.kind] === 1
+      ? ([
+          [near, p.span],
+          [far, -p.span],
+        ] as const)
+      : ([[near, 0]] as const)) {
       if (i < 0) continue;
-      empty(i);
       o.kind[i] = p.kind;
       o.dir[i] = p.dir;
       o.span[i] = span;
@@ -328,6 +339,7 @@ export function asIf(y: Yard, grp: Pick<Group, "as" | "tiles" | "at">): Yard {
       o.grade[i] = gradeOf(p.kind, p.grade);
       o.set[i] = p.recipe ?? NONE;
     }
+    if (near >= 0 && tiles.every((i) => i >= 0)) layOver(o.kind, o.part, y.land.w, near, p.kind, p.dir);
   }
   // Where power reaches is the real yard's, worked out by the rules first; nothing works it out again here.
   return { ...y, ...o, lit: litOf(y), powered: true, wire: null };

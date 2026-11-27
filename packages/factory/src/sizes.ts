@@ -173,3 +173,21 @@ export function piecesTiles(y: Pick<Yard, "kind" | "dir" | "land" | "part">, t: 
   const f = facingAt(y, i);
   return Array.from(f?.dx ?? [], (dx, n) => i + dx + (f?.dy[n] ?? 0) * y.land.w);
 }
+
+/**
+ * Lays a piece of a kind facing `d` on its own tile `i` over its tiles, on a land `w` tiles across:
+ * each tile it covers takes its kind and where its own tile is (`part`), its own tile `OWN`. The one
+ * way the tiles of a piece of more than one are laid (`yard.ts`'s `cover`, and the page's pieces in
+ * hand), so that what is shown laid is what a command lays. Its tiles are on the land and clear.
+ */
+export function layOver(kind: Uint8Array, part: Uint8Array, w: number, i: number, k: number, d: number): void {
+  const f = FACING[k]?.[d & 3];
+  if (!f || f.dx.length < 2) return;
+  part[i] = OWN;
+  for (let t = 1; t < f.dx.length; t++) {
+    const dx = f.dx[t] ?? 0;
+    const dy = f.dy[t] ?? 0;
+    kind[i + dx + dy * w] = k;
+    part[i + dx + dy * w] = partOf(-dx, -dy);
+  }
+}

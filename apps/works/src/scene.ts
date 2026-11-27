@@ -51,7 +51,7 @@ import { BEYOND, glint, type Ground } from "./art/ground.ts";
 import type { Art } from "./art/index.ts";
 import { DEPOT as DEPOT_ART, lookOf } from "./art/machines.ts";
 import type { Sprite } from "./art/pal.ts";
-import { boxAt, boxIn, drawnFrom, heldIn, pieceBox, pointersOn } from "./big.ts";
+import { aimBox, boxIn, drawnFrom, heldIn, pointersOn } from "./big.ts";
 import { drawPlan, drawPlanMarks } from "./far.ts";
 import { bits, floaters, rings } from "./fx.ts";
 import { heldBox, heldMarks } from "./held.ts";
@@ -1381,7 +1381,7 @@ function marksLayer(f: Frame): void {
     const x = on.x * TILE - cx;
     const y = on.y * TILE - cy;
     const bad = S.aim.why !== null;
-    if (tool === "remove") boxCorners(g, pieceBox(w, on.y * land.w + on.x), cx, cy, CORAL);
+    if (tool === "remove") boxCorners(g, aimBox(w, "remove", 0, on.x, on.y), cx, cy, CORAL);
     else if (tool === "paint") {
       // The brush shows its colour on what it would colour, and nothing elsewhere.
       if (!bad) corners(g, x, y, TILE, TILE, PAINTS[S.tint - 1]?.lit ?? CREAM, true);
@@ -1423,7 +1423,7 @@ function marksLayer(f: Frame): void {
         const ring = ((REACH.pylon * w.open.reach) / 10_000) * TILE;
         pixelRing(g, x + 8, y + 8, ring, ring, col, 2);
       }
-      boxCorners(g, boxAt(tool, S.dir, on.x, on.y), cx, cy, col);
+      boxCorners(g, aimBox(w, tool, S.dir, on.x, on.y), cx, cy, col);
       // And the tile aimed at, which for a tunnel whose way in is set is where it would come up, or cannot.
       corners(g, S.aim.x * TILE - cx, S.aim.y * TILE - cy, TILE, TILE, col, true);
     }

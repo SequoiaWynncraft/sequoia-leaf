@@ -8,7 +8,7 @@
  * The yard keeps no purse: what it earns gathers in `till` until a command pays it in.
  */
 import type { Land } from "./land.ts";
-import { FACING, OWN, partOf, pieceOf } from "./sizes.ts";
+import { FACING, layOver, pieceOf } from "./sizes.ts";
 import {
   BLUEPRINTS_MOST,
   DEPOT,
@@ -561,20 +561,13 @@ export function place(y: Yard, i: number, k: Kind, d: number, g = 1): void {
   if ((FACING[k]?.[d & 3]?.dx.length ?? 1) > 1) cover(y, i, k, d & 3);
 }
 
-/** Lays the piece of more than one tile standing on its own tile `i` over the rest of its tiles: each takes its kind and where its own tile is, and nothing else. */
+/** Lays the piece of more than one tile standing on its own tile `i` over the rest of its tiles, each cleared first: each takes its kind and where its own tile is, and nothing else (`layOver`). */
 export function cover(y: Yard, i: number, k: number, d: number): void {
-  const f = FACING[k]?.[d];
+  const f = FACING[k]?.[d & 3];
   if (!f) return;
   const w = y.land.w;
-  y.part[i] = OWN;
-  for (let t = 1; t < f.dx.length; t++) {
-    const dx = f.dx[t] ?? 0;
-    const dy = f.dy[t] ?? 0;
-    const c = i + dx + dy * w;
-    vacate(y, c);
-    y.kind[c] = k;
-    y.part[c] = partOf(-dx, -dy);
-  }
+  for (let t = 1; t < f.dx.length; t++) vacate(y, i + (f.dx[t] ?? 0) + (f.dy[t] ?? 0) * w);
+  layOver(y.kind, y.part, w, i, k, d);
 }
 
 /**
