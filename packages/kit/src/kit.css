@@ -161,11 +161,21 @@ img.k-px {
   color: var(--k-cream);
   text-shadow: 0 var(--u) 0 var(--k-ink);
 }
+/*
+ * A title, as a thing's name (`.k-thing-name`), wraps only between words: its column is never
+ * narrower than its longest word, and what is beside it gives way first. A member's name is one word
+ * they chose, so it may break anywhere (`member`), never under what is beside it.
+ */
 .k-title.big,
 .k-head .k-title,
 .k-info-head .k-name {
   font: var(--f-head);
-  /* A name of one long word (a member's) goes onto a second line, never under what is beside it. */
+  min-width: min-content;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+:is(.k-title.big, .k-head .k-title, .k-info-head .k-name).member {
+  min-width: 0;
   overflow-wrap: anywhere;
 }
 /* Sentences that are read: what a thing does, a note, a letter, a tip. */
@@ -361,8 +371,7 @@ button.k-plaque:active {
   box-shadow: 0 calc(var(--u) * 2) 0 #0b071066;
 }
 .k-head .k-title {
-  flex: 1;
-  min-width: 0;
+  flex: 1 1 0;
 }
 .k-body {
   padding: calc(var(--u) * 4);
@@ -707,16 +716,29 @@ button.k-slot:hover {
   min-height: calc(var(--u) * 26);
   padding: var(--u);
 }
+/*
+ * The name and what is at its right (a price): the name's column takes the room, never narrower than
+ * its longest word; where both do not fit, what is at its right goes onto a line of its own under it.
+ */
+.k-info-main {
+  flex: 1 1 0;
+  min-width: min-content;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  column-gap: calc(var(--u) * 4);
+  row-gap: calc(var(--u) * 2);
+}
 .k-info-who {
-  flex: 1;
-  min-width: 0;
+  flex: 1 1 0;
+  min-width: min-content;
   display: flex;
   flex-direction: column;
   gap: calc(var(--u) * 2);
 }
 .k-info-aside {
   flex: none;
-  align-self: flex-start;
+  margin-left: auto;
   display: flex;
   align-items: center;
   gap: calc(var(--u) * 2);

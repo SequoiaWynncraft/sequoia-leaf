@@ -34,7 +34,13 @@ describe("a machine's rate", () => {
     const y = F.create({ seed: 5, tier: 2 });
     const i = millAt(y, false);
     told(y, i, "plank");
-    expect(F.machineRate(y, i)).toEqual({ nominal: F.makes(F.MILL, 1, sawing), share: 0, effective: 0, draw: 0 });
+    expect(F.machineRate(y, i)).toEqual({
+      nominal: F.makes(F.MILL, 1, sawing),
+      share: 0,
+      effective: 0,
+      draw: 0,
+      most: null,
+    });
   });
 
   test("short of power: the yard's pace of its full rate, drawing its grade's power", () => {
@@ -49,6 +55,7 @@ describe("a machine's rate", () => {
       share: pace,
       effective: F.makes(F.MILL, 2, sawing) * pace,
       draw: 4.5,
+      most: null,
     });
   });
 });

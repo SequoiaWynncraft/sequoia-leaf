@@ -426,6 +426,19 @@ function takeUp(p: StandingPrint, hands: Hands): Action[] {
   ];
 }
 
+/**
+ * A machine's own pace in place of its kind's (from its quickest recipe to its slowest): what it makes
+ * a minute of what it is making, the number its recipe shows, "up to" what its belt carries where
+ * that holds it back.
+ */
+const ownPace = (stats: Description["stats"], f: Flow): (Stat | string)[] =>
+  (stats ?? []).map((st) =>
+    typeof st !== "string" && st.label.startsWith("Makes") ? { label: "Makes", value: madeSays(f) } : st,
+  );
+/** What a machine makes a minute, as its card says it. */
+export const madeSays = (f: Flow): string =>
+  f.most === null ? perMinute(f.perMinute) : `up to ${perMinute(f.perMinute)}`;
+
 /** A machine standing in the yard: its kind's card, with what this one is doing and holds, and what can be done with it. */
 function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
   const { machine: m, x, y } = p;
@@ -506,6 +519,7 @@ function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
         : (own?.said?.(p) ?? p.line ?? KIND_INFO[k]?.what ?? "");
   return {
     ...base,
+    ...(p.flow ? { stats: ownPace(base.stats, p.flow) } : {}),
     tag: el("span", p.trouble && !waits ? "k-coral" : "", { text: said }),
     // What is wrong and what to do about it comes first; the numbers are under it.
     blocks: [

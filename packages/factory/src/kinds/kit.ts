@@ -52,6 +52,7 @@ export interface Kit {
   readonly recipesFor: typeof Tables.recipesFor;
   readonly makes: typeof Planner.makes;
   readonly MINUTE: typeof Planner.MINUTE;
+  readonly carried: typeof Planner.carried;
   readonly BURNS: typeof Tables.BURNS;
   readonly whole: (v: unknown, most: number) => number | null;
 
@@ -88,6 +89,7 @@ export interface Kit {
 
   // Who hands to whom, and the one rule of handing a thing on.
   readonly nextOf: typeof Wire.nextOf;
+  readonly carries: typeof Wire.carries;
   readonly closedOf: typeof Wire.closedWays;
   readonly wayOut: typeof Wire.wayOut;
   readonly waysOf: typeof Wire.waysOf;

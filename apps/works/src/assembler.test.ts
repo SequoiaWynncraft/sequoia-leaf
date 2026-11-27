@@ -29,6 +29,7 @@ import type { Lamp } from "./lamps.ts";
 import { blockColour } from "./plan.ts";
 import { DRAWN, draws, S } from "./state.ts";
 import { tileRef } from "./ui/card.ts";
+import { madeSays } from "./ui/cards.ts";
 import { printOf } from "./ui/prints.ts";
 
 const ASSEMBLER = kind("assembler");
@@ -67,15 +68,31 @@ describe("the assembler's card", () => {
     });
   });
 
-  test("says up to what its belt carries where it makes more: 270 a minute onto a grade I belt carrying 150", () => {
-    expect(printOf(tileRef(at(hall(1, 1), ...xy(-6, -4))))).toMatchObject({
-      flow: { perMinute: 270, most: carried(1) },
+  test("where its belt carries less than it makes, says up to that in its header, its output and its parts, and counts the mills for that", () => {
+    const tool = RECIPE[item("tool")];
+    if (!tool) throw new Error("no recipe");
+    // A grade I hall makes 270 tools a minute; a grade I belt carries 150: its header and its output say
+    // up to 150, its parts are what 150 tools take, and the mills before them are counted for 150.
+    const capped = printOf(tileRef(at(hall(1, 1), ...xy(-6, -4))));
+    const mills = feeders(1, tool, 1).map((f) => (f.count * 150) / makes(tool.by, 1, tool));
+    expect(capped).toMatchObject({
+      flow: {
+        perMinute: 150,
+        most: 150,
+        parts: [
+          { item: item("plank"), perMinute: 150, by: { kind: MILL, count: expect.closeTo(mills[0] ?? 0, 9) } },
+          { item: item("ingot"), perMinute: 150, by: { kind: MILL, count: expect.closeTo(mills[1] ?? 0, 9) } },
+        ],
+      },
     });
+    expect(capped.card === "standing" && capped.flow ? madeSays(capped.flow) : null).toBe("up to 150 /min");
     expect(carried(1)).toBe(150);
     // A grade III hall makes 540 a minute; a grade III belt carries 300.
-    expect(printOf(tileRef(at(hall(3, 3), ...xy(-6, -4))))).toMatchObject({ flow: { perMinute: 540, most: 300 } });
-    // A grade I hall onto a grade III belt makes less than it carries: no "up to".
-    expect(printOf(tileRef(at(hall(1, 3), ...xy(-6, -4))))).toMatchObject({ flow: { perMinute: 270, most: null } });
+    expect(printOf(tileRef(at(hall(3, 3), ...xy(-6, -4))))).toMatchObject({ flow: { perMinute: 300, most: 300 } });
+    // A grade I hall onto a grade III belt makes less than it carries: its own number, no "up to".
+    const free = printOf(tileRef(at(hall(1, 3), ...xy(-6, -4))));
+    expect(free).toMatchObject({ flow: { perMinute: 270, most: null } });
+    expect(free.card === "standing" && free.flow ? madeSays(free.flow) : null).toBe("270 /min");
   });
 });
 

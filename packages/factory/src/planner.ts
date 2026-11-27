@@ -40,10 +40,17 @@ export function carried(grade: number): number {
   return pace > 0 ? MINUTE / Math.ceil(ACROSS / pace) : 0;
 }
 
-/** What a machine of a grade (the recipe's own, unless it says) needs of each part a minute to make a recipe flat out. */
-export function needs(grade: number, r: Recipe, by: Kind = r.by): { item: Item; perMinute: number }[] {
-  const often = makes(by, grade, r);
-  return r.from.map((item, p) => ({ item, perMinute: often * (r.need[p] ?? 0) }));
+/**
+ * What a machine of a grade (the recipe's own, unless it says) needs of each part a minute to make a
+ * recipe flat out, or to make `made` of it a minute (where the belt it hands to carries less).
+ */
+export function needs(
+  grade: number,
+  r: Recipe,
+  by: Kind = r.by,
+  made = makes(by, grade, r),
+): { item: Item; perMinute: number }[] {
+  return r.from.map((item, p) => ({ item, perMinute: made * (r.need[p] ?? 0) }));
 }
 
 /**
@@ -58,15 +65,16 @@ export const makerOf = (n: Item): { kind: Kind; recipe: Recipe | null } => {
 
 /**
  * For each part a machine of a grade (the recipe's own, unless it says) needs to make a recipe flat
- * out, how many of the piece before it that is, each at `before`.
+ * out (or `made` of it a minute), how many of the piece before it that is, each at `before`.
  */
 export function feeders(
   grade: number,
   r: Recipe,
   before = grade,
   by: Kind = r.by,
+  made = makes(by, grade, r),
 ): { item: Item; kind: Kind; count: number }[] {
-  return needs(grade, r, by).map(({ item, perMinute }) => {
+  return needs(grade, r, by, made).map(({ item, perMinute }) => {
     const { kind, recipe } = makerOf(item);
     return { item, kind, count: perMinute / makes(kind, before, recipe) };
   });

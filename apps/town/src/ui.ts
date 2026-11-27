@@ -630,7 +630,7 @@ function profile(body: HTMLElement): null {
         "div",
         "k-grow k-col",
         {},
-        el("div", "k-title big", { text: me.name }),
+        el("div", "k-title big member", { text: me.name }),
         el("div", "k-dim", { text: `${me.rank} of the guild` }),
         ...levelBar(me),
       ),

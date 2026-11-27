@@ -17,7 +17,7 @@ import { room as makerRoom, wants as makerWants } from "./kinds/maker.ts";
  */
 import { besideWater, toward } from "./land.ts";
 import { deliver, giveGoal } from "./orders.ts";
-import { makes, MINUTE } from "./planner.ts";
+import { carried, makes, MINUTE } from "./planner.ts";
 import { litAt, litOf } from "./power.ts";
 import { lit as litBig, outsOf, OWN, pieceOf, roomRound, takesAt } from "./sizes.ts";
 import {
@@ -512,6 +512,7 @@ export const KIT: Kit = {
   recipesFor,
   makes,
   MINUTE,
+  carried,
   BURNS,
   whole,
   // The yard's reads and writes.
@@ -544,6 +545,7 @@ export const KIT: Kit = {
   otherMouth,
   // Who hands to whom, and the one rule of handing a thing on.
   nextOf,
+  carries,
   closedOf: closedWays,
   wayOut,
   waysOf,

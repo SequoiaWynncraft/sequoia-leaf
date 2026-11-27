@@ -125,6 +125,31 @@ describe("the assembler", () => {
       }
     });
 
+  test("does no more a minute than the belt it hands to carries, and its parts and feeders are counted for that", () => {
+    const tool = F.RECIPE[F.item("tool")];
+    if (!tool) throw new Error("no recipe");
+    const rate = (grade: number, belt: number | null): F.MachineRate => {
+      const y = alone(ASSEMBLER, grade);
+      F.setRecipe(y, 20, 10, F.item("tool"));
+      if (belt !== null) F.build(y, F.BELT, 22, 10, 0, Infinity, { grade: belt });
+      return F.machineRate(y, tile(y, 21, 11), tool);
+    };
+    // Grade I makes 270 a minute: onto a grade I belt (150 a minute) it does 150; onto grade III (300), or
+    // onto nothing yet, all 270. Grade III makes 540; onto a grade III belt it does 300.
+    expect([rate(1, 1), rate(1, 3), rate(1, null), rate(3, 3)].map((r) => [r.nominal, r.effective, r.most])).toEqual([
+      [270, 150, 150],
+      [270, 270, null],
+      [270, 270, null],
+      [540, 300, 300],
+    ]);
+    // What 150 tools a minute take, and the mills that make that much.
+    expect(F.needs(1, tool, ASSEMBLER, 150).map((n) => n.perMinute)).toEqual([150, 150]);
+    const flat = F.feeders(1, tool, 1, ASSEMBLER).map((f) => f.count);
+    F.feeders(1, tool, 1, ASSEMBLER, 150).forEach((f, p) =>
+      expect(f.count).toBeCloseTo(((flat[p] ?? 0) * 150) / 270, 9),
+    );
+  });
+
   test("keeps 9 times what a bench keeps of each part, and tips out what it no longer keeps when told otherwise", () => {
     const plank = F.item("plank");
     const hamper = F.item("hamper");

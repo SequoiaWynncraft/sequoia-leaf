@@ -136,7 +136,7 @@ export function makeCampUi(art: CampArt): CampUi & { bind(scene: CampScene): voi
           "div",
           "k-grow k-col",
           {},
-          el("div", "k-title big", { text: me.name }),
+          el("div", "k-title big member", { text: me.name }),
           el("div", "k-dim", { text: `${me.rank} of the guild` }),
           ...levelBar(me),
         ),
