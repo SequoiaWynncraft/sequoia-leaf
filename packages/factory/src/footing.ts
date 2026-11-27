@@ -6,13 +6,13 @@
  *
  * What is solid goes by the yard's tiles: off the map, land the yard has not bought (the fence keeps
  * to it), the stream, a standing redwood, the depot, and every piece but those that lie flat, which
- * are walked over: belts, splitters, joiners, sorters and tunnel mouths. A figure that something is
- * built on is put on the nearest clear ground (`freed`), by the same rule on every side.
+ * are walked over: what carries (`KindDef.carries`: belts, splitters, joiners, sorters and tunnel
+ * mouths). A figure that something is built on is put on the nearest clear ground (`freed`), by the
+ * same rule on every side.
  *
  * Carried over from Outworks' region package (`walk.ts`, `solid.ts`), over the Works' tiles.
  */
-import { type KindName, KINDS } from "./content/machines.ts";
-import { NONE } from "./tables.ts";
+import { CARRIES, NONE } from "./tables.ts";
 import { redwoodAt, type Yard } from "./yard.ts";
 
 /** Pixels of the art to a tile. */
@@ -38,10 +38,8 @@ export const OUTSIDE = "outside";
 export const WATER = "water";
 export const IN_THE_WAY = "in-the-way";
 
-/** The pieces that lie flat and are walked over. */
-const WALKED_OVER: ReadonlySet<KindName> = new Set(["belt", "splitter", "joiner", "sorter", "tunnel"]);
-/** 1 for each kind of piece that stands up and is walked round, by kind. */
-const STANDS = Uint8Array.from(KINDS, (k) => (WALKED_OVER.has(k) ? 0 : 1));
+/** 1 for each kind of piece that stands up and is walked round, by kind: all but what carries, which lies flat and is walked over. */
+const STANDS = CARRIES.map((c) => (c === 1 ? 0 : 1));
 
 /** A place: where a figure's feet are, in pixels of the art. */
 export interface Place {

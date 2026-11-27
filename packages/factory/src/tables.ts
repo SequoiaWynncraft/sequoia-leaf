@@ -243,8 +243,9 @@ export const RECIPES_N: readonly Recipe[] = RECIPES.map((r) => {
 export const RECIPE: readonly (Recipe | null)[] = ALL_ITEMS.map((n) => RECIPES_N.find((r) => r.out === n) ?? null);
 /** The recipes each kind of machine knows, in the table's order. */
 export const MADE_BY: readonly (readonly Recipe[])[] = ALL_KINDS.map((k) => RECIPES_N.filter((r) => r.by === k));
-/** Whether a kind of machine is one that makes things. */
-export const isMaker = (k: number): boolean => k === MILL || k === BENCH || k === WORKSHOP;
+const MAKERS = Uint8Array.from(MADE_BY, (recipes) => (recipes.length > 0 ? 1 : 0));
+/** Whether a kind of machine is one that makes things: one some recipe is made by. */
+export const isMaker = (k: number): boolean => MAKERS[k] === 1;
 /** How many of a thing a recipe takes: 0 for a thing it does not use. */
 export function needOf(r: Recipe, n: number): number {
   for (let p = 0; p < r.from.length; p++) if (r.from[p] === n) return r.need[p] ?? 0;
