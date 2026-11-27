@@ -19,6 +19,8 @@ import { farSteps, markSize, natural, tilePx, zoomFor } from "./zoom.ts";
 
 /** The view going with the member's figure. */
 const follow = new Follow();
+/** The middle of what the interface left clear at the last frame (whole pixels from the view's corner), and the view's size then. */
+const edges: { at: Pt | null; w: number; h: number; z: number } = { at: null, w: 0, h: 0, z: 0 };
 
 /** How much of the screen the interface covers at each edge, in CSS pixels. */
 export const inset = { top: 0, bottom: 0, left: 0, right: 0 };
@@ -118,12 +120,15 @@ export function pan(dx: number, dy: number): void {
   bound();
 }
 
-/** Zooms a step in or out, keeping the point of the page under the pointer where it is (going with the figure, the figure). */
+/** Zooms a step in or out, keeping the point of the page under the pointer where it is (going with the figure, nothing in hand, the figure). */
 export function zoom(by: number, pageX: number, pageY: number): boolean {
   const before = S.view.z;
-  // Going with the member's figure, it zooms about the figure instead, in this one step: the view
-  // goes on with the figure from where that leaves it, and nothing moves at the next frame.
-  const c = following() ? you() : null;
+  // Going with the member's figure and nothing in hand, it zooms about the figure instead, in this one
+  // step: the view goes on with the figure from where that leaves it, and nothing moves at the next
+  // frame. With a tool in hand it zooms about the pointer, as it always has, and lets go of the figure,
+  // as a drag does, so that what is aimed stays under the pointer.
+  const c = following() && S.tool === null ? you() : null;
+  if (!c) follow.letGo();
   const about = c ? toPage(c.x, c.y) : { x: pageX, y: pageY };
   const k0 = S.view.dpr / before;
   const wx = S.cam.x + about.x * k0;
@@ -180,14 +185,21 @@ export function inView(x: number, y: number, pad = 24): boolean {
 export function track(dt: number): void {
   const c = you();
   if (!c) return;
+  // The interface's edges moved the middle of what it leaves clear: the yard stays where it is on the
+  // screen, so nothing moves under a finger between two taps.
+  const m = middle();
+  const r = { x: Math.round(m.x), y: Math.round(m.y) };
+  const was = edges.at;
+  if (was && edges.w === S.view.w && edges.h === S.view.h && edges.z === S.view.z)
+    follow.shift(r.x - was.x, r.y - was.y);
+  Object.assign(edges, { at: r, w: S.view.w, h: S.view.h, z: S.view.z });
   const k = S.view.dpr / S.view.z;
   const clear = { w: S.view.w - (inset.left + inset.right) * k, h: S.view.h - (inset.top + inset.bottom) * k };
   const mid = follow.track(c.x, c.y, dt, c.moving, clear);
   if (S.view.z < 1) follow.letGo();
   if (!mid) return;
-  const m = middle();
-  S.cam.x = mid.x - Math.round(m.x);
-  S.cam.y = mid.y - Math.round(m.y);
+  S.cam.x = mid.x - r.x;
+  S.cam.y = mid.y - r.y;
   goal = null;
   bound();
 }

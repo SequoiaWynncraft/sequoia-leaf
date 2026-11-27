@@ -39,7 +39,7 @@ import { leave, placeYou, walkTo, you } from "./you.ts";
 // first whose canvases take any drawing and keep none of it.
 const inert: () => unknown = new Proxy(() => inert, { get: () => inert, set: () => true });
 Object.defineProperty(globalThis, "document", { value: { createElement: () => inert }, configurable: true });
-const { following, pan, setCamera, setZoom, zoom } = await import("../camera.ts");
+const { following, holdView, inset, pan, setCamera, setZoom, zoom } = await import("../camera.ts");
 const { fingerTap, initInput, letGo, stepInput } = await import("../input.ts");
 
 useFakeLeaf();
@@ -366,11 +366,10 @@ describe("reach", () => {
     expect(S.world.grade[13 * y.land.w + 27]).toBe(2);
   });
 
-  test("a phone's run start on a machine is its first belt, at the machine's outlet: gold, and Build lays it", async () => {
+  test("a phone's run start on a machine stands as it is, as before #270: Build there is what the rules say of a belt on it", async () => {
     // A mill at 10, 9 facing east: it hands things on to 11, 9.
     const y = everywhere();
     stands(y, MILL, 10, 9);
-    stands(y, MILL, 10, 16);
     await opened(y, 100_000);
     placeYou(HOLLOW);
     const t = (x: number, z: number): number => z * y.land.w + x;
@@ -378,44 +377,35 @@ describe("reach", () => {
       S.dir = 3;
       setTool(BELT);
       fingerTap(10, 9);
-      // The start is the mill; the belt shown and laid is at its outlet, facing out of it.
-      expect([S.from, aimOf(S.hand)?.x, aimOf(S.hand)?.y, S.dir, gold()]).toEqual([{ x: 10, y: 9 }, 11, 9, 0, true]);
+      // The start is the mill, aimed on its own tile, and the hand keeps its facing.
+      expect([S.from, aimOf(S.hand)?.x, aimOf(S.hand)?.y, aimOf(S.hand)?.why, S.dir]).toEqual([
+        { x: 10, y: 9 },
+        10,
+        9,
+        null,
+        3,
+      ]);
       expect(handPrint().go).toEqual({ label: "Build", bad: false });
-      expect(confirm()).toBe(true);
-      expect([S.world.kind[t(11, 9)], S.world.dir[t(11, 9)], S.world.kind[t(10, 9)]]).toEqual([BELT, 0, MILL]);
-      // A second tap on a machine lays the same belt as Build: at its outlet, never on the machine.
+      // Build, or the same tile again, is a belt on the mill: the rules refuse it, and nothing is laid.
+      expect(confirm()).toBe(false);
+      expect([aimOf(S.hand)?.why, S.world.kind[t(11, 9)], S.world.kind[t(10, 9)]]).toEqual([
+        "Something is here already",
+        255,
+        MILL,
+      ]);
       setTool(BELT);
-      fingerTap(10, 16);
-      fingerTap(10, 16);
-      expect([S.world.kind[t(11, 16)], S.world.dir[t(11, 16)], S.world.kind[t(10, 16)]]).toEqual([BELT, 0, MILL]);
+      fingerTap(10, 9);
+      fingerTap(10, 9);
+      expect([S.world.kind[t(11, 9)], S.world.kind[t(10, 9)]]).toEqual([255, MILL]);
+      // A run tapped out from it starts where it hands things on.
+      setTool(BELT);
+      fingerTap(10, 9);
+      fingerTap(14, 9);
+      expect(S.run?.legs[0]).toMatchObject({ x: 11, y: 9 });
     });
   });
 
-  test("a machine's outlet that cannot take a belt, or is out of reach, is coral with the reason", async () => {
-    const y = everywhere();
-    stands(y, MILL, 10, 12);
-    stands(y, CRATE, 11, 12);
-    stands(y, MILL, 40, 9);
-    await opened(y, 100_000);
-    placeYou(HOLLOW);
-    onPhone(() => {
-      setTool(BELT);
-      fingerTap(10, 12);
-      const why = aimOf(S.hand)?.why;
-      expect([aimOf(S.hand)?.x, why === null, why === OUT_OF_REACH]).toEqual([11, false, false]);
-      expect(handPrint().go?.bad).toBe(true);
-      expect(confirm()).toBe(false);
-      // A far mill: its outlet, 41, 9, is out of reach.
-      setTool(BELT);
-      fingerTap(40, 9);
-      expect([aimOf(S.hand)?.x, aimOf(S.hand)?.why]).toEqual([41, OUT_OF_REACH]);
-      expect(handPrint().go).toEqual({ label: "Build", bad: true });
-      expect(confirm()).toBe(false);
-      expect(S.world.kind[9 * y.land.w + 41]).not.toBe(BELT);
-    });
-  });
-
-  test("a phone's run start on a crate, which no run leaves from by itself, is judged on the crate's own tile", async () => {
+  test("a phone's run start on a crate stands as it is, gold, as before #270", async () => {
     const y = everywhere();
     stands(y, CRATE, 14, 9);
     await opened(y, 100_000);
@@ -423,9 +413,23 @@ describe("reach", () => {
     onPhone(() => {
       setTool(BELT);
       fingerTap(14, 9);
-      expect([aimOf(S.hand)?.x, aimOf(S.hand)?.y, gold()]).toEqual([14, 9, false]);
-      expect(handPrint().go?.bad).toBe(true);
+      expect([aimOf(S.hand)?.x, aimOf(S.hand)?.y, aimOf(S.hand)?.why]).toEqual([14, 9, null]);
+      expect(handPrint().go).toEqual({ label: "Build", bad: false });
+    });
+  });
+
+  test("a start on a far machine sends nothing; reach refuses Build only when it would send the belt", async () => {
+    const y = everywhere();
+    stands(y, MILL, 40, 9);
+    await opened(y, 100_000);
+    placeYou(HOLLOW);
+    onPhone(() => {
+      setTool(BELT);
+      fingerTap(40, 9);
+      expect([aimOf(S.hand)?.x, aimOf(S.hand)?.why]).toEqual([40, null]);
       expect(confirm()).toBe(false);
+      expect(aimOf(S.hand)?.why).toBe(OUT_OF_REACH);
+      expect(S.world.kind[9 * y.land.w + 41]).not.toBe(BELT);
     });
   });
 
@@ -606,9 +610,11 @@ describe("a zoom while the view goes with you", () => {
       { x: -56, y: -88, w: 48 * 16 + 112, h: 36 * 16 + 144 },
     );
     setZoom(0);
+    setTool(null);
     // The view fitted to this screen first, at the size that suits it.
     zoom(0, 0, 0);
     const c = placeYou(mid(24, 21));
+    holdView(true);
     for (let k = 0; k < 5; k++) stepInput(1 / 60);
     expect(following()).toBe(true);
     const z = S.view.z;
@@ -627,6 +633,68 @@ describe("a zoom while the view goes with you", () => {
     expect(zoom(-1, 10, 10)).toBe(true);
     expect(Math.abs(S.cam.x + 10 * (S.view.dpr / S.view.z) - under.x)).toBeLessThan(1);
     setZoom(0);
+  });
+});
+
+/** A page whose camera knows the picture and the ground, the view fitted to its screen, you standing in the yard. */
+async function framed(): Promise<{ c: ReturnType<typeof placeYou> }> {
+  await opened(everywhere(), 100_000);
+  canvasPage();
+  setCamera(
+    { width: 320, height: 200, style: { transform: "" } },
+    { x: -56, y: -88, w: 48 * 16 + 112, h: 36 * 16 + 144 },
+  );
+  setZoom(0);
+  setTool(null);
+  zoom(0, 0, 0);
+  const c = placeYou(mid(24, 21));
+  holdView(true);
+  for (let k = 0; k < 60; k++) stepInput(1 / 60);
+  return { c };
+}
+
+describe("with a tool in hand the view stays out of the way", () => {
+  test("a zoom with a tool in hand keeps the tile under the pointer, as before #270, and lets go of you", async () => {
+    await framed();
+    setTool(BELT);
+    expect(following()).toBe(true);
+    const k0 = S.view.dpr / S.view.z;
+    const under = { x: S.cam.x + 30 * k0, y: S.cam.y + 20 * k0 };
+    expect(zoom(1, 30, 20)).toBe(true);
+    const k1 = S.view.dpr / S.view.z;
+    expect([Math.abs(S.cam.x + 30 * k1 - under.x) < 1, Math.abs(S.cam.y + 20 * k1 - under.y) < 1]).toEqual([
+      true,
+      true,
+    ]);
+    const cam = { ...S.cam };
+    for (let k = 0; k < 30; k++) stepInput(1 / 60);
+    expect([S.cam.x, S.cam.y, following()]).toEqual([cam.x, cam.y, false]);
+    setTool(null);
+    setZoom(0);
+  });
+
+  test("the line over the dock growing, or a card coming up, moves nothing under the finger", async () => {
+    const { c } = await framed();
+    setTool(BELT);
+    expect(following()).toBe(true);
+    const cam = { ...S.cam };
+    const was = { ...inset };
+    try {
+      inset.bottom += 40;
+      for (let k = 0; k < 10; k++) stepInput(1 / 60);
+      expect([S.cam.x, S.cam.y]).toEqual([cam.x, cam.y]);
+      inset.top += 30;
+      for (let k = 0; k < 10; k++) stepInput(1 / 60);
+      expect([S.cam.x, S.cam.y, following()]).toEqual([cam.x, cam.y, true]);
+      // Walking, the view gathers on you again.
+      expect(walkTo(mid(30, 21).x, mid(30, 21).y)).toBe(true);
+      for (let k = 0; k < 60; k++) stepInput(1 / 60);
+      expect([c.x > mid(24, 21).x, S.cam.x > cam.x]).toEqual([true, true]);
+    } finally {
+      Object.assign(inset, was);
+      setTool(null);
+      setZoom(0);
+    }
   });
 });
 

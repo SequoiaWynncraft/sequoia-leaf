@@ -82,7 +82,7 @@ import {
   toolHooks,
 } from "./state.ts";
 import { comesUp, setWayIn, tunnelAim, wayInAim } from "./tunnel.ts";
-import { outletOf, runOut, stepWay } from "./ways.ts";
+import { runOut, stepWay } from "./ways.ts";
 import { coins, doNow } from "./yard.ts";
 
 const W = (): number => S.world.land.w;
@@ -237,7 +237,7 @@ export function keepAim(again = false): void {
     if (stale(h.run ?? h.aim)) reckon(h.path);
   } else if (h.is === "beltTaps") {
     if (h.run && h.aim && stale(h.run)) runTo(h.aim.x, h.aim.y);
-    else if (!h.run && h.aim && stale(h.aim)) go({ do: "run", run: null, aim: buildAim(BELT, h.aim.x, h.aim.y) });
+    else if (!h.run && h.aim && stale(h.aim)) startAt(h.aim.x, h.aim.y);
   } else {
     const a = aimOf(h);
     if (a && stale(a)) aimAt(a.x, a.y);
@@ -635,9 +635,9 @@ export function commitRun(): boolean {
 export function tapBelt(x: number, y: number): void {
   const h = S.hand;
   if (h.is === "beltTaps" && h.run === null && h.from.x === x && h.from.y === y) {
-    // The same tile twice: the one belt aimed, the way the hand is pointing (on a machine, at its outlet).
+    // The same tile twice: one belt, the way the hand is pointing.
     go({ do: "from", from: null });
-    place(h.aim?.x ?? x, h.aim?.y ?? y);
+    place(x, y);
     return;
   }
   if (h.is !== "beltTaps") {
@@ -650,15 +650,10 @@ export function tapBelt(x: number, y: number): void {
   toolHooks.changed();
 }
 
-/**
- * Where a finger's run starts, aimed as the one belt Build (or a second tap) would lay: on a machine,
- * the run's first belt, at its outlet, facing out of it (`outletOf`), as the run tapped out next lays
- * first; anywhere else (clear ground, a belt, a crate, a piece that hands nothing on), on the tile tapped.
- */
+/** Where a finger's run starts, aimed: a clear tile as a belt would be, or a piece to start from, which stands as it is. */
 function startAt(x: number, y: number): void {
-  const out = outletOf(S.world, at(S.world, x, y));
-  if (out) S.dir = out.dir;
-  go({ do: "run", run: null, aim: buildAim(BELT, out?.x ?? x, out?.y ?? y) });
+  const aim = kindAt(S.world, x, y) !== NONE ? aimed(x, y, null, 0) : buildAim(BELT, x, y);
+  go({ do: "run", run: null, aim });
 }
 
 /** The run from where a finger's run starts (on a piece, the tile ahead of it) to a tile: the shortest clear way. */

@@ -73,6 +73,19 @@ export class Follow {
     this.hold(mid);
   }
 
+  /**
+   * The interface's edges moved the middle of the view by so many whole pixels (a line over the dock
+   * grew, a card came up): the view stays exactly where it is, left that much aside of the figure, to
+   * close as the figure next walks.
+   */
+  shift(dx: number, dy: number): void {
+    if (!this.following) return;
+    this.#left.x += dx;
+    this.#left.y += dy;
+    this.#apart.x += dx;
+    this.#apart.y += dy;
+  }
+
   /** The player asks for the view back: it takes hold, and closes on the figure whether or not the figure walks. */
   home(mid: Place): void {
     this.hold(mid);

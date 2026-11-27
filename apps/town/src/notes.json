@@ -1,5 +1,21 @@
 [
   {
+    "id": "works-belt-feel",
+    "at": "2026-11-27T16:51Z",
+    "title": "Laying belts",
+    "lines": ["In The Works, laying belts works as it did before you walked the yard."],
+    "more": [
+      {
+        "head": "Fixed",
+        "points": [
+          "On a phone, the yard no longer moves under your finger between taps when the line over the toolbar changes.",
+          "With a tool in hand, zooming keeps the tile under the pointer where it is.",
+          "Tapping a machine or a crate to start a line works as it did before."
+        ]
+      }
+    ]
+  },
+  {
     "id": "gaz-on-the-stall",
     "at": "2026-11-27T16:50Z",
     "title": "gaz in every raid",
