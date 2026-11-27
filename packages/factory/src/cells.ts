@@ -22,40 +22,12 @@
  * shape: a thing they do not have is let go, more of one than a piece holds is clamped as it is put
  * back, and a tunnel longer than tunnels go is a piece that cannot stand.
  */
-import { keeps } from "./build.ts";
 import { Reader, Writer } from "./bytes.ts";
-import { FUEL, STUDY_HOLDS, TICKS } from "./content/machines.ts";
-import { keptOf, unpackWays, waysOn, waysTo } from "./pieces.ts";
-import {
-  ALL_ITEMS,
-  BOILER,
-  CRATE,
-  DEADFALL,
-  DEPOT,
-  GATHERER,
-  type Goal,
-  GOALS,
-  holdsMost,
-  isFolio,
-  isItem,
-  isKind,
-  isMaker,
-  isRaw,
-  type Item,
-  JOINER,
-  locked,
-  NONE,
-  PACE,
-  RECIPE,
-  SORTER,
-  SPAN_MOST,
-  SPLITTER,
-  STUDY,
-  TINTS,
-  WORK,
-} from "./tables.ts";
-import { carries } from "./wire.ts";
-import { counts, enough, held, holderOf, type Holders, put, tunnelOf, type Yard } from "./yard.ts";
+import { RULES } from "./kinds/list.ts";
+import { waysOn } from "./pieces.ts";
+import { ALL_ITEMS, CARRIES, FIXED, type Goal, isItem, keptKind, NONE, SHUTS, SPAN_MOST, TINTS } from "./tables.ts";
+import { KIT } from "./wire.ts";
+import { held, holderOf, type Holders, tunnelOf, type Yard } from "./yard.ts";
 
 /** The parts a piece's bytes may say follow, a bit each. */
 const PARTS = 0x3ffe;
@@ -131,7 +103,7 @@ function settingsAt(y: Yard, i: number): Partial<Building> {
   return {
     ...(turn === 0 ? {} : { turn }),
     ...(recipe === NONE ? {} : { recipe }),
-    ...(y.kind[i] === CRATE && y.holders.open[holderOf(y, i)] === 0 ? { closed: true } : {}),
+    ...(SHUTS[y.kind[i] ?? NONE] === 1 && y.holders.open[holderOf(y, i)] === 0 ? { closed: true } : {}),
     ...(y.free[i] === 1 ? { free: true } : {}),
     ...(tint === 0 ? {} : { tint }),
     ...(ways === 0 ? {} : { ways }),
@@ -165,7 +137,7 @@ export function keptPiece(y: Yard, i: number): KeptPiece {
 
 /** The yard's pieces as bytes, in tile order. */
 export function packCells(y: Yard): Uint8Array {
-  const at = Array.from(y.kind.keys()).filter((i) => y.kind[i] !== NONE && y.kind[i] !== DEPOT);
+  const at = Array.from(y.kind.keys()).filter((i) => y.kind[i] !== NONE && FIXED[y.kind[i] ?? NONE] !== 1);
   return packKept(at.map((i) => keptPiece(y, i)));
 }
 
@@ -216,7 +188,7 @@ function writeNumbers(o: Writer, p: KeptPiece, parts: typeof EARLY | typeof LATE
 /** Writes a kept piece, from its first byte. */
 function writeKept(o: Writer, p: KeptPiece): void {
   const f = partsOf(p);
-  o.byte(p.kind | (p.dir << 4) | (p.item === undefined ? 0 : 64) | (f === 0 ? 0 : 128));
+  o.byte(keptKind(p.kind) | (p.dir << 4) | (p.item === undefined ? 0 : 64) | (f === 0 ? 0 : 128));
   if (p.item !== undefined) {
     o.byte(p.item);
     o.byte((p.prog ?? 0) | ((p.via ?? 0) << 4));
@@ -317,106 +289,15 @@ export function unpackCells(bytes: Uint8Array, tiles: number): KeptPiece[] | nul
 const whole = (v: unknown, most: number): number | null =>
   typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= most ? v : null;
 
-/** How many of a thing the piece on a tile may hold: a machine, as many as it keeps for what it may make (`keeps`). */
-function mostHeld(y: Yard, i: number, n: number): number {
-  const k = y.kind[i] ?? NONE;
-  if (isMaker(k)) return holdsMost(keeps(y, i), n);
-  if (k === BOILER) return n === DEADFALL ? FUEL : 0;
-  if (k === STUDY) return isFolio(n) ? STUDY_HOLDS : 0;
-  return k === CRATE ? 1e6 : 0;
-}
-
-/**
- * What a piece's work toward what it is making stays below: what that takes; with nothing being made,
- * what a tick at the top pace can leave over once a thing is done.
- */
-const workFor = (k: number, making: number): number =>
-  k === GATHERER
-    ? WORK.gather
-    : making === NONE
-      ? Math.max(...PACE)
-      : k === STUDY
-        ? WORK.study
-        : (RECIPE[making]?.work ?? 0);
-
-/** Whether a kind of machine may make a thing in the yard: its recipe is the kind's, and unlocked. */
-const mayMake = (y: Yard, k: number, n: number | undefined): n is Item =>
-  n !== undefined && isItem(n) && RECIPE[n]?.by === k && locked(y.open, { make: n }) === null;
-
 /** Puts back what a carrying piece carried, and its line's colour. */
 function carriedOnto(y: Yard, i: number, o: KeptPiece): void {
-  const k = y.kind[i] ?? NONE;
-  if (!carries(k)) return;
+  if (CARRIES[y.kind[i] ?? NONE] !== 1) return;
   if (o.item !== undefined && isItem(o.item)) {
     y.item[i] = o.item;
     y.prog[i] = whole(o.prog, 16) ?? 0;
     y.via[i] = whole(o.via, 4) ?? 0;
   }
   y.tint[i] = whole(o.tint, TINTS) ?? 0;
-}
-
-/** Puts back what a holder's row (`r`) is told to make and holds: only what it may make, and no more than it keeps. */
-function stockOnto(y: Yard, i: number, r: number, o: KeptPiece): void {
-  const k = y.kind[i] ?? NONE;
-  const h = y.holders;
-  if (isMaker(k) && mayMake(y, k, o.recipe)) y.set[i] = o.recipe;
-  const room = k === CRATE ? y.open.crate : 1e6;
-  const has = counts();
-  for (const [n, c] of o.held ?? []) if (isItem(n) && (whole(c, 1e6) ?? 0) > 0) has[n] = c;
-  for (const n of ALL_ITEMS)
-    for (let c = Math.min(Math.floor(has[n] ?? 0), mostHeld(y, i, n)); c > 0 && (h.count[r] ?? 0) < room; c--)
-      put(h, r, n);
-  h.idle[r] = 0;
-}
-
-/** What a kept holder's finished thing may be on its piece now: a crate's anything, a gatherer's a raw thing, a machine's what it may make. */
-function outOf(y: Yard, i: number, o: KeptPiece): Item | null {
-  const k = y.kind[i] ?? NONE;
-  const out = o.out !== undefined && isItem(o.out) ? o.out : null;
-  if (out === null) return null;
-  return k === CRATE || (k === GATHERER && isRaw(out)) || (isMaker(k) && mayMake(y, k, out)) ? out : null;
-}
-
-/**
- * What a kept holder may be making on its piece now: a machine, what it keeps a recipe for and holds
- * all of; a Study, a folio it holds that `studied`, the research first in line, wants.
- */
-function makingOf(y: Yard, i: number, r: number, o: KeptPiece, studied: Goal | undefined): number {
-  const k = y.kind[i] ?? NONE;
-  const m = o.making;
-  if (m === undefined) return NONE;
-  if (isMaker(k)) return keeps(y, i).some((rec) => rec.out === m && enough(y.holders, r, rec)) ? m : NONE;
-  const wanted = studied !== undefined && isFolio(m) && (GOALS[studied]?.want[m] ?? 0) > 0;
-  return k === STUDY && wanted && held(y.holders, r, m) > 0 ? m : NONE;
-}
-
-/** Puts back what a holder's row (`r`) was doing: what is waiting to leave, what it makes, its work toward that, a crate shut, a boiler's fuel. */
-function doingOnto(y: Yard, i: number, r: number, o: KeptPiece, studied: Goal | undefined): void {
-  const k = y.kind[i] ?? NONE;
-  const h = y.holders;
-  const out = outOf(y, i, o);
-  if (out !== null) h.out[r] = out;
-  const making = makingOf(y, i, r, o, studied);
-  if (making !== NONE) h.making[r] = making;
-  // What a machine is making is what it last began (`lastRecipe`), though no save keeps that apart.
-  if (making !== NONE && isMaker(k)) h.last[r] = making;
-  if (isMaker(k) || k === GATHERER || (k === STUDY && studied !== undefined))
-    h.work[r] = whole(o.work, workFor(k, making) - 1) ?? 0;
-  if (k === CRATE) h.open[r] = o.closed === true ? 0 : 1;
-  if (k === BOILER) h.fuel[r] = whole(o.fuel, TICKS.burn) ?? 0;
-}
-
-/** Puts back a splitter's or joiner's next way, a sorter's thing and side, and a splitter's ways, as the kind may keep them. */
-function waysOnto(y: Yard, i: number, o: KeptPiece): void {
-  const k = y.kind[i] ?? NONE;
-  // A joiner's next way in; a splitter's next way out, and over it its next way in (`tick.ts`).
-  if (k === SPLITTER || k === JOINER) y.turn[i] = whole(o.turn, k === SPLITTER ? 14 : 2) ?? 0;
-  if (!isKind(k)) return;
-  // What a sorter is set to and its side, kept in the byte a splitter keeps its ways in, and a
-  // splitter's ways (`waysTo`). `keptOf` keeps only what the kind may keep.
-  const kept = keptOf({ ...unpackWays(whole(o.ways, 255) ?? 0), recipe: o.recipe }, k);
-  if (k === SORTER && kept.recipe !== undefined) y.set[i] = kept.recipe;
-  waysTo(y, i, k, kept);
 }
 
 /** Puts back what is under the ground in a way-in mouth's tunnel, a real thing or none at each tile. */
@@ -439,11 +320,6 @@ function underOnto(y: Yard, i: number, o: KeptPiece): void {
  */
 export function keptOnto(y: Yard, i: number, o: KeptPiece, studied: Goal | undefined): void {
   carriedOnto(y, i, o);
-  const r = holderOf(y, i);
-  if (r >= 0) {
-    stockOnto(y, i, r, o);
-    doingOnto(y, i, r, o, studied);
-  }
-  waysOnto(y, i, o);
+  RULES[y.kind[i] ?? NONE]?.onto(KIT, y, i, holderOf(y, i), o, studied);
   underOnto(y, i, o);
 }

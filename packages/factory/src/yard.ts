@@ -9,20 +9,16 @@
  */
 import type { Land } from "./land.ts";
 import {
-  BENCH,
   BLUEPRINTS_MOST,
-  BOILER,
-  CRATE,
   DEPOT,
-  GATHERER,
   type Goal,
   GOALS,
   goalsBelow,
   gradeOf,
+  HOLDS,
   type Item,
   ITEM_COUNT,
   type Kind,
-  MILL,
   MILLI,
   nextHand,
   NONE,
@@ -32,10 +28,8 @@ import {
   plot,
   type Recipe,
   SPAN_MOST,
+  SPANS,
   STARTING,
-  STUDY,
-  TUNNEL,
-  WORKSHOP,
 } from "./tables.ts";
 
 /** A count of each thing, by its number. */
@@ -114,17 +108,17 @@ export interface Seen {
 export interface Wire {
   /** Tiles that hand things on, each after the tiles it hands to. */
   readonly order: Int32Array;
-  /** Tiles that carry, tiles that work, and boilers within reach of power. */
+  /** Tiles that carry, tiles that work, and tiles that burn for power (a boiler) within reach of power. */
   readonly carry: Int32Array;
   /** Tunnels' way-in mouths, which carry things under the ground too. */
   readonly mouths: Int32Array;
   readonly work: Int32Array;
-  readonly boilers: Int32Array;
+  readonly burners: Int32Array;
   /** For each tile, the sides it takes things in from, a bit each (`sidesTaken`). */
   readonly taken: Uint8Array;
   /** For each kind of machine, the recipes it may make (`recipesFor`): all a machine reads of what is unlocked. */
   readonly recipes: readonly (readonly Recipe[])[];
-  /** Power always there (the depot and the waterwheels), and power drawn. */
+  /** Power always there (the depot, and what gives it steadily: the waterwheels), and power drawn. */
   readonly steady: number;
   readonly demand: number;
   /**
@@ -410,8 +404,7 @@ export const redwoodAt = (y: Yard, i: number): boolean => standingTree(y, i) >= 
 // ---------- rows ----------
 
 /** Whether a kind of piece holds things, and so has a row in `holders`. */
-export const holds = (k: number): boolean =>
-  k === GATHERER || k === MILL || k === BENCH || k === WORKSHOP || k === CRATE || k === BOILER || k === STUDY;
+export const holds = (k: number): boolean => HOLDS[k] === 1;
 
 /** How much a full side table grows by: a half, so a yard of nothing but crates stays under a megabyte. */
 const grown = (size: number): number => Math.ceil(size * 1.5);
@@ -423,7 +416,7 @@ const grown = (size: number): number => Math.ceil(size * 1.5);
 export const holderOf = (y: Yard, i: number): number => (holds(y.kind[i] ?? NONE) ? (y.row[i] ?? -1) : -1);
 /** The row in `tunnels` of the tunnel going in on a tile (its way-in mouth), or -1 for anything else. */
 export const tunnelOf = (y: Yard, i: number): number =>
-  y.kind[i] === TUNNEL && (y.span[i] ?? 0) > 0 ? (y.row[i] ?? -1) : -1;
+  SPANS[y.kind[i] ?? NONE] === 1 && (y.span[i] ?? 0) > 0 ? (y.row[i] ?? -1) : -1;
 
 /** A new row in a side table for the piece on a tile, the table grown if it is full. */
 export function holderRow(y: Yard, tile: number): number {
@@ -562,6 +555,14 @@ export function vacate(y: Yard, i: number): void {
   y.grade[i] = 0;
   y.free[i] = 0;
   y.span[i] = 0;
+}
+
+/** Sets a splitter's ways in; with none left, its next way in goes from `turn` too (`kinds/splitter.ts`). Who takes from whom changes, so the plumbing is worked out again. */
+export function insTo(y: Yard, i: number, ins: number): void {
+  if (y.ins[i] === ins) return;
+  y.ins[i] = ins;
+  if (ins === 0) y.turn[i] = (y.turn[i] ?? 0) & 3;
+  changed(y);
 }
 
 /**

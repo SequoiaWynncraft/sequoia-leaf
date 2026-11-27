@@ -1,10 +1,10 @@
 /**
  * Where power reaches. It reaches out from the depot, and from every pylon joined to the depot
- * through other pylons; each marks the tiles within its reach. It is worked out once after a change
+ * through other pylons (a kind that `reaches`); each marks the tiles within its reach. It is worked out once after a change
  * that may move it, when next read (`litOf`), however many pieces the change was.
  */
 import { REACH } from "./content/machines.ts";
-import { PYLON } from "./tables.ts";
+import { NONE, REACHES } from "./tables.ts";
 import { changed, type Yard } from "./yard.ts";
 
 /**
@@ -33,7 +33,7 @@ export function repower(y: Yard): Uint8Array {
   y.lit.fill(0);
   mark(y, cx, cy, squared(REACH.depot));
   const pylons: number[] = [];
-  for (let i = 0; i < y.kind.length; i++) if (y.kind[i] === PYLON) pylons.push(i);
+  for (let i = 0; i < y.kind.length; i++) if (REACHES[y.kind[i] ?? NONE] === 1) pylons.push(i);
   const live = new Uint8Array(pylons.length);
   const found: number[] = [];
   pylons.forEach((i, n) => {

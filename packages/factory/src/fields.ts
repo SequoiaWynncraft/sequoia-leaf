@@ -10,7 +10,7 @@ import { type Leg, legKind, legSpan } from "./route.ts";
 import {
   BELT,
   BLUEPRINTS_MOST,
-  DEPOT,
+  FIXED,
   goalNamed,
   type Item,
   itemName,
@@ -41,7 +41,7 @@ export const gradeOf = (v: unknown): number | null => (v === undefined ? 1 : who
 export function readPiece(v: unknown, mx = 255, my = 255): Piece | null {
   if (!isRecord(v)) return null;
   const k = kindNamed(v.kind);
-  if (k === null || k === DEPOT || !isDir(v.dir)) return null;
+  if (k === null || FIXED[k] === 1 || !isDir(v.dir)) return null;
   if (!whole(v.x, mx) || !whole(v.y, my) || !whole(v.span, SPAN_MOST)) return null;
   const recipe = itemNamed(v.recipe);
   return { kind: k, x: v.x, y: v.y, dir: v.dir, span: v.span, ...keptOf({ ...v, recipe: recipe ?? undefined }, k) };

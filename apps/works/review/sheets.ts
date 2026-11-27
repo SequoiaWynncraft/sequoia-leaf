@@ -16,8 +16,9 @@ import {
 import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
 import { arms, beltTile, marksOf, woodOf } from "../src/art/belts.ts";
-import { type Art, meetingTile } from "../src/art/index.ts";
+import type { Art } from "../src/art/index.ts";
 import { FLAG_AT, gathererHat, lookOf } from "../src/art/machines.ts";
+import { meetingTile } from "../src/art/meeting.ts";
 import type { Sprite } from "../src/art/pal.ts";
 import { type Entry, showSheet } from "./sheet.ts";
 

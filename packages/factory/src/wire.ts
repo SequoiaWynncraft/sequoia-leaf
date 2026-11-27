@@ -1,116 +1,130 @@
+import { keep } from "./kinds/holder.ts";
+import type { Kit } from "./kinds/kit.ts";
+import { anything, empty, lay } from "./kinds/line.ts";
+import { RULES, TAKES_TURNS } from "./kinds/list.ts";
+import { room as makerRoom, wants as makerWants } from "./kinds/maker.ts";
 /**
- * The yard's plumbing: who hands to whom, and in what order. It depends only on what stands where,
- * so it is worked out once after a change (`rewire`) and kept until the next. A piece hands to the
- * tile ahead of it; a tunnel's way-in mouth to its other mouth; a splitter to the tiles ahead, to
- * its left and to its right, but for a way that is shut; a sorter ahead, or for the thing it is set
- * to, to its left. Ways are numbered east, south, west, north; a quarter turn right is one more.
+ * The yard's plumbing: who hands to whom, and in what order, and the one rule by which a piece hands
+ * a thing to another. Who hands to whom depends only on what stands where, so it is worked out once
+ * after a change (`rewire`) and kept until the next. Each kind says for itself, in its module
+ * (`kinds/`), which sides it takes things in from, the tile it hands to or its ways out, what it wants
+ * and has room for, and its step in handing on; this asks each piece's kind, and so names none.
+ * Ways are numbered east, south, west, north; a quarter turn right is one more.
+ *
+ * The kinds play with the kit made here (`KIT`): everything of the rules they may use, handed to
+ * each of their hooks, since a kind's module imports nothing of the rules (`kinds/kind.ts`).
  */
 import { besideWater, toward } from "./land.ts";
+import { deliver, giveGoal } from "./orders.ts";
+import { makes, MINUTE } from "./planner.ts";
 import { litOf } from "./power.ts";
 import {
+  ALL_ITEMS,
   ALL_KINDS,
-  BELT,
-  BENCH,
-  BOILER,
-  CRATE,
+  BURNS,
+  CARRIES,
   DEADFALL,
-  DEPOT,
-  DRAW,
   drawnAt,
-  GATHERER,
-  GIVES,
+  FIXED,
+  FOLIOS,
+  GOALS,
+  GRADED,
   HALF,
+  holdsMost,
   isFolio,
-  JOINER,
+  isItem,
+  isKind,
+  isMaker,
+  isRaw,
+  ITEM_COUNT,
+  ITEM_INFO,
   type Kind,
-  MILL,
+  locked,
   NONE,
-  type Recipe,
+  PACE,
+  RECIPE,
   recipesFor,
-  SORTER,
-  SPLITTER,
-  STOP,
-  STUDY,
-  TUNNEL,
-  WHEEL,
-  WORKSHOP,
+  SPAN_MOST,
+  SPANS,
+  TINTED,
+  TINTS,
+  TOP,
+  WAYS,
+  WORK_OF,
 } from "./tables.ts";
-import { holderOf, tunnelOf, type Wire, type Yard } from "./yard.ts";
+import {
+  ahead,
+  at,
+  behind,
+  DX,
+  DY,
+  farMouth,
+  ground,
+  kindAt,
+  otherMouth,
+  unpackWays,
+  WAY_TURN,
+  wayIn,
+  wayTo,
+} from "./tiles.ts";
+import {
+  changed,
+  counts,
+  enough,
+  held,
+  holderOf,
+  insTo,
+  place,
+  put,
+  take,
+  tunnelOf,
+  tunnelRow,
+  type Wire,
+  type Yard,
+} from "./yard.ts";
 
-/** The tile ahead of a piece, behind it, and to its left and right; -1 off the map. */
-export const ahead = (y: Yard, i: number): number => toward(y.land, i, y.dir[i] ?? 0);
-export const behind = (y: Yard, i: number): number => toward(y.land, i, (y.dir[i] ?? 0) + 2);
-const left = (y: Yard, i: number): number => toward(y.land, i, (y.dir[i] ?? 0) + 3);
-const right = (y: Yard, i: number): number => toward(y.land, i, (y.dir[i] ?? 0) + 1);
+export { sortWay } from "./kinds/sorter.ts";
+export { ahead, behind, WAY_TURN, wayIn } from "./tiles.ts";
 
-/**
- * The way a sorter sends the thing it is set to: 1, to its left, or 2, to its right. It is kept as
- * a splitter keeps the way it puts first, 1 + the way, but only 3 is kept: 0 is the left, the way
- * every sorter sent before one could be set to the right.
- */
-export const sortWay = (y: Yard, i: number): 1 | 2 => (y.first[i] === 3 ? 2 : 1);
-/**
- * The ways out a piece sends nothing by, a bit each (1 ahead, 2 left, 4 right): a splitter's shut
- * ways and its ways turned to take things in, and a sorter's the side it does not send to.
- */
-export const closedWays = (y: Yard, i: number): number =>
-  y.kind[i] === SORTER ? (sortWay(y, i) === 1 ? 4 : 2) : (y.shut[i] ?? 0) | (y.ins[i] ?? 0);
-/** A splitter's or a sorter's way out (0 ahead, 1 left, 2 right), or -1 where it is closed or off the map. */
-export const wayOut = (y: Yard, i: number, way: number): number =>
-  (closedWays(y, i) >> way) & 1 ? -1 : way === 0 ? ahead(y, i) : way === 1 ? left(y, i) : right(y, i);
-/** How far round from the way a piece faces each of its ways out is, in quarter turns right: ahead, left, right. */
-export const WAY_TURN = [0, 3, 1] as const;
-/** The sides a splitter takes things in by besides behind, a bit each as `sidesTaken` has them: its ways in. */
-function sidesIn(y: Yard, i: number): number {
-  const ins = y.ins[i] ?? 0;
-  const d = y.dir[i] ?? 0;
-  let sides = 0;
-  WAY_TURN.forEach((t, way) => {
-    if ((ins >> way) & 1) sides |= 1 << ((d + t) & 3);
-  });
-  return sides;
-}
-/** A joiner's way in (0 behind, 1 left, 2 right), or -1 off the map. */
-export const wayIn = (y: Yard, i: number, way: number): number =>
-  way === 0 ? behind(y, i) : way === 1 ? left(y, i) : right(y, i);
+// ---------- who hands to whom ----------
 
-/** The far mouth of a tunnel's way-in mouth, `span + 1` tiles ahead; -1 off the map. */
-export function farMouth(y: Yard, i: number): number {
-  const { w, h } = y.land;
-  const d = y.dir[i] ?? 0;
-  const s = (y.span[i] ?? 0) + 1;
-  const x = (i % w) + (d === 0 ? s : d === 2 ? -s : 0);
-  const z = Math.floor(i / w) + (d === 1 ? s : d === 3 ? -s : 0);
-  return x < 0 || z < 0 || x >= w || z >= h ? -1 : z * w + x;
-}
+/** The rules of the kind standing on a tile; none where nothing stands. */
+const rulesAt = (y: Yard, i: number) => RULES[y.kind[i] ?? NONE];
 
-/** The one tile a piece hands to, or -1: none for a splitter or sorter (they have ways), a pylon, wheel, boiler, Study, stop or the depot. */
+/** Whether a kind carries things across its tile. */
+export const carries = (k: number): k is Kind => CARRIES[k] === 1;
+/** How many ways out a piece with ways has: a splitter's and a sorter's are ahead, left and right; 0 for one that hands to one tile. */
+export const waysOf = (k: number): number => WAYS[k] ?? 0;
+
+/** The one tile a piece hands to, or -1: none for a piece with ways, nor for one that hands nothing on. */
 export function nextOf(y: Yard, i: number): number {
-  const k = y.kind[i] ?? NONE;
-  if (k === TUNNEL && (y.span[i] ?? 0) > 0) return farMouth(y, i);
-  return k === BELT || k === JOINER || k === TUNNEL || k === CRATE || k === GATHERER || isWorker(k) ? ahead(y, i) : -1;
+  const r = rulesAt(y, i);
+  return r ? r.next(KIT, y, i) : -1;
 }
 
-/** Whether a kind carries things across its tile, and whether it is a machine that makes things. */
-export const carries = (k: number): k is Kind =>
-  k === BELT || k === SPLITTER || k === JOINER || k === TUNNEL || k === SORTER;
-/** How many ways out a piece with ways has: a splitter's and a sorter's are ahead, left and right (a sorter's other side shut). */
-export const waysOf = (k: number): number => (k === SPLITTER || k === SORTER ? 3 : 0);
-const isWorker = (k: number): boolean => k === MILL || k === BENCH || k === WORKSHOP;
+/** The ways out a piece sends nothing by, a bit each (1 ahead, 2 left, 4 right). */
+export function closedWays(y: Yard, i: number): number {
+  const r = rulesAt(y, i);
+  return r ? r.closed(KIT, y, i) : 0;
+}
+
+/** A piece's way out (0 ahead, 1 left, 2 right), or -1 where it is closed or off the map. */
+export const wayOut = (y: Yard, i: number, way: number): number =>
+  (closedWays(y, i) >> way) & 1 ? -1 : wayTo(y, i, way);
+
+/** The ways out (a bit each, as `closedWays`) a piece with ways sends the thing `n` by. */
+export function sendsOf(y: Yard, i: number, n: number): number {
+  const r = rulesAt(y, i);
+  return r ? r.sends(KIT, y, i, n) : 0;
+}
 
 /**
  * The sides a piece takes things in from, a bit for each way (east 1, south 2, west 4, north 8),
- * whatever it holds just now: a belt, crate or joiner from all but the side it faces (two belts
- * facing each other pass nothing), a splitter, a sorter and a tunnel's way-in mouth only from behind
- * (a splitter by its ways in too), the depot, a stop, mills, benches, workshops, boilers and Studies from every side, the rest from none.
+ * whatever it holds just now, as its kind says.
  */
 export function sidesTaken(y: Yard, i: number): number {
-  const k = y.kind[i] ?? NONE;
-  const d = y.dir[i] ?? 0;
-  if (k === BELT || k === CRATE || k === JOINER) return 15 & ~(1 << d);
-  if (k === SPLITTER || k === SORTER || (k === TUNNEL && (y.span[i] ?? 0) > 0))
-    return (1 << ((d + 2) & 3)) | sidesIn(y, i);
-  return k === DEPOT || k === STOP || k === BOILER || k === STUDY || isWorker(k) ? 15 : 0;
+  const r = rulesAt(y, i);
+  return r ? r.sides(KIT, y, i) : 0;
 }
 
 /**
@@ -124,55 +138,189 @@ export function takes(y: Yard, to: number, from: number): boolean {
   return false;
 }
 
-const NO_RECIPES: readonly Recipe[] = [];
-
 /**
  * Whether the piece on a tile takes the thing `n` at all, from whichever side it takes things by,
- * full or not: anything that carries, a crate, the depot and a stop take anything; a machine a part
- * of a recipe it may make, the one it is told to if it is told one; a boiler deadfall; a Study folios.
- * Whether it has room for it this tick is the tick's to ask, after this.
+ * full or not, as its kind says. Whether it has room for it this tick is the tick's to ask, after this.
  */
 export function wants(y: Yard, to: number, n: number): boolean {
-  const k = y.kind[to] ?? NONE;
-  if (carries(k) || k === CRATE || k === DEPOT || k === STOP) return true;
-  if (k === BOILER) return n === DEADFALL;
-  if (k === STUDY) return isFolio(n);
-  return isWorker(k) && partOf(y, k, y.set[to] ?? NONE, n);
+  const r = rulesAt(y, to);
+  return r ? r.wants(KIT, y, to, n) : false;
 }
 
-/** Whether the thing `n` goes into a recipe a kind of machine may make: the one it is told to (`only`), or any. */
-function partOf(y: Yard, k: number, only: number, n: number): boolean {
-  const recipes = (y.wire ?? rewire(y)).recipes[k] ?? NO_RECIPES;
-  for (let c = 0; c < recipes.length; c++) {
-    const recipe = recipes[c];
-    if (!recipe || (only !== NONE && recipe.out !== only)) continue;
-    for (let p = 0; p < recipe.from.length; p++) if (recipe.from[p] === n) return true;
-  }
-  return false;
+// ---------- the one rule by which a piece hands a thing to another ----------
+
+/** Each kind's hooks for taking a thing in, by its number: whether it wants it, has room for it, and takes it. */
+const WANTS = RULES.map((r) => r.wants);
+const ROOM = RULES.map((r) => r.room);
+const GIVE = RULES.map((r) => r.give);
+/**
+ * 1 for each kind that takes a thing as a belt does, by the carriers' own hooks (`kinds/line.ts`):
+ * anything, onto its tile while nothing is on it. Most of what a tick hands on goes onto such a tile,
+ * so it is asked here, before any hook: what the hooks would say, without the calls.
+ */
+const PLAIN = Uint8Array.from(RULES, (r) => (r.wants === anything && r.room === empty && r.give === lay ? 1 : 0));
+
+/** Whether the tile at `i` has something finished that it means to hand to the tile at `to`. */
+export function ready(y: Yard, i: number, to: number): boolean {
+  if (i < 0) return false;
+  const r = rulesAt(y, i);
+  return r ? r.ready(KIT, y, i, to) : false;
 }
+
+/** Whether the tile at `to` lets things in by turns (a joiner, or a splitter with ways in): a thing it refuses does not wait. */
+export function takesTurns(y: Yard, to: number): boolean {
+  if (to < 0) return false;
+  const k = y.kind[to] ?? NONE;
+  if (TAKES_TURNS[k] !== 1) return false;
+  return RULES[k]?.turns(KIT, y, to) ?? false;
+}
+
+/**
+ * Whether it is the turn of the way in `slot` of a piece whose ways in take turns (`ways` of them,
+ * the next being `turn`): it waits for whoever's turn it is, so long as they have something ready to
+ * give, the tile each way in takes from being `from`. A slot of -1 is no way in, never its turn.
+ */
+export function onTurn(
+  k: Kit,
+  y: Yard,
+  to: number,
+  slot: number,
+  ways: number,
+  turn: number,
+  from: (k: Kit, y: Yard, to: number, s: number) => number,
+): boolean {
+  if (slot < 0) return false;
+  for (let s = turn % ways; s !== slot; s = (s + 1) % ways) if (ready(y, from(k, y, to, s), to)) return false;
+  return true;
+}
+
+/**
+ * Whether the tile at `to` will take the thing `n` handed to it from the tile beside it on its side
+ * `side` (a way), asked in three steps the rules answer apart: whether it takes things from that side
+ * (`Wire.taken`, which `takes` reads too), whether it takes that thing (`wants`), and whether it has
+ * room for it this tick (its kind's `room`).
+ */
+export function accepts(y: Yard, to: number, n: number, side: number, wire: Wire): boolean {
+  if (to < 0 || (((wire.taken[to] ?? 0) >> side) & 1) === 0) return false;
+  const k = y.kind[to] ?? NONE;
+  if (PLAIN[k] === 1) return y.item[to] === NONE;
+  const takesIt = WANTS[k];
+  const roomFor = ROOM[k];
+  // A machine's, which most of what is not a belt is, by its own name (`tick.ts` says why).
+  if (takesIt === makerWants && roomFor === makerRoom)
+    return makerWants(KIT, y, to, n) && makerRoom(KIT, y, to, n, side, wire);
+  return takesIt !== undefined && roomFor !== undefined && takesIt(KIT, y, to, n) && roomFor(KIT, y, to, n, side, wire);
+}
+
+/** Hands the thing `n` to the tile at `to` from its side `side`, `over` eighths past the edge of the tile it came from. */
+function handTo(y: Yard, to: number, n: number, side: number, over: number, wire: Wire): void {
+  const k = y.kind[to] ?? NONE;
+  if (PLAIN[k] === 1) {
+    y.item[to] = n;
+    y.prog[to] = over;
+    y.via[to] = 1 + side;
+    return;
+  }
+  const give = GIVE[k];
+  if (give === keep) keep(KIT, y, to, n, side, over, wire);
+  else if (give) give(KIT, y, to, n, side, over, wire);
+}
+
+/**
+ * The tile at `i` may have room for more, or for another thing: the tiles that may hand to it stop
+ * waiting. They are the tiles beside it, and for a tunnel's far mouth, its way-in mouth. Each side is
+ * woken without asking first whether it is on the map, which every hand-off would pay for: past the
+ * end of a row is a tile at the other end of the next, which at worst tries again for nothing, and
+ * past the top or bottom row is outside the array, where writing does nothing.
+ */
+export function roomBeside(y: Yard, i: number, waiting: Uint8Array): void {
+  const w = y.land.w;
+  waiting[i + 1] = 0;
+  waiting[i - 1] = 0;
+  waiting[i + w] = 0;
+  waiting[i - w] = 0;
+  // A far mouth is the one tile with a span below 0. This stays this small so that every hand-off has
+  // it inlined: with the far mouth's case in it, it was not, and a line of belts ran 40% slower.
+  if ((y.span[i] ?? 0) < 0) mouthBehind(y, i, waiting);
+}
+
+/** A tunnel's far mouth may have room: its way-in mouth stops waiting. */
+function mouthBehind(y: Yard, i: number, waiting: Uint8Array): void {
+  if (SPANS[y.kind[i] ?? NONE] !== 1) return;
+  const mouth = otherMouth(y, i);
+  if (mouth >= 0) waiting[mouth] = 0;
+}
+
+/**
+ * The tile at `i` could not hand on what it holds to the tile at `to`, which had no room for it: it
+ * waits. Not at a tile whose ways in take turns, which may let it in once the thing whose turn it is
+ * goes another way, with nothing beside that tile changed; there it tries again each tick.
+ */
+export function refused(y: Yard, i: number, to: number, wire: Wire): void {
+  if (!takesTurns(y, to)) wire.waiting[i] = 1;
+}
+
+/**
+ * Hands what the tile at `i` carries to the tile at `to`, which it comes into by its side `side`, if
+ * that tile takes it, with how far past the edge it had come. Says whether it did.
+ */
+export function passTo(y: Yard, i: number, to: number, side: number, wire: Wire): boolean {
+  const n = y.item[i] ?? NONE;
+  if (!accepts(y, to, n, side, wire)) return false;
+  handTo(y, to, n, side, (y.prog[i] ?? 8) - 8, wire);
+  y.item[i] = NONE;
+  y.prog[i] = 0;
+  y.via[i] = 0;
+  roomBeside(y, i, wire.waiting);
+  return true;
+}
+
+/** Hands what a piece with ways carries to its way out `way`, if the tile there takes it. Says whether it did. */
+export const passWay = (y: Yard, i: number, way: number, wire: Wire): boolean =>
+  passTo(y, i, wayOut(y, i, way), ((y.dir[i] ?? 0) + (WAY_TURN[way] ?? 0) + 2) & 3, wire);
+
+/** A holder hands on its finished piece (its row `r`), to the tile ahead. */
+export function sendOut(y: Yard, i: number, r: number, wire: Wire): void {
+  const h = y.holders;
+  const n = h.out[r] ?? NONE;
+  const to = ahead(y, i);
+  const side = ((y.dir[i] ?? 0) + 2) & 3;
+  if (!accepts(y, to, n, side, wire)) {
+    refused(y, i, to, wire);
+    return;
+  }
+  handTo(y, to, n, side, 0, wire);
+  h.out[r] = NONE;
+  roomBeside(y, i, wire.waiting);
+}
+
+// ---------- the plumbing, worked out ----------
+
+/** The yard's plumbing as it stands, worked out first if a change left it unknown. */
+export const wireOf = (y: Yard): Wire => y.wire ?? rewire(y);
 
 /** Works out the yard's plumbing from what stands where. */
 export function rewire(y: Yard): Wire {
   const lit = litOf(y);
-  const { kind, land } = y;
+  const { kind } = y;
   const n = kind.length;
   const carry: number[] = [];
   const work: number[] = [];
-  const boilers: number[] = [];
+  const burners: number[] = [];
   // Power in halves: a piece draws its kind's power once for each half its grade draws (`drawnAt`).
   let steady = y.open.depot * HALF;
   let demand = 0;
   for (let i = 0; i < n; i++) {
     const k = kind[i] ?? NONE;
+    const r = RULES[k];
+    if (!r) continue;
     if (carries(k)) carry.push(i);
-    else if (k === GATHERER || k === STUDY || isWorker(k)) {
-      if (lit[i] === 1) {
-        work.push(i);
-        demand += drawnAt(k, y.grade[i] ?? 0);
-      }
-    } else if (k === WHEEL) {
-      if (lit[i] === 1 && besideWater(land, i)) steady += (GIVES[WHEEL] ?? 0) * HALF;
-    } else if (k === BOILER && lit[i] === 1) boilers.push(i);
+    else if (lit[i] !== 1) continue;
+    else if (r.work !== null) {
+      work.push(i);
+      demand += drawnAt(k, y.grade[i] ?? 0);
+    } else if (r.steady !== null) steady += r.steady(KIT, y, i);
+    else if (BURNS[k]) burners.push(i);
   }
   const taken = new Uint8Array(n);
   for (let i = 0; i < n; i++) if (kind[i] !== NONE) taken[i] = sidesTaken(y, i);
@@ -182,7 +330,7 @@ export function rewire(y: Yard): Wire {
     carry: Int32Array.from(carry),
     mouths: Int32Array.from(carry.filter((i) => tunnelOf(y, i) >= 0)),
     work: Int32Array.from(work),
-    boilers: Int32Array.from(boilers),
+    burners: Int32Array.from(burners),
     recipes: ALL_KINDS.map((k) => recipesFor(y.open, k)),
     steady,
     demand,
@@ -191,15 +339,24 @@ export function rewire(y: Yard): Wire {
   };
   y.wire = wire;
   y.demand = demand;
-  let burning = 0;
-  for (const i of boilers) if ((y.holders.fuel[holderOf(y, i)] ?? 0) > 0) burning++;
-  y.supply = steady + burning * (GIVES[BOILER] ?? 0) * HALF;
+  y.supply = steady + burningNow(y, burners);
   return wire;
 }
 
+/** The power what burns gives as it stands, in halves: each burning now, as its kind says (`KindDef.burns`). */
+function burningNow(y: Yard, burners: readonly number[]): number {
+  let burning = 0;
+  for (const i of burners)
+    if ((y.holders.fuel[holderOf(y, i)] ?? 0) > 0) burning += BURNS[y.kind[i] ?? NONE]?.halves ?? 0;
+  return burning;
+}
+
+/** Whether a kind hands things on at all: those with a step in handing on. */
+const hands = (k: number): boolean => (RULES[k]?.hands ?? null) !== null;
+
 /**
  * The tiles that hand things on, each after the tiles it hands to, so that a full belt moves as
- * one: a walk from each tile in turn, a splitter's ways in order, each tile once.
+ * one: a walk from each tile in turn, a piece's ways in order, each tile once.
  */
 function handingOrder(y: Yard): Int32Array {
   const n = y.kind.length;
@@ -211,8 +368,7 @@ function handingOrder(y: Yard): Int32Array {
   const enter = (i: number): void => {
     if (i < 0 || seen[i] === 1) return;
     seen[i] = 1;
-    const k = y.kind[i] ?? NONE;
-    if (hands(k)) stack[top++] = i;
+    if (hands(y.kind[i] ?? NONE)) stack[top++] = i;
   };
   for (let s = 0; s < n; s++) {
     enter(s);
@@ -231,8 +387,6 @@ function handingOrder(y: Yard): Int32Array {
   }
   return Int32Array.from(order);
 }
-/** Whether a kind hands things on at all: everything but pylons, wheels, boilers and the depot. */
-const hands = (k: number): boolean => carries(k) || k === CRATE || k === GATHERER || isWorker(k);
 
 /** The power there is and the power drawn; the share of ticks the machines work on (`pace`), and as every screen says it (`speed`). */
 export interface Power {
@@ -257,96 +411,98 @@ export function power(y: Yard): Power {
   };
 }
 
-/** What stands of a kind that draws power: how many where power reaches and where it does not, the power those in reach draw, and the least and most one of them draws at its grade where power reaches it. */
-export interface KindPower {
-  readonly kind: Kind;
-  readonly lit: number;
-  readonly dark: number;
-  readonly drawn: number;
-  readonly each: readonly [number, number];
-}
+/** How many of each thing the piece on a tile may hold, as its kind says (`Hooks.most`). */
+const mostHeld = (y: Yard, i: number, n: number): number => rulesAt(y, i)?.most(KIT, y, i, n) ?? 0;
+
+/** A whole number from 0 to `most`, or null. */
+const whole = (v: unknown, most: number): number | null =>
+  typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= most ? v : null;
 
 /**
- * Where a yard's power comes from and goes, counted once from what stands, as every screen says it:
- * what the depot gives; the waterwheels turning and those out of reach; the boilers in reach
- * burning and cold, and those out of reach; and each kind that draws, as `KindPower`
- * says, for each kind of which something stands. The kinds' power drawn adds up to `demand`, and
- * what the depot, the wheels and the boilers burning give to `supply`.
+ * The kit: what of the rules each kind's hooks are given (`kinds/kind.ts`). A kind uses only this,
+ * so whatever a kind can do to a yard is here to read.
  */
-export interface PowerSummary extends Power {
-  readonly depot: number;
-  readonly wheels: { readonly turning: number; readonly away: number };
-  readonly boilers: { readonly burning: number; readonly cold: number; readonly dark: number };
-  readonly draws: readonly KindPower[];
-}
-
-/** The kinds that draw power, in the tables' order. */
-const DRAWS: readonly Kind[] = ALL_KINDS.filter((k) => (DRAW[k] ?? 0) > 0);
-
-export function powerSummary(y: Yard): PowerSummary {
-  const p = power(y);
-  const t = tally(y);
-  const boilers = of(t.lit, BOILER);
-  const burns = (GIVES[BOILER] ?? 0) * HALF;
-  // The boilers that burned at the last tick are what the supply has beyond what is always there.
-  const beyond = y.supply - (y.wire ?? rewire(y)).steady;
-  const burning = burns > 0 ? Math.min(boilers, Math.max(0, Math.round(beyond / burns))) : 0;
-  return {
-    ...p,
-    depot: y.open.depot,
-    wheels: { turning: t.turning, away: of(t.lit, WHEEL) + of(t.dark, WHEEL) - t.turning },
-    boilers: { burning, cold: boilers - burning, dark: of(t.dark, BOILER) },
-    draws: DRAWS.filter((k) => of(t.lit, k) + of(t.dark, k) > 0).map((k) => ({
-      kind: k,
-      lit: of(t.lit, k),
-      dark: of(t.dark, k),
-      drawn: of(t.drawn, k) / HALF,
-      each: [of(t.least, k) / HALF, of(t.most, k) / HALF],
-    })),
-  };
-}
-
-/** A kind's count in a tally. */
-const of = (a: Int32Array, k: number): number => a[k] ?? 0;
-
-/** One walk over what stands: of each kind (by its number), how many in reach of power and not, what those in reach draw and the least and most one draws, in halves; and the wheels that turn. */
-interface Tally {
-  readonly lit: Int32Array;
-  readonly dark: Int32Array;
-  readonly drawn: Int32Array;
-  readonly least: Int32Array;
-  readonly most: Int32Array;
-  turning: number;
-}
-
-function tally(y: Yard): Tally {
-  const lit = litOf(y);
-  const n = ALL_KINDS.length;
-  const t: Tally = {
-    lit: new Int32Array(n),
-    dark: new Int32Array(n),
-    drawn: new Int32Array(n),
-    least: new Int32Array(n),
-    most: new Int32Array(n),
-    turning: 0,
-  };
-  for (let i = 0; i < y.kind.length; i++) {
-    const k = y.kind[i] ?? NONE;
-    if (k === NONE) continue;
-    const reached = lit[i] === 1;
-    const counts = reached ? t.lit : t.dark;
-    counts[k] = of(counts, k) + 1;
-    if (k === WHEEL && reached && besideWater(y.land, i)) t.turning++;
-    const d = drawnAt(k, y.grade[i] ?? 0);
-    if (!reached) continue;
-    t.drawn[k] = of(t.drawn, k) + d;
-    if (d > 0) widen(t, k, d);
-  }
-  return t;
-}
-
-/** Takes in what one piece of a kind draws: the least and the most one of the kind draws. */
-function widen(t: Tally, k: number, d: number): void {
-  if (of(t.least, k) === 0 || d < of(t.least, k)) t.least[k] = d;
-  if (d > of(t.most, k)) t.most[k] = d;
-}
+export const KIT: Kit = {
+  // The tables.
+  NONE,
+  ITEM_COUNT,
+  ALL_ITEMS,
+  ITEM_INFO,
+  RECIPE,
+  GOALS,
+  FOLIOS,
+  DEADFALL,
+  PACE,
+  HALF,
+  TOP,
+  TINTS,
+  SPAN_MOST,
+  WORK_OF,
+  FIXED,
+  TINTED,
+  GRADED,
+  isItem,
+  isKind,
+  isRaw,
+  isFolio,
+  isMaker,
+  drawnAt,
+  holdsMost,
+  locked,
+  recipesFor,
+  makes,
+  MINUTE,
+  BURNS,
+  whole,
+  // The yard's reads and writes.
+  holderOf,
+  tunnelOf,
+  put,
+  take,
+  held,
+  enough,
+  counts,
+  changed,
+  place,
+  tunnelRow,
+  insTo,
+  unpackWays,
+  mostHeld,
+  // The tiles about a piece.
+  DX,
+  DY,
+  WAY_TURN,
+  at,
+  kindAt,
+  ground,
+  toward,
+  besideWater,
+  ahead,
+  behind,
+  wayIn,
+  farMouth,
+  otherMouth,
+  // Who hands to whom, and the one rule of handing a thing on.
+  nextOf,
+  closedOf: closedWays,
+  wayOut,
+  waysOf,
+  sendsOf,
+  takes,
+  wants,
+  ready,
+  takesTurns,
+  onTurn,
+  passTo,
+  passWay,
+  sendOut,
+  refused,
+  roomBeside,
+  wireOf,
+  // What reaches the depot and the research; power.
+  deliver,
+  giveGoal,
+  litOf,
+  pace: (y: Yard): number => power(y).pace,
+};
+export type { Kit };

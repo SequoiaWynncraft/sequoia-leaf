@@ -2,7 +2,7 @@
  * What the piece on a tile says of the things it carries, as the picture draws them: which way it
  * faces, the side a thing came in by, and whether a thing is under a tunnel's hood.
  */
-import { BACK, type Dir, TUNNEL, type Yard } from "@sequoia-leaf/factory";
+import { BACK, type Dir, NONE, SPANS, type Yard } from "@sequoia-leaf/factory";
 
 /** The way the piece on a tile faces. */
 export const dirAt = (y: Yard, i: number): Dir => {
@@ -22,4 +22,4 @@ export const cameFrom = (y: Yard, i: number): number => {
  * show past the hood, between the mouths.
  */
 export const hooded = (y: Yard, i: number, prog: number): boolean =>
-  y.kind[i] === TUNNEL && ((y.span[i] ?? 0) > 0 ? prog > 0.5 : prog < 0.5);
+  SPANS[y.kind[i] ?? NONE] === 1 && ((y.span[i] ?? 0) > 0 ? prog > 0.5 : prog < 0.5);

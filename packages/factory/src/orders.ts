@@ -35,7 +35,7 @@ import {
   type Plot,
   ready,
   RECIPES_N,
-  STUDY,
+  STUDIES,
   workOf,
 } from "./tables.ts";
 import { type Counts, counts, hold, reopen, type Standing, type Yard } from "./yard.ts";
@@ -139,7 +139,7 @@ function begin(y: Yard): void {
   const h = y.holders;
   h.idle.fill(0);
   for (let r = 0; r < h.size; r++)
-    if (y.kind[h.tile[r] ?? 0] === STUDY) {
+    if (STUDIES[y.kind[h.tile[r] ?? 0] ?? NONE] === 1) {
       h.making[r] = NONE;
       h.work[r] = 0;
     }

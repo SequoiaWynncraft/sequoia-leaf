@@ -85,9 +85,8 @@ describe("the power summary", () => {
   test("says what the depot and the waterwheels give and the boilers burning, which adds up to the power made", () => {
     const y = delivering();
     const s = F.powerSummary(y);
-    expect(s.depot + s.wheels.turning * (F.GIVES[F.WHEEL] ?? 0) + s.boilers.burning * (F.GIVES[F.BOILER] ?? 0)).toBe(
-      s.supply,
-    );
+    expect(s.depot + s.gives.reduce((n, g) => n + g.gives, 0)).toBe(s.supply);
+    expect(s.gives.map((g) => g.kind)).toEqual(s.gives.map((g) => g.kind).toSorted((a, b) => a - b));
   });
 });
 

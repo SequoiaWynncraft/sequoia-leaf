@@ -5,8 +5,8 @@
 import { at, digsUnder, type Dir, DX, DY } from "./build.ts";
 import { toward } from "./land.ts";
 import type { Piece } from "./pieces.ts";
-import { BELT, DEPOT, isMaker, type Kind, locked, NONE, TUNNEL } from "./tables.ts";
-import { ahead, takes } from "./wire.ts";
+import { BELT, FIXED, type Kind, locked, NONE, TUNNEL } from "./tables.ts";
+import { nextOf, takes } from "./wire.ts";
 import { redwoodAt, type Yard } from "./yard.ts";
 
 /** Where a leg of a run is laid, which way it goes, and its grade: what a leg of belt and a leg of tunnel both hold. */
@@ -29,6 +29,9 @@ export type Leg =
 
 /** What a leg lays. */
 export const legKind = (l: Leg): Kind => (l.tunnel ? TUNNEL : BELT);
+
+/** Whether a kind is the depot's: a run that ends beside it goes into it, by any of its tiles. */
+const fixed = (k: number | undefined): boolean => FIXED[k ?? NONE] === 1;
 /** How far under a leg goes: a tunnel's span, and none for a belt. */
 export const legSpan = (l: Leg): number => (l.tunnel ? l.span : 0);
 /** A leg as a piece to stand, made of nothing but what a leg holds. */
@@ -96,9 +99,9 @@ interface Into {
  */
 function endsInto(y: Yard, i: number, j: number, to: Into): boolean {
   const k = y.kind[j] ?? NONE;
-  if (j !== to.target && !(k === DEPOT && y.kind[to.target] === DEPOT)) return false;
+  if (j !== to.target && !(fixed(k) && y.kind[to.target] === k)) return false;
   if (!takes(y, j, i)) return false;
-  return to.fronts || i === to.start || !isMaker(k) || ahead(y, j) !== i;
+  return to.fronts || i === to.start || nextOf(y, j) !== i;
 }
 
 function search(
@@ -178,10 +181,10 @@ function search(
     const p = prev[end] ?? -1;
     if (p >= 0) endDir = wayBetween(W, Math.floor(p / 5), goal);
     const onto = toward(land, goal, endDir);
-    if (onto < 0 || y.kind[onto] !== DEPOT)
+    if (onto < 0 || !fixed(y.kind[onto]))
       for (const d of DIRS) {
         const j = toward(land, goal, d);
-        if (j >= 0 && y.kind[j] === DEPOT && takes(y, j, goal)) endDir = d;
+        if (j >= 0 && fixed(y.kind[j]) && takes(y, j, goal)) endDir = d;
       }
   }
 

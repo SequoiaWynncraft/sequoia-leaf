@@ -3,9 +3,10 @@
  * would send (by the rules, and by reach: `figure/reach.ts`), and the press sends that command, so
  * what is shown and what is done can never differ.
  */
-import { type Act, at, boxOf, type Dir, type Kind, type Leg, type Piece, SORTER, TUNNEL } from "@sequoia-leaf/factory";
+import { type Act, at, boxOf, type Dir, type Kind, type Leg, type Piece, TUNNEL } from "@sequoia-leaf/factory";
 
 import type { Tile } from "./hand.ts";
+import { flips } from "./kinds/index.ts";
 import { gradeInHand, type Group, S } from "./state.ts";
 
 /**
@@ -23,8 +24,8 @@ export function raisedOn(tool: Kind, i: number): number | undefined {
   return stands > 0 && gradeInHand(tool) > stands ? stands : undefined;
 }
 
-/** For a sorter in hand, the side it sends to. */
-export const sideInHand = (tool: Kind): { right?: boolean } => (tool === SORTER ? { right: S.right } : {});
+/** For a kind in hand that is flipped (a sorter), the side it sends to. */
+export const sideInHand = (tool: Kind): { right?: boolean } => (flips(tool) ? { right: S.right } : {});
 
 /** Building the kind in hand on a tile, facing the way the hand faces, at the grade it would stand at there. */
 export const buildAct = (kind: Kind, x: number, y: number): Act => ({

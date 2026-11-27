@@ -1,3 +1,4 @@
+import type { KindName } from "../kinds/list.ts";
 /**
  * The tiers, as nodes: lessons first, done in their order; then in each tier projects, done in any
  * order once the tier is open, and one commission, which opens the next tier. Each is a delivery to
@@ -6,7 +7,6 @@
  * What a node or a piece of research unlocks is one type (`Unlocks`). A new yard starts with `START`.
  */
 import type { ItemName, Wants } from "./items.ts";
-import type { KindName } from "./machines.ts";
 import type { PlotName } from "./plots.ts";
 
 /** `whole`: a blueprint of the whole yard, kept and put back with Select (`whole.ts`). */

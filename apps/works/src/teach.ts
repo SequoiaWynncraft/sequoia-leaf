@@ -16,9 +16,10 @@ import {
   BENCH,
   condition,
   DEADFALL,
-  DEPOT,
+  FIXED,
   FOLIOS,
   GATHERER,
+  GATHERING,
   goal,
   GOALS,
   highest,
@@ -38,11 +39,11 @@ import {
   RECIPES_N,
   recipeSays,
   refusal,
-  SPLITTER,
+  RULES,
   STATES,
   STUDY,
+  STUDYING,
   TROUBLE,
-  WORKSHOP,
   type Yard,
 } from "@sequoia-leaf/factory";
 
@@ -102,6 +103,9 @@ const owned = (w: Yard, i: number): boolean => {
   const plot = w.land.plots[w.land.plot[i] ?? NONE];
   return plot !== undefined && w.plots.includes(plot.plot);
 };
+
+/** Whether a kind has a way it may put first (a splitter). */
+const putsFirst = (k: number): boolean => RULES[k]?.set.first !== undefined;
 
 /** Whether the yard may make a recipe that takes more than 1 of a part: from then on a card says numbers. */
 const counted = (w: Yard): boolean =>
@@ -235,7 +239,7 @@ export function nudge(
 
   // A machine's numbers, the first time a card is opened once the yard counts.
   const picked = at.picked >= 0 ? (w.kind[at.picked] ?? NONE) : NONE;
-  if (!told("numbers") && (isMaker(picked) || picked === GATHERER) && counted(w))
+  if (!told("numbers") && (isMaker(picked) || picked === GATHERING) && counted(w))
     return {
       id: "numbers",
       text: "Its card says what it makes and needs a minute: count the machines that feed it there.",
@@ -246,7 +250,7 @@ export function nudge(
     };
 
   // A way put first, the first time a splitter's card is opened once the yard may put one first: beside its ways.
-  if (!told("first") && picked === SPLITTER && locked(w.open, { first: true }) === null)
+  if (!told("first") && putsFirst(picked) && locked(w.open, { first: true }) === null)
     return {
       id: "first",
       text: "Press a way until it says First. Items go that way while it can take them; the rest go to the other ways.",
@@ -310,7 +314,7 @@ export function nudge(
   }
 
   // Select only once the yard has it.
-  const pieces = w.kind.reduce((n, k) => n + (k !== NONE && k !== DEPOT ? 1 : 0), 0);
+  const pieces = w.kind.reduce((n, k) => n + (k !== NONE && FIXED[k] !== 1 ? 1 : 0), 0);
   if (!told("select") && locked(w.open, { use: "select" }) === null && pieces > 60)
     return {
       id: "select",
@@ -332,7 +336,8 @@ export function nudge(
       lasting: false,
     };
   if (!told("starved")) {
-    const stuck = w.kind.findIndex((k, i) => (k === BENCH || k === WORKSHOP) && condition(w, i) === STARVED);
+    // Only a machine of two parts or more can fill up with one while it waits for another.
+    const stuck = w.kind.findIndex((k, i) => isMaker(k) && condition(w, i) === STARVED);
     if (stuck >= 0)
       return {
         id: "starved",
@@ -351,7 +356,7 @@ export function nudge(
  * A lesson about a tile needs none, since what it asks for is what stops it being said.
  */
 const LEARNT: Readonly<Record<string, (w: Yard) => boolean>> = {
-  study: (w) => has(w, STUDY) >= 0,
+  study: (w) => has(w, STUDYING) >= 0,
   research: (w) => w.line.length > 0,
 };
 

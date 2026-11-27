@@ -5,7 +5,8 @@
  */
 import { describe, expect, test } from "bun:test";
 
-import { at, build, create, encode, SPLITTER, type Yard } from "@sequoia-leaf/factory";
+import { at, build, create, encode, SORTER, SPLITTER, type Yard } from "@sequoia-leaf/factory";
+import { bareLand } from "@sequoia-leaf/factory/test/land.ts";
 import { near, xy } from "@sequoia-leaf/factory/test/near.ts";
 
 import { ctx, type FakeLeaf, opened, until, useFakeLeaf } from "../test/fake-leaf.ts";
@@ -70,6 +71,14 @@ describe("a splitter's ways on its card", () => {
     expect(runOut(y, i)).toBe(at(y, ...xy(-4, -3)));
     y.shut[i] = 6;
     expect(runOut(y, i)).toBe(-1);
+  });
+
+  test("a run of belt from a sorter begins ahead of it, as it sends everything with nothing set: none at the map's edge", () => {
+    const y = create({ land: bareLand(20, 9, [], [15, 4]), tier: 5, seed: 1 });
+    for (const x of [10, 19]) expect(build(y, SORTER, x, 1, 0, Infinity).ok).toBe(true);
+    expect(runOut(y, at(y, 10, 1))).toBe(at(y, 11, 1));
+    // Facing off the map: no way left or right instead.
+    expect(runOut(y, at(y, 19, 1))).toBe(-1);
   });
 
   test("before ways in are studied, a shut way opens; before a way may be put first, an open way shuts", () => {

@@ -5,11 +5,13 @@
  * end to end with it, as things are handed on, as far as the next thing that is neither.
  */
 import { toward } from "./land.ts";
-import { BELT, JOINER, NONE, SORTER, SPLITTER, TUNNEL } from "./tables.ts";
-import { behind, nextOf, takes } from "./wire.ts";
+import { LINED, NONE, TINTED } from "./tables.ts";
+import { behind } from "./tiles.ts";
+import { nextOf, takes } from "./wire.ts";
 import type { Yard } from "./yard.ts";
 
-const inLine = (y: Yard, i: number): boolean => i >= 0 && (y.kind[i] === BELT || y.kind[i] === TUNNEL);
+/** Whether a tile holds what is coloured with its line (a belt, a tunnel mouth). */
+const inLine = (y: Yard, i: number): boolean => i >= 0 && LINED[y.kind[i] ?? NONE] === 1;
 
 /**
  * The belt or tunnel mouth a line comes onto a tile from, or -1: a tunnel's other mouth, the one
@@ -37,8 +39,8 @@ function after(y: Yard, i: number): number {
 
 /** The tiles coloured together with a tile: a splitter or a joiner by itself, a belt or a tunnel mouth with its line. */
 export function lineOf(y: Yard, i: number): number[] {
-  const k = i < 0 ? NONE : y.kind[i];
-  if (k === SPLITTER || k === JOINER || k === SORTER) return [i];
+  const k = i < 0 ? NONE : (y.kind[i] ?? NONE);
+  if (TINTED[k] === 1 && LINED[k] !== 1) return [i];
   if (!inLine(y, i)) return [];
   const line = [i];
   const on = new Set(line);

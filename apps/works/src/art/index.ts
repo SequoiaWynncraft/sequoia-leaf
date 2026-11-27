@@ -4,15 +4,12 @@
  */
 
 import {
-  ALL_KINDS,
   type Dir,
   isItem,
   type Item,
   item as thing,
   ITEM_COUNT,
   type Kind,
-  type KindName,
-  kindName,
   type Land,
   LEFT,
   NONE,
@@ -24,10 +21,13 @@ import { whole } from "@sequoia-leaf/kit/say.ts";
 import { widthOf, write } from "@sequoia-leaf/kit/text.ts";
 import { hash, makeCanvas, must, vnoise } from "@sequoia-leaf/kit/util.ts";
 
-import { type Arms, arms, beltTile, marksOf, TILE, woodOf } from "./belts.ts";
+import { pageOf } from "../kinds/index.ts";
+import type { Parts } from "../kinds/kind.ts";
+import { arms, TILE } from "./belts.ts";
 import { type Ground, paintGround } from "./ground.ts";
 import { type ItemArt, makeItems, makePlain } from "./items.ts";
-import { gathererHat, lookOf, type Machines, makeMachines } from "./machines.ts";
+import { type Machines, makeMachines } from "./machines.ts";
+import { headsOn, meeting } from "./meeting.ts";
 import { bush, fern, trunk } from "./nature.ts";
 import { bm, DEEP, spr, type Sprite } from "./pal.ts";
 
@@ -140,33 +140,6 @@ function signMaker(): (price: number) => Sprite {
   };
 }
 
-/** A piece of belt running east, with nothing on it, in a line's colour or in none. */
-export const bare = (tint = 0): HTMLCanvasElement => beltTile(arms(2, 0, 1, 0), 0, 5, 1, tint);
-
-/**
- * A tile where belts meet at a grade, as the yard lays it: its belt in the grade's wood (`wood`, as
- * `beltTile` takes it), what marks it, and over that the grade's mark. `a` and `main` as `beltTile`
- * takes them.
- */
-export function meetingTile(
-  m: Machines,
-  a: Arms,
-  main: Dir,
-  top: HTMLCanvasElement | undefined,
-  grade: number,
-  wood = woodOf(grade),
-): HTMLCanvasElement {
-  const { c, g } = makeCanvas(16, 16);
-  g.drawImage(beltTile(a, main, 5, wood), 0, 0);
-  if (top) g.drawImage(top, 0, 0);
-  const pip = m.pips[grade - 2];
-  if (pip) g.drawImage(pip, 0, 0);
-  return c;
-}
-/** A tile where belts meet, pointing east, at a grade, for a button: at the first grade, with the lighter slats a button shows a belt with. */
-const meeting = (m: Machines, a: Arms, top: HTMLCanvasElement | undefined, grade: number): HTMLCanvasElement =>
-  meetingTile(m, a, 0, top, grade, grade >= 2 ? woodOf(grade) : 1);
-
 /**
  * What lies over a sorter pointing east: a framed board across the belt, things passing under it,
  * and an arrowhead on the way out to its side (left, or right), in brass once it is set to a thing.
@@ -209,16 +182,6 @@ function sorterTops(plain: ItemArt): Art["sorter"] {
   };
 }
 
-/** A splitter's top pointing east with its arrowheads on some of its ways out only (0 ahead, 1 left, 2 right). */
-function headsOn(m: Machines, ways: readonly number[]): HTMLCanvasElement {
-  const { c, g } = makeCanvas(TILE, TILE);
-  for (const way of ways) {
-    const head = m.heads[way]?.[0];
-    if (head) g.drawImage(head, 0, 0);
-  }
-  return c;
-}
-
 /**
  * The depot typed out for a slot, 22 pixels square with its edge: the whole building as the yard has
  * it (the purple roof with the Works' wheel, the chimney, the lit window, the order board, the open
@@ -248,68 +211,10 @@ export const DEPOT_PIC = [
   "ssshSSSryYYyrSshSSSS",
 ];
 
-/** What a kind's picture is put together from: the machines' art, the things', a sorter's top, and the depot's picture for a slot. */
-interface Parts {
-  readonly m: Machines;
-  readonly item: ItemArt;
-  readonly sorter: Art["sorter"];
-  readonly depot: HTMLCanvasElement;
-}
-
-/**
- * How each kind of piece is pictured, standing idle at a grade: for the toolbar and the cards. Every
- * kind in the tables has its entry, or this does not build; `pictures.test.ts` walks the tables
- * against it too.
- */
-export const KIND_PIC: Readonly<Record<KindName, (p: Parts, grade: number, carrying: Item) => HTMLCanvasElement>> = {
-  // A belt is known by what rides on it: a plank, unless it is pictured carrying something of its own.
-  // At the first grade its button has lighter slats than the yard's.
-  belt: ({ item }, grade, carrying) => {
-    const { c, g } = makeCanvas(16, 16);
-    g.drawImage(grade >= 2 ? beltTile(arms(2, 0, 1, 0), 0, 5, woodOf(grade), 0, marksOf(grade)) : bare(), 0, 0);
-    const on = item(carrying);
-    g.drawImage(on, 8 - (on.width >> 1), 7 - (on.height >> 1));
-    return c;
-  },
-  // A gatherer in his grade's hat; of the second grade with his rake stood beside him, of the third his wheelbarrow too.
-  gatherer: ({ m }, grade) => {
-    const gnome = must(m.gnome[gathererHat(grade)]?.[0], "gnome").c;
-    if (grade < 2) return gnome;
-    const barrow = grade >= 3 ? m.barrow : null;
-    const left = barrow ? barrow.width - 4 : 0;
-    const { c, g } = makeCanvas(left + gnome.width + 5, gnome.height);
-    if (barrow) g.drawImage(barrow, 0, gnome.height - barrow.height);
-    g.drawImage(m.rake.c, left + gnome.width - 2, gnome.height - m.rake.c.height);
-    g.drawImage(gnome, left, 0);
-    return c;
-  },
-  mill: ({ m }, grade) => must(m.saw[lookOf(grade)]?.[0], "saw").c,
-  bench: ({ m }, grade) => must(m.bench[lookOf(grade)]?.[0], "bench").c,
-  workshop: ({ m }, grade) => must(m.workshop[lookOf(grade)]?.[1]?.[0], "workshop").c,
-  splitter: ({ m }, grade) => meeting(m, arms(2, 2, 1, 2), m.splitter[0], grade),
-  joiner: ({ m }, grade) => meeting(m, arms(2, 1, 1, 1), m.joiner[0], grade),
-  tunnel: ({ m }, grade) => {
-    const hood = must(m.hood[lookOf(grade)]?.[0], "hood");
-    const { c, g } = makeCanvas(18, 20);
-    g.drawImage(beltTile(arms(0, 0, 1, 0), 0, 5, woodOf(grade)), 1, 3);
-    g.drawImage(hood.c, 0, 0);
-    return c;
-  },
-  crate: ({ m }) => must(m.crate[0]?.[0], "crate").c,
-  pylon: ({ m }) => must(m.pylon[0]?.[2], "pylon").c,
-  wheel: ({ m }) => must(m.wheel[0], "wheel").c,
-  boiler: ({ m }) => must(m.boiler[1], "boiler").c,
-  depot: ({ depot }) => depot,
-  study: ({ m }, grade) => must(m.study[lookOf(grade)]?.[2], "study").c,
-  stop: ({ m }) => must(m.stop[0], "stop").c,
-  sorter: ({ m, sorter }, grade, carrying) => meeting(m, arms(2, 0, 1, 2), sorter(0, carrying), grade),
-};
-
 /** A copy of each kind's picture, for a button or a card. */
 function icons(parts: Parts): Art["icon"] {
-  const made = ALL_KINDS.map((k) => KIND_PIC[kindName(k)]);
   return (kind, grade = 1, carrying = thing("plank")) => {
-    const src = must(made[kind], "a kind's picture")(parts, grade, carrying);
+    const src = must(pageOf(kind), "a kind's page").picture(parts, grade, carrying);
     const { c, g } = makeCanvas(src.width, src.height);
     g.drawImage(src, 0, 0);
     return c;

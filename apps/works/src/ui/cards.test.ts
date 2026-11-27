@@ -195,13 +195,13 @@ describe("a card", () => {
     const drawing: Record<string, string[]> = {
       "./cards.ts": [
         "../art/machines.ts",
+        "../kinds/index.ts",
         "../sound.ts",
         "./flow.ts",
         "./goal.ts",
         "./land.ts",
         "./parts.ts",
         "./refs.ts",
-        "./sorter.ts",
         "./splitter.ts",
       ],
       "./flow.ts": ["./parts.ts", "./refs.ts"],
@@ -220,6 +220,22 @@ describe("a card", () => {
       expect([file, from.filter((f) => f.startsWith(".")).toSorted((a, b) => a.localeCompare(b))]).toEqual([file, may]);
       expect(text).not.toMatch(/\bS\.|coins\(/);
     });
+  });
+
+  test("is drawn by kinds' modules that reach no yard either: each imports only the art, the frame's effects, the tiles and the cards' own parts", async () => {
+    // Each kind's page module (`kinds/`), whose card rows and buttons the cards draw, may import these of the page and nothing else.
+    const may =
+      /^(?:\.\/[\w-]+\.ts|\.\.\/art\/[\w-]+\.ts|\.\.\/fx\.ts|\.\.\/tiles\.ts|\.\.\/ui\/(?:parts|refs|sorter)\.ts)$/;
+    const folder = new URL("../kinds/", import.meta.url).pathname;
+    const files = [...new Bun.Glob("*.ts").scanSync({ cwd: folder })].filter((f) => !f.endsWith(".test.ts"));
+    expect(files.length).toBeGreaterThan(16);
+    const texts = await Promise.all(files.map((file) => Bun.file(`${folder}${file}`).text()));
+    for (const [n, file] of files.entries()) {
+      const text = texts[n] ?? "";
+      const from = [...text.matchAll(/^import(?! type)[^;]*? from "([^"]+)";/gms)].map((m) => m[1] ?? "");
+      expect([file, from.filter((f) => f.startsWith(".") && !may.test(f))]).toEqual([file, []]);
+      expect([file, /\bS\.|coins\(/.test(text)]).toEqual([file, false]);
+    }
   });
 });
 

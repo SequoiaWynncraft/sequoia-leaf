@@ -20,26 +20,18 @@ import {
   ALL_ITEMS,
   ALL_KINDS,
   carries,
-  DEPOT,
+  FIXED,
   type ItemName,
   itemName,
-  JOINER,
-  type KindName,
-  kindName,
   type Land,
   nextOf,
   NONE,
   plotState,
-  PYLON,
   RAW,
   redwoodAt,
-  SORTER,
-  SPLITTER,
-  STOP,
-  STUDY,
-  TUNNEL,
   tunnelOf,
   wayOut,
+  waysOf,
   type Yard,
 } from "@sequoia-leaf/factory";
 import { BARK, CREAM, GOLD, GREEN, INK, PAPER, SKY, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
@@ -47,6 +39,7 @@ import { type Ctx, makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
 import { armAt, PAINTS } from "./art/belts.ts";
 import { CLAY, DARK, DEEP } from "./art/pal.ts";
+import { pageOf } from "./kinds/index.ts";
 import { armsAt, type Layout } from "./layout.ts";
 
 // ---------- colours ----------
@@ -98,26 +91,8 @@ const HUE: Readonly<Record<ItemName, string>> = {
 };
 const HUES = ALL_ITEMS.map((n) => HUE[itemName(n)]);
 
-/** A kind's block, lit and in shade; nothing for the kinds drawn another way (what carries, the lamp of a pylon, the depot). */
-const LOOK: Readonly<Record<KindName, readonly [string, string] | null>> = {
-  belt: null,
-  splitter: null,
-  joiner: null,
-  tunnel: null,
-  sorter: null,
-  pylon: null,
-  depot: null,
-  gatherer: [WATER[2], WATER[0]],
-  mill: [STONE[2], STONE[0]],
-  bench: [PAPER[0], BARK[3]],
-  workshop: [SKY[3], SKY[1]],
-  crate: [BARK[3], BARK[1]],
-  wheel: [WATER[3], WATER[1]],
-  boiler: [CLAY[1], CLAY[0]],
-  study: [CREAM, PAPER[0]],
-  stop: [GOLD[1], GOLD[0]],
-};
-const LOOKS = ALL_KINDS.map((k) => LOOK[kindName(k)]);
+/** Each kind's block, lit and in shade, by its number; nothing for the kinds drawn another way (what carries, the lamp of a pylon, the depot). */
+const LOOKS = ALL_KINDS.map((k) => pageOf(k)?.map ?? null);
 
 /** The ground by whose it is: the yard's (grass at dusk), a plot for sale (dim), land not for sale (dark). */
 const GROUNDS = [mix(GREEN[1], SKY[0], 0.22), mix(GREEN[0], DEEP[1], 0.5), DEEP[0]] as const;
@@ -181,7 +156,7 @@ function lie(s: Seen, y: Yard): void {
     const west = x > 0 && land.plot[i - 1] !== here && !(mine && s.ground[i - 1] === 0);
     s.edge[i] = (north ? 1 : 0) | (west ? 2 : 0);
     const k = y.kind[i] ?? NONE;
-    if (k === STOP || k === STUDY) s.spots.push(i);
+    if (pageOf(k)?.spot) s.spots.push(i);
     if (!carries(k)) s.carried[i] = NONE;
     if (tunnelOf(y, i) < 0) continue;
     const step = land.step[(y.dir[i] ?? 0) & 3] ?? 0;
@@ -247,8 +222,10 @@ function look(y: Yard): Seen {
     for (let o = order.length - 1; o >= 0; o--) {
       const i = order[o] ?? 0;
       const k = y.kind[i] ?? NONE;
-      if (s.carried[i] === NONE || !carries(k) || k === SORTER) continue;
-      if (k === SPLITTER) for (let way = 0; way < 3; way++) hand(s, y, i, wayOut(y, i, way));
+      // A piece that sends each thing by what it is (a sorter) carries no line on.
+      if (s.carried[i] === NONE || !carries(k) || pageOf(k)?.sorts) continue;
+      const ways = waysOf(k);
+      if (ways > 0) for (let way = 0; way < ways; way++) hand(s, y, i, wayOut(y, i, way));
       else hand(s, y, i, nextOf(y, i));
     }
   s.yard = y;
@@ -345,7 +322,7 @@ function numberOf(s: Seen, y: Yard, L: Layout, i: number, depot: number): number
     const load = s.carried[i] ?? NONE;
     // A kind the picture near does not draw yet has no arms in the layout: they are worked out here.
     n |= ((L.arms[i] || armsAt(y, i)) << 14) | (tint << 22) | ((tint > 0 || load === NONE ? 0 : load + 1) << 25);
-  } else if (k === DEPOT) {
+  } else if (FIXED[k] === 1) {
     const W = land.w;
     n |= ((i % W) - (depot % W) + 1 + (Math.floor(i / W) - Math.floor(depot / W) + 1) * 3) << 14;
   }
@@ -401,22 +378,24 @@ function tile(g: Ctx, P: number, x: number, y: number, n: number): void {
       if (west === 1 || west === 2) g.fillRect(x, y + a, m, wide);
       if (north === 1 || north === 2) g.fillRect(x + a, y, wide, m);
     }
-    // Brass where a line parts or meets, stone at a tunnel's mouth.
-    if (kind === TUNNEL || kind === SPLITTER || kind === JOINER || kind === SORTER) {
-      g.fillStyle = kind === TUNNEL ? STONE[3] : GOLD[2];
+    // Brass where a line parts or meets, stone at a tunnel's mouth: as its kind marks it.
+    const mid = pageOf(kind)?.mapMark;
+    if (mid) {
+      g.fillStyle = mid;
       g.fillRect(x + m, y + m, t, t);
     }
     return;
   }
-  if (kind === PYLON) {
+  const lamp = pageOf(kind)?.mapLamp;
+  if (lamp) {
     // A lamp: small, so that a row of them does not read as machines.
     g.fillStyle = INK;
     g.fillRect(x + m - 1, y + m - 1, t + 2, t + 2);
-    g.fillStyle = GOLD[2];
+    g.fillStyle = lamp;
     g.fillRect(x + m, y + m, t, t);
     return;
   }
-  if (kind === DEPOT) {
+  if (FIXED[kind] === 1) {
     // Nine tiles as one building: its roof, darker along the foot, a dark edge all round, the brass wheel in the middle.
     const col = detail % 3;
     const row = Math.floor(detail / 3);
@@ -496,7 +475,7 @@ export function layPlan(g: Ctx, p: Plan, y: Yard, dx: number, dy: number): void 
   const s = seen;
   if (!s || s.spots.length === 0) return;
   for (const i of s.spots) {
-    const pic = y.kind[i] === STUDY ? p.study : p.stop;
+    const pic = pageOf(y.kind[i] ?? NONE)?.spot === "study" ? p.study : p.stop;
     const half = (pic.width - p.px) / 2;
     g.drawImage(pic, dx + (i % W) * p.px - Math.floor(half), dy + Math.floor(i / W) * p.px - Math.floor(half));
   }
@@ -528,4 +507,4 @@ export function alarm(g: Ctx, px: number, tx: number, ty: number, dx: number, dy
 }
 
 /** The colour a kind's block is on a plan, for showing one that is about to be built; a line's wood for what carries. */
-export const blockColour = (kind: number): string => LOOKS[kind]?.[0] ?? (kind === PYLON ? GOLD[2] : WOOD);
+export const blockColour = (kind: number): string => LOOKS[kind]?.[0] ?? pageOf(kind)?.mapLamp ?? WOOD;

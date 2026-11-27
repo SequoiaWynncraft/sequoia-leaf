@@ -24,24 +24,17 @@
  */
 import {
   type Act,
-  ALL_ITEMS,
-  BOILER,
-  burned,
-  carried,
-  carries,
   CRATE,
-  DEADFALL,
-  DEPOT,
   DEPOT_SHARE,
   drawnAt,
-  GATHERER,
+  FIXED,
+  GATHERING,
   GIVES,
   type Goal,
   GOALS,
   gradeSays,
   HALF,
   isFolio,
-  isMaker,
   isNode,
   isRaw,
   type Item,
@@ -50,7 +43,6 @@ import {
   type Kind,
   kind as kindOf,
   KIND_INFO,
-  MADE_BY,
   makes,
   NODES,
   type Numbered,
@@ -59,17 +51,15 @@ import {
   PYLON,
   RECIPE,
   RECIPES_N,
-  SORTER,
   SPLITTER,
   STOP,
-  STUDY,
+  STUDYING,
   tierName,
   type Tool,
   TOOL_INFO,
   TUNNEL,
   type Unlock,
   unlockedBy,
-  WHEEL,
 } from "@sequoia-leaf/factory";
 import {
   type Action,
@@ -80,12 +70,12 @@ import {
   type Row,
   type Stat,
 } from "@sequoia-leaf/kit/card.ts";
-import { amount, el, icon } from "@sequoia-leaf/kit/dom.ts";
+import { amount, el } from "@sequoia-leaf/kit/dom.ts";
 import { exact, num, perMinute, whole } from "@sequoia-leaf/kit/say.ts";
-import { sfx } from "@sequoia-leaf/kit/sound.ts";
 
 import type { Art } from "../art/index.ts";
 import { FLAG_AT } from "../art/machines.ts";
+import { pageOf } from "../kinds/index.ts";
 import { yardSfx } from "../sound.ts";
 import { flowNode } from "./flow.ts";
 import {
@@ -102,9 +92,9 @@ import {
 } from "./goal.ts";
 import { groundCard, type GroundPrint, type LandHands, plotCard, type PlotPrint } from "./land.ts";
 import type { Flow } from "./numbers.ts";
-import { fitted, partsWords, TOOL_ICON, yardIcon } from "./parts.ts";
+import { fitted, TOOL_ICON, yardIcon } from "./parts.ts";
 import { itemRef, machineRef, nodeRef, pictureRef, plotRef } from "./refs.ts";
-import { sorterActions, type SorterPrint, sorterRows } from "./sorter.ts";
+import type { SorterPrint } from "./sorter.ts";
 import { splitterWays, type WaysPrint } from "./splitter.ts";
 
 // ---------- prints: what each card shows of the yard and the purse ----------
@@ -343,7 +333,7 @@ function itemCard(art: Art, p: ItemPrint): Description {
   } else if (isRaw(k)) {
     rows.push({
       label: "Gathered by",
-      things: [{ ref: machineRef(GATHERER), note: perMinute(makes(GATHERER, 1, null)) }],
+      things: [{ ref: machineRef(GATHERING), note: perMinute(makes(GATHERING, 1, null)) }],
     });
     rows.push({
       label: "Lies in",
@@ -355,7 +345,7 @@ function itemCard(art: Art, p: ItemPrint): Description {
     });
   }
   rows.push({ label: "Used in", things: usedIn });
-  if (isFolio(k)) rows.push({ label: "Studied in", things: [{ ref: machineRef(STUDY) }] });
+  if (isFolio(k)) rows.push({ label: "Studied in", things: [{ ref: machineRef(STUDYING) }] });
   rows.push({ label: "Asked for by", things: entries(p.asked) });
   const ground = GROUND[itemName(k)];
   return {
@@ -374,19 +364,11 @@ function itemCard(art: Art, p: ItemPrint): Description {
 }
 
 /**
- * What a piece does a minute at a grade's pace, working flat out (the rules' planner): what a gatherer
- * gathers, a machine makes (from its quickest recipe to its slowest), a Study takes in, a boiler burns,
- * and a belt or what stands in a line of belt carries.
+ * What a piece does a minute at a grade's pace, working flat out (the rules' planner), as its kind
+ * says (`KindPage.pace`): what a gatherer gathers, a machine makes (from its quickest recipe to its
+ * slowest), a Study takes in, a boiler burns, and a belt or what stands in a line of belt carries.
  */
-export function paceOf(k: Kind, grade: number): Stat | null {
-  if (k === GATHERER) return { label: "Gathers", value: perMinute(makes(k, grade, null)) };
-  if (k === STUDY) return { label: "Takes in", value: perMinute(makes(k, grade, null)) };
-  if (carries(k)) return { label: "Carries", value: perMinute(carried(grade)) };
-  if (k === BOILER) return { label: "Burns", value: perMinute(burned()) };
-  if (!isMaker(k)) return null;
-  const often = (MADE_BY[k] ?? []).map((r) => makes(k, grade, r));
-  return { label: "Makes", value: perMinute([Math.min(...often), Math.max(...often)]) };
-}
+export const paceOf = (k: Kind, grade: number): Stat | null => pageOf(k)?.pace?.(k, grade) ?? null;
 
 /** A kind's own blocks: how many are free to place. A price needs no sentence: the card shows it, and taking a piece away gives all of it back. */
 const spareBlocks = (p: MachinePrint): Block[] => (p.spare > 0 ? [{ body: `${p.spare} free to place.` }] : []);
@@ -406,17 +388,13 @@ function machineCard(art: Art, p: MachinePrint): Description {
   const pace = paceOf(k, grade);
   if (pace) stats.push(pace);
   if (p.key) stats.push({ label: "Key", value: p.key });
-  const rows: Row[] = [];
-  if (isMaker(k)) rows.push({ label: "Can make", things: p.recipes.map((r) => ({ ref: itemRef(r) })) });
-  if (k === GATHERER)
-    rows.push({ label: "Gathers", things: ALL_ITEMS.filter(isRaw).map((r) => ({ ref: itemRef(r) })) });
-  if (k === BOILER) rows.push({ label: "Burns", things: [{ ref: itemRef(DEADFALL) }] });
+  const rows: Row[] = pageOf(k)?.rows?.(p) ?? [];
   return {
     name: gradedName(p),
     icon: machinePic(art, k, grade),
     tag: p.open ? what : `${what} Not unlocked yet.`,
     blocks: [...spareBlocks(p), ...lines(p.numbers)],
-    ...(k === DEPOT ? {} : { aside: amount("coin", p.price === 0 ? "free" : p.price) }),
+    ...(FIXED[k] === 1 ? {} : { aside: amount("coin", p.price === 0 ? "free" : p.price) }),
     stats,
     rows,
   };
@@ -466,38 +444,13 @@ function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
   const per = p.numbers.length === 0 ? p.perMinute : null;
   if (p.gathering !== null) rows.push({ label: "Gathering", things: [{ ref: itemRef(p.gathering), note: per ?? "" }] });
   if (p.studying !== null) rows.push({ label: "Studying", things: [{ ref: nodeRef(p.studying) }] });
-  if (k === SORTER) rows.push(...sorterRows(p));
+  const page = pageOf(k);
+  const own = page?.standing;
+  rows.push(...(own?.rows?.(p) ?? []));
   rows.push(...(base.rows ?? []));
 
-  const actions: Action[] = k === SORTER ? sorterActions(art, p, (item) => hands.act({ do: "sort", x, y, item })) : [];
-  if (isMaker(k)) {
-    actions.push({
-      label: "Any recipe",
-      look: "slot",
-      icon: icon("more"),
-      lit: p.set === null,
-      hint: "Any recipe",
-      about: "It makes whichever item its inputs combine into.",
-      on: () => {
-        hands.act({ do: "recipe", x, y, item: null });
-        sfx.tap();
-      },
-    });
-    for (const out of m.recipes)
-      actions.push({
-        label: `Only ${many(out)}`,
-        look: "slot",
-        icon: art.item(out),
-        lit: p.set === out,
-        hint: `Only ${many(out)}`,
-        about: `From ${partsWords(out)}. It takes in no other item.`,
-        on: () => {
-          hands.act({ do: "recipe", x, y, item: p.set === out ? null : out });
-          sfx.tap();
-        },
-      });
-  }
-  if (p.count > 0 && (k === CRATE || p.spare !== null || p.state === "idle"))
+  const actions: Action[] = own?.actions?.(art, p, hands) ?? [];
+  if (p.count > 0 && (page?.empties === true || p.spare !== null || p.state === "idle"))
     actions.push({
       label: p.spare === null ? "Empty it" : `Empty the ${many(p.spare)}`,
       look: p.spare === null ? "wood sm" : "sm",
@@ -510,24 +463,9 @@ function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
         if (hands.act({ do: "tipOut", x, y, item: p.spare })) yardSfx.take();
       },
     });
-  if (k === CRATE)
-    actions.push({
-      label: p.open ? "Shut it" : "Open it",
-      hint: p.open ? "Shut" : "Open",
-      about: "While shut, it takes items in and lets none out.",
-      on: () => {
-        hands.act({ do: "crate", x, y, open: !p.open });
-        sfx.clack();
-      },
-    });
-  if (k === DEPOT) {
-    actions.push(
-      { label: "Orders", on: () => hands.panel("orders") },
-      ...(p.tier !== null ? [{ label: `Tier ${p.tier}`, on: () => hands.panel("tier") }] : []),
-      { label: "Items", on: () => hands.panel("depot") },
-    );
-  } else {
-    if (k === STUDY && p.research) actions.push({ label: "Research", on: () => hands.panel("research") });
+  actions.push(...(own?.more?.(art, p, hands) ?? []));
+  // The depot is land: it is neither raised, turned, taken up nor taken away.
+  if (FIXED[k] !== 1) {
     // A piece of a grade the yard may build higher is raised where it stands, for the difference.
     const raise = p.raise;
     if (raise)
@@ -539,10 +477,9 @@ function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
         about: gradeSays(k, raise.to),
         on: () => hands.raise(x, y),
       });
-    // What takes things in from every side and hands none on has no way to face.
-    if (k !== TUNNEL && k !== PYLON && k !== WHEEL && k !== BOILER && k !== STUDY && k !== STOP)
-      actions.push({ label: "Rotate", hint: p.hints.rotate, on: () => hands.turn(x, y) });
-    if (k === SORTER) actions.push({ label: "Flip", hint: p.hints.flip, on: () => hands.flip(x, y) });
+    // What takes things in from every side and hands none on has no way to face (`KindPage.faces`).
+    if (page?.faces) actions.push({ label: "Rotate", hint: p.hints.rotate, on: () => hands.turn(x, y) });
+    if (page?.flips) actions.push({ label: "Flip", hint: p.hints.flip, on: () => hands.flip(x, y) });
     actions.push(...takeUp(p, hands));
     actions.push({
       label: "Remove",
@@ -557,28 +494,22 @@ function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
     p.state === "starved" && p.spare !== null
       ? `A bench takes things in at its back and both sides. Bring ${many(p.spare)} in one way and ${p.missing.map(many).join(" and ")} another, and it cannot fill up with the wrong one.`
       : null;
-  // A cart stop and a sorter say what they do in their own words: the rules' line for either is of
-  // every belt. What is wrong with one is the rules' to say.
+  // A kind may say what it does in its own words (a cart stop, a sorter: the rules' line for either is
+  // of every sink or belt). What is wrong with one is the rules' to say.
   // What a machine waiting for its parts is short of is in its rows, not in a sentence.
   const said =
     waits && p.flow
       ? `Waiting to make ${many(p.flow.out)}.`
       : p.trouble && p.line !== null
         ? p.line
-        : k === STOP
-          ? "Items handed in here reach the depot at once."
-          : k === SORTER
-            ? p.set !== null
-              ? "Everything else goes ahead."
-              : "With nothing set it is a belt."
-            : (p.line ?? KIND_INFO[k]?.what ?? "");
+        : (own?.said?.(p) ?? p.line ?? KIND_INFO[k]?.what ?? "");
   return {
     ...base,
     tag: el("span", p.trouble && !waits ? "k-coral" : "", { text: said }),
     // What is wrong and what to do about it comes first; the numbers are under it.
     blocks: [
       ...spareBlocks(m),
-      ...(k === DEPOT ? [{ body: `Each thing that arrives pays ${DEPOT_SHARE * 100}% of its worth.` }] : []),
+      ...(own?.blocks?.(p) ?? []),
       ...(advice ? [{ body: advice }] : []),
       ...(p.flow ? [{ body: flowNode(art, p.flow) }] : []),
       ...lines(p.numbers),

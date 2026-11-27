@@ -11,19 +11,16 @@
  */
 
 import {
-  BELT,
   costOf,
   highest,
   isGraded,
   type Kind,
   KIND_INFO,
   locked,
+  MOST,
   numeral,
   priceOf,
-  SORTER,
-  STOP,
   stops,
-  TUNNEL,
 } from "@sequoia-leaf/factory";
 import { link } from "@sequoia-leaf/kit/card.ts";
 import { amount, asking, asksAgain, el, icon, pressedTwice, type Spend } from "@sequoia-leaf/kit/dom.ts";
@@ -31,9 +28,12 @@ import { coinsText } from "@sequoia-leaf/kit/say.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
 
 import { PAINTS } from "../art/belts.ts";
-import { type Art, bare } from "../art/index.ts";
+import type { Art } from "../art/index.ts";
+import { bare } from "../art/meeting.ts";
 import type { Stage } from "../hand.ts";
 import { turns, WORKS_KEYS, type WorksAction } from "../keymap.ts";
+import { flips, pageOf } from "../kinds/index.ts";
+import type { Hold } from "../kinds/kind.ts";
 import {
   askSave,
   copyable,
@@ -103,11 +103,11 @@ function slotFor(art: Art, k: Kind, fresh: boolean): HTMLElement {
   const cost = costOf(S.world, k, grade);
   const { stand, may } = stopsStand();
   // No more of a kind may stand: its slot is off, and says so when pressed.
-  const full = k === STOP && stand >= may;
-  const under =
-    k === STOP
-      ? el("span", "k-dim", { text: `${stand} of ${may}` })
-      : el("span", cost === 0 ? "k-dim" : "k-gold", { text: cost === 0 ? "free" : String(cost) });
+  const limited = MOST[k] === "stops";
+  const full = limited && stand >= may;
+  const under = limited
+    ? el("span", "k-dim", { text: `${stand} of ${may}` })
+    : el("span", cost === 0 ? "k-dim" : "k-gold", { text: cost === 0 ? "free" : String(cost) });
   const b = el(
     "button",
     `k-slot${S.tool === k ? " lit" : ""}${fresh ? " new" : ""}${S.nudge?.tool === k && S.tool !== k ? " nudged" : ""}${full ? " off" : ""}`,
@@ -254,26 +254,30 @@ function handLine(): { text: string; bad: boolean } {
     const what = `Raise to ${numeral(S.aim.grade ?? 1)}: ${price(S.aim.cost)}.`;
     return { text: f ? `${what} Tap again, or Raise.` : `${what} Click to raise it.`, bad: false };
   }
-  if (tool === BELT) return { text: beltLine(f), bad: false };
-  if (tool === TUNNEL) return { text: tunnelLine(f), bad: false };
-  if (f) return { text: S.aim ? "Tap again, or Build." : `${name}: tap where it goes.`, bad: false };
-  return { text: `${name}: click to place it.${turns(tool === SORTER)}`, bad: false };
+  return { text: kindLine(tool, name, f), bad: false };
 }
 
-/** What the line says with the belt in hand: for a mouse, to drag; for a finger, where to tap first, then next. */
-function beltLine(f: boolean): string {
-  if (!f) return `Belt: drag to place a line.${turns()}`;
-  return S.from ? "Now tap where it ends." : "Tap where the line starts.";
+/** What the line says with a kind in hand, once nothing is wrong: what its kind says (a belt, a tunnel), or where to put it. */
+function kindLine(tool: Kind, name: string, f: boolean): string {
+  const page = pageOf(tool);
+  const flipped = flips(tool);
+  if (page?.says) return page.says(holding(f, flipped));
+  if (f) return S.aim ? "Tap again, or Build." : `${name}: tap where it goes.`;
+  return `${name}: click to place it.${turns(flipped)}`;
 }
 
-/** What the line says with the tunnel in hand: where to click (or tap) first, then where next; for a finger with the way out aimed, how to build it. */
-function tunnelLine(f: boolean): string {
+/** Whether what is in hand is a kind flipped to send to its other side (a sorter). */
+const flipsInHand = (tool: Tool | null): boolean => typeof tool === "number" && flips(tool);
+
+/** What a kind's line is given with it in hand (`KindPage.says`). */
+function holding(finger: boolean, flipped: boolean): Hold {
   const from = S.from;
-  if (!from)
-    return f ? "Tunnel: tap where it goes in." : `Tunnel: click where it goes in, then where it comes up.${turns()}`;
-  const out = S.aim && (S.aim.x !== from.x || S.aim.y !== from.y);
-  if (f) return out ? "Tap again, or Build." : "Now tap where it comes up.";
-  return `Now click where it comes up.${turns()}`;
+  return {
+    finger,
+    from: from !== null,
+    away: from !== null && !!S.aim && (S.aim.x !== from.x || S.aim.y !== from.y),
+    turns: turns(flipped),
+  };
 }
 
 /** Everything the line over the dock shows, worked out from what is in hand, the yard and the purse: it is drawn again exactly when this differs. */
@@ -393,7 +397,7 @@ export function handPrint(): HandPrint {
     save: acting && S.world.open.blueprints > 0,
     upgrade: upgradeOf(stage),
     turn: builds(tool) || turnsInHand(g),
-    flip: tool === SORTER,
+    flip: flipsInHand(tool),
     undo: undoes(stage),
     bin: typeof g?.as === "number" ? { slot: g.as, asking: asking(deleteKey(g.as)) } : null,
     copy: copyable(g),
@@ -557,7 +561,7 @@ export function initDock(art: Art): void {
     () =>
       `${openTools().join()}|${usable("select")}|${usable("paint")}|${S.tool}|${S.nudge?.tool}|${openTools()
         .map((k) => `${gradeInHand(k)}:${costOf(S.world, k, gradeInHand(k))}`)
-        .join()}|${usable(STOP) ? `${stopsStand().stand}/${stopsStand().may}` : ""}`,
+        .join()}|${openTools().some((k) => MOST[k] === "stops") ? `${stopsStand().stand}/${stopsStand().may}` : ""}`,
     () => {
       buildDock(art);
     },

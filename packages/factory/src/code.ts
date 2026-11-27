@@ -22,7 +22,7 @@ import { fromBase64, toBase64 } from "./bytes.ts";
 import { type KeptPrint, packPrint, unpackPrint } from "./codec.ts";
 import { BLUEPRINT } from "./content/machines.ts";
 import { boxOf, keptOf, packPieces, type Piece, unpackWays } from "./pieces.ts";
-import { DEPOT, isKind, locked, type Open, SPAN_MOST, TUNNEL } from "./tables.ts";
+import { FIXED, isKind, locked, type Open, SPAN_MOST, SPANS } from "./tables.ts";
 import type { Print, Yard } from "./yard.ts";
 
 /** What every code begins with: which version of the code it is. */
@@ -80,8 +80,8 @@ function packedOf(text: string): Uint8Array | null {
 /** A piece read from a code, as a blueprint keeps it: a kind there is (not the depot), and a span for a tunnel alone. */
 function pieceOf(p: KeptPrint[number]): Piece | null {
   const { kind: k, dir: d, span } = p;
-  if (!isKind(k) || k === DEPOT || !isDir(d)) return null;
-  if ((k === TUNNEL) !== span > 0 || span > SPAN_MOST) return null;
+  if (!isKind(k) || FIXED[k] === 1 || !isDir(d)) return null;
+  if ((SPANS[k] === 1) !== span > 0 || span > SPAN_MOST) return null;
   const kept = keptOf(
     { recipe: p.recipe, open: p.open ? undefined : false, tint: p.tint, ...unpackWays(p.ways), grade: p.grade },
     k,
@@ -93,7 +93,7 @@ function pieceOf(p: KeptPrint[number]): Piece | null {
 function apart(pieces: readonly Piece[]): boolean {
   const taken = new Set<number>();
   for (const p of pieces) {
-    const far = p.kind === TUNNEL ? p.span + 1 : 0;
+    const far = SPANS[p.kind] === 1 ? p.span + 1 : 0;
     const tiles = [p.x + p.y * 1024, ...(far > 0 ? [p.x + DX[p.dir] * far + (p.y + DY[p.dir] * far) * 1024] : [])];
     for (const t of tiles) {
       if (taken.has(t)) return false;

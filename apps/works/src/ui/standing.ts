@@ -12,7 +12,8 @@ import {
   isNode,
   locked,
   ready,
-  STUDY,
+  STUDIES,
+  STUDYING,
   studyRefusal,
   takeRefusal,
 } from "@sequoia-leaf/factory";
@@ -23,7 +24,7 @@ import { type Begin, type Count, type Given, givenIn, type Need, nodeKind, type 
 /** Whether the tier has a screen of its own: from tier 1 on, and not in somebody else's yard. */
 export const tierOpen = (): boolean => S.world.open.tier >= 1 && S.visiting === null;
 /** Whether research has a screen: once the yard may build a Study, and not in somebody else's yard. */
-export const researchOpen = (): boolean => locked(S.world.open, { build: STUDY }) === null && S.visiting === null;
+export const researchOpen = (): boolean => locked(S.world.open, { build: STUDYING }) === null && S.visiting === null;
 
 /** The projects and commissions of the tiers open, in their order. */
 export const nodesOpen = (): Goal[] =>
@@ -80,7 +81,7 @@ export const researchOf = (): Goal[] =>
   ALL_GOALS.filter((g) => !isNode(g) && (GOALS[g]?.tier ?? 0) <= S.world.open.tier);
 
 /** Whether a Study stands in the yard. */
-export const studyStands = (): boolean => S.world.kind.includes(STUDY);
+export const studyStands = (): boolean => S.world.kind.some((k) => STUDIES[k] === 1);
 
 /** What a goal wants, each thing with how many have come of how many: all of them, once it is done. */
 export function givenTo(g: Goal): Given {
@@ -119,7 +120,7 @@ function beginOf(g: Goal): Begin | null {
   const w = S.world;
   if (isNode(g)) return takeRefusal(w, g) === null ? "take" : null;
   if (!ready(w.open, g)) return null;
-  if (!studyStands()) return locked(w.open, { build: STUDY }) === null ? "build" : null;
+  if (!studyStands()) return locked(w.open, { build: STUDYING }) === null ? "build" : null;
   return studyRefusal(w, g) === null ? "study" : null;
 }
 

@@ -17,9 +17,10 @@ import {
   LINE,
   litOf,
   machineRate,
+  NONE,
   STATES,
   status,
-  STUDY,
+  STUDIES,
   studyRefusal,
   TROUBLE,
   unlockedBy,
@@ -61,7 +62,7 @@ export function studying(): { pace: number; working: number; says: string } {
   let pace = 0;
   const missing = new Set<number>();
   for (let i = 0; i < w.kind.length; i++) {
-    if (w.kind[i] !== STUDY) continue;
+    if (STUDIES[w.kind[i] ?? NONE] !== 1) continue;
     standing++;
     if (lit[i] !== 1) dark++;
     else if (condition(w, i) % TROUBLE === WORKING) {

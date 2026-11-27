@@ -79,7 +79,7 @@ import {
 } from "./pieces.ts";
 import { REASON } from "./reasons.ts";
 import { legPiece } from "./route.ts";
-import { CRATE, DEPOT, gradeOf, isKind, type Kind, NONE, TUNNEL } from "./tables.ts";
+import { FIXED, gradeOf, isKind, keptKind, type Kind, NONE, SHUTS, SPANS } from "./tables.ts";
 import { changed, type Entry, holderOf, place, redwoodAt, standingTree, tunnelRow, vacate, type Yard } from "./yard.ts";
 
 /** The version of the Works' rules this was built with: the one the page and Leaf compare. */
@@ -180,7 +180,7 @@ export interface Before {
 function settingAt(y: Yard, i: number): Setting | null {
   const k = y.kind[i] ?? NONE;
   const d = y.dir[i] ?? 0;
-  if (!isKind(k) || k === DEPOT || !isDir(d)) return null;
+  if (!isKind(k) || FIXED[k] === 1 || !isDir(d)) return null;
   return { tile: i, kind: k, dir: d, span: y.span[i] ?? 0, free: y.free[i] === 1, kept: keptAt(y, i) };
 }
 
@@ -202,10 +202,10 @@ const SETTINGS: readonly {
   { at: (y, i) => y.first[i] ?? 0, of: (s) => (s.kept.first ?? -1) + 1, to: (y, i, v) => (y.first[i] = v) },
   { at: (y, i) => y.ins[i] ?? 0, of: (s) => s.kept.ins ?? 0, to: insTo },
   {
-    at: (y, i) => (y.kind[i] === CRATE ? (y.holders.open[holderOf(y, i)] ?? 1) : 1),
+    at: (y, i) => (SHUTS[y.kind[i] ?? NONE] === 1 ? (y.holders.open[holderOf(y, i)] ?? 1) : 1),
     of: (s) => (s.kept.open === false ? 0 : 1),
     to: (y, i, v) => {
-      if (y.kind[i] === CRATE) y.holders.open[holderOf(y, i)] = v;
+      if (SHUTS[y.kind[i] ?? NONE] === 1) y.holders.open[holderOf(y, i)] = v;
     },
   },
 ];
@@ -239,7 +239,7 @@ function packSettings(o: Writer, was: readonly Setting[]): void {
       [32, s.span === 0 ? undefined : s.span + 8],
     ];
     const f = parts.reduce((m, [bit, v]) => (v === undefined ? m : m | bit), 0);
-    o.byte(s.kind | (s.dir << 4) | (s.free ? 64 : 0) | (f === 0 ? 0 : 128));
+    o.byte(keptKind(s.kind) | (s.dir << 4) | (s.free ? 64 : 0) | (f === 0 ? 0 : 128));
     if (f !== 0) o.byte(f);
     for (const [, v] of parts) if (v !== undefined) o.byte(v);
   }
@@ -251,7 +251,7 @@ function readSetting(r: Reader, tile: number): Setting | null {
   const [kind, dir] = [kd & 15, (kd >> 4) & 3];
   const f = kd & 128 ? r.byte() : 0;
   const [recipe, closed, tint, ways, grade, span] = [1, 2, 4, 8, 16, 32].map((bit) => (f & bit ? r.byte() : undefined));
-  if (r.over || f > 63 || !isKind(kind) || kind === DEPOT || !isDir(dir)) return null;
+  if (r.over || f > 63 || !isKind(kind) || FIXED[kind] === 1 || !isDir(dir)) return null;
   const kept = keptOf(
     { ...unpackWays(ways ?? 0), recipe, tint, grade, open: closed === undefined ? undefined : false },
     kind,
@@ -286,7 +286,7 @@ function treeOf(y: Yard, a: { readonly x: number; readonly y: number }): readonl
 }
 /** A new tunnel's far mouth, where it would come up. */
 function tunnelEnd(y: Yard, a: ActOf<"build">): number[] {
-  const exit = a.kind === TUNNEL ? tunnelExit(y, a.x, a.y, a.dir) : null;
+  const exit = SPANS[a.kind] === 1 ? tunnelExit(y, a.x, a.y, a.dir) : null;
   return exit ? [tileOf(y, exit)] : [];
 }
 
@@ -330,7 +330,7 @@ export function before(y: Yard, a: Act): Before | null {
   if (!near) return null;
   // A tunnel's mouths go together; the depot never changes.
   const mouths = near.flatMap((i) => (i < 0 ? [] : [i, otherMouth(y, i)]));
-  const tiles = [...new Set(mouths)].filter((i) => i >= 0 && y.kind[i] !== DEPOT).toSorted((i, j) => i - j);
+  const tiles = [...new Set(mouths)].filter((i) => i >= 0 && FIXED[y.kind[i] ?? NONE] !== 1).toSorted((i, j) => i - j);
   const was = new Map(tiles.flatMap((i) => [settingAt(y, i) ?? []].flat().map((s) => [i, s] as const)));
   const made = tiles.map((i) => y.made[i] ?? 0);
   if (a.do !== "move") return { tiles, was, made, back: null };
@@ -348,7 +348,7 @@ function sumOf(y: Yard, tiles: readonly number[]): number {
     mix(redwoodAt(y, i) ? ~i : i);
     for (const part of ["kind", "dir", "grade", "tint", "shut", "first", "ins", "set", "free", "span"] as const)
       mix(y[part][i] ?? 0);
-    mix(y.kind[i] === CRATE ? (y.holders.open[holderOf(y, i)] ?? 1) : -1);
+    mix(SHUTS[y.kind[i] ?? NONE] === 1 ? (y.holders.open[holderOf(y, i)] ?? 1) : -1);
   }
   return h >>> 0;
 }

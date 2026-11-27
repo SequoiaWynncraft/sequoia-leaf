@@ -24,8 +24,8 @@ import {
   type Piece,
   piecesAt,
   placed,
+  SPANS,
   tilesOf,
-  TUNNEL,
   tunnelExit,
   type Turned,
   type Yard,
@@ -78,7 +78,7 @@ function setsDown(y: Yard, p: Piece): number[] {
 function built(y: Yard, act: Extract<Act, { do: "build" }>): number[] {
   const i = at(y, act.x, act.y);
   if (i >= 0 && y.kind[i] === act.kind) return taken(y, [i]);
-  const exit = act.kind === TUNNEL ? tunnelExit(y, act.x, act.y, act.dir) : null;
+  const exit = SPANS[act.kind] === 1 ? tunnelExit(y, act.x, act.y, act.dir) : null;
   return setsDown(y, { kind: act.kind, x: act.x, y: act.y, dir: act.dir, span: exit?.span ?? 0 });
 }
 

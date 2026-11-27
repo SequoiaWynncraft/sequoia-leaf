@@ -4,23 +4,19 @@
  */
 
 import {
-  BELT,
-  DEPOT,
+  ALL_KINDS,
   type Dir,
   emptyYard,
+  FIXED,
   type Goal,
   highest,
-  JOINER,
   type Kind,
-  kind,
   KIND_COUNT,
   LAND,
   type Leg,
   openOf,
   type Piece,
   type Plot,
-  SPLITTER,
-  TUNNEL,
   unlockedBy,
   type Yard,
 } from "@sequoia-leaf/factory";
@@ -43,42 +39,29 @@ import {
   type Tile,
   toolOf,
 } from "./hand.ts";
+import { pageOf } from "./kinds/index.ts";
 import type { Nudge } from "./teach.ts";
 
 /**
- * The kinds of piece this page draws and builds: what a line is built with, what makes, what else
- * carries, what gives power. The dock puts them in the order a yard unlocked them (`dockOrder`); the
- * pick and the drawing read this list; a test holds it to every kind in the tables but the depot,
- * which is never built.
+ * The kinds of piece this page draws and builds: those whose page module gives them a place in the
+ * dock (`KindPage.dock`), in that order. The dock puts them in the order a yard unlocked them
+ * (`dockOrder`); the pick and the drawing read this list; a test holds it to every kind in the tables
+ * but the depot, which is never built.
  */
-export const DRAWN: readonly Kind[] = (
-  [
-    "belt",
-    "splitter",
-    "joiner",
-    "tunnel",
-    "gatherer",
-    "mill",
-    "bench",
-    "workshop",
-    "study",
-    "sorter",
-    "stop",
-    "crate",
-    "pylon",
-    "wheel",
-    "boiler",
-  ] as const
-).map(kind);
+export const DRAWN: readonly Kind[] = ALL_KINDS.filter((k) => pageOf(k)?.dock !== undefined).toSorted(
+  (a, b) => (pageOf(a)?.dock ?? 0) - (pageOf(b)?.dock ?? 0),
+);
 const drawn = new Uint8Array(KIND_COUNT);
 for (const k of DRAWN) drawn[k] = 1;
 // The depot is drawn, and has its card, though nobody builds one: it is not in the dock.
-drawn[DEPOT] = 1;
+for (const k of ALL_KINDS) if (FIXED[k] === 1) drawn[k] = 1;
 /** Whether this page draws a kind of piece: those it builds (`DRAWN`), and the depot. */
 export const draws = (k: number): boolean => drawn[k] === 1;
 
-/** What a line of belt is built with, and used most: the first four slots, once each is unlocked. */
-const LINE: readonly Kind[] = [BELT, SPLITTER, JOINER, TUNNEL];
+/** What a line of belt is built with, and used most: the first four slots, once each is unlocked (`KindPage.line`). */
+const LINE: readonly Kind[] = ALL_KINDS.filter((k) => pageOf(k)?.line !== undefined).toSorted(
+  (a, b) => (pageOf(a)?.line ?? 0) - (pageOf(b)?.line ?? 0),
+);
 
 /** The kinds a new yard may build, as `DRAWN` has them. */
 const NEW_YARD = DRAWN.filter((k) => (openOf([]).kinds[k] ?? 0) > 0);

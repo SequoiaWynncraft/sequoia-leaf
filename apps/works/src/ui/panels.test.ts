@@ -9,13 +9,17 @@ import { describe, expect, test } from "bun:test";
 import {
   ALL_GOALS,
   ALL_ITEMS,
+  at,
+  BOILER,
   build,
   create,
   type Goal,
   goal,
   GOALS,
+  holderOf,
   isNode,
   item,
+  type Kind,
   LINE,
   litOf,
   MILL,
@@ -23,6 +27,7 @@ import {
   ORDER_WAITS,
   play,
   power,
+  put,
   reopen,
   step,
   STUDY,
@@ -133,6 +138,17 @@ describe("a panel is kept by what it prints", () => {
     expect(mills()).toEqual({ kind: MILL, about: "2 in the dark", drawn: 0 });
   });
 
+  test("power: each kind that gives power is its own row, at its own power: one boiler burning and one cold", () => {
+    const y = create({ seed: 5, tier: 4 });
+    const [hot] = piecesAt(y, BOILER, 2, null, true);
+    if (!hot) throw new Error("no boiler");
+    put(y.holders, holderOf(y, at(y, hot.x, hot.y)), item("deadfall"));
+    step(y);
+    S.world = y;
+    expect(powerPrint().gives).toEqual([{ kind: BOILER, about: "1 burning, 1 cold", n: 30 }]);
+    expect(powerPrint().supply).toBe(y.open.depot + 30);
+  });
+
   test("power: the book, the bar over the yard and the trouble view say the same speed, rounded down", () => {
     const y = create({ seed: 5, tier: 4 });
     // Nine mills of grade II in reach draw 40.5 of the 40 made: 98.77%.
@@ -147,18 +163,21 @@ describe("a panel is kept by what it prints", () => {
 const mills = (): unknown => powerPrint().draws.find((d) => d.kind === MILL);
 
 /** Builds `n` mills of a grade where power reaches, each on the first tile that takes one; where they stand. */
-function millsInReach(y: Yard, n: number, grade: number, reached = true): { x: number; y: number }[] {
+/** Builds `n` pieces of a kind (at a grade, where it has grades) on clear tiles in reach of power, or out of it. */
+function piecesAt(y: Yard, kind: Kind, n: number, grade: number | null, reached: boolean): { x: number; y: number }[] {
   const lit = litOf(y);
   const out: { x: number; y: number }[] = [];
   for (let i = 0; i < y.kind.length && out.length < n; i++) {
-    const at = { x: i % y.land.w, y: Math.floor(i / y.land.w) };
-    if (y.kind[i] === NONE && (lit[i] === 1) === reached && build(y, MILL, at.x, at.y, 0, Infinity, { grade }).ok)
-      out.push(at);
+    const tile = { x: i % y.land.w, y: Math.floor(i / y.land.w) };
+    const as = grade === null ? {} : { grade };
+    if (y.kind[i] === NONE && (lit[i] === 1) === reached && build(y, kind, tile.x, tile.y, 0, Infinity, as).ok)
+      out.push(tile);
   }
-  if (out.length < n) throw new Error("no room for the mills");
+  if (out.length < n) throw new Error("no room for the pieces");
   return out;
 }
-const millsInDark = (y: Yard, n: number, grade: number): unknown => millsInReach(y, n, grade, false);
+const millsInReach = (y: Yard, n: number, grade: number): unknown => piecesAt(y, MILL, n, grade, true);
+const millsInDark = (y: Yard, n: number, grade: number): unknown => piecesAt(y, MILL, n, grade, false);
 
 /** What the books' buttons are called now, each titled by its id. */
 const names = (): Map<string, string> => bookNames(booksPrint(), (id) => id);
