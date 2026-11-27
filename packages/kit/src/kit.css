@@ -609,6 +609,15 @@ button.k-slot:hover {
   max-width: min(calc(var(--u) * 120), calc(100vw - var(--u) * 8));
   pointer-events: none;
 }
+/* How long a length a game sets for the cards is, as the browser works it out (card.ts): never seen. */
+.k-probe {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
 
 /* ---------- cards (card.ts) ---------- */
 

@@ -23,7 +23,7 @@
  * The rules of that (`Deck`) touch no page and are tested; the rest draws them (`face.ts`).
  */
 import { givingBack, layer } from "./dialog.ts";
-import { pressedTwice, unheld } from "./dom.ts";
+import { el, pressedTwice, unheld } from "./dom.ts";
 import {
   type Action,
   actionSpend,
@@ -375,16 +375,31 @@ const spotOf = (at: Spot | object): Spot | null => {
   return isSpot(at) ? at : null;
 };
 
-/** A length a game sets on the page for the cards, in CSS pixels. */
-const setting = (name: string): number =>
-  Number.parseFloat(getComputedStyle(document.body).getPropertyValue(name)) || 0;
+/** A probe for each length a game sets for the cards: never seen, and as tall as the length. */
+const probes = new Map<string, HTMLElement>();
 
-/** The window, the game's bar along its bottom that a sheet stands on, and where what hangs from its top ends. */
+/**
+ * A length a game sets for the cards (`--sheet-floor`), in CSS pixels as the browser works it out:
+ * the height of a probe that is that tall, so a `calc()`, a `var()` or an `env()` in it counts as it
+ * does in the sheet's own rule. Its words are never read as a number. 0 where it is not set.
+ */
+function length(name: string): number {
+  const had = probes.get(name);
+  const probe = had?.isConnected ? had : el("div", "k-probe", { "aria-hidden": "true" });
+  if (probe !== had) {
+    probe.style.height = `var(${name}, 0px)`;
+    document.body.append(probe);
+    probes.set(name, probe);
+  }
+  return probe.getBoundingClientRect().height;
+}
+
+/** The window, the game's bar along its bottom that a sheet stands on, and where what hangs from its top ends: read as each card is placed. */
 const room = (): { w: number; h: number; floor: number; ceiling: number } => ({
   w: window.innerWidth,
   h: window.innerHeight,
-  floor: setting("--sheet-floor"),
-  ceiling: setting("--sheet-top"),
+  floor: length("--sheet-floor"),
+  ceiling: length("--sheet-top"),
 });
 
 /** Lets go of the pinned card's layer over the page (`dialog.ts`), where Escape puts it away and Tab stays in it. */
@@ -407,12 +422,22 @@ function putAt(box: HTMLElement, x: number, y: number, most: number, tall: numbe
 }
 
 /**
- * Places the card by the one rule (`place.ts`). `keep`: drawn again, it keeps its corner while that
- * is still clear of its thing (a card followed to stays put); `follow`: it moves with its thing,
- * on the side it was on; `new`: wherever the rule says first. A sheet goes to whichever edge does
- * not cover its thing.
+ * Places the card by the one rule (`place.ts`), scrolled as it was: measuring it takes off the
+ * height it was given, which takes away what it was scrolled by, so that is given back once its
+ * height is.
  */
 function placeCard(card: HTMLElement, o: Open, how: "keep" | "follow" | "new"): void {
+  const scrolled = card.scrollTop;
+  placeNow(card, o, how);
+  card.scrollTop = scrolled;
+}
+
+/**
+ * `keep`: drawn again, the card keeps its corner while that is still clear of its thing (a card
+ * followed to stays put); `follow`: it moves with its thing, on the side it was on; `new`: wherever
+ * the rule says first. A sheet goes to whichever edge does not cover its thing.
+ */
+function placeNow(card: HTMLElement, o: Open, how: "keep" | "follow" | "new"): void {
   const r0 = room();
   const spot = spotOf(o.at);
   card.style.maxHeight = "";
@@ -493,11 +518,12 @@ const sameShown = (prev: Open | null, o: Open): boolean =>
 /**
  * The new card goes in beside the old before the old goes: taking the old one out takes the focus
  * off a button pressed in it, and `replaceWith` would lose whatever followed the old. The very card
- * that was up, drawn again (`again`, not one followed to from it), stays scrolled where it was, so
- * what was under a finger is still under it, and whoever was on one of its buttons is still on it;
- * another card in its place (followed to, gone back to) has the focus the old one had.
+ * that was up, drawn again (`again`, not one followed to from it), keeps whoever was on one of its
+ * buttons, and gives back how far it was scrolled, for once it is placed (no taller than it was:
+ * scrolled before that, the browser would cut the scroll to what the taller card has); another card
+ * in its place (followed to, gone back to) has the focus the old one had.
  */
-function swapIn(was: HTMLElement | null, card: HTMLElement, again: boolean): void {
+function swapIn(was: HTMLElement | null, card: HTMLElement, again: boolean): number | null {
   const scrolled = was?.scrollTop ?? 0;
   const held = was ? [...was.querySelectorAll("button")].findIndex((b) => b === document.activeElement) : -1;
   const focused = was?.contains(document.activeElement) ?? false;
@@ -507,10 +533,10 @@ function swapIn(was: HTMLElement | null, card: HTMLElement, again: boolean): voi
   } else document.body.append(card);
   if (!again) {
     if (focused && card.hasAttribute("tabindex")) card.focus({ preventScroll: true });
-    return;
+    return null;
   }
-  card.scrollTop = scrolled;
   card.querySelectorAll("button")[held]?.focus({ preventScroll: true });
+  return scrolled;
 }
 
 /** Nothing is up: the card, its place and its layer go. */
@@ -531,9 +557,11 @@ const view: View = {
     describedBy(null);
     if (!o || !d) return putAway(was);
     const card = drawCard(d, faceOf(o), hands);
-    swapIn(was, card, sameShown(prev, o));
+    const scrolled = swapIn(was, card, sameShown(prev, o));
     page.node = card;
     placeCard(card, o, howPlaced(prev, o));
+    // The same card, as high as it is to be: scrolled where it was, so what was under a finger is still under it.
+    if (scrolled !== null) card.scrollTop = scrolled;
     if (!o.pinned) {
       card.id = TIP_ID;
       describedBy(o.from);

@@ -7,6 +7,10 @@
     <link rel="stylesheet" href="../src/kit.css" />
     <script type="module" src="./tips-page.ts"></script>
     <style>
+      /* The game's bar along the bottom, as the town gives it: a length worked out, not a number. */
+      :root {
+        --sheet-floor: calc(var(--u) * 60);
+      }
       html body {
         min-height: 100vh;
         margin: 0;
@@ -37,6 +41,18 @@
       #br {
         right: 4px;
         bottom: 4px;
+      }
+      /* Just above the bar: a sheet along the bottom would cover it. */
+      #floor {
+        position: fixed;
+        left: 70%;
+        bottom: calc(var(--u) * 60 + 10px);
+      }
+      /* In the middle: its long card fits whole at neither edge. */
+      #tall {
+        position: fixed;
+        left: 10px;
+        top: 45%;
       }
     </style>
   </head>

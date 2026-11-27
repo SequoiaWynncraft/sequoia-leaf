@@ -6,7 +6,8 @@
  * Builds `review/tips.html` into a folder of its own, has the kit's driver (`tools/drive.ts`, headless
  * Chromium) go through the steps below on it at 1280x760 and 390x844, and checks each line the page
  * says (`tips.say()`: what is up and how, where the focus is, presses on the button, and whether the
- * card is inside the window and clear of its thing) against what it should be. Pictures of the
+ * card is inside the window and clear of its thing; `tips.keeps()`: whether a scrolled card that
+ * was shortened to fit stays scrolled where it was) against what it should be. Pictures of the
  * moments go to `<out-dir>`. It fails on the first line that differs.
  */
 import { mkdtempSync, rmSync } from "node:fs";
@@ -98,6 +99,16 @@ const plan: (Step | [Step, string])[] = [
   // Chromium's screenshot can hang once touch has been used.)
   ...tapFinger("#low"),
   [SAY, "pinned Amber sheet-top focus=low pressed=1 clear=yes"],
+  // Just above the page's bar (a `calc()`): along the bottom, over the bar, the sheet would cover it.
+  ...tapFinger("body"),
+  ...tapFinger("#floor"),
+  [SAY, "pinned Kin sheet-top focus=floor pressed=1 clear=yes"],
+  // A long card shortened to fit, scrolled to its foot, stays there when drawn again and placed again.
+  ...tapFinger("body"),
+  ...tapFinger("#tall"),
+  [SAY, "pinned Long Note sheet-top focus=tall pressed=1 clear=yes"],
+  [["eval", "tips.keeps('refresh')"], "shortened=true scrolled=true kept=true"],
+  [["eval", "tips.keeps('settle')"], "shortened=true scrolled=true kept=true"],
 ];
 
 const steps = plan.map((p) => (typeof p[1] === "string" && Array.isArray(p[0]) ? p[0] : p));

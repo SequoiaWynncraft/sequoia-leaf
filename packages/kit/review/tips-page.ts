@@ -2,9 +2,10 @@
  * The page `tips.ts` drives: tips and a card's thing, as the games give them, and `window.tips` to
  * say from outside what is up. A plain thing with a tip (`#plain`, it only explains itself), a
  * button with one (`#act`, which counts its presses), a thing with a whole card (`#gem`, and `#low`
- * near the bottom), and a button with a tip in each corner.
+ * near the bottom), a button with a tip in each corner, a thing just above the page's bar
+ * (`#floor`, a `calc()` in `tips.html`), and one in the middle with a long card (`#tall`).
  */
-import { deck, register, thing } from "../src/card.ts";
+import { deck, refresh, register, settle, thing } from "../src/card.ts";
 import { el } from "../src/dom.ts";
 import { tip } from "../src/tip.ts";
 
@@ -39,6 +40,21 @@ register("gem", (id) =>
       }
     : null,
 );
+register("note", (id) =>
+  id === "tall"
+    ? {
+        name: "Long Note",
+        glance: "A card too long to fit whole beside it",
+        sections: [
+          {
+            s: "says",
+            label: "Lines",
+            lines: Array.from({ length: 14 }, (_, i) => ({ text: `Line ${i + 1} of what it says.` })),
+          },
+        ],
+      }
+    : null,
+);
 register("stat", (id) => (id === "attack" ? { name: "Attack 15", glance: "Damage a hit does before armour" } : null));
 register("trait", (id) => (id === "kin" ? { name: "Kin", glance: "Kin strike first" } : null));
 
@@ -56,7 +72,11 @@ const corners = ["tl", "tr", "bl", "br"].map((id) => {
   tip(b, `Corner ${id}`, "Its tip stays inside the window and off the button.");
   return b;
 });
-document.body.append(plain, act, gem, low, ...corners);
+const floor = thing("trait:kin");
+floor.id = "floor";
+const tall = thing("note:tall");
+tall.id = "tall";
+document.body.append(plain, act, gem, low, ...corners, floor, tall);
 
 /** Whether a box is inside the window and clear of another. */
 function clearOf(card: DOMRect, of: DOMRect): boolean {
@@ -86,4 +106,19 @@ function at(selector: string): { x: number; y: number } | null {
   return r ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null;
 }
 
-Object.assign(window, { tips: { say, at } });
+/**
+ * The pinned card scrolled to its foot, then drawn again (`refresh`) or placed again (`settle`):
+ * whether it was shortened to fit, and whether it is scrolled where it was.
+ */
+function keeps(how: "refresh" | "settle"): string {
+  const before = document.querySelector<HTMLElement>(".k-info.pinned");
+  if (!before) return "no card";
+  before.scrollTop = before.scrollHeight;
+  const was = before.scrollTop;
+  if (how === "refresh") refresh();
+  else settle();
+  const after = document.querySelector<HTMLElement>(".k-info.pinned");
+  return `shortened=${(after?.style.maxHeight ?? "") !== ""} scrolled=${was > 0} kept=${after?.scrollTop === was}`;
+}
+
+Object.assign(window, { tips: { say, at, keeps } });
