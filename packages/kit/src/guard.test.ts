@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { PAGE_ERRORS_PATH } from "@sequoia-leaf/core";
 
 import { buildOf, firstTry, guard, type GuardWorld, TRIED, UPDATING } from "./guard.ts";
-import { pageScope } from "./scope.ts";
+import { pageScopes, TAKEN } from "./scope.ts";
 import { aPage } from "./standin.ts";
 import { must } from "./util.ts";
 
@@ -173,7 +173,7 @@ describe("a page the guard takes over", () => {
       const shown = aPage();
       try {
         const p = page(tab);
-        const life = pageScope(p.events).child();
+        const life = pageScopes(p.events)();
         /** The page's own parts, gone once the guard has put its line in place of the page or loaded it again. */
         const top = (): object | null => (p.did.some((d) => d.startsWith("show") || d === "reload") ? null : {});
         const ran: string[] = [];
@@ -212,5 +212,24 @@ describe("a page the guard takes over", () => {
 describe("a page's build", () => {
   test("is its own files by name, whatever their order, query or folder", () => {
     expect(buildOf([JS, `${CSS}?v=1`])).toBe("index-aaaa1111.css index-bbbb2222.js");
+  });
+});
+
+describe("a page's scopes", () => {
+  test("are not kept by the page: one nobody closes goes as nothing else holds it", async () => {
+    const make = pageScopes(new EventTarget());
+    const lost = (() => new WeakRef(make()))();
+    await Bun.sleep(0);
+    Bun.gc(true);
+    expect(lost.deref()).toBeUndefined();
+  });
+
+  test("close as the page is taken, and one made after is closed from the start", () => {
+    const events = new EventTarget();
+    const make = pageScopes(events);
+    const before = make();
+    expect(before.closed).toBe(false);
+    events.dispatchEvent(new Event(TAKEN));
+    expect([before.closed, make().closed]).toEqual([true, true]);
   });
 });

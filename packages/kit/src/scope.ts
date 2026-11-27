@@ -158,15 +158,37 @@ export class Scope {
 /** What the page hears as the guard (`guard.ts`) takes it over, to show its line or load it again. */
 export const TAKEN = "leaf:taken";
 
-/** A whole page's scope, which closes when `events` hears `TAKEN`: nothing the page opened runs on against a page the guard has taken. */
-export function pageScope(events: EventTarget | null): Scope {
-  const root = new Scope();
-  if (events !== null) root.on(events, TAKEN, () => root.close());
-  return root;
+/**
+ * A page's maker of scopes: every scope it makes closes when `events` hears `TAKEN`, so nothing the
+ * page opened runs on against a page the guard has taken, and one made after that is closed from the
+ * start. It holds them only weakly: a scope nobody closes (one on an element that is thrown away) goes
+ * with what it was on, as it would with no page to close it.
+ */
+export function pageScopes(events: EventTarget | null): () => Scope {
+  const live = new Set<WeakRef<Scope>>();
+  const gone = new FinalizationRegistry<WeakRef<Scope>>((ref) => live.delete(ref));
+  const page = { taken: false };
+  if (events !== null)
+    new Scope().on(events, TAKEN, () => {
+      page.taken = true;
+      for (const ref of live) ref.deref()?.close();
+      live.clear();
+    });
+  return () => {
+    const made = new Scope();
+    if (page.taken) {
+      made.close();
+      return made;
+    }
+    const ref = new WeakRef(made);
+    live.add(ref);
+    gone.register(made, ref);
+    return made;
+  };
 }
 
-/** The page's scope, on the window (none where there is no window, as in tests). */
-const page = pageScope("addEventListener" in globalThis ? globalThis : null);
+/** Scopes for this page, on the window (none closed by a takeover where there is no window, as in tests). */
+const made = pageScopes("addEventListener" in globalThis ? globalThis : null);
 
-/** A new scope, owned by whoever made it, and closed with the page's when the guard takes the page over. */
-export const scope = (): Scope => page.child();
+/** A new scope, owned by whoever made it, and closed when the guard takes the page over. */
+export const scope = (): Scope => made();
