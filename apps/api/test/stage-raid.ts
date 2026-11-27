@@ -9,20 +9,36 @@
  * member by its banner, `{ "banner-1": 2 }`), and
  * `{ start: { seed, trail, own: true } }` sets out with the figures pulled; `{ fresh: true }` is a
  * member who has pulled nothing.
+ *
+ * The endless run: `{ venture: { way, seed, room, level, acorns } }` sets out on one, in a room
+ * (counting from 0) with every room before it won, at a level and with acorns; any other step with
+ * `slot: "endless"` is done to it rather than to the run in hand. `stageWoods` fills the endless
+ * boards with other members, and has one of them hold rooms of the Deep Woods.
  */
-import type { PlayerId } from "@sequoia-leaf/core";
+import { type PlayerId, utcWeekStart } from "@sequoia-leaf/core";
 import {
   boardMet,
+  depthSlot,
+  ENDLESS,
+  heldSlot,
   isComponentId,
+  isEndlessWay,
   isFigureId,
   isFinishedId,
   isMemberId,
+  layOutAfresh,
+  MAX_LEVEL,
   RAID,
+  roomAt,
   type Roster,
   rosterOf,
+  type Run,
+  sparAt,
+  sparParty,
   startRun,
   type Table,
   TRAIL_COUNT,
+  weekAt,
 } from "@sequoia-leaf/raid";
 import { Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
@@ -33,9 +49,40 @@ const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "obj
 const whole = (v: unknown, least: number, most: number): number | null =>
   typeof v === "number" && Number.isInteger(v) && v >= least && v <= most ? v : null;
 
+/**
+ * Sets out on an endless run, in a room with every room before it won (so a boss won past the
+ * fifteenth is a chair), at a level and with acorns, its stall and its room laid out afresh; and
+ * writes that room down as the deepest won this week and ever, as play would have.
+ */
+function venture(table: Table, v: Record<string, unknown>): Run | null {
+  if (!isEndlessWay(v.way)) return null;
+  const seed = whole(v.seed, 0, 0xffffffff) ?? 1;
+  const room = whole(v.room, 0, 200) ?? 0;
+  const run = startRun(seed, { endless: v.way });
+  table.ventures += 1;
+  table.endless = run;
+  if (room === 0) return run;
+  for (let i = 0; i < room; i++)
+    run.record.push({ room: i, kind: roomAt(i)?.kind ?? "spar", result: "win", standing: [3, 0], boss: null });
+  run.room = room;
+  run.level = whole(v.level, 1, MAX_LEVEL) ?? MAX_LEVEL;
+  run.acorns = whole(v.acorns, 0, 999) ?? 50;
+  // With nobody in the party yet, the first figure is still to be picked (`layOutAfresh` draws it).
+  run.stage = { phase: "plan", picks: [{ kind: "starter", options: [] }] };
+  layOutAfresh(run, seed);
+  table.week = weekAt(table.week, Date.now());
+  table.week.deepest[v.way] = Math.max(table.week.deepest[v.way], room);
+  table.almanac.deepest[v.way] = Math.max(table.almanac.deepest[v.way], room);
+  return run;
+}
+
 /** Does one staging step to a table, writing down the number of a run or a figure it made. */
 function step(table: Table, op: Record<string, unknown>, made: number[], own: Roster): void {
-  const run = table.run;
+  if (isRecord(op.venture)) {
+    if (venture(table, op.venture)) made.push(table.ventures);
+    return;
+  }
+  const run = op.slot === "endless" ? table.endless : table.run;
   if (isRecord(op.start)) {
     const seed = whole(op.start.seed, 0, 0xffffffff) ?? 1;
     const trail = whole(op.start.trail, 0, TRAIL_COUNT - 1) ?? 0;
@@ -63,13 +110,44 @@ function step(table: Table, op: Record<string, unknown>, made: number[], own: Ro
   }
   if (isComponentId(op.item) || isFinishedId(op.item)) run.items.push(op.item);
   // The party waiting in the room as another member's board, signed as the rules sign one Leaf hands over.
-  if (typeof op.member === "string")
-    run.foe =
-      boardMet({ player: "20000000-0000-4000-8000-0000000000aa", name: op.member, data: run.foe, of: 1 }) ?? run.foe;
+  if (typeof op.member === "string") {
+    const met = { player: "20000000-0000-4000-8000-0000000000aa", name: op.member, data: run.foe, of: 1 };
+    run.foe = boardMet(met, false, run.endless ? ENDLESS.chairs : 0) ?? run.foe;
+  }
   if (op.strip === true) {
     for (const piece of [...run.board, ...run.bench]) if (piece) piece.items = [];
   }
 }
+
+/**
+ * The endless boards with other members on them (`others`, each deeper than the next) as their runs
+ * leave them with Leaf (`play_kept`), and rooms of the Deep Woods held by them: `{ hold: { room, by } }`
+ * has the `by`th of them hold a room (counting from 0) with a regular's board for it, from `now`.
+ */
+export const stageWoods = (others: readonly PlayerId[], ops: readonly unknown[], now: number) =>
+  Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
+    const keep = (player: PlayerId, slot: string, data: unknown, at: number) => sql`
+      INSERT INTO play_kept (player_id, game, slot, data, updated_at) VALUES (${player}, 'raid', ${slot}, ${JSON.stringify(data)}, ${at})
+      ON CONFLICT (player_id, game, slot) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at
+    `;
+    if (ops.some((op) => isRecord(op) && op.woods === true)) {
+      for (const [i, player] of others.entries()) {
+        const at = Math.max(utcWeekStart(now), now - (i + 1) * 60_000);
+        yield* keep(player, depthSlot("wilds", "ever"), { room: 44 - 6 * i }, at - 86_400_000 * 9);
+        yield* keep(player, depthSlot("wilds", "week"), { room: 31 - 3 * i }, at);
+        yield* keep(player, depthSlot("deep", "ever"), { room: 27 - 2 * i }, at - 86_400_000 * 9);
+        yield* keep(player, depthSlot("deep", "week"), { room: 25 - 2 * i }, at);
+      }
+    }
+    for (const op of ops) {
+      const hold = isRecord(op) && isRecord(op.hold) ? op.hold : null;
+      const room = whole(hold?.room, 0, 200);
+      const player = others[whole(hold?.by, 0, others.length - 1) ?? 0];
+      if (room === null || player === undefined) continue;
+      yield* keep(player, heldSlot(room), sparParty(7 + room, room, 0, sparAt(room)), now);
+    }
+  });
 
 /** Stages each step in order on the player's table, as one change. Gives back the numbers of what it made. */
 export const stageRaid = (playerId: PlayerId, ops: readonly unknown[]) =>

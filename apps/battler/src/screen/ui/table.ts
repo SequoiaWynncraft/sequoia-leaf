@@ -23,7 +23,6 @@ import {
   picksOf,
   pieces,
   priceOf,
-  ROOMS,
   type RunView,
   rustleCost,
   tally,
@@ -35,7 +34,7 @@ import {
 } from "@sequoia-leaf/raid";
 import { regularOf } from "@sequoia-leaf/raid/content/rooms.ts";
 
-import { boonIcon, glyph, itemIcon, roomIcon, traitIcon } from "../art/icons.ts";
+import { boonIcon, glyph, itemIcon, traitIcon } from "../art/icons.ts";
 import { rimTop, stumpOf } from "../art/table.ts";
 import { fightEvents, fightUnits } from "../fightview.ts";
 import type { Speed } from "../keep.ts";
@@ -47,6 +46,7 @@ import { busy, S } from "../state.ts";
 import { acorns, boonRef, figPic, figureRef, itemRef, pic, traitRef, unitRef } from "./cards.ts";
 import { forgetLight, paintLight } from "./lit.ts";
 import { oddsRow, runTag, waySign } from "./own.ts";
+import { chairsTag, forgetTrack, renderTrack, trackPlaque } from "./rooms.ts";
 import { type TallyView, tallyView } from "./tally.ts";
 
 /** What the buttons ask for. The table only asks; whoever built it answers. */
@@ -71,7 +71,6 @@ let asks: Asks | null = null;
 let stallKey = "";
 let rackKey = "";
 let traitKey = "";
-let trackKey = "";
 /** The run's trait steps from the last drawing, by the run's number, to tell one that has just gone up. */
 const traitSteps = new TraitWatch();
 
@@ -85,16 +84,7 @@ export function buildTable(a: Asks): void {
   asks = a;
   const hud = el("div", "", { id: "hud" });
   const purse = el("div", "k-plaque hung", { id: "purse" });
-  const track = el("div", "k-plaque hung", { id: "track" });
-  // One stop for the keyboard (the room you are in); the arrows walk along the rest.
-  track.addEventListener("keydown", (e) => {
-    const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
-    const pips = [...track.querySelectorAll<HTMLElement>(".pip")];
-    const next = pips[pips.findIndex((p) => p === document.activeElement) + step];
-    if (step === 0 || !next) return;
-    e.preventDefault();
-    next.focus();
-  });
+  const track = trackPlaque();
   const resolve = el("button", "k-plaque hung", { id: "resolve", type: "button" });
   tip(
     resolve,
@@ -228,29 +218,6 @@ export function toast(text: string, tone: "coral" | "gold" | "leaf" = "coral"): 
   const line = el("div", `k-toast ${tone === "gold" ? "" : tone}`.trim(), { text });
   says.append(line);
   window.setTimeout(() => line.remove(), 2200);
-}
-
-function renderTrack(run: RunView): void {
-  const track = byId("track");
-  if (!track) return;
-  const key = `${S.runs}:${run.room}:${run.stage.phase}:${run.record.map((r) => r.result[0]).join("")}`;
-  if (key === trackKey) return;
-  trackKey = key;
-  track.replaceChildren();
-  ROOMS.forEach((room, i) => {
-    const record = run.record.findLast((r) => r.room === i);
-    const here = i === run.room && run.stage.phase !== "over";
-    const state = record ? (record.result === "win" ? "won" : record.result === "loss" ? "lost" : "drawn") : "";
-    const pip = el(
-      "button",
-      `k-slot pip ${room.kind} ${here && !(record?.result === "win") ? "here lit" : state}${i > 0 && ROOMS[i - 1]?.wing !== room.wing ? " wing" : ""}`.trim(),
-      { type: "button", "aria-label": `Room ${i + 1}${state ? `, ${state}` : ""}` },
-      pic(roomIcon(room.kind)),
-    );
-    pip.tabIndex = here ? 0 : -1;
-    link(pip, `room:${i}`);
-    track.append(pip);
-  });
 }
 
 function renderResolve(run: RunView): void {
@@ -451,6 +418,7 @@ function renderPurseSide(run: RunView): void {
   const wasLv = level.dataset.n;
   level.replaceChildren(
     el("b", "", { text: `Level ${lv}` }),
+    chairsTag(run),
     bar,
     el("span", "k-dim", { text: need > 0 ? `${xp}/${need}` : "top" }),
     el("span", "k-dim fielded", {}, pic(glyph("figure")), `${fielded(run)}/${fieldCap(run)}`),
@@ -576,7 +544,7 @@ export function forgetTable(): void {
   stallKey = "";
   rackKey = "";
   traitKey = "";
-  trackKey = "";
+  forgetTrack();
   forgetLight();
   traitSteps.forget();
 }

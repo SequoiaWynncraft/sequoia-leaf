@@ -136,18 +136,35 @@ kit's card: "The table needs the guild's server."
 - **The end of a run** is a page of paper: the rooms, the party that got there, what is new in the
   almanac, and the Coins paid into the member's purse. Then again, or back to town.
 - **Round the game.** A front page that picks a way to play (`ui/modes.ts` is the table of them,
-  `ui/front.ts` draws it). Along the top a strip for each run laid out: its trail, room and health,
-  going home early and Carry on. Down the left the categories as large tabs (Normal,
-  Endless, Versus), and under the chosen one its modes as cards; a mode the page cannot set out on
-  yet (`setOut` null: Endless, the Deep Woods and the live tables, for now) is not shown, nor a
-  category with none shown. In the middle the chosen mode's card: its name, one sentence, a picture
-  of the table as it is dressed, its options, and its foot: Set out, or Carry on with its run laid
-  out and New raid beside it once that run has fought a room, with a line under them saying why
-  Set out is closed or that a new raid ends the one laid out. On the right its board, a title and
+  `ui/front.ts` draws it). Along the top a strip for each run laid out, the run in hand and the
+  endless run beside it: what it is (its trail, or its endless way), its room and health, End this
+  raid (asked first, and saying how many rooms it is paid for) and Carry on. Down the left the
+  categories as large tabs (Normal, Endless, Versus), and under the chosen one its modes as cards;
+  a mode the page cannot set out on yet (`setOut` null: the live tables, for now) is not shown,
+  nor a category with none shown. In the middle the chosen mode's card: its name, one sentence, a
+  picture of the table as it is dressed (the words of every mode in its category laid in one
+  place, so choosing between them moves nothing), its options, and its foot: Set out, or Carry on
+  with its run laid out and New raid beside it once that run has fought a room, with a line under
+  them saying why Set out is closed or what a new raid ends. On the right its board, a title and
   rows of a rank, a name and a number, the member's own lit (and under the list when below it);
-  the trails' board is the member's own records. Along the bottom the almanac, how to play, table
-  looks and leave the table. On an upright phone it is the same, one part under another, the mode
-  alone in its category not listed. The trails' options are the figures to set out with and the
+  the trails' board is the guild's by bosses beaten, or the member's own records until it has
+  anybody. Along the bottom the almanac, how to play, table looks and leave the table. On an
+  upright phone it is the same, one part under another, the mode alone in its category not
+  listed.
+- **The endless ways** (`ui/endless.ts`, `ui/woods.ts`): the Wilds and the Deep Woods, under
+  Endless, set out an endless run beside the run in hand, which is not touched. Their card says
+  what grows after room 15 and what pays; the Deep Woods' also lists the rooms the member holds this
+  week, and until they have set out there, that their board and name can be met there (Set out is
+  the agreement). The Wilds' board is the deepest room won, ever or this week (two tabs); the Deep
+  Woods' is this week's. When a room of the Deep Woods has been taken from the member since they
+  last looked, the front page says so once, at the top: "Room 22 was taken from you by Birchwood."
+  While the front page is up, the news, the rooms held and the board are read again every minute,
+  and the page drawn again (the keyboard and the scroll where they were) only when one changed.
+  At the table an endless run past room 15 has its room before the track's pips ("Room 23"; on a
+  phone the number), the level's plaque says its chairs ("Chairs: 10") once a boss past room 15 has
+  given one, a held room's card says who holds it, and a room the forest grows in says by how much
+  ("+41% health and attack"). Its end page says how deep it went and the member's deepest. The
+  trails' options are the figures to set out with and the
   three trails (a radio group: the arrows choose; one not open yet can be chosen to look at, and
   then Set out says why it is closed), with what the chosen one is under them. Whatever is chosen,
   the card, the board and the button stay where they are: the words of every trail and of each way
@@ -217,7 +234,13 @@ does by taking the look's price from the ledger, and the purse then asks Leaf fo
 for a guest, or while Leaf's spending is off (`leafOpen()`), the button is closed.
 
 The browser keeps only the member's view settings (`raid.prefs.v1`, `src/screen/keep.ts`): the
-speed fights are watched at and the first-time nudges already given.
+speed fights are watched at and the first-time nudges already given; and the newest of the member's
+events already looked at for a room taken (`raid.taken.v1:<Leaf id>`, `ui/woods.ts`), so it is said
+to them once, and another member on the same browser has their own.
+
+The table keeps two runs, the run in hand and the endless run, and the page plays one at a time
+(`S.slot`): every command for a run goes to that one (`endless: true` for the endless run). A
+strip's Carry on sits down to its run; End this raid ends that one.
 
 ## In the town's frame
 
@@ -280,6 +303,7 @@ timed can be stepped by hand.
 | `src/screen/art/place.ts`     | The second place the table may stand (the guild hall), what moves in it, and which place is painted   |
 | `src/screen/art/pal.ts`       | A colour for each trait                                                                               |
 | `src/screen/ui/table.ts`      | The interface round the table: purse, track, traits, rack, stall, buttons, the fight's panel          |
+| `src/screen/ui/rooms.ts`      | The track's pips (an endless run's past room 15 too), each room's card, an endless run's chairs       |
 | `src/screen/ui/tally.ts`      | The tally as rows and bars, two parties side by side (one at a time on a phone), with its tabs        |
 | `src/screen/ui/fightsheet.ts` | The sheet of a fight that is over: after it with the takings and "Carry on", or "Last fight"          |
 | `src/screen/held.ts`          | What a figure holds: where the row of small pictures under its base goes, drawing it, hitting it      |
@@ -288,10 +312,13 @@ timed can be stepped by hand.
 | `src/screen/ui/picks.ts`      | Three cards to choose from                                                                            |
 | `src/screen/ui/modes.ts`      | The ways to play as a table: each mode's category, words, Set out, run and board; the foot it shows   |
 | `src/screen/ui/front.ts`      | The front page: runs laid out, the categories and modes, the chosen mode's card, its board            |
-| `src/screen/ui/pages.ts`      | The pages over the table: the almanac, how to play, table looks, the end of a run                     |
+| `src/screen/ui/endless.ts`    | The endless ways with no page in them: their names, boards from Leaf, rooms taken, the strip's line   |
+| `src/screen/ui/woods.ts`      | The endless ways on the front page: boards and rooms held read from Leaf, a room taken said once      |
+| `src/screen/ui/pages.ts`      | The pages over the table: the almanac, how to play, table looks                                       |
+| `src/screen/ui/ended.ts`      | The end of a run: how far (or how deep), the party, what is new, what it paid, Again                  |
 | `src/screen/ui/nudge.ts`      | The first-time nudges                                                                                 |
 
-`geometry.ts`, `logic.ts`, `keep.ts`, `light.ts`, `rich.ts`, `playback.ts` and `ui/modes.ts` have tests beside them;
+`geometry.ts`, `logic.ts`, `keep.ts`, `light.ts`, `rich.ts`, `playback.ts`, `ui/modes.ts` and `ui/endless.ts` have tests beside them;
 `playback.test.ts` holds that the fight on the table, lead-ins, hit-stops and all, is the rules'
 own, event for event, to the same end, at every speed.
 
@@ -316,7 +343,11 @@ A headless browser draws about a frame a second, so the page puts a handle on `w
 `hold(true)` stops the clock so that only `skip(seconds)` and `tick(steps)` move it. Whatever plays
 goes to Leaf as commands, so these give back promises: `start(seed, trail)` begins a run; `bot(rooms)`
 has the rules' bot play whole rooms unseen and `plan()` has it plan the room that is up (the bot plans
-on the page's copy and sends what it would do, `planCommands`); `to("boon" | "component" | "boss" |
+on the page's copy and sends what it would do, `planCommands`), on whichever run the table plays;
+`endless(way, room, acorns)` sets out on an endless run (staged in a room with every room before it
+won), `sit(slot)` sits down to a run as a strip's Carry on does, and `woods(...)` has the play server
+put the other members on the endless boards, have one hold a room of the Deep Woods, or take one
+from the member; `to("boon" | "component" | "boss" |
 "lastboss" | "end" | "front")` plays on to a moment worth looking at; `fight()` sets out;
 `settled()` waits until Leaf has answered everything sent; `send(command)` sends one as the page
 would. `fresh()` (a new member, who has pulled nothing), `pulled({ greg: 3 })` (copies pulled), `start` from a chosen seed (and `own`), `acorns(n)`, `give(kind)`, `offer(at,

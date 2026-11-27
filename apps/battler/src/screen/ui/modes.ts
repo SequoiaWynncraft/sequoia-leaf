@@ -5,11 +5,16 @@
  *
  * Each mode has a board: rows of a rank, a name and the number that ranks them. `listed` keeps the
  * member's own row in view, under the list when it is below it.
+ *
+ * The trails play in the table's run in hand; the Wilds and the Deep Woods in its endless run, beside
+ * it (`endless.ts` has what they need besides).
  */
 import { whole } from "@sequoia-leaf/core";
 import type { Board as Standings } from "@sequoia-leaf/kit/person.ts";
 import {
   type Almanac,
+  ENDLESS,
+  type EndlessWay,
   type RaidCommand,
   ROOM_COUNT,
   type RunView,
@@ -18,9 +23,11 @@ import {
   trailOpen,
   TRAILS,
   unfought,
+  type Week,
 } from "@sequoia-leaf/raid";
 
 import type { Glyph } from "../art/icons.ts";
+import { type DepthBoard, depthBoard, type Span, WAY_NAMES } from "./endless.ts";
 
 /** What the table is read against: Leaf's copy, and what is chosen on the page. */
 export interface At {
@@ -32,6 +39,14 @@ export interface At {
   readonly own: boolean;
   /** The guild's raid board as Leaf last gave it (`GET /v1/game/play/raid/standings`), or null before it is read. */
   readonly standings: Standings | null;
+  /** The endless run laid out beside the run in hand, if one is. */
+  readonly endless: RunView | null;
+  /** This week's deepest rooms won in each endless way, as Leaf keeps them. */
+  readonly week: Week;
+  /** The endless boards as Leaf last gave them (`GET /v1/game/raid/depths/{way}/{span}`), by way and span: `wilds:ever`. */
+  readonly depths: ReadonlyMap<string, DepthBoard>;
+  /** Which of the Wilds' boards is chosen. */
+  readonly span: Span;
 }
 
 export type CategoryId = "normal" | "endless" | "versus";
@@ -62,6 +77,8 @@ export interface Board {
 }
 
 export type ModeId = "trails" | "endless" | "deep" | "live";
+/** What setting out sends Leaf: a trail's run, or an endless run. */
+export type SetOut = Extract<RaidCommand, { do: "start" | "endless" }>;
 export interface Mode {
   readonly id: ModeId;
   readonly category: CategoryId;
@@ -71,10 +88,12 @@ export interface Mode {
   /** Why the member cannot set out on it now, or null when they can. */
   readonly closed: (at: At) => string | null;
   /** What Set out sends Leaf; null until the mode is wired, and until then the page does not show it. */
-  readonly setOut: ((at: At) => Extract<RaidCommand, { do: "start" }>) | null;
+  readonly setOut: ((at: At) => SetOut) | null;
   /** Its run laid out, if one is. */
   readonly run: (at: At) => RunView | null;
   readonly board: (at: At) => Board;
+  /** What setting out on it would end besides its own run, said under the button: for an endless way, a run of the other. */
+  readonly ends?: (at: At) => string | null;
 }
 
 /** Why a trail cannot be set out on yet, or null when it can. */
@@ -128,31 +147,65 @@ export const THE_TRAILS: Mode = {
   board: (at) => (at.standings && at.standings.top.length > 0 ? guildBoard(at.standings) : records(at.almanac)),
 };
 
+/** The endless run laid out, if it set out the given way. */
+const endlessOn = (at: At, way: EndlessWay): RunView | null => (at.endless?.endless === way ? at.endless : null);
+/** The other way's endless run, whose place a new run takes: why not while it has fought no room, and what it ends once it has. */
+function otherWay(at: At, way: EndlessWay): { closed: string | null; ends: string | null } {
+  const other = at.endless && at.endless.endless !== way ? at.endless : null;
+  if (!other?.endless) return { closed: null, ends: null };
+  const name = WAY_NAMES[other.endless];
+  return unfought(other)
+    ? { closed: `Your raid in ${name} has not fought a room yet.`, ends: null }
+    : { closed: null, ends: `A new raid ends your raid in ${name}.` };
+}
+/** An endless way as a mode: its words, setting out on it, its run, and its board (the Wilds' of the span chosen). */
+const endlessMode = (id: ModeId, way: EndlessWay, text: string, title: string): Mode => ({
+  id,
+  category: "endless",
+  name: WAY_NAMES[way],
+  text,
+  closed: (at) => otherWay(at, way).closed,
+  setOut: () => ({ do: "endless", way }),
+  run: (at) => endlessOn(at, way),
+  board: (at) => {
+    const span: Span = way === "deep" ? "week" : at.span;
+    const own = span === "week" ? at.week.deepest[way] : at.almanac.deepest[way];
+    return depthBoard(title, at.depths.get(`${way}:${span}`) ?? null, own);
+  },
+  ends: (at) => otherWay(at, way).ends,
+});
+
+/** The endless run with regulars in every sparring room: how deep a member gets, ever and this week. */
+export const THE_WILDS: Mode = endlessMode(
+  "endless",
+  "wilds",
+  "Rooms without end, until your health runs out. Your raid on a trail is kept as it is.",
+  "Deepest room",
+);
+/** The endless run whose sparring rooms from room 16 are held by the members who last won them this week. */
+export const THE_DEEP_WOODS: Mode = endlessMode(
+  "deep",
+  "deep",
+  `Rooms without end. From room ${ENDLESS.heldFrom + 1}, each sparring room is held by the last member to win it this week, and you meet their board. Win it, and your board holds it.`,
+  "Deepest this week",
+);
+
 export const MODES: readonly Mode[] = [
   THE_TRAILS,
-  later(
-    {
-      id: "endless",
-      category: "endless",
-      name: "Endless",
-      text: "Rooms without end, alone, until your health runs out.",
-    },
-    "Furthest room",
-  ),
-  later(
-    {
-      id: "deep",
-      category: "endless",
-      name: "The Deep Woods",
-      text: "Rooms held by guildmates' boards, new each week. See how deep you get.",
-    },
-    "Deepest this week",
-  ),
+  THE_WILDS,
+  THE_DEEP_WOODS,
   later(
     { id: "live", category: "versus", name: "Live tables", text: "8 members at one table, against each other." },
     "Tables won",
   ),
 ];
+
+/** The runs laid out, each with the mode it is of: the run in hand, then the endless run. */
+export const laidOut = (at: At): { mode: Mode; run: RunView }[] =>
+  MODES.flatMap((mode) => {
+    const run = mode.run(at);
+    return run ? [{ mode, run }] : [];
+  });
 
 /** The modes shown: those the page can set out on. */
 export const shownModes = (modes: readonly Mode[]): Mode[] => modes.filter((m) => m.setOut !== null);
@@ -178,7 +231,7 @@ export interface Foot {
 export function footOf(mode: Mode, at: At): Foot {
   const run = mode.run(at);
   const why = mode.closed(at);
-  if (!run) return { button: "setOut", anew: false, off: why !== null, line: why };
+  if (!run) return { button: "setOut", anew: false, off: why !== null, line: why ?? mode.ends?.(at) ?? null };
   if (unfought(run)) return { button: "carryOn", anew: false, off: false, line: null };
   return { button: "carryOn", anew: true, off: why !== null, line: why ?? ENDS_THE_RUN };
 }

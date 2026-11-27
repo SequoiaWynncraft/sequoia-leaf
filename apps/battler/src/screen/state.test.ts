@@ -3,7 +3,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { type Reply, type Sent, type Standin, standin } from "@sequoia-leaf/kit/standin.ts";
 import { RAID, type RaidCommand, type Table } from "@sequoia-leaf/raid";
 
-import { ask, busy, doNow, onHeld, onRefused, openTable, S, waitingForLeaf } from "./state.ts";
+import { ask, busy, doNow, onHeld, onRefused, openTable, playSlot, S, tableNow, waitingForLeaf } from "./state.ts";
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 /** What Leaf tells the game about each call. */
@@ -66,6 +66,7 @@ afterEach(() => {
   world?.done();
   world = null;
   S.run = null;
+  S.slot = "main";
   S.screen = { at: "front" };
 });
 
@@ -183,6 +184,30 @@ describe("the table, on Leaf", () => {
     await until(() => fake.leaf.state.run?.held === true && S.run?.acorns !== 999);
     expect(S.run?.acorns).toBe(acorns);
     expect(S.run?.board.find((p) => p !== null)?.stars).toBe(1);
+  });
+
+  test("an endless run beside the run in hand: every command for a run goes to the one the table plays", async () => {
+    const fake = await seated();
+    // The run in hand, but for its dice (Leaf stirs every run's with each command).
+    const kept = () => ({ ...fake.leaf.state.run, rng: 0 });
+    const inHand = structuredClone(kept());
+    expect((await ask({ do: "endless", way: "deep" }))?.ok).toBe(true);
+    // Setting out on it leaves the table on the run in hand until the page sits down to the endless one.
+    expect(S.run?.endless).toBeNull();
+    expect(S.laid.endless?.endless).toBe("deep");
+    playSlot("endless");
+    expect([S.run?.endless, S.runs, tableNow().run?.endless]).toEqual(["deep", 1, "deep"]);
+    expect((await ask({ do: "choose", option: 0 }))?.ok).toBe(true);
+    expect(doNow({ do: "hold", on: true })?.ok).toBe(true);
+    await until(() => !waitingForLeaf());
+    expect(fake.leaf.state.endless?.held).toBe(true);
+    expect(fake.leaf.state.endless?.board.some((p) => p !== null)).toBe(true);
+    expect(kept()).toEqual(inHand);
+    // Back to the run in hand: its commands are its own again.
+    playSlot("main");
+    doNow({ do: "hold", on: true });
+    await until(() => !waitingForLeaf());
+    expect([fake.leaf.state.run?.held, S.run?.endless, S.runs]).toEqual([true, null, 1]);
   });
 
   test("what another page of the member's did shows on this page's next answer", async () => {

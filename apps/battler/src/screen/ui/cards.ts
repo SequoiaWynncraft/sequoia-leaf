@@ -48,7 +48,6 @@ import {
   pieceAt,
   pieces,
   roleLine,
-  ROOMS,
   type RunView,
   sellValue,
   specOf,
@@ -62,9 +61,8 @@ import {
   type Unit,
   type UnitKind,
 } from "@sequoia-leaf/raid";
-import { regularOf } from "@sequoia-leaf/raid/content/rooms.ts";
 
-import { boonIcon, glyph, itemIcon, roomIcon, traitIcon } from "../art/icons.ts";
+import { boonIcon, glyph, itemIcon, traitIcon } from "../art/icons.ts";
 import { fightUnits } from "../fightview.ts";
 import {
   acrossName,
@@ -72,7 +70,6 @@ import {
   membersOf,
   NUMBER_KEYS,
   type Numbers,
-  opening,
   ownTraitCount,
   pieceNumbers,
   plainNumbers,
@@ -87,6 +84,7 @@ import {
 } from "../logic.ts";
 import { pieces as richPieces } from "../rich.ts";
 import { doNow, S } from "../state.ts";
+import { chairsSaid } from "./endless.ts";
 import { figuresHere, levelOnCard, oddsStats } from "./own.ts";
 import { figureRef, itemRef, pieceRef, traitRef } from "./refs.ts";
 import { itemsOf, wantedBy } from "./suits.ts";
@@ -442,36 +440,6 @@ export function boonDesc(id: BoonId): Description {
 
 // ---------- the rest ----------
 
-/** A room on the track: what kind it is, who is or was there, and what it gives. */
-function roomDesc(index: number, run: RunView): Description | null {
-  const room = ROOMS[index];
-  if (!room) return null;
-  const record = run.record.findLast((r) => r.room === index);
-  const here = run.room === index && run.stage.phase !== "over";
-  const kind = room.kind === "spar" ? "Sparring" : room.kind === "boss" ? "A boss" : "Trouble";
-  const lines: string[] = [];
-  if (here)
-    lines.push(
-      regularOf(run.foe)
-        ? `${opening(run.foe.who)} ${run.foe.title}.`
-        : `${run.foe.who}${run.foe.title ? `: ${run.foe.title}` : ""}.`,
-    );
-  const lose = `Lose: 1 of ${ECONOMY.componentsLost}.`;
-  if (record) lines.push(record.result === "win" ? "Won." : record.result === "loss" ? "Lost." : "A draw.");
-  else if (room.kind === "spar") lines.push("A regular's party. It gives no components.");
-  else if (room.kind === "trouble") lines.push(`Win: pick 1 of ${ECONOMY.componentsWon} components. ${lose}`);
-  else if (index === ROOMS.length - 1)
-    lines.push("The last room. It is fought again until it is won or health runs out.");
-  else lines.push(`Win: pick 1 of ${ECONOMY.componentsWon} components, twice. ${lose}`);
-  if (ECONOMY.boonRooms.some((r) => r === index)) lines.push("A boon after it, won or lost.");
-  return {
-    name: `Room ${index + 1}`,
-    icon: roomIcon(room.kind),
-    tag: `${kind}, wing ${room.wing}.`,
-    blocks: [{ body: lines.join(" ") }],
-  };
-}
-
 /** The purse of acorns: how the savings are counted. */
 function purseDesc(run: RunView): Description {
   const s = savings(run);
@@ -501,7 +469,10 @@ function levelDesc(run: RunView): Description {
     icon: glyph("acorn"),
     tag: "How many figures you may field.",
     stats: oddsStats(run),
-    blocks: [{ body: `${ECONOMY.xpBought} XP for ${ECONOMY.xpCost} acorns. Every room gives ${ECONOMY.xpRoom} XP.` }],
+    blocks: [
+      { body: `${ECONOMY.xpBought} XP for ${ECONOMY.xpCost} acorns. Every room gives ${ECONOMY.xpRoom} XP.` },
+      ...chairsSaid(run).map((body) => ({ body })),
+    ],
   };
 }
 
@@ -565,7 +536,6 @@ export function registerCards(): void {
     return itemDesc(id, lore ? null : S.run, Number(at), lore);
   });
   register("boon", (id) => (isBoonId(id) ? boonDesc(id) : null));
-  register("room", (id) => (S.run ? roomDesc(Number(id), S.run) : null));
   register("acorns", () => (S.run ? purseDesc(S.run) : null));
   register("level", () => (S.run ? levelDesc(S.run) : null));
 }

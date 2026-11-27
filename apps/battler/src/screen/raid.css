@@ -76,6 +76,12 @@ button.k-chip {
   padding: calc(var(--u) * 2) calc(var(--u) * 3);
   font: var(--f-ui);
 }
+/* Past the fifteenth room of an endless run, the room it is in, before the pips. */
+#track > .deep {
+  padding-right: calc(var(--u) * 2);
+  font: var(--f-ui);
+  white-space: nowrap;
+}
 .pip {
   width: calc(var(--u) * 9);
   height: calc(var(--u) * 9);
@@ -479,6 +485,9 @@ body[data-picking="yes"] #foe {
 }
 #level .k-bar {
   width: 100%;
+}
+#level > .chairs {
+  grid-column: 1 / -1;
 }
 #level > .fielded {
   grid-column: 1 / -1;
@@ -1216,30 +1225,40 @@ b.dmg.true {
   width: min(100%, calc(var(--u) * 480));
   height: min(calc(100dvh - var(--u) * 8), calc(var(--u) * 380));
 }
+/* Taller than the window lets it be (two runs laid out, a long card), the panel's body scrolls: nothing in it is cut. */
 .page > .menu {
   flex: 1;
-  overflow: hidden;
+  overflow: hidden auto;
 }
 .runs {
   display: flex;
   flex-direction: column;
   gap: calc(var(--u) * 2);
 }
-.run {
+/* A room of the Deep Woods taken from the member since they last looked, said once at the top. */
+.taken {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--u);
   padding-block: calc(var(--u) * 2);
 }
-.run > .k-col {
-  min-width: calc(var(--u) * 60);
+.run {
+  padding-block: var(--u);
 }
+/* A run's name, room and health on one line, beside its two buttons. */
+.run > .what {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 calc(var(--u) * 4);
+}
+/* As tall as the panel leaves them, and taller when what they hold needs it. */
 .menu-cols {
-  flex: 1;
-  min-height: 0;
+  flex: 1 0 auto;
   display: grid;
   grid-template-columns: calc(var(--u) * 84) minmax(0, 1fr) calc(var(--u) * 136);
   gap: calc(var(--u) * 4);
-}
-.menu-cols > * {
-  min-height: 0;
 }
 .picker,
 .modes {
@@ -1274,8 +1293,7 @@ b.dmg.true {
   margin: 0;
 }
 .mode-opts {
-  flex: 1;
-  min-height: 0;
+  flex: 1 0 auto;
   display: flex;
   flex-direction: column;
   gap: calc(var(--u) * 3);
@@ -1286,13 +1304,21 @@ b.dmg.true {
 .mode-foot > .k-row > .k-btn {
   flex: 1;
 }
+/*
+ * Set out and Carry on stay in view while the card goes on below the panel's edge: held down to the
+ * edge itself (past the body's padding), over the card's own padding, so nothing shows under them.
+ */
+.mode-foot {
+  position: sticky;
+  bottom: calc(var(--u) * -4);
+  margin-bottom: calc(var(--u) * -3);
+  padding-bottom: calc(var(--u) * 3);
+  background: var(--k-mid);
+}
 /* Its line is there when it is empty too: a reason coming or going moves nothing. */
 .mode-foot > p {
   min-height: calc(var(--t-r) * 1.4);
   margin: calc(var(--u) * 2) 0 0;
-}
-.board {
-  overflow: hidden auto;
 }
 .board-row {
   display: flex;
@@ -1307,6 +1333,9 @@ b.dmg.true {
 }
 .board-row .place:empty {
   display: none;
+}
+.board > .spans {
+  padding-inline: 0;
 }
 .menu-foot > .k-btn {
   flex: 1;
@@ -1637,11 +1666,28 @@ b.dmg.true {
     flex: 1 1 100%;
     flex-wrap: wrap;
   }
+  /* Ending a run, asked in its strip: the question on a line of its own, its two answers under it. */
+  .run .ask {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+  }
+  .run .ask > .k-d {
+    flex-basis: 100%;
+  }
+  .run .ask > .k-btn {
+    flex: 1;
+  }
   /* The run's two buttons small, side by side under its words. */
+  .run {
+    padding-inline: calc(var(--u) * 2);
+  }
+  .run .acts {
+    gap: var(--u);
+  }
   .acts > .k-btn {
     flex: 1;
     min-height: calc(var(--u) * 16);
-    padding-inline: calc(var(--u) * 3);
+    padding-inline: calc(var(--u) * 2);
   }
   /* A picture of the table one screen pixel to each of its own, beside the mode's name. */
   .mode-head {

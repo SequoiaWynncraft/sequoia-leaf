@@ -15,6 +15,7 @@
 import { ask as askLeaf } from "@sequoia-leaf/kit/net.ts";
 import { balance } from "@sequoia-leaf/kit/purse.ts";
 import {
+  type EndlessWay,
   HZ,
   isBossId,
   MEASURES,
@@ -23,6 +24,7 @@ import {
   pieces,
   planCommands,
   type RaidCommand,
+  roomAt,
   ROOMS,
   type RunView,
   SENSIBLE,
@@ -32,7 +34,17 @@ import { isUnitKind, specOf } from "@sequoia-leaf/raid/content/figures.ts";
 import { COLS } from "@sequoia-leaf/raid/hex.ts";
 
 import { fightEvents, fightState, startFight } from "../src/screen/fightview.ts";
-import { carryOn, doSpeed, enterRun, lookBack, setOut, startNew, toFront } from "../src/screen/flow.ts";
+import {
+  carryOn,
+  doSpeed,
+  enterRun,
+  lookBack,
+  setOut,
+  sitDown,
+  startEndless,
+  startNew,
+  toFront,
+} from "../src/screen/flow.ts";
 import { grab, hover, tapPawn, unpick } from "../src/screen/hand.ts";
 import { heldRow, heldTop } from "../src/screen/held.ts";
 import { NUDGES } from "../src/screen/logic.ts";
@@ -48,8 +60,10 @@ import {
   doNow,
   go,
   leafView,
+  playSlot,
   prefsChanged,
   S,
+  type Slot,
   tableNow,
   waitingForLeaf,
 } from "../src/screen/state.ts";
@@ -63,6 +77,19 @@ type Jump = "front" | "boon" | "component" | "spar" | "boss" | "lastboss" | "end
 export interface Handle {
   /** Starts a run on a trail, at its first pick; from a chosen seed where the play server stages it. With `own`, with the figures pulled. */
   start(seed: number, trail?: number, own?: boolean): Promise<string>;
+  /**
+   * Sets out on an endless run one way, and sits down to it: where the play server stages it, in a
+   * room (counting from 0) with every room before it won, at the top level and with acorns.
+   */
+  endless(way: EndlessWay, room?: number, acorns?: number): Promise<string>;
+  /**
+   * Has the play server put the other members on the endless boards (`{ woods: true }`), have one
+   * hold a room of the Deep Woods (`{ hold: { room, by } }`), or take one from the member
+   * (`{ taken: { room, by } }`), rooms counting from 0.
+   */
+  woods(...ops: unknown[]): Promise<void>;
+  /** Sits down to the run in a slot, as a strip's Carry on does. */
+  sit(slot: Slot): string;
   /** Has the member hold what pulling these copies of each figure awards (`{ greg: 3 }`), where the play server stages it. */
   pulled(copies: Record<string, number>): Promise<void>;
   /** Has the nth of the play server's other members be the first banner's member (null: nobody), and asks who it is again. */
@@ -156,12 +183,16 @@ declare global {
   }
 }
 
-/** Asks the play server to stage a moment, then takes the table as Leaf now has it. Gives back the numbers of figures it made. */
+/**
+ * Asks the play server to stage a moment (on the run the table plays), then takes the table as Leaf
+ * now has it. Gives back the numbers of figures it made.
+ */
 async function staged(...ops: unknown[]): Promise<number[]> {
+  const aimed = ops.map((op) => (typeof op === "object" && op !== null ? Object.assign({ slot: S.slot }, op) : op));
   const answer = await askLeaf("/test/play/raid", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ stage: ops }),
+    body: JSON.stringify({ stage: aimed }),
   });
   await again();
   const body = answer.body;
@@ -191,7 +222,7 @@ async function send(c: RaidCommand): Promise<Did | null> {
 async function plan(rounds = 30): Promise<void> {
   const view = leafView();
   if (rounds === 0 || !view) return;
-  const commands = planCommands(view, SENSIBLE);
+  const commands = planCommands(view, SENSIBLE, S.slot === "endless");
   if (commands.length === 0) return;
   for (const c of commands) {
     // oxlint-disable-next-line no-await-in-loop -- in order, each after the one before
@@ -225,14 +256,14 @@ async function botRoom(): Promise<boolean> {
 function settle(): string {
   const ended = botEnded;
   botEnded = null;
-  if (ended && !leafView()?.run) {
+  if (ended && !tableNow().run) {
     go({ e: "ended", ended });
     return S.screen.at;
   }
   enterRun();
   const run = S.run;
   if (!run || S.screen.at === "front") return S.screen.at;
-  return `room ${run.room + 1}, ${ROOMS[run.room]?.kind ?? ""}, ${picksOf(run)[0]?.kind ?? "planning"}`;
+  return `room ${run.room + 1}, ${roomAt(run.room)?.kind ?? ""}, ${picksOf(run)[0]?.kind ?? "planning"}`;
 }
 
 /** Whether the run is at the room a jump is for. */
@@ -240,7 +271,7 @@ const there = (run: RunView, where: Jump): boolean =>
   where === "lastboss"
     ? run.room === ROOMS.length - 1
     : where === "boss" || where === "spar"
-      ? ROOMS[run.room]?.kind === where
+      ? roomAt(run.room)?.kind === where
       : false;
 
 async function playTo(where: Jump, guard = 60): Promise<void> {
@@ -272,9 +303,23 @@ export function openHandle(): void {
   window.raid = {
     async start(seed, trail = 0, own = false) {
       // From the chosen seed where the play server stages it; otherwise as the front page sets out.
+      playSlot("main");
       const staging = await staged({ start: { seed, trail, own } });
       if (staging.length === 0) await startNew(trail, own);
       return settle();
+    },
+    async endless(way, room = 0, acorns = 60) {
+      playSlot("endless");
+      const staging = await staged({ venture: { way, seed: 5, room, acorns } });
+      if (staging.length === 0) await startEndless(way);
+      return settle();
+    },
+    async woods(...ops) {
+      await staged(...ops);
+    },
+    sit(slot) {
+      sitDown(slot);
+      return S.screen.at;
     },
     async pulled(copies) {
       await staged({ pulled: copies });
@@ -377,8 +422,9 @@ export function openHandle(): void {
       const run = S.run;
       return {
         mode: S.screen.at,
+        slot: S.slot,
         room: run ? run.room + 1 : 0,
-        kind: run ? ROOMS[run.room]?.kind : "",
+        kind: run ? roomAt(run.room)?.kind : "",
         phase: run?.stage.phase,
         acorns: run?.acorns,
         level: run?.level,

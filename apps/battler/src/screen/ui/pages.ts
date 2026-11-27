@@ -1,7 +1,7 @@
 /**
  * The pages that sit over the table: the front page before a run, the almanac of everything met so
  * far, how to play, the looks for the table that Leaf buys, and the paper at a run's end. One is up
- * at a time. The front page is its own (`front.ts`).
+ * at a time. The front page is its own (`front.ts`), and so is the paper (`ended.ts`).
  */
 import { nameOf, portrait, starsPic } from "@sequoia-leaf/figures/sprites.ts";
 import { link } from "@sequoia-leaf/kit/card.ts";
@@ -14,6 +14,7 @@ import {
   BOSS_IDS,
   COMPONENT_IDS,
   ECONOMY,
+  type EndlessWay,
   FIGHT,
   FIGURE_IDS,
   type FigureId,
@@ -27,11 +28,8 @@ import {
   type LookKind,
   LOOKS,
   owns,
-  pieces,
   type RaidCommand,
   ROOM_COUNT,
-  ROOMS,
-  type RunView,
   specOf,
   TRAIL_COUNT,
   trailOpen,
@@ -42,23 +40,29 @@ import {
   wornOf,
 } from "@sequoia-leaf/raid";
 
-import { glyph, itemIcon, roomIcon, traitIcon } from "../art/icons.ts";
+import { glyph, itemIcon, traitIcon } from "../art/icons.ts";
 import { paintLook } from "../art/place.ts";
 import { endedOf } from "../screen.ts";
 import { snd } from "../sounds.ts";
-import { ask, S } from "../state.ts";
+import { ask, laidKey, S, type Slot } from "../state.ts";
 import { figPic, pic } from "./cards.ts";
+import { summary } from "./ended.ts";
 import { frontAway, frontBody } from "./front.ts";
-import { figuresHere, nothingNew, pulledLine, pulledTag, runTag, unshown } from "./own.ts";
+import { figuresHere, pulledLine, pulledTag, unshown } from "./own.ts";
+import { frontShown } from "./woods.ts";
 
 export type PageId = "front" | "almanac" | "howto" | "looks" | "summary";
 
 /** What the pages ask for. */
 export interface PageAsks {
-  carryOn: () => void;
+  /** Sit down to the run in a slot: the run in hand, or the endless run. */
+  carryOn: (slot: Slot) => void;
   /** Set out on a trail, with all figures or (`own`) the member's own. */
   start: (trail: number, own: boolean) => void;
-  goHome: () => void;
+  /** Set out on an endless run, one way or the other. */
+  endless: (way: EndlessWay) => void;
+  /** End the run in a slot early. */
+  goHome: (slot: Slot) => void;
   leave: () => void;
   /** A gear for the settings menu, on the pages that cover the table and have no close of their own. */
   gear: () => HTMLElement;
@@ -115,18 +119,6 @@ function panel(title: string, sign: HTMLElement | null, body: HTMLElement, withC
     el("header", "k-head", {}, sign, el("h1", "k-title", { text: title }), withClose ? close() : asks?.gear()),
     body,
   );
-}
-
-/** The figures a run has on its board, with their stars. */
-function partyRow(run: RunView): HTMLElement {
-  const row = el("div", "party", {});
-  const board = run.board.flatMap((p) => (p ? [p] : []));
-  for (const p of board.length > 0 ? board : pieces(run)) {
-    const who = el("div", "who", {}, pic(starsPic(p.stars)), figPic(portrait(p.kind)), runTag(run, p.kind));
-    link(who, `figure:${p.kind}/${p.stars}`);
-    row.append(who);
-  }
-  return row;
 }
 
 // ---------- the almanac ----------
@@ -414,98 +406,6 @@ function looks(): HTMLElement {
   return panel("Table looks", pic(glyph("brush")), body, true);
 }
 
-// ---------- the end of a run ----------
-
-function summary(): HTMLElement | null {
-  const ended = endedOf(S.screen);
-  if (!ended) return null;
-  const { run, summary: sum, paid, news } = ended;
-  const title = sum.ending === "won" ? "The raid is done." : sum.ending === "left" ? "Raid ended." : "Out of health.";
-  const paper = el("section", "k-paper page k-rise summary", { role: "dialog", "aria-label": title });
-  add(
-    paper,
-    el("h1", "k-title big", { text: title }),
-    el("div", "", {
-      text:
-        sum.ending === "won"
-          ? `${ROOM_COUNT} rooms, and the crab nobody counted has been counted.`
-          : `${TRAILS[sum.trail]?.name ?? ""}: ${sum.cleared} room${sum.cleared === 1 ? "" : "s"} won, as far as room ${sum.reached}.`,
-    }),
-  );
-  const pips = el("div", "pips", {});
-  ROOMS.forEach((room, i) => {
-    const record = run.record.findLast((r) => r.room === i);
-    pips.append(
-      el(
-        "span",
-        `k-slot pip ${record ? (record.result === "win" ? "won" : record.result === "loss" ? "lost" : "drawn") : ""}`,
-        {},
-        pic(roomIcon(room.kind)),
-      ),
-    );
-  });
-  const left = el("div", "k-col", {});
-  const right = el("div", "k-col", {});
-  add(paper, pips, el("div", "cols", {}, left, right));
-  add(left, el("div", "k-label", { text: "The party that got there" }), partyRow(run));
-
-  const fresh = news.filter((n) => n.t !== "best");
-  if (fresh.length > 0) {
-    const list = el("div", "news", {});
-    for (const n of fresh) {
-      if (n.t === "fielded") list.append(el("span", "new", {}, pic(portrait(n.figure)), `Met ${nameOf(n.figure)}`));
-      else if (n.t === "threeStars")
-        list.append(el("span", "new", {}, pic(starsPic(3)), `${nameOf(n.figure)} to three stars`));
-      else if (n.t === "forged") list.append(el("span", "new", {}, pic(itemIcon(n.item)), `Made ${itemName(n.item)}`));
-      else if (n.t === "topped")
-        list.append(el("span", "new", {}, pic(traitIcon(n.trait)), `${TRAITS[n.trait].name} all the way on`));
-      else if (n.t === "boss")
-        list.append(el("span", "new", {}, pic(portrait(n.boss)), `Saw off ${specOf(n.boss).name}`));
-      else list.append(el("span", "new", {}, pic(glyph("door")), `${TRAILS[n.trail]?.name ?? ""} is open`));
-    }
-    add(right, el("div", "k-label", { text: "New in the almanac" }), list);
-  }
-  add(left, el("hr", ""));
-  const WHY = {
-    rooms: "Rooms won",
-    bosses: "Bosses seen off",
-    win: "The whole raid",
-    trail: "The harder way",
-  } as const;
-  for (const l of paid.lines)
-    add(
-      left,
-      l.why === "full"
-        ? el("div", "k-d", { text: "Your purse can take no more for now. It has room again within the hour." })
-        : el("div", "k-row pay", {}, el("span", "k-grow", { text: WHY[l.why] }), amount("coin", `+${l.coins}`)),
-    );
-  if (right.childElementCount === 0) add(right, ...nothingNew(run));
-  add(
-    left,
-    el(
-      "div",
-      "k-row pay total",
-      {},
-      el("b", "k-grow", { text: paid.coins > 0 ? "Paid into your purse" : "Nothing to pay this time" }),
-      amount("coin", paid.coins),
-    ),
-    el(
-      "div",
-      "k-wrap ends",
-      {},
-      el("button", "k-btn", { type: "button", id: "again", onclick: () => asks?.start(sum.trail, !!run.own) }, "Again"),
-      el(
-        "button",
-        "k-btn wood",
-        { type: "button", id: "totown", onclick: () => asks?.leave() },
-        icon("back"),
-        "Back to town",
-      ),
-    ),
-  );
-  return paper;
-}
-
 /** The front page in its panel, once the page has been told what it asks for. */
 const frontPage = (): HTMLElement | null =>
   asks &&
@@ -522,7 +422,9 @@ export function renderPages(force = false): void {
   const box = document.getElementById("modal");
   if (!box) return;
   const id = pageUp();
-  const key = `${id}:${S.runs}:${S.run?.room ?? 0}:${endedOf(S.screen) ? 1 : 0}`;
+  // While the front page is up, what it shows of the endless ways is read again every minute.
+  frontShown(id === "front");
+  const key = `${id}:${S.runs}:${S.run?.room ?? 0}:${endedOf(S.screen) ? 1 : 0}:${laidKey()}`;
   if (!force && key === shownKey) return;
   shownKey = key;
   // While a page is opened over the table, the table behind it cannot be reached.
@@ -544,7 +446,7 @@ export function renderPages(force = false): void {
           ? howto()
           : id === "looks"
             ? looks()
-            : summary();
+            : summary(asks);
   if (!node) {
     box.hidden = true;
     return;
@@ -553,13 +455,24 @@ export function renderPages(force = false): void {
   // Drawn again (a tab, a look tried on), the page keeps the keyboard where it was.
   const before = controlKeys(box);
   const was = before.find(([b]) => b === document.activeElement)?.[1];
-  box.hidden = false;
-  box.dataset.page = id;
-  box.replaceChildren(node);
+  place(box, id, node);
   if (was !== undefined)
     controlKeys(box)
       .find(([, k]) => k === was)?.[0]
       .focus({ preventScroll: true });
+}
+
+/**
+ * Puts a page in the box. Drawn again, the same page keeps its body scrolled where it was, so that
+ * a choice made, or the front page's minute's reading, does not carry the member back to its top.
+ */
+function place(box: HTMLElement, id: PageId, node: HTMLElement): void {
+  const top = box.dataset.page === id ? (box.querySelector(".k-body")?.scrollTop ?? 0) : 0;
+  box.hidden = false;
+  box.dataset.page = id;
+  box.replaceChildren(node);
+  const body = node.querySelector(".k-body");
+  if (body) body.scrollTop = top;
 }
 
 /**
