@@ -10,6 +10,7 @@ import type { Wire, Yard } from "../yard.ts";
 import { kind } from "./kind.ts";
 import type { Kit } from "./kit.ts";
 import { anything, behindOnly, carrierCondition, carrierWords, carryOn, empty, lay, readyAhead } from "./line.ts";
+import { passUnder } from "./under.ts";
 
 /** Where a tunnel going in at (x, y) facing `d` would come up: the nearest clear tile beyond one to as many as it may run under, or the end of `span`. */
 export function exitOf(
@@ -71,59 +72,6 @@ function lays(k: Kit, y: Yard, i: number, d: number, grade: number, l: Lay): rea
   k.place(y, far, own, d, grade);
   y.span[far] = -exit.span;
   return [far];
-}
-
-/**
- * Whether it is full under the ground, everything across its tile, behind its own far mouth: nothing
- * in it moved, as the far mouth had no room, and nothing will until that mouth hands on
- * (`roomBeside`), whatever comes in at the way-in mouth meanwhile.
- */
-function jammed(k: Kit, y: Yard, i: number, at: number, last: number): boolean {
-  const { under, along } = y.tunnels;
-  for (let t = at; t <= last; t++) if (under[t] === k.NONE || (along[t] ?? 0) < 8) return false;
-  return k.otherMouth(y, k.farMouth(y, i)) === i;
-}
-
-/** The way-in mouth moves what is under it along, brings it up at the far mouth, and takes in what has crossed its own tile. */
-function passUnder(k: Kit, y: Yard, i: number, waiting: Uint8Array): void {
-  const under = y.tunnels.under;
-  const along = y.tunnels.along;
-  const at = k.tunnelOf(y, i) * k.SPAN_MOST;
-  const last = at + (y.span[i] ?? 0) - 1;
-  bringUp(k, y, i, at, last);
-  if (y.item[i] !== k.NONE && (y.prog[i] ?? 0) >= 8 && under[at] === k.NONE) {
-    under[at] = y.item[i] ?? k.NONE;
-    along[at] = (y.prog[i] ?? 8) - 8;
-    y.item[i] = k.NONE;
-    y.prog[i] = 0;
-    y.via[i] = 0;
-    k.roomBeside(y, i, waiting);
-  }
-  if (jammed(k, y, i, at, last)) waiting[i] = 1;
-}
-
-/** What has crossed each tile under the ground (rows `at` to `last`) moves on to the next, and from the last comes up at the far mouth if it has room. */
-function bringUp(k: Kit, y: Yard, i: number, at: number, last: number): void {
-  const under = y.tunnels.under;
-  const along = y.tunnels.along;
-  const mouth = k.farMouth(y, i);
-  for (let t = last; t >= at; t--) {
-    const n = under[t] ?? k.NONE;
-    const over = (along[t] ?? 0) - 8;
-    if (n === k.NONE || over < 0) continue;
-    if (t === last) {
-      if (mouth < 0 || y.kind[mouth] === k.NONE || y.item[mouth] !== k.NONE) continue;
-      y.item[mouth] = n;
-      y.prog[mouth] = over;
-      y.via[mouth] = 0;
-    } else {
-      if (under[t + 1] !== k.NONE) continue;
-      under[t + 1] = n;
-      along[t + 1] = over;
-    }
-    under[t] = k.NONE;
-    along[t] = 0;
-  }
 }
 
 /** A way-in mouth passes what is under the ground along; a far mouth hands on what has crossed it, ahead. */

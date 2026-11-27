@@ -2,12 +2,12 @@
  * The yard's power book: where its power comes from and goes, counted once from what stands, as every
  * screen says it. What gives power is counted by how it gives (`kinds/`): what gives it steadily
  * where power reaches it (the waterwheels, by `Hooks.steady`), and what burns for it (the boilers, by
- * `Hooks.burn`). The book's two rows are named for the two kinds that give power today; a kind that
+ * `KindDef.burns`). The book's two rows are named for the two kinds that give power today; a kind that
  * gives power another way, or burns at another rate, makes them a row for each kind that gives.
  */
 import { RULES } from "./kinds/list.ts";
 import { litOf } from "./power.ts";
-import { ALL_KINDS, DRAW, drawnAt, GIVES, HALF, type Kind, NONE } from "./tables.ts";
+import { ALL_KINDS, BURNS, DRAW, drawnAt, HALF, type Kind, NONE } from "./tables.ts";
 import { KIT, type Power, power, rewire } from "./wire.ts";
 import type { Yard } from "./yard.ts";
 
@@ -38,9 +38,8 @@ export interface PowerSummary extends Power {
 const DRAWS: readonly Kind[] = ALL_KINDS.filter((k) => (DRAW[k] ?? 0) > 0);
 /** Whether a kind gives power steadily where power reaches it, and whether it burns for power. */
 const STEADY = RULES.map((r) => r.steady !== null);
-const BURNS = RULES.map((r) => r.burn !== null);
 /** The power one piece that burns gives while it burns, in halves. */
-const BURNT = (GIVES[BURNS.indexOf(true)] ?? 0) * HALF;
+const BURNT = BURNS.find((b) => b !== null)?.halves ?? 0;
 
 export function powerSummary(y: Yard): PowerSummary {
   const p = power(y);
@@ -118,7 +117,7 @@ function givers(t: Tally, y: Yard, i: number, k: number, reached: boolean): void
     t.steady++;
     if (reached && (RULES[k]?.steady?.(KIT, y, i) ?? 0) > 0) t.turning++;
   }
-  if (BURNS[k] === true) {
+  if (BURNS[k]) {
     if (reached) t.burners++;
     else t.burnersAway++;
   }

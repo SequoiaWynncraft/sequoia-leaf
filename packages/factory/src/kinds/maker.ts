@@ -23,7 +23,7 @@ const NO_RECIPES: readonly Recipe[] = [];
 
 /** The recipes the machine on a tile may make, as the plumbing has them (`recipesFor`, worked out once a change). */
 const recipesOf = (k: Kit, y: Yard, i: number): readonly Recipe[] =>
-  k.wireOf(y).recipes[y.kind[i] ?? k.NONE] ?? NO_RECIPES;
+  (y.wire ?? k.wireOf(y)).recipes[y.kind[i] ?? k.NONE] ?? NO_RECIPES;
 
 /** Whether the thing `n` goes into a recipe the machine on a tile may make: the one it is told to, or any. */
 export function wants(k: Kit, y: Yard, i: number, n: number): boolean {

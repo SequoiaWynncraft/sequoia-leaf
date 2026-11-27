@@ -44,7 +44,7 @@ export const KIND_DEFS = [
 export type KindName = (typeof KIND_DEFS)[number]["name"];
 
 /** A hook a kind may leave out, whose absence is read: a piece with none of these does none of them. */
-type Absent = "hands" | "work" | "steady" | "burn";
+type Absent = "hands" | "work" | "steady";
 /** How a kind plays, with every hook there: what it leaves out made what it does when it does not. */
 export type KindRules = Required<Omit<Hooks, Absent>> & { readonly [K in Absent]: NonNullable<Hooks[K]> | null };
 
@@ -73,8 +73,6 @@ const LEFT_OUT: KindRules = {
   ready: never,
   work: null,
   steady: null,
-  burn: null,
-  burning: none,
   refusal: nothing,
   over: nothing,
   lays: () => [],
@@ -98,3 +96,5 @@ const rulesOf = (h: Hooks): KindRules => ({ ...LEFT_OUT, ...h });
 
 /** Each kind's rules, by its number. */
 export const RULES: readonly KindRules[] = KIND_DEFS.map((d) => rulesOf(d.rules));
+/** 1 for each kind that may let things in by turns (`Hooks.turns`), asked of the piece only then: the tick asks it at every refusal. */
+export const TAKES_TURNS = Uint8Array.from(RULES, (r) => (r.turns === never ? 0 : 1));

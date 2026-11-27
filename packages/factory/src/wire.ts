@@ -1,7 +1,7 @@
 import { keep } from "./kinds/holder.ts";
 import type { Kit } from "./kinds/kit.ts";
 import { anything, empty, lay } from "./kinds/line.ts";
-import { RULES } from "./kinds/list.ts";
+import { RULES, TAKES_TURNS } from "./kinds/list.ts";
 import { room as makerRoom, wants as makerWants } from "./kinds/maker.ts";
 /**
  * The yard's plumbing: who hands to whom, and in what order, and the one rule by which a piece hands
@@ -16,11 +16,12 @@ import { room as makerRoom, wants as makerWants } from "./kinds/maker.ts";
  */
 import { besideWater, toward } from "./land.ts";
 import { deliver, giveGoal } from "./orders.ts";
-import { burned, makes } from "./planner.ts";
+import { makes, MINUTE } from "./planner.ts";
 import { litOf } from "./power.ts";
 import {
   ALL_ITEMS,
   ALL_KINDS,
+  BURNS,
   CARRIES,
   DEADFALL,
   drawnAt,
@@ -169,8 +170,9 @@ export function ready(y: Yard, i: number, to: number): boolean {
 /** Whether the tile at `to` lets things in by turns (a joiner, or a splitter with ways in): a thing it refuses does not wait. */
 export function takesTurns(y: Yard, to: number): boolean {
   if (to < 0) return false;
-  const r = rulesAt(y, to);
-  return r ? r.turns(KIT, y, to) : false;
+  const k = y.kind[to] ?? NONE;
+  if (TAKES_TURNS[k] !== 1) return false;
+  return RULES[k]?.turns(KIT, y, to) ?? false;
 }
 
 /**
@@ -312,7 +314,7 @@ export function rewire(y: Yard): Wire {
       work.push(i);
       demand += drawnAt(k, y.grade[i] ?? 0);
     } else if (r.steady !== null) steady += r.steady(KIT, y, i);
-    else if (r.burn !== null) burners.push(i);
+    else if (BURNS[k]) burners.push(i);
   }
   const taken = new Uint8Array(n);
   for (let i = 0; i < n; i++) if (kind[i] !== NONE) taken[i] = sidesTaken(y, i);
@@ -331,10 +333,16 @@ export function rewire(y: Yard): Wire {
   };
   y.wire = wire;
   y.demand = demand;
-  let burning = 0;
-  for (const i of burners) burning += rulesAt(y, i)?.burning(KIT, y, i) ?? 0;
-  y.supply = steady + burning;
+  y.supply = steady + burningNow(y, burners);
   return wire;
+}
+
+/** The power what burns gives as it stands, in halves: each burning now, as its kind says (`KindDef.burns`). */
+function burningNow(y: Yard, burners: readonly number[]): number {
+  let burning = 0;
+  for (const i of burners)
+    if ((y.holders.fuel[holderOf(y, i)] ?? 0) > 0) burning += BURNS[y.kind[i] ?? NONE]?.halves ?? 0;
+  return burning;
 }
 
 /** Whether a kind hands things on at all: those with a step in handing on. */
@@ -437,7 +445,8 @@ export const KIT: Kit = {
   locked,
   recipesFor,
   makes,
-  burned,
+  MINUTE,
+  BURNS,
   whole,
   // The yard's reads and writes.
   holderOf,

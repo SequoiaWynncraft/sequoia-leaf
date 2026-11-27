@@ -46,7 +46,8 @@ export interface Kit {
   readonly locked: typeof Tables.locked;
   readonly recipesFor: typeof Tables.recipesFor;
   readonly makes: typeof Planner.makes;
-  readonly burned: typeof Planner.burned;
+  readonly MINUTE: typeof Planner.MINUTE;
+  readonly BURNS: typeof Tables.BURNS;
   readonly whole: (v: unknown, most: number) => number | null;
 
   // The yard's reads and writes.

@@ -95,10 +95,6 @@ export interface Hooks {
   readonly work?: (k: Kit, y: Yard, i: number, r: number, speed: number, wire: Wire) => void;
   /** Power it gives every tick where power reaches it, in halves: counted when the plumbing is worked out. */
   readonly steady?: (k: Kit, y: Yard, i: number) => number;
-  /** Its step in a tick's power where power reaches it: the power it gives this tick, in halves (a boiler burning). */
-  readonly burn?: (k: Kit, y: Yard, i: number, waiting: Uint8Array) => number;
-  /** The power it gives as it stands, in halves: the yard's supply until the next tick (a boiler burning). */
-  readonly burning?: (k: Kit, y: Yard, i: number) => number;
 
   /** Why it cannot be set down on the tile `i` facing `d`, beyond the ground, its lock, its limit and the price; or nothing. */
   readonly refusal?: (k: Kit, y: Yard, i: number, d: number, lay: Lay) => string | null;
@@ -171,6 +167,13 @@ export interface KindDef<N extends string = string> {
   readonly gathers?: true;
   /** Whether it works for the research first in the line: its work is dropped when another comes first. */
   readonly studies?: true;
+  /**
+   * Whether it burns for power, where power reaches it: a piece of `fuel` (a thing, by name) at a
+   * time, for `ticks` ticks, giving its power (`info.gives`) while it burns, and holding up to `holds`
+   * pieces. The tick burns it (`tick.ts`'s `power`) from this alone, with no step of the kind's:
+   * with a step a piece for every burner every tick cost the tick more than all the burning.
+   */
+  readonly burns?: { readonly fuel: string; readonly ticks: number; readonly holds: number };
   /** Half-ticks of work in each thing it finishes, for one whose work is not a recipe's (a gatherer, a Study). */
   readonly work?: number;
   /** The kinds it may be set down in the place of (a splitter on a belt), by name: not its own. */

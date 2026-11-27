@@ -191,6 +191,18 @@ export const HALF = 2;
 export const DRAWN: readonly number[] = [HALF, ...halves((g) => g.draw)];
 /** The power a piece of a kind at a grade draws where power reaches it, in halves: its kind's, once for each half its grade draws. */
 export const drawnAt = (k: number, grade: number): number => (DRAW[k] ?? 0) * (DRAWN[isGraded(k) ? grade : 0] ?? HALF);
+/** For each kind that burns for power (`KindDef.burns`): the thing it burns, the ticks a piece burns, how many pieces it holds, and the power it gives while it burns, in halves. */
+export interface Burns {
+  readonly fuel: Item;
+  readonly ticks: number;
+  readonly holds: number;
+  readonly halves: number;
+}
+export const BURNS: readonly (Burns | null)[] = KIND_DEFS.map((d: KindDef) => {
+  const b = d.burns;
+  const fuel = b ? itemNamed(b.fuel) : null;
+  return b && fuel !== null ? { fuel, ticks: b.ticks, holds: b.holds, halves: d.info.gives * HALF } : null;
+});
 /** The work in gathering one thing and in studying one folio, in half-ticks. */
 export const WORK = { gather: TICKS.gather * 2, study: TICKS.study * 2 } as const;
 /** What a piece of a kind and grade costs to build. */

@@ -39,16 +39,16 @@ import { handOut } from "./kinds/holder.ts";
 import { carryOn } from "./kinds/line.ts";
 import { RULES } from "./kinds/list.ts";
 import { work as make } from "./kinds/maker.ts";
-import { CARRIES, NONE, PACE, SPAN_MOST } from "./tables.ts";
-import { KIT, rewire } from "./wire.ts";
-import { holderOf, tunnelOf, type Wire, type Yard } from "./yard.ts";
+import { passUnder } from "./kinds/under.ts";
+import { BURNS, CARRIES, ITEM_COUNT, NONE, PACE, SPAN_MOST } from "./tables.ts";
+import { KIT, rewire, roomBeside } from "./wire.ts";
+import { holderOf, take, tunnelOf, type Wire, type Yard } from "./yard.ts";
 
 /**
- * Each kind's steps, by its number: in power, in work and in handing on. A step many kinds share (a
+ * Each kind's steps, by its number: in work and in handing on. A step many kinds share (a
  * belt's, a machine's) is called by its own name where a kind has it, not through the table: one
  * call site for a dozen kinds' steps costs the tick more than the steps.
  */
-const BURN = RULES.map((r) => r.burn);
 const WORK = RULES.map((r) => r.work);
 const HANDS = RULES.map((r) => r.hands);
 
@@ -65,16 +65,28 @@ export function step(y: Yard): void {
 }
 
 /**
- * Power: what burns for power burns what it holds, and what there is is set against what is drawn.
- * Says whether the pieces that work work this tick.
+ * Power: what burns for power burns what it holds, as its kind says it burns (`KindDef.burns`): once
+ * the last piece has burned out it takes another of its fuel, and gives its power each tick one
+ * burns. What there is is set against what is drawn. Says whether the pieces that work work this tick.
  */
 function power(y: Yard, wire: Wire, waiting: Uint8Array): boolean {
   let supply = wire.steady;
+  const h = y.holders;
   const burners = wire.burners;
   for (let b = 0; b < burners.length; b++) {
     const i = burners[b] ?? 0;
-    const burn = BURN[y.kind[i] ?? NONE];
-    if (burn) supply += burn(KIT, y, i, waiting);
+    const burns = BURNS[y.kind[i] ?? NONE];
+    if (!burns) continue;
+    const r = holderOf(y, i);
+    if ((h.fuel[r] ?? 0) <= 0 && (h.stock[r * ITEM_COUNT + burns.fuel] ?? 0) > 0) {
+      take(h, r, burns.fuel);
+      h.fuel[r] = burns.ticks;
+      roomBeside(y, i, waiting);
+    }
+    if ((h.fuel[r] ?? 0) > 0) {
+      h.fuel[r] = (h.fuel[r] ?? 1) - 1;
+      supply += burns.halves;
+    }
   }
   y.supply = supply;
   const demand = wire.demand;
@@ -128,8 +140,8 @@ function working(y: Yard, wire: Wire): void {
 /**
  * Every tile hands on what it has finished with, each after the tiles it hands to: but a tile that
  * waits. A tile that carries hands on nothing until what it carries has crossed it (each carrier's
- * step asks it first, `kinds/line.ts`), so that is asked here, without the call: but of a tunnel's
- * way-in mouth, which moves what is under the ground every tick.
+ * step asks it first, `kinds/line.ts`), so that is asked here, without the call. A way-in mouth of
+ * what runs under tiles (a tunnel's) moves what is under the ground every tick, called by name.
  */
 function handOn(y: Yard, wire: Wire, waiting: Uint8Array): void {
   const { kind, item, prog, span } = y;
@@ -138,7 +150,14 @@ function handOn(y: Yard, wire: Wire, waiting: Uint8Array): void {
     const i = order[o] ?? 0;
     if (waiting[i] === 1) continue;
     const k = kind[i] ?? NONE;
-    if (CARRIES[k] === 1 && (span[i] ?? 0) <= 0 && (item[i] === NONE || (prog[i] ?? 0) < 8)) continue;
+    if (CARRIES[k] === 1) {
+      // A way-in mouth moves what is under the ground every tick (`kinds/under.ts`).
+      if ((span[i] ?? 0) > 0) {
+        passUnder(KIT, y, i, waiting);
+        continue;
+      }
+      if (item[i] === NONE || (prog[i] ?? 0) < 8) continue;
+    }
     const hands = HANDS[k];
     if (hands === carryOn) carryOn(KIT, y, i, wire);
     else if (hands === handOut) handOut(KIT, y, i, wire);
