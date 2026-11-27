@@ -571,16 +571,8 @@
           "threeStars": [],
           "forged": [],
           "topped": [],
-          "bosses": [
-            [],
-            [],
-            []
-          ],
-          "best": [
-            0,
-            0,
-            0
-          ],
+          "bosses": [[], [], []],
+          "best": [0, 0, 0],
           "runs": 0,
           "deepest": {
             "wilds": 0,
@@ -678,25 +670,9 @@
             null,
             null
           ],
-          "bench": [
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null
-          ],
+          "bench": [null, null, null, null, null, null, null, null, null],
           "items": [],
-          "stall": [
-            "worm",
-            "finch",
-            "mossmote",
-            "worm",
-            "crab7"
-          ],
+          "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
           "held": false,
           "rustles": 1,
           "bought": 0,
@@ -749,16 +725,8 @@
           "threeStars": [],
           "forged": [],
           "topped": [],
-          "bosses": [
-            [],
-            [],
-            []
-          ],
-          "best": [
-            0,
-            0,
-            0
-          ],
+          "bosses": [[], [], []],
+          "best": [0, 0, 0],
           "runs": 0,
           "deepest": {
             "wilds": 0,
@@ -876,25 +844,9 @@
             null,
             null
           ],
-          "bench": [
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null
-          ],
+          "bench": [null, null, null, null, null, null, null, null, null],
           "items": [],
-          "stall": [
-            "worm",
-            "finch",
-            "mossmote",
-            "worm",
-            "crab7"
-          ],
+          "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
           "held": false,
           "rustles": 1,
           "bought": 0,
@@ -947,16 +899,8 @@
           "threeStars": [],
           "forged": [],
           "topped": [],
-          "bosses": [
-            [],
-            [],
-            []
-          ],
-          "best": [
-            0,
-            0,
-            0
-          ],
+          "bosses": [[], [], []],
+          "best": [0, 0, 0],
           "runs": 0,
           "deepest": {
             "wilds": 0,
@@ -1060,25 +1004,9 @@
             null,
             null
           ],
-          "bench": [
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null
-          ],
+          "bench": [null, null, null, null, null, null, null, null, null],
           "items": [],
-          "stall": [
-            "worm",
-            "finch",
-            "mossmote",
-            "worm",
-            "crab7"
-          ],
+          "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
           "held": false,
           "rustles": 1,
           "bought": 0,
@@ -1131,16 +1059,8 @@
           "threeStars": [],
           "forged": [],
           "topped": [],
-          "bosses": [
-            [],
-            [],
-            []
-          ],
-          "best": [
-            0,
-            0,
-            0
-          ],
+          "bosses": [[], [], []],
+          "best": [0, 0, 0],
           "runs": 0,
           "deepest": {
             "wilds": 0,
@@ -1291,25 +1211,9 @@
             null,
             null
           ],
-          "bench": [
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null
-          ],
+          "bench": [null, null, null, null, null, null, null, null, null],
           "items": [],
-          "stall": [
-            "worm",
-            "finch",
-            "mossmote",
-            "worm",
-            "crab7"
-          ],
+          "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
           "held": false,
           "rustles": 1,
           "bought": 0,
@@ -1362,16 +1266,8 @@
           "threeStars": [],
           "forged": [],
           "topped": [],
-          "bosses": [
-            [],
-            [],
-            []
-          ],
-          "best": [
-            0,
-            0,
-            0
-          ],
+          "bosses": [[], [], []],
+          "best": [0, 0, 0],
           "runs": 0,
           "deepest": {
             "wilds": 0,
@@ -1384,9 +1280,7 @@
           "cloth": "plum",
           "lantern": "iron",
           "bases": "plain",
-          "owned": [
-            "plum"
-          ]
+          "owned": ["plum"]
         },
         "roster": {}
       },
@@ -1479,25 +1373,9 @@
             null,
             null
           ],
-          "bench": [
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null
-          ],
+          "bench": [null, null, null, null, null, null, null, null, null],
           "items": [],
-          "stall": [
-            "worm",
-            "finch",
-            "mossmote",
-            "worm",
-            "crab7"
-          ],
+          "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
           "held": false,
           "rustles": 1,
           "bought": 0,
@@ -1550,16 +1428,8 @@
           "threeStars": [],
           "forged": [],
           "topped": [],
-          "bosses": [
-            [],
-            [],
-            []
-          ],
-          "best": [
-            0,
-            0,
-            0
-          ],
+          "bosses": [[], [], []],
+          "best": [0, 0, 0],
           "runs": 0,
           "deepest": {
             "wilds": 0,
@@ -1572,9 +1442,7 @@
           "cloth": "plum",
           "lantern": "iron",
           "bases": "plain",
-          "owned": [
-            "plum"
-          ]
+          "owned": ["plum"]
         },
         "roster": {}
       },
@@ -1634,16 +1502,8 @@
           "threeStars": [],
           "forged": [],
           "topped": [],
-          "bosses": [
-            [],
-            [],
-            []
-          ],
-          "best": [
-            0,
-            0,
-            0
-          ],
+          "bosses": [[], [], []],
+          "best": [0, 0, 0],
           "runs": 0,
           "deepest": {
             "wilds": 0,
@@ -1808,9 +1668,7 @@
           "first": true,
           "newDay": true,
           "away": 0,
-          "said": [
-            "Tindra left a mushroom by your gate."
-          ],
+          "said": ["Tindra left a mushroom by your gate."],
           "mail": [
             {
               "id": "w-9",
@@ -1989,9 +1847,7 @@
         },
         "visit": null,
         "made": 12,
-        "pets": [
-          "glorp"
-        ],
+        "pets": ["glorp"],
         "arrival": {
           "first": false,
           "newDay": false,
@@ -2456,9 +2312,7 @@
         },
         "visit": null,
         "made": 0,
-        "pets": [
-          "glorp"
-        ],
+        "pets": ["glorp"],
         "arrival": {
           "first": false,
           "newDay": false,
@@ -2840,25 +2694,9 @@
             null,
             null
           ],
-          "bench": [
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null
-          ],
+          "bench": [null, null, null, null, null, null, null, null, null],
           "items": [],
-          "stall": [
-            "worm",
-            "finch",
-            "mossmote",
-            "worm",
-            "crab7"
-          ],
+          "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
           "held": false,
           "rustles": 1,
           "bought": 0,
@@ -2905,11 +2743,7 @@
             "picks": [
               {
                 "kind": "starter",
-                "options": [
-                  "finch",
-                  "emberkit",
-                  "crab7"
-                ]
+                "options": ["finch", "emberkit", "crab7"]
               }
             ]
           },
@@ -2948,25 +2782,9 @@
             null,
             null
           ],
-          "bench": [
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null
-          ],
+          "bench": [null, null, null, null, null, null, null, null, null],
           "items": [],
-          "stall": [
-            "barrowgnome",
-            "emberkit",
-            "moth",
-            "barrowgnome",
-            "barrowgnome"
-          ],
+          "stall": ["barrowgnome", "emberkit", "moth", "barrowgnome", "barrowgnome"],
           "held": false,
           "rustles": 1,
           "bought": 0,
@@ -3018,16 +2836,8 @@
           "threeStars": [],
           "forged": [],
           "topped": [],
-          "bosses": [
-            [],
-            [],
-            []
-          ],
-          "best": [
-            0,
-            0,
-            0
-          ],
+          "bosses": [[], [], []],
+          "best": [0, 0, 0],
           "runs": 0,
           "deepest": {
             "wilds": 0,
@@ -3040,9 +2850,7 @@
           "cloth": "plum",
           "lantern": "iron",
           "bases": "plain",
-          "owned": [
-            "plum"
-          ]
+          "owned": ["plum"]
         },
         "roster": {}
       },
@@ -3596,16 +3404,7 @@
               "by": null
             }
           ],
-          "turns": [
-            0,
-            1,
-            2,
-            3,
-            4,
-            5,
-            6,
-            7
-          ],
+          "turns": [0, 1, 2, 3, 4, 5, 6, 7],
           "open": 8
         },
         "room": 0,
@@ -3791,11 +3590,7 @@
             "picks": [
               {
                 "kind": "starter",
-                "options": [
-                  "emberkit",
-                  "mossmote",
-                  "worm"
-                ]
+                "options": ["emberkit", "mossmote", "worm"]
               }
             ]
           },
@@ -3834,25 +3629,9 @@
             null,
             null
           ],
-          "bench": [
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null
-          ],
+          "bench": [null, null, null, null, null, null, null, null, null],
           "items": [],
-          "stall": [
-            "moth",
-            "moth",
-            "finch",
-            "barrowgnome",
-            "mossmote"
-          ],
+          "stall": ["moth", "moth", "finch", "barrowgnome", "mossmote"],
           "held": false,
           "rustles": 1,
           "bought": 0,
