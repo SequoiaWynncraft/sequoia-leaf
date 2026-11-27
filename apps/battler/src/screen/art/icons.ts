@@ -2,23 +2,24 @@ import { PAL } from "@sequoia-leaf/figures/pal.ts";
 import { readRows } from "@sequoia-leaf/figures/rows.ts";
 /**
  * The small pictures: one for every trait, component, finished item and boon, the three kinds of
- * room, and the few signs the buttons carry. Typed as rows of letters like the figures and kept as
- * text (`icons.txt`), baked once with a dark edge, and handed out as fresh little canvases to put on
- * the page. An emblem is its kin's own sign.
+ * room, the Wilds' rules, and the few signs the buttons carry. Typed as rows of letters like the
+ * figures and kept as text (`icons.txt`), baked once with a dark edge, and handed out as fresh little
+ * canvases to put on the page. An emblem is its kin's own sign.
  */
-import { GOLD, INK } from "@sequoia-leaf/kit/palette.ts";
+import { GOLD, INK, PAPER } from "@sequoia-leaf/kit/palette.ts";
 import { bitmap, outlined } from "@sequoia-leaf/kit/pix.ts";
 import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
 import type { BoonId } from "@sequoia-leaf/raid/content/boons.ts";
 import { EMBLEMS, isComponentId, isEmblemId, type ItemId } from "@sequoia-leaf/raid/content/items.ts";
 import type { RoomKind } from "@sequoia-leaf/raid/content/rooms.ts";
 import type { TraitId } from "@sequoia-leaf/raid/content/traits.ts";
+import type { RuleId } from "@sequoia-leaf/raid/content/wilds.ts";
 
 import text from "./icons.txt";
 
 const ROWS = readRows(text);
 /** A picture's rows from `icons.txt`, by its kind and its id. */
-const rowsOf = (kind: "trait" | "item" | "room" | "glyph" | "level", id: string): readonly string[] =>
+const rowsOf = (kind: "trait" | "item" | "room" | "rule" | "glyph" | "level", id: string): readonly string[] =>
   ROWS.get(`${kind} ${id}`) ?? [];
 
 /** The signs the buttons and the purse carry. */
@@ -45,10 +46,10 @@ export const GLYPHS = [
 export type Glyph = (typeof GLYPHS)[number];
 
 const baked = new Map<string, HTMLCanvasElement>();
-function bakedOf(key: string, rows: readonly string[], edge = true): HTMLCanvasElement {
+function bakedOf(key: string, rows: readonly string[], edge = true, pal = PAL): HTMLCanvasElement {
   let c = baked.get(key);
   if (!c) {
-    const pic = bitmap(rows, PAL);
+    const pic = bitmap(rows, pal);
     c = edge ? outlined(pic, INK) : pic;
     baked.set(key, c);
   }
@@ -72,6 +73,11 @@ export const glyph = (id: Glyph): HTMLCanvasElement => copy(glyphPic(id));
 /** A figure's level, 1 to 6, as a small green number: drawn beside its base, never among its stars. */
 export const levelPic = (level: number): HTMLCanvasElement => bakedOf(`l:${level}`, rowsOf("level", String(level)));
 export const roomIcon = (kind: RoomKind): HTMLCanvasElement => copy(bakedOf(`r:${kind}`, rowsOf("room", kind)));
+/** The letters a rule's picture is typed in: the figures' and the board's own wood, for its hexes. */
+const BOARD_PAL: Readonly<Record<string, string>> = { ...PAL, F: PAPER[1], Q: PAPER[0] };
+/** A rule's picture, the same size for every rule: wherever the rule is shown, its pick, its room, its fight. */
+export const ruleIcon = (id: RuleId): HTMLCanvasElement =>
+  copy(bakedOf(`u:${id}`, rowsOf("rule", id), true, BOARD_PAL));
 
 /** A boon's picture: its own, or for a charm its kin's sign hanging on a string. */
 export function boonIcon(id: BoonId): HTMLCanvasElement {

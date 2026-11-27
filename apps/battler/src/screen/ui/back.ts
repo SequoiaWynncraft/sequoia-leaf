@@ -7,13 +7,14 @@ import { portrait } from "@sequoia-leaf/figures/sprites.ts";
  * never runs out.
  */
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
-import type { RunView } from "@sequoia-leaf/raid";
+import { roomOf, type RunView } from "@sequoia-leaf/raid";
 
 import { glyph } from "../art/icons.ts";
 import { watchable } from "../screen.ts";
 import { S, type Slot } from "../state.ts";
 import { figPic, pic } from "./cards.ts";
 import { WAY_NAMES } from "./endless.ts";
+import { ruleRow } from "./rulecards.ts";
 import { backLines, bossOfWing } from "./wilds.ts";
 
 /** Whether the card is up, over the front page. */
@@ -37,6 +38,7 @@ export interface BackAsks {
 export function backCard(go: BackAsks, run: RunView): HTMLElement {
   const lines = backLines(run, S.almanac.deepest.wilds);
   const boss = bossOfWing(run.room);
+  const { named } = roomOf(run);
   const back = (): void => {
     showBack(false);
     go.redraw();
@@ -62,7 +64,9 @@ export function backCard(go: BackAsks, run: RunView): HTMLElement {
       "div",
       "mode-opts k-col",
       {},
-      ...[lines.rule, lines.boss, lines.best, lines.last].map((text) => (text ? el("p", "k-d", { text }) : null)),
+      // The rules the run is under, each with its picture; else what is said about the next one.
+      ...(named.length > 0 ? named.map((rule) => ruleRow(rule, "k-d")) : [el("p", "k-d", { text: lines.rule })]),
+      ...[lines.boss, lines.best, lines.last].map((text) => (text ? el("p", "k-d", { text }) : null)),
     ),
     el(
       "div",

@@ -27,7 +27,6 @@ import {
 } from "@sequoia-leaf/raid";
 
 import { boonIcon, glyphPic, itemIcon, itemPic, traitIcon } from "../art/icons.ts";
-import { rulePic } from "../closed.ts";
 import { fly } from "../fx.ts";
 import { signal } from "../signals.ts";
 import { snd } from "../sounds.ts";
@@ -123,10 +122,8 @@ function partsOf(run: RunView, choice: Choice, i: number): (HTMLElement | null)[
       return componentCard(run, choice.options[i] ?? "thorn");
     case "boon":
       return boonCardParts(choice.options[i] ?? "windfall");
-    case "rule": {
-      const rule = choice.options[i] ?? "fog";
-      return [el("span", "art", {}, pic(rulePic(rule), 2)), ...ruleCard(rule)];
-    }
+    case "rule":
+      return ruleCard(choice.options[i] ?? "fog");
   }
 }
 
