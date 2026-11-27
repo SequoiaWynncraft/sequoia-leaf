@@ -236,6 +236,116 @@ body[data-picking="yes"] #foe {
   gap: var(--u);
   padding: var(--u);
 }
+/*
+ * The rack: a tile per kind. The components in a row of their own, always all five in their places;
+ * under them the rest in a box of fixed size that scrolls in itself, so the rack never grows however
+ * much lies on it, and nothing round it moves.
+ */
+#rack .k-plaque.items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--u);
+}
+#rack .parts {
+  display: grid;
+  grid-template-columns: repeat(5, calc(var(--u) * 18));
+  gap: var(--u);
+}
+#rack .made {
+  display: grid;
+  grid-template-columns: repeat(5, calc(var(--u) * 18));
+  grid-auto-rows: calc(var(--u) * 18);
+  align-content: start;
+  gap: var(--u);
+  height: calc(var(--u) * 56);
+  padding: var(--u) 0;
+  overflow: hidden auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--k-gold) transparent;
+  box-shadow: inset 0 var(--u) 0 #fff3cf20;
+}
+/*
+ * A swipe in the box scrolls it, along the way it scrolls; a drag the other way (toward the board)
+ * carries the item, and a tap picks it up. The components' row does not scroll: any drag carries.
+ */
+#rack .made .item {
+  touch-action: pan-y;
+}
+/* Folded (`rackfold.ts`): one button where nothing else is, which opens the rack as a panel over the stall. */
+#rackbtn {
+  position: fixed;
+  z-index: 7;
+  display: none;
+  min-width: calc(var(--u) * 32);
+  justify-content: center;
+  white-space: nowrap;
+}
+body.rack-folded #rackbtn {
+  display: inline-flex;
+}
+body.rack-folded #rack {
+  display: none;
+}
+body.rack-folded.rack-open #rack {
+  position: fixed;
+  z-index: 8;
+  right: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  padding: var(--u);
+  box-sizing: border-box;
+  background: #1a0f1ef2;
+}
+body.rack-open #rack .k-plaque.items {
+  flex-direction: column;
+  min-width: 0;
+}
+body.rack-open #rack .parts {
+  grid-template-columns: repeat(5, calc(var(--u) * 18));
+}
+body.rack-open #rack .made,
+body.rack-open #rack .k-plaque.boons {
+  grid-auto-flow: column;
+  grid-template-columns: none;
+  grid-auto-columns: calc(var(--u) * 18);
+  grid-template-rows: calc(var(--u) * 18);
+  width: auto;
+  height: auto;
+  padding: 0;
+  overflow: auto hidden;
+}
+body.rack-open #rack .item,
+body.rack-open #rack .boon {
+  width: calc(var(--u) * 18);
+  height: calc(var(--u) * 18);
+}
+body.rack-open #rack .made .item {
+  touch-action: pan-x;
+}
+/* How many of a kind lie there, over the tile's corner. */
+#rack .item > .n {
+  position: absolute;
+  right: 0;
+  bottom: calc(var(--u) * -1);
+  padding: 0 calc(var(--u) * 0.5);
+  font: var(--f-small);
+  color: var(--k-cream);
+  text-shadow:
+    var(--u) 0 0 var(--k-ink),
+    calc(var(--u) * -1) 0 0 var(--k-ink),
+    0 var(--u) 0 var(--k-ink),
+    0 calc(var(--u) * -1) 0 var(--k-ink);
+  pointer-events: none;
+}
+/* A component there is none of: its place, empty. */
+#rack .item.none {
+  cursor: default;
+  opacity: 0.3;
+  filter: grayscale(1);
+}
 #rack .item {
   width: calc(var(--u) * 18);
   height: calc(var(--u) * 18);
@@ -318,6 +428,15 @@ body[data-picking="yes"] #foe {
   flex-direction: column;
   gap: var(--u);
   pointer-events: none;
+}
+/* A line that has had its moment keeps its room until every line has: one going moves nothing. */
+#says > .gone {
+  visibility: hidden;
+}
+/* The line of figures a rule moved has room for two lines, so a longer list does not grow it. */
+#says > .shifted {
+  min-height: calc(var(--t-m) * 1.2 * 2 + var(--u) * 4);
+  box-sizing: border-box;
 }
 #shop {
   position: relative;
@@ -821,7 +940,7 @@ body[data-busy="yes"] #plan > :not(#acorns, #level) {
   background: #1a0f1ed9;
   pointer-events: none;
 }
-body.selling #sellhint {
+body:is(.selling, .melting) #sellhint {
   display: grid;
 }
 body.sell-hot #sellhint {
@@ -876,8 +995,8 @@ body.dragging,
 body.dragging * {
   cursor: grabbing !important;
 }
-body:is([data-mode="front"], [data-mode="over"]) :is(#track, #resolve, #traits, #rack, #foe, #bottom, #door),
-body.no-run :is(#track, #resolve, #traits, #rack, #foe, #bottom, #door) {
+body:is([data-mode="front"], [data-mode="over"]) :is(#track, #resolve, #traits, #rack, #rackbtn, #foe, #bottom, #door),
+body.no-run :is(#track, #resolve, #traits, #rack, #rackbtn, #foe, #bottom, #door) {
   visibility: hidden;
 }
 #rack.empty {
@@ -1809,21 +1928,32 @@ body[data-rule] #says {
   .trait .name {
     display: none;
   }
+  /*
+   * On a phone the rack is one narrow column in the wood between the board's last hexes and the edge,
+   * above the bench: the components in their five places, then a box two tiles tall for the rest that
+   * scrolls in itself. Its size never changes with what is on it, so nothing round it moves.
+   */
   #rack {
-    top: calc(var(--top) + var(--u) * 48);
+    top: calc(var(--top) + var(--u) * 62);
+    right: calc(var(--u) * 0.5);
   }
   #rack .k-plaque {
     grid-template-columns: auto;
+    padding: calc(var(--u) * 0.5);
   }
-  /* A long rack goes to two columns rather than down over the traits. */
-  #rack .k-plaque.items:has(> :nth-child(6)) {
-    grid-template-columns: repeat(2, auto);
+  #rack .parts {
+    grid-template-columns: calc(var(--u) * 13);
   }
-  /* Big enough for a finger, here and in the corner. */
+  #rack .made {
+    grid-template-columns: calc(var(--u) * 13);
+    grid-auto-rows: calc(var(--u) * 13);
+    height: calc(var(--u) * 28);
+    padding: 0;
+  }
   #rack .item,
   #rack .boon {
-    width: calc(var(--u) * 20);
-    height: calc(var(--u) * 20);
+    width: calc(var(--u) * 13);
+    height: calc(var(--u) * 13);
   }
   #corner > .k-btn,
   #lastfight {

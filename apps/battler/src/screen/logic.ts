@@ -13,6 +13,7 @@ import {
   chairsOn,
   combine,
   type ComponentId,
+  countOn,
   countTraits,
   ECONOMY,
   type Era,
@@ -27,6 +28,7 @@ import {
   interestNow,
   isComponentId,
   type ItemId,
+  kindsOn,
   legal,
   levelBoost,
   openFight,
@@ -114,12 +116,19 @@ function makes(cat: Catalog, item: ComponentId, other: ComponentId): { with: Com
 export const recipesOf = (cat: Catalog, item: ComponentId): { with: ComponentId; makes: ItemId }[] =>
   cat.ids.components.flatMap((other) => makes(cat, item, other));
 
-/** What a component would make with each *other* loose component the party has, without repeats. */
-export function combosWithHeld(run: RunView, item: ComponentId, itemAt = -1): { with: ComponentId; makes: ItemId }[] {
-  const others: ComponentId[] = [];
-  run.items.forEach((held, at) => {
-    if (at !== itemAt && isComponentId(held) && !others.includes(held)) others.push(held);
-  });
+/**
+ * What a component would make with each *other* loose component the party has, without repeats: on
+ * the rack (where, for one of it there itself, `fromRack`, its own kind counts only if there are two)
+ * and held by a figure.
+ */
+export function combosWithHeld(
+  run: RunView,
+  item: ComponentId,
+  fromRack = false,
+): { with: ComponentId; makes: ItemId }[] {
+  const others: ComponentId[] = kindsOn(run.rack).filter(
+    (held): held is ComponentId => isComponentId(held) && countOn(run.rack, held) > (fromRack && held === item ? 1 : 0),
+  );
   for (const p of pieces(run)) {
     for (const held of p.items) if (isComponentId(held) && !others.includes(held)) others.push(held);
   }
@@ -249,7 +258,7 @@ export function nudgeFor(run: RunView, doing: Doing, taught: readonly string[]):
   const affordable = run.stall.some((_, i) => canBuy(run, i));
   if (fresh("buy") && owned.length === 1 && affordable) return "buy";
   if (fresh("field") && benched && chairsOn(run) < fieldCap(run)) return "field";
-  if (fresh("item") && run.items.length > 0) return "item";
+  if (fresh("item") && kindsOn(run.rack).length > 0) return "item";
   if (fresh("setout") && run.room === 0 && fielded(run) > 0) return "setout";
   if (fresh("three") && run.room >= 1 && hasPair(owned)) return "three";
   if (fresh("trait") && traitsNow(run).some((t) => t.step > 0)) return "trait";

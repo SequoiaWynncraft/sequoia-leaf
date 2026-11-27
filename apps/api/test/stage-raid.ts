@@ -21,13 +21,13 @@ import {
   boardMet,
   catalogAt,
   catalogOf,
+  counted,
   ENDLESS,
   type EndlessWay,
-  isComponentId,
   isEndlessWay,
   isFigureId,
-  isFinishedId,
   isMemberId,
+  isRackItem,
   isRuleId,
   keepRoom,
   lanes,
@@ -121,7 +121,11 @@ function step(table: Table, op: Record<string, unknown>, made: number[], own: Ro
     const at = whole(op.offer.at, 0, run.stall.length - 1);
     if (at !== null) run.stall[at] = op.offer.kind;
   }
-  if (isComponentId(op.item) || isFinishedId(op.item)) run.items.push(op.item);
+  // One of a kind onto the rack (`item`), or many (`items`: how many of each).
+  if (isRackItem(op.item)) run.rack = counted(run.rack, op.item, 1);
+  if (isRecord(op.items))
+    for (const [kind, n] of Object.entries(op.items))
+      if (isRackItem(kind)) run.rack = counted(run.rack, kind, whole(n, 1, 1_000_000) ?? 0);
   // The party waiting in the room as another member's board, signed as the rules sign one Leaf hands over.
   if (typeof op.member === "string") {
     const met = { player: "20000000-0000-4000-8000-0000000000aa", name: op.member, data: run.foe, of: 1 };

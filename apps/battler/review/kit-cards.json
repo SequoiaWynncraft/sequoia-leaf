@@ -11,7 +11,7 @@
   ],
   [
     "eval",
-    "(async ()=>{const r = window.raid; const board = r.party().filter(p => p.on === 'board'); const one = board[0]; const three = board[1]; await r.item('thorn'); r.hand(r.rack().length - 1, one.id); await r.settled(); for (const k of ['honeycake', 'mothlantern', 'stewpot']) { await r.item(k); r.hand(r.rack().length - 1, three.id); await r.settled(); } r.skip(0.6); return 'one: ' + one.kind + ', three: ' + three.kind + ', held: ' + JSON.stringify(r.held())})()"
+    "(async ()=>{const r = window.raid; const board = r.party().filter(p => p.on === 'board'); const one = board[0]; const three = board[1]; await r.item('thorn'); r.hand('thorn', one.id); await r.settled(); for (const k of ['honeycake', 'mothlantern', 'stewpot']) { await r.item(k); r.hand(k, three.id); await r.settled(); } r.skip(0.6); return 'one: ' + one.kind + ', three: ' + three.kind + ', held: ' + JSON.stringify(r.held())})()"
   ],
   ["move", 640, 40],
   ["wait", 500],
@@ -51,7 +51,7 @@
   ["key", "Escape"],
   [
     "eval",
-    "(async ()=>{const r = window.raid; const p = r.party().filter(p => p.on === 'board')[0]; await r.item('plume'); r.hover(r.rack().length - 1, p.id); r.skip(0.5); return 'forging over ' + p.kind + ': ' + document.querySelector('.k-info .k-name')?.textContent})()"
+    "(async ()=>{const r = window.raid; const p = r.party().filter(p => p.on === 'board')[0]; await r.item('plume'); r.hover('plume', p.id); r.skip(0.5); return 'forging over ' + p.kind + ': ' + document.querySelector('.k-info .k-name')?.textContent})()"
   ],
   ["wait", 500],
   ["shot", "b-05-forge-preview"],

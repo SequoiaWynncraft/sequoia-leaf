@@ -16,7 +16,7 @@ import { SENSIBLE } from "./bot.ts";
 import { legal, type Predicted, type RaidCommand } from "./command.ts";
 import { catalogAt, everyShared } from "./content/catalog.ts";
 import { figureIn } from "./content/figures.ts";
-import { EMBLEM_IDS, grantOf } from "./content/items.ts";
+import { EMBLEM_IDS, grantOf, isItemId } from "./content/items.ts";
 import { newLooks } from "./content/looks.ts";
 import { eraAt, LEGACY_ERA } from "./content/releases.ts";
 import { LEVELS, MAX_LEVEL, regularOf, ROOMS } from "./content/rooms.ts";
@@ -40,6 +40,7 @@ import {
 import { beatenBosses, payout, recordRun, trailCleared, trailOpen } from "./outside.ts";
 import { rosterOf } from "./own.ts";
 import { isParty, type Party, traitSteps } from "./party.ts";
+import { counted, kindsOn } from "./racks.ts";
 import { MET_APART, noRooms } from "./record.ts";
 import {
   fieldCap,
@@ -290,7 +291,9 @@ describe("every command a player has", () => {
     expect(done.notes[0]).toMatchObject({ t: "component" });
     state = done.state;
     const seat = state.held.main?.board.findIndex((p) => p !== null) ?? -1;
-    done = must(state, { do: "give", item: 0, to: { on: "board", at: seat } });
+    const taken = done.notes[0]?.t === "component" ? done.notes[0].item : "thorn";
+    if (taken === "tongs" || taken === "whetstone") throw new Error("a tool");
+    done = must(state, { do: "give", item: taken, to: { on: "board", at: seat } });
     expect(done.notes[0]).toMatchObject({ t: "gave", forged: null });
     state = done.state;
     // Play on to the boon after the second room.
@@ -519,17 +522,19 @@ describe("keeping a table", () => {
     const state = planned(started(9));
     const run = state.held.main;
     if (!run) throw new Error("no run");
+    // A table of version 7: the rack as a list, the charm among the boons, no emblem anywhere, and the foe with the old `charms`.
     const stored = tableKeptAs(RAID.encode(state), 7);
-    // The charm among the boons, no emblem anywhere, and the foe with the old `charms`.
+    const { rack: _, ...kept } = stored.run;
+    const items = kindsOn(run.rack).flatMap((kind) => Array.from({ length: run.rack[kind] ?? 0 }, () => kind));
     const old = JSON.stringify({
       ...stored,
-      run: { ...stored.run, boons: ["crabcharm"], foe: { ...run.foe, charms: [] } },
+      run: { ...kept, items, boons: ["crabcharm"], foe: { ...run.foe, charms: [] } },
     });
     const once = RAID.decode(old);
-    expect(once?.held.main?.items).toEqual([...run.items, "crabcharm"]);
+    expect(once?.held.main?.rack).toEqual(counted(run.rack, "crabcharm", 1));
     expect(once?.held.main?.foe).toMatchObject(run.foe);
     const twice = once ? RAID.decode(RAID.encode(once)) : null;
-    expect(twice?.held.main?.items).toEqual([...run.items, "crabcharm"]);
+    expect(twice?.held.main?.rack).toEqual(counted(run.rack, "crabcharm", 1));
   });
 });
 
@@ -588,7 +593,9 @@ describe("what the page may show before Leaf answers", () => {
       expect(guessed).toEqual({ view: tableView(done.state, ctx()), notes: [...done.notes] });
       state = done.state;
     };
-    same({ do: "give", item: 0, to: { on: "board", at: seat } });
+    const first = kindsOn(state.held.main?.rack ?? {}).find(isItemId);
+    if (!first) throw new Error("nothing on the rack");
+    same({ do: "give", item: first, to: { on: "board", at: seat } });
     same({ do: "move", from: { on: "board", at: seat }, to: { on: "board", at: 20 } });
     same({ do: "hold", on: true });
     same({ do: "bench", seat: 20 });
@@ -624,7 +631,7 @@ describe("whether the rules would do a command", () => {
       { do: "sell", from: { on: "bench", at: 8 } },
       { do: "xp" },
       { do: "hold", on: true },
-      { do: "give", item: 0, to: { on: "board", at: 3 } },
+      { do: "give", item: "thorn", to: { on: "board", at: 3 } },
     ];
     for (const c of commands) {
       const blank = RAID.view(RAID.create(ctx(1)), ctx());
@@ -645,8 +652,8 @@ describe("an emblem handed to a figure of its kin already", () => {
     const own = EMBLEM_IDS.find((id) => grantOf(CAT, id) === figureIn(CAT, figure.kind).kin);
     if (!own) throw new Error("no emblem of its kin");
     run.boons = [own];
-    run.items = [own];
-    const command: RaidCommand = { do: "give", item: 0, to: spot };
+    run.rack = { [own]: 1 };
+    const command: RaidCommand = { do: "give", item: own, to: spot };
     expect(predict(RAID.view(state, ctx()), command)).toEqual({ refused: "already_kin" });
     expect(RAID.apply(state, command, ctx())).toEqual({ refused: "already_kin" });
     expect(refusalText("already_kin")).toBe("It is of that origin already.");
@@ -1311,7 +1318,7 @@ describe("every fight decided, kept for the staff", () => {
         resolve: runOf(taken.state).resolve,
         level: runOf(sent.state).level,
         acorns: runOf(sent.state).acorns,
-        party: { figures: ours.figures, traits: traitSteps(CAT, ours), boons: [] },
+        party: { figures: ours.figures, traits: traitSteps(catalogAt(decided.setup.era), ours), boons: [] },
         against: null,
         setup: decided.setup,
       },
@@ -1327,7 +1334,12 @@ describe("every fight decided, kept for the staff", () => {
     const foe = fought(sparred.state)?.setup.sides[1];
     if (!foe) throw new Error("no fight");
     expect(regular?.across).toBe(`regular:${regularOf(foe)?.kind}`);
-    expect(regular?.against).toEqual({ figures: foe.figures, traits: traitSteps(CAT, foe), boons: foe.boons });
+    const era = fought(sparred.state)?.setup.era ?? CAT.era;
+    expect(regular?.against).toEqual({
+      figures: foe.figures,
+      traits: traitSteps(catalogAt(era), foe),
+      boons: foe.boons,
+    });
     const board = keptBoard();
     const met = must(fighting(1), { do: "take" }, { ...ctx(), met: metOf(board) }).state;
     expect(runOf(met).foe.by).toBe(MEMBER);

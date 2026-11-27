@@ -9,16 +9,18 @@ import { isEndlessWay } from "./content/endless.ts";
  * again if its rules do not play it to that (`playsAsKept`).
  */
 import { BOSS_IDS, isBossId, isFigureId, isStars } from "./content/figures.ts";
-import { FINISHED_IDS, isComponentId, isFinishedId, isItemId } from "./content/items.ts";
+import { type ComponentId, FINISHED_IDS, isComponentId, isFinishedId, isItemId } from "./content/items.ts";
 import { isLookKind, lookOf, readLooks } from "./content/looks.ts";
 import { isEra } from "./content/releases.ts";
 import { ECONOMY, MAX_LEVEL, MOST_ROOMS, ROOM_COUNT, TRAIL_COUNT } from "./content/rooms.ts";
+import { isToolId, type ToolId } from "./content/tools.ts";
 import { isTraitId, TRAIT_IDS } from "./content/traits.ts";
 import { readApart, readWeek } from "./depths.ts";
 import type { Fed } from "./feed.ts";
 import type { RaidNote, RunView, TableView } from "./game.ts";
 import { type News, type Payout, readAlmanac, trailOpen } from "./outside.ts";
 import { readRoster } from "./own.ts";
+import { isRackItem } from "./racks.ts";
 import { ACORNS_WHYS, type AcornsWhy, type Ending, type Note, type RunSummary, type Spot } from "./run.ts";
 import { fields, Nonsense, readRunView } from "./save.ts";
 import { type Slot, slotOf } from "./way.ts";
@@ -27,6 +29,8 @@ const { record, whole, flag, list, one, each, items, setup, outcome, bad } = fie
 const UINT = 0xffffffff;
 const MOST = 1_000_000;
 
+/** What a pick of components may offer, and what may lie on the rack: an item, or a tool. */
+const isPickable = (v: unknown): v is ComponentId | ToolId => isComponentId(v) || isToolId(v);
 const isRoomKind = (v: unknown): v is "trouble" | "spar" | "boss" => v === "trouble" || v === "spar" || v === "boss";
 const text = (v: unknown, what: string): string => (typeof v === "string" && v.length <= 200 ? v : bad(what));
 
@@ -75,7 +79,7 @@ function spot(v: unknown, what: string): Spot {
   if (s.on !== "board" && s.on !== "bench") return bad(what);
   return { on: s.on, at: whole(s.at, 0, 63, what) };
 }
-const piece = (v: unknown): number => whole(v, 1, MOST, "a figure's number");
+const piece = (v: unknown): number => whole(v, 1, Number.MAX_SAFE_INTEGER, "a figure's number");
 
 function summaryOf(v: unknown): RunSummary {
   const s = record(v, "what the run came to");
@@ -152,7 +156,7 @@ function runNote(n: Record<string, unknown>): Note {
     case "starter":
       return { t: "starter", kind: one(n.kind, isFigureId, what), piece: piece(n.piece), to: spot(n.to, what) };
     case "component":
-      return { t: "component", item: one(n.item, isComponentId, what) };
+      return { t: "component", item: one(n.item, isPickable, what) };
     case "boon":
       return { t: "boon", boon: one(n.boon, isBoonId, what) };
     case "redrawn":
@@ -258,6 +262,20 @@ function runNote(n: Record<string, unknown>): Note {
     case "over":
       return { t: "over", won: flag(n.won, what) };
     default:
+      return rackNote(n, what);
+  }
+}
+
+/** One of the rack's own notes: something melted, the Tongs, a Whetstone. */
+function rackNote(n: Record<string, unknown>, what: string): Note {
+  switch (n.t) {
+    case "melted":
+      return { t: "melted", item: one(n.item, isRackItem, what), acorns: whole(n.acorns, 0, 99, what) };
+    case "tongs":
+      return { t: "tongs", piece: piece(n.piece), items: items(n.items, what) };
+    case "whetted":
+      return { t: "whetted", piece: piece(n.piece), was: items(n.was, what), now: items(n.now, what) };
+    default:
       return bad("a note");
   }
 }
@@ -280,7 +298,7 @@ function noteOf(v: unknown): RaidNote {
       return id === null ? bad("a note") : { t: "look", kind, id };
     }
     case "made":
-      return { t: "made", item: one(n.item, isItemId, "a note"), at: whole(n.at, 0, 399, "a note") };
+      return { t: "made", item: one(n.item, isItemId, "a note") };
     case "shifted":
       return { t: "shifted", piece: piece(n.piece), from: whole(n.from, 0, 63, "a note"), to: spot(n.to, "a note") };
     case "ended":

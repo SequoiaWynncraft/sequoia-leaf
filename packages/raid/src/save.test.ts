@@ -2,10 +2,11 @@ import { describe, expect, test } from "bun:test";
 
 import { planRoom, SENSIBLE } from "./bot.ts";
 import { figureIn } from "./content/figures.ts";
-import { COMPONENT_IDS, FINISHED_IDS, isEmblemId } from "./content/items.ts";
+import { FINISHED_IDS, isEmblemId } from "./content/items.ts";
 import { LEGACY_ERA } from "./content/releases.ts";
 import { ECONOMY } from "./content/rooms.ts";
 import { TRAIT_IDS } from "./content/traits.ts";
+import { counted, countOn, kindsOn, rackOf } from "./racks.ts";
 import {
   beginFight,
   buy,
@@ -25,6 +26,8 @@ import { CAT, EVERYONES } from "./testkit.ts";
 /** A run as a table keeps it, written out and read back. */
 const saveRun = (run: Run): string => JSON.stringify({ run });
 const loadRun = (text: string): Loaded => checkRun(JSON.parse(text).run);
+/** A run as a table kept it before the rack had tools (before version 10). */
+const loadBeforeTools = (text: string): Loaded => checkRun(JSON.parse(text).run, false, false, false, false);
 
 /** A run played by the bot up to a room, stopped in the middle of planning it. */
 function midRun(seed: number, rooms: number): Run {
@@ -43,6 +46,17 @@ function reload(run: Run): Run {
 }
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 /** A list read out of saved text, to change in place. */
+/** A record in stored data, to change by hand. */
+function recordIn(v: unknown): Record<string, unknown> {
+  if (typeof v !== "object" || v === null || Array.isArray(v)) throw new Error("not a record");
+  return { ...v };
+}
+/** A stored run's rack as a run kept it before its rack was counts: a list, under `items`. */
+function asList(raw: Record<string, unknown>): void {
+  const rack = recordIn(raw.rack);
+  raw.items = Object.entries(rack).flatMap(([kind, n]) => Array.from({ length: Number(n) }, () => kind));
+  delete raw.rack;
+}
 function listIn(v: unknown): unknown[] {
   if (!Array.isArray(v)) throw new Error("not a list");
   return v;
@@ -68,13 +82,6 @@ const refused = (text: string): string => {
 };
 
 describe("saving a run", () => {
-  test("a deep endless run's item bench of a thousand components and more still loads", () => {
-    const run = midRun(7, 3);
-    const deep = tampered(run, (raw) => {
-      raw.items = Array.from({ length: 5_000 }, (_, i) => COMPONENT_IDS[i % COMPONENT_IDS.length]);
-    });
-    expect(mustLoad(deep).items.length).toBe(5_000);
-  });
   test("a run saves to a string and loads back identical, at every point of a raid", () => {
     for (const rooms of [0, 1, 3, 6, 10]) {
       const run = midRun(31, rooms);
@@ -162,28 +169,29 @@ describe("saving a run", () => {
   });
   test("a run saved when a charm counted for its kin gets the emblem on its item bench, once", () => {
     const run = midRun(12, 4);
-    run.items = run.items.filter((item) => !isEmblemId(item));
+    run.rack = rackOf(kindsOn(run.rack).filter((item) => !isEmblemId(item)));
     for (const p of pieces(run)) p.items = p.items.filter((item) => !isEmblemId(item));
-    // As it was stored then: the charm among the boons, no emblem anywhere, and parties with charms.
+    // As it was stored then: the rack as a list, the charm among the boons, no emblem anywhere, and parties with charms.
     const old = tampered(run, (raw) => {
+      asList(raw);
       raw.boons = ["crabcharm"];
       if (isRecord(raw.foe)) raw.foe.charms = [];
       if (isRecord(raw.last)) for (const side of listIn(raw.last.sides)) if (isRecord(side)) side.charms = ["crab"];
     });
-    const loaded = loadRun(old);
+    const loaded = loadBeforeTools(old);
     if (!loaded.ok) throw new Error(loaded.why);
     expect(loaded.run.boons).toEqual(["crabcharm"]);
-    expect(loaded.run.items).toEqual([...run.items, "crabcharm"]);
+    expect(loaded.run.rack).toEqual(counted(run.rack, "crabcharm", 1));
     // Read again, it is still the one.
     const again = loadRun(saveRun(loaded.run));
-    expect(again.ok && again.run.items).toEqual(loaded.run.items);
+    expect(again.ok && again.run.rack).toEqual(loaded.run.rack);
     // A figure holding it is somewhere it is: none is added.
     const figure = pieces(loaded.run).find((p) => figureIn(CAT, p.kind).kin !== "crab" && p.items.length < 3);
     const spot = figure ? spotOf(loaded.run, figure.id) : null;
     if (!spot) throw new Error("nobody to hold it");
-    expect(giveItem(loaded.run, loaded.run.items.indexOf("crabcharm"), spot).ok).toBe(true);
+    expect(giveItem(loaded.run, "crabcharm", spot).ok).toBe(true);
     const held = checkRun(JSON.parse(JSON.stringify(loaded.run)));
-    expect(held.ok && held.run.items.filter((item) => item === "crabcharm")).toEqual([]);
+    expect(held.ok && countOn(held.run.rack, "crabcharm")).toBe(0);
   });
   test("a finished run loads as finished", () => {
     const run = midRun(3, 99);
@@ -205,11 +213,15 @@ describe("loading puts right what today's rules would not allow", () => {
     );
   test("what a figure holds that it may not hold now goes to the item bench, and nobody but Greg has eaten", () => {
     const two = worm(["thorn", "plume"], 3);
-    expect([two.bench[8]?.items, two.bench[8]?.fed, two.items.slice(-1)]).toEqual([["thorn"], 0, ["plume"]]);
+    expect([two.bench[8]?.items, two.bench[8]?.fed, countOn(two.rack, "plume")]).toEqual([
+      ["thorn"],
+      0,
+      countOn(run.rack, "plume") + 1,
+    ]);
     expect(worm(["hoard", "hoard", "hoard", "hoard"]).bench[8]?.items).toEqual(["hoard", "hoard", "hoard"]);
     // A worm is a burrow kin already.
     const kin = worm(["burrowcharm"]);
-    expect([kin.bench[8]?.items, kin.items.filter((item) => item === "burrowcharm")]).toEqual([[], ["burrowcharm"]]);
+    expect([kin.bench[8]?.items, countOn(kin.rack, "burrowcharm")]).toEqual([[], 1]);
   });
   test("more on the board than may be fielded now stand there: setting out is refused until one is benched", () => {
     const crowded = mustLoad(
@@ -231,10 +243,10 @@ describe("loading puts right what today's rules would not allow", () => {
       tampered(run, (raw) => (raw.stage = { phase: "plan", picks: [{ kind: "boon", options: [], redraws: 0 }] })),
     ].map(mustLoad);
     for (const laid of again) {
-      expect([laid.board, laid.bench, laid.items, laid.acorns, laid.level, laid.room]).toEqual([
+      expect([laid.board, laid.bench, laid.rack, laid.acorns, laid.level, laid.room]).toEqual([
         run.board,
         run.bench,
-        run.items,
+        run.rack,
         run.acorns,
         run.level,
         run.room,
@@ -293,7 +305,12 @@ describe("loading refuses nonsense", () => {
   });
   test("figures, items and boons that do not exist", () => {
     expect(refused(tampered(run, (raw) => (raw.boons = ["godmode"])))).toContain("the boons");
-    expect(refused(tampered(run, (raw) => (raw.items = ["thorn", "excalibur"])))).toContain("the item bench");
+    expect(refused(tampered(run, (raw) => (raw.rack = { thorn: 1, excalibur: 1 })))).toContain("the rack");
+    expect(refused(tampered(run, (raw) => (raw.rack = ["thorn"])))).toContain("the rack");
+    // A run kept with its rack as a list (before version 10).
+    expect(refused(tampered(run, (raw) => ((raw.items = ["thorn", "excalibur"]), delete raw.rack)))).toContain(
+      "the item bench",
+    );
     const withPiece = (piece: unknown): string =>
       refused(
         tampered(run, (raw) => {
@@ -331,12 +348,16 @@ describe("loading refuses nonsense", () => {
     expect(refused(tampered(run, (raw) => delete raw.record))).toContain("the record");
   });
   test("an emblem with no charm to give it, or two of one emblem", () => {
-    expect(refused(tampered(run, (raw) => listIn(raw.items).push("crabcharm")))).toContain("the emblems");
+    const stray = tampered(run, (raw) => (raw.rack = { ...recordIn(raw.rack), crabcharm: 1 }));
+    const before = loadBeforeTools(stray);
+    expect(!before.ok && before.why).toContain("the emblems");
+    // Nor since: a Whetstone leaves emblems as they are.
+    expect(refused(stray)).toContain("the emblems");
     expect(
       refused(
         tampered(run, (raw) => {
           raw.boons = ["crabcharm"];
-          listIn(raw.items).push("crabcharm", "crabcharm");
+          raw.rack = { ...recordIn(raw.rack), crabcharm: 2 };
         }),
       ),
     ).toContain("the emblems");

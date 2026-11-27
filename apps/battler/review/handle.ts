@@ -17,9 +17,13 @@ import { ask as askLeaf } from "@sequoia-leaf/kit/net.ts";
 import { balance } from "@sequoia-leaf/kit/purse.ts";
 import {
   catalogAt,
+  countOn,
   type EndlessWay,
   HZ,
   isBossId,
+  isItemId,
+  isRackItem,
+  kindsOn,
   LAST_ERA,
   MEASURES,
   onTrail,
@@ -40,7 +44,7 @@ import { COLS } from "@sequoia-leaf/raid/hex.ts";
 
 import { fightEvents, fightState, startFight } from "../src/screen/fightview.ts";
 import { carryOn, doSpeed, enterRun, lookBack, setOut, sitDown, startOn, toFront } from "../src/screen/flow.ts";
-import { grab, hover, tapPawn, unpick } from "../src/screen/hand.ts";
+import { grab, hover, overStall, tapPawn, unpick } from "../src/screen/hand.ts";
 import { heldRow, heldTop } from "../src/screen/held.ts";
 import { NUDGES } from "../src/screen/logic.ts";
 import { pawns, spotOfPawn, syncPawns } from "../src/screen/pawns.ts";
@@ -64,6 +68,7 @@ import {
 } from "../src/screen/state.ts";
 import { sheetUp } from "../src/screen/ui/fightsheet.ts";
 import { type PageId, renderPages, showPage } from "../src/screen/ui/pages.ts";
+import { type Box, foldReport, tableBoxes } from "../src/screen/ui/rackfold.ts";
 import { redrawTallies, TV } from "../src/screen/ui/tally.ts";
 
 type Jump = "front" | "boon" | "component" | "spar" | "boss" | "lastboss" | "end";
@@ -138,16 +143,19 @@ export interface Handle {
   at(id: number): { x: number; y: number } | null;
   /** Where on the page the middle of the picture of the `i`th item a figure holds is. */
   heldAt(id: number, i: number): { x: number; y: number } | null;
-  /** What is on the rack, and what each of the party's figures holds. */
+  /** What is on the rack (one of each, as many times as there are), and what each of the party's figures holds. */
   rack(): string[];
   held(): Record<number, string[]>;
   /** For staging a moment: every figure lets go of what it holds. */
   strip(): Promise<void>;
-  /** Holds the item at a place on the rack over a figure; and hands it over. */
-  hover(itemAt: number, id: number): void;
-  /** Holds the item at a place on the rack over another place on it. */
-  pair(itemAt: number, rackAt: number): void;
-  hand(itemAt: number, id: number): void;
+  /** Holds one of a kind on the rack over a figure; and hands it over. */
+  hover(item: string, id: number): void;
+  /** Holds one of a kind on the rack over another kind's tile. */
+  pair(item: string, other: string): void;
+  /** Carries one of a kind on the rack over the stall, where it melts. */
+  melting(item: string): void;
+  /** Hands one of a kind on the rack to a figure, as the page does; throws when it is not done. */
+  hand(item: string, id: number): string;
   drop(): void;
   page(id: PageId | null): void;
   /** Goes on from a fight's sheet, as "Carry on" does. */
@@ -161,8 +169,14 @@ export interface Handle {
   give(kind: string, stars?: number): Promise<number>;
   offer(at: number, kind: string): Promise<void>;
   item(id: string): Promise<void>;
+  /** For staging a moment: many of each kind onto the rack at once (`{ thorn: 300 }`). */
+  items(counts: Record<string, number>): Promise<void>;
   /** The page's own copy of the run, to change by hand. */
   copy(): RunView | null;
+  /** Every seat of the board and slot of the bench, as boxes on the page: what the rack must never cover. */
+  tableBoxes(): Box[];
+  /** Each place the folded rack's button might go, and what is in the way there. */
+  foldReport(): string[];
   /** Draws the table again from the copy as it stands. */
   redraw(): void;
   /** Leaf's table as the page last heard it, and whether anything sent is still waiting for an answer. */
@@ -468,7 +482,8 @@ export function openHandle(): void {
       return at ? stage.boardToPage(at.x + at.w / 2, at.y + at.h / 2) : null;
     },
     rack() {
-      return [...(S.run?.items ?? [])];
+      const rack = S.run?.rack ?? {};
+      return kindsOn(rack).flatMap((kind) => Array.from({ length: countOn(rack, kind) }, () => kind));
     },
     held() {
       const out: Record<number, string[]> = {};
@@ -480,15 +495,22 @@ export function openHandle(): void {
       syncPawns(S.run, true);
       changed();
     },
-    hover(itemAt, id) {
-      hover(itemAt, { piece: id });
+    hover(item, id) {
+      if (isRackItem(item)) hover(item, { piece: id });
     },
-    pair(itemAt, rackAt) {
-      hover(itemAt, { rack: rackAt });
+    pair(item, other) {
+      if (isRackItem(item) && isRackItem(other)) hover(item, { rack: other });
     },
-    hand(itemAt, id) {
+    melting(item) {
+      if (isRackItem(item)) overStall(item);
+    },
+    hand(item, id) {
       const spot = spotOfPawn(pawns.get(id));
-      if (spot) doNow({ do: "give", item: itemAt, to: spot });
+      if (!spot) throw new Error(`no figure ${id}`);
+      if (!isItemId(item)) throw new Error(`no item called ${item}`);
+      const done = doNow({ do: "give", item, to: spot });
+      if (!done?.ok) throw new Error(`${item} not handed to ${id}: ${done?.why ?? "held off while Leaf answers"}`);
+      return item;
     },
     drop: unpick,
     page: showPage,
@@ -525,11 +547,17 @@ export function openHandle(): void {
       await staged({ item: id });
       changed();
     },
+    async items(counts) {
+      await staged({ items: counts });
+      changed();
+    },
     copy: () => S.run,
     redraw() {
       syncPawns(S.run, true);
       changed();
     },
+    tableBoxes,
+    foldReport,
     leaf: leafView,
     waiting: waitingForLeaf,
     async settled() {

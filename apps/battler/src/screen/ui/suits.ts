@@ -48,7 +48,7 @@ function have(id: number, item: FinishedId): void {
   const to = run ? spotOf(run, id) : null;
   const piece = run && to ? pieceAt(run, to) : null;
   if (!run || !to || !piece) return;
-  for (const command of commandsFor(run, offerOf(run, piece, item), to)) if (!doNow(command)?.ok) return;
+  for (const command of commandsFor(offerOf(run, piece, item), to)) if (!doNow(command)?.ok) return;
 }
 
 /** What stands at the end of an offer's line: its button, the components it needs, or why it is not offered. */
@@ -111,7 +111,7 @@ export function itemsOf(
     rows.push({
       label: "Good with",
       look: "icons",
-      things: offersFor(run ?? { items: [], era: S.era }, { kind, items: [...items] }).map((offer) => ({
+      things: offersFor(run ?? { rack: {}, era: S.era }, { kind, items: [...items] }).map((offer) => ({
         ref: itemRef(offer.item),
         lit: run !== null && onOffer(offer),
       })),

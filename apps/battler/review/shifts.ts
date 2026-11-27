@@ -131,11 +131,17 @@ function parts(
   return { found, scrolled };
 }
 
-/** The parts sliding or growing in on a transform now: what is under them is not looked at until they stand still. */
+/**
+ * The parts sliding or growing in on a transform now, and the bars whose parts grow on their width
+ * (a tally filling as a fight plays: data, not a part moving): what is under them is not looked at
+ * until they stand still.
+ */
 function moving(): Element[] {
   return document.getAnimations().flatMap((a) => {
     const effect = a.effect;
     if (a.playState !== "running" || !(effect instanceof KeyframeEffect) || !effect.target) return [];
+    if (a instanceof CSSTransition && a.transitionProperty === "width")
+      return [effect.target.closest(".k-bar") ?? effect.target];
     const moves = effect.getKeyframes().some((k) => "transform" in k || "translate" in k || "scale" in k);
     return moves ? [effect.target] : [];
   });

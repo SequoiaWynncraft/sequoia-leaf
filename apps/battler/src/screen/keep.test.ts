@@ -60,6 +60,15 @@ describe("what the table keeps in the browser", () => {
     ]);
   });
 
+  test("the fight's speed sticks: whichever was picked last is the one the page opens with, for every later fight", () => {
+    world = standin({});
+    for (const speed of [4, 1, 2, 4] as const) {
+      keepPrefs({ ...readPrefs(), speed });
+      // A page opened again (a new session, an endless run picked up past room 15) reads it back.
+      expect(readPrefs().speed).toBe(speed);
+    }
+  });
+
   test("they are written into the browser, and read back", () => {
     world = standin({});
     const prefs = { speed: 2 as const, taught: ["buy"] };

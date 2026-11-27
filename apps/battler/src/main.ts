@@ -54,6 +54,7 @@ import { renderNudge, stepNudge } from "./screen/ui/nudge.ts";
 import { meetMember } from "./screen/ui/own.ts";
 import { openPages, pageOver, pagesClick, pageUp, renderPages, showPage } from "./screen/ui/pages.ts";
 import { renderPicks } from "./screen/ui/picks.ts";
+import { placeRack } from "./screen/ui/rackfold.ts";
 import { placeRule, ruleSign, sayShifted } from "./screen/ui/rulecards.ts";
 import { buildTable, placeFoe, renderTable, stepTable, toast, wakeChip } from "./screen/ui/table.ts";
 
@@ -107,6 +108,7 @@ const STAGE: stage.Hooks = {
   over: drawOver,
   resized() {
     placeFoe();
+    placeRack(S.run);
     placeRule();
     placeSheet();
     // The stall growing or shrinking lays the page out again too: a card stays beside its thing.

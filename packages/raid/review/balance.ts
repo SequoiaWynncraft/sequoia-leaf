@@ -1,10 +1,11 @@
+import { mix } from "@sequoia-leaf/core";
 /**
  * Plays many whole runs with bots of different habits and prints how far each gets, room by room,
  * and which traits, figures and items do better or worse than the rest:
  *
  *     bun review/balance.ts [runs each] [trail 0-2] [section ...] [only=<habit>,...] [rows=<file>] [era=<release>]
  *
- * Sections: habits, rooms, traits, figures, items, suits, fights (all of them if none is named). It
+ * Sections: habits, rooms, traits, figures, items, suits, fights, tools (all of them if none is named). It
  * is a gauge for tuning the tables in `src/game/content`, not a verdict: the bots are rough players.
  * `suits` is each figure with the finished items it held, worst first, beside the three a card
  * recommends for it. `rows` writes every fight of the habits that are trying to a file, one JSON line
@@ -12,7 +13,8 @@
  * plays the catalogue as that release left it (`groot`: before Groot Night), every release by default.
  */
 import { rulesVersions } from "@sequoia-leaf/core/build/rules.ts";
-import { CARELESS, fondOf, type Habit, planRoom, ROLLER, SAVER, SENSIBLE } from "@sequoia-leaf/raid/bot.ts";
+import { CARELESS, fondOf, type Habit, planWith, ROLLER, SAVER, SENSIBLE } from "@sequoia-leaf/raid/bot.ts";
+import { act } from "@sequoia-leaf/raid/command.ts";
 import { GOOD_WITH } from "@sequoia-leaf/raid/content/advice.ts";
 import { type BoonId, boonIn } from "@sequoia-leaf/raid/content/boons.ts";
 import { available, catalogAt } from "@sequoia-leaf/raid/content/catalog.ts";
@@ -21,12 +23,22 @@ import { FINISHED_IDS, type FinishedId, isFinishedId, itemName } from "@sequoia-
 import { holdItem } from "@sequoia-leaf/raid/content/recipes.ts";
 import { eraOf, LAST_ERA, RELEASES } from "@sequoia-leaf/raid/content/releases.ts";
 import { ROOM_COUNT, ROOMS, TRAILS } from "@sequoia-leaf/raid/content/rooms.ts";
+import { isToolId } from "@sequoia-leaf/raid/content/tools.ts";
 import { isCalling, isKin, type TraitId, traitIn } from "@sequoia-leaf/raid/content/traits.ts";
 import { resolveFight } from "@sequoia-leaf/raid/fight/engine.ts";
 import type { FightSetup, FightSummary } from "@sequoia-leaf/raid/fight/types.ts";
 import { fightRecord, margin } from "@sequoia-leaf/raid/fought.ts";
 import { Tally } from "@sequoia-leaf/raid/rates.ts";
-import { beginFight, endingOf, foughtOf, startRun, takeTakings, traitsNow } from "@sequoia-leaf/raid/run.ts";
+import {
+  beginFight,
+  endingOf,
+  foughtOf,
+  picksOf,
+  type Run,
+  startRun,
+  takeTakings,
+  traitsNow,
+} from "@sequoia-leaf/raid/run.ts";
 import { onTrail } from "@sequoia-leaf/raid/way.ts";
 
 const args = process.argv.slice(2);
@@ -107,6 +119,32 @@ let draws = 0;
 const kept: string[] = [];
 const rules = rulesVersions().raid;
 
+/** Tools, for each habit: picks that offered one, tools taken, and tools used (Tongs, Whetstone). */
+interface Tools {
+  offered: number;
+  taken: number;
+  tongs: number;
+  whetstone: number;
+}
+const toolsOf = new Map<string, Tools>();
+/** Plans a room as the bot does (`planRoom`), counting the tools it takes and uses. */
+function planCounting(run: Run, habit: Habit, t: Tools): void {
+  planWith(
+    run,
+    habit,
+    (r, c) => {
+      if (c.do === "choose") {
+        const up = picksOf(r)[0];
+        if (up?.kind === "component" && isToolId(up.options[c.option])) t.taken++;
+      }
+      const done = act(r, c);
+      if (done.ok && (c.do === "tongs" || c.do === "whetstone")) t[c.do]++;
+      return done;
+    },
+    { rng: mix(run.seed, 9000 + run.record.length) },
+  );
+}
+
 interface Line {
   name: string;
   wing1: number;
@@ -122,11 +160,13 @@ const started = performance.now();
 
 for (const habit of HABITS) {
   const line: Line = { name: habit.name, wing1: 0, wing2: 0, met: 0, beat: 0, rooms: 0, level: 0, ends: [] };
+  const tools: Tools = { offered: 0, taken: 0, tongs: 0, whetstone: 0 };
+  toolsOf.set(habit.name, tools);
   for (let i = 0; i < ROOM_COUNT + 1; i++) line.ends.push(0);
   for (let n = 1; n <= runs; n++) {
     const run = startRun(n * 7919 + 13, { era: ERA, way: onTrail(trail) });
     for (let guard = 0; guard < 200 && run.stage.phase !== "over"; guard++) {
-      planRoom(run, habit);
+      planCounting(run, habit, tools);
       const room = run.room;
       const traits = traitsNow(run).filter((t) => t.step > 0);
       const board = run.board.flatMap((p) => (p ? [p] : []));
@@ -141,6 +181,7 @@ for (const habit of HABITS) {
       }
       const taken = takeTakings(run);
       if (!taken.ok) break;
+      tools.offered += picksOf(run).filter((p) => p.kind === "component" && p.options.some(isToolId)).length;
       const win = taken.fight.result === "win";
       fights++;
       seconds += taken.fight.seconds;
@@ -331,6 +372,16 @@ if (shows("suits")) {
     console.log(`      best: ${list(best)}; worst: ${list(worst)}`);
   }
   console.log(`\n${clashes} recommended item${clashes === 1 ? "" : "s"} among a figure's three worst.\n`);
+}
+if (shows("tools")) {
+  console.log("Tools, a run on average: picks that offered one, taken, and used (Tongs, Whetstone).");
+  for (const [name, t] of toolsOf) {
+    const each = (n: number): string => (n / runs).toFixed(2).padStart(6);
+    console.log(
+      `  ${name.padEnd(13)} offered ${each(t.offered)}  taken ${each(t.taken)}  Tongs ${each(t.tongs)}  Whetstone ${each(t.whetstone)}`,
+    );
+  }
+  console.log("");
 }
 if (rowsTo !== undefined) {
   await Bun.write(rowsTo, kept.map((row) => `${row}\n`).join(""));

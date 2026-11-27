@@ -207,7 +207,7 @@ export function runView(run: RunView): RunView {
     xp: run.xp,
     board: run.board,
     bench: run.bench,
-    items: run.items,
+    rack: run.rack,
     stall: run.stall,
     held: run.held,
     rustles: run.rustles,
@@ -565,8 +565,9 @@ export function planCommands(view: TableView, habit: Habit, slot: Slot = "main")
   const out: Aimed[] = [];
   const hands: Hands<RunView> = (r, c) => {
     const done = plan(r, c);
-    if (done?.ok || (!done && c.do === "choose")) out.push(slot === "main" ? c : { ...c, slot });
-    // What draws is Leaf's to do: a pick is written down and the bot plans the rest once Leaf has answered; a rustle, never.
+    if (done?.ok || (!done && (c.do === "choose" || c.do === "whetstone")))
+      out.push(slot === "main" ? c : { ...c, slot });
+    // What draws is Leaf's to do: a pick or a Whetstone (the bot's last) is written down and the bot plans the rest once Leaf has answered; a rustle, never.
     return done ?? refusal(c.do === "choose" ? "nothing_to_choose" : "not_enough_acorns");
   };
   // The page's own stream for the bot's habits: the run's is Leaf's.

@@ -55,12 +55,12 @@
   [
     "finger",
     "down",
-    "(()=>{const r=window.raid; const i=(r.rack().indexOf('plume')); const e=document.querySelector('#rack [data-item=\"'+i+'\"]'); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
+    "(()=>{const r=window.raid; const i=('plume'); const e=document.querySelector('#rack [data-item=\"'+i+'\"]'); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
   ],
   [
     "finger",
     "up",
-    "(()=>{const r=window.raid; const i=(r.rack().indexOf('plume')); const e=document.querySelector('#rack [data-item=\"'+i+'\"]'); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
+    "(()=>{const r=window.raid; const i=('plume'); const e=document.querySelector('#rack [data-item=\"'+i+'\"]'); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
   ],
   [
     "finger",
@@ -81,12 +81,12 @@
   [
     "finger",
     "down",
-    "(()=>{const r=window.raid; const i=(r.rack().indexOf('plume')); const e=document.querySelector('#rack [data-item=\"'+i+'\"]'); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
+    "(()=>{const r=window.raid; const i=('plume'); const e=document.querySelector('#rack [data-item=\"'+i+'\"]'); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
   ],
   [
     "finger",
     "up",
-    "(()=>{const r=window.raid; const i=(r.rack().indexOf('plume')); const e=document.querySelector('#rack [data-item=\"'+i+'\"]'); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
+    "(()=>{const r=window.raid; const i=('plume'); const e=document.querySelector('#rack [data-item=\"'+i+'\"]'); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
   ],
   [
     "eval",
@@ -94,17 +94,17 @@
   ],
   [
     "eval",
-    "(async()=>{const r=window.raid; await r.item('bark'); await r.settled(); r.hand(r.rack().lastIndexOf('bark'), r.party().find(p=>p.on==='board'&&p.kind==='slug').id); await r.item('chestnut'); await r.settled(); r.skip(0.5); return JSON.stringify({rack: r.rack(), held: r.held(), card: [...document.querySelectorAll('.k-info .k-name')].map(e=>e.textContent), tip: document.querySelector('.k-info')?.innerText?.replace(/\\s+/g,' ').slice(0,160)});})()"
+    "(async()=>{const r=window.raid; await r.item('bark'); await r.settled(); r.hand('bark', r.party().find(p=>p.on==='board'&&p.kind==='slug').id); await r.item('chestnut'); await r.settled(); r.skip(0.5); return JSON.stringify({rack: r.rack(), held: r.held(), card: [...document.querySelectorAll('.k-info .k-name')].map(e=>e.textContent), tip: document.querySelector('.k-info')?.innerText?.replace(/\\s+/g,' ').slice(0,160)});})()"
   ],
   [
     "finger",
     "down",
-    "(()=>{const r=window.raid; const i=(r.rack().indexOf('chestnut')); const e=document.querySelector('#rack [data-item=\"'+i+'\"]'); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
+    "(()=>{const r=window.raid; const i=('chestnut'); const e=document.querySelector('#rack [data-item=\"'+i+'\"]'); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
   ],
   [
     "finger",
     "up",
-    "(()=>{const r=window.raid; const i=(r.rack().indexOf('chestnut')); const e=document.querySelector('#rack [data-item=\"'+i+'\"]'); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
+    "(()=>{const r=window.raid; const i=('chestnut'); const e=document.querySelector('#rack [data-item=\"'+i+'\"]'); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
   ],
   [
     "eval",
@@ -146,17 +146,17 @@
   ["shot", "p-05-made-by-button"],
   [
     "eval",
-    "(async()=>{const r=window.raid; for (const k of ['lichen','stewpot']) { await r.item(k); await r.settled(); r.hand(r.rack().indexOf(k), r.party().find(p=>p.on==='board'&&p.kind==='rock').id); await r.settled(); } r.skip(0.4); return JSON.stringify({rack: r.rack(), held: r.held(), card: [...document.querySelectorAll('.k-info .k-name')].map(e=>e.textContent), tip: document.querySelector('.k-info')?.innerText?.replace(/\\s+/g,' ').slice(0,160)});})()"
+    "(async()=>{const r=window.raid; for (const k of ['lichen','stewpot']) { await r.item(k); await r.settled(); r.hand(k, r.party().find(p=>p.on==='board'&&p.kind==='rock').id); await r.settled(); } r.skip(0.4); return JSON.stringify({rack: r.rack(), held: r.held(), card: [...document.querySelectorAll('.k-info .k-name')].map(e=>e.textContent), tip: document.querySelector('.k-info')?.innerText?.replace(/\\s+/g,' ').slice(0,160)});})()"
   ],
   [
     "finger",
     "down",
-    "(()=>{const r=window.raid; const i=(r.rack().indexOf('plume')); const e=document.querySelector('#rack [data-item=\"'+i+'\"]'); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
+    "(()=>{const r=window.raid; const i=('plume'); const e=document.querySelector('#rack [data-item=\"'+i+'\"]'); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
   ],
   [
     "finger",
     "up",
-    "(()=>{const r=window.raid; const i=(r.rack().indexOf('plume')); const e=document.querySelector('#rack [data-item=\"'+i+'\"]'); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
+    "(()=>{const r=window.raid; const i=('plume'); const e=document.querySelector('#rack [data-item=\"'+i+'\"]'); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
   ],
   [
     "finger",
@@ -177,12 +177,12 @@
   [
     "finger",
     "down",
-    "(()=>{const r=window.raid; const i=(r.rack().indexOf('plume')); const e=document.querySelector('#rack [data-item=\"'+i+'\"]'); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
+    "(()=>{const r=window.raid; const i=('plume'); const e=document.querySelector('#rack [data-item=\"'+i+'\"]'); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
   ],
   [
     "finger",
     "up",
-    "(()=>{const r=window.raid; const i=(r.rack().indexOf('plume')); const e=document.querySelector('#rack [data-item=\"'+i+'\"]'); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
+    "(()=>{const r=window.raid; const i=('plume'); const e=document.querySelector('#rack [data-item=\"'+i+'\"]'); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
   ],
   [
     "eval",
@@ -195,12 +195,12 @@
   [
     "finger",
     "down",
-    "(()=>{const r=window.raid; const i=(r.rack().indexOf('plume')); const e=document.querySelector('#rack [data-item=\"'+i+'\"]'); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
+    "(()=>{const r=window.raid; const i=('plume'); const e=document.querySelector('#rack [data-item=\"'+i+'\"]'); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
   ],
   [
     "finger",
     "up",
-    "(()=>{const r=window.raid; const i=(r.rack().indexOf('plume')); const e=document.querySelector('#rack [data-item=\"'+i+'\"]'); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
+    "(()=>{const r=window.raid; const i=('plume'); const e=document.querySelector('#rack [data-item=\"'+i+'\"]'); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
   ],
   [
     "eval",
@@ -211,12 +211,12 @@
   [
     "finger",
     "down",
-    "(()=>{const r=window.raid; const i=(r.rack().indexOf('thorn')); const e=document.querySelector('#rack [data-item=\"'+i+'\"]'); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
+    "(()=>{const r=window.raid; const i=('thorn'); const e=document.querySelector('#rack [data-item=\"'+i+'\"]'); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
   ],
   [
     "finger",
     "up",
-    "(()=>{const r=window.raid; const i=(r.rack().indexOf('thorn')); const e=document.querySelector('#rack [data-item=\"'+i+'\"]'); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
+    "(()=>{const r=window.raid; const i=('thorn'); const e=document.querySelector('#rack [data-item=\"'+i+'\"]'); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
   ],
   [
     "eval",
@@ -249,13 +249,13 @@
   [
     "finger",
     "down",
-    "(()=>{const r=window.raid; const i=(r.rack().indexOf('thorn')); const e=document.querySelector('#rack [data-item=\"'+i+'\"]'); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
+    "(()=>{const r=window.raid; const i=('thorn'); const e=document.querySelector('#rack [data-item=\"'+i+'\"]'); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
   ],
   ["wait", 750],
   [
     "finger",
     "up",
-    "(()=>{const r=window.raid; const i=(r.rack().indexOf('thorn')); const e=document.querySelector('#rack [data-item=\"'+i+'\"]'); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
+    "(()=>{const r=window.raid; const i=('thorn'); const e=document.querySelector('#rack [data-item=\"'+i+'\"]'); const b=e.getBoundingClientRect(); return {x:b.left+b.width/2,y:b.top+b.height/2}})()"
   ],
   [
     "eval",

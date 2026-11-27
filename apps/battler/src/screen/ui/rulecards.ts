@@ -15,6 +15,7 @@ import { ruleIcon } from "../art/icons.ts";
 import { ruleShown } from "../closed.ts";
 import { onChange, S } from "../state.ts";
 import { pic } from "./cards.ts";
+import { lineGone } from "./says.ts";
 import { bossOfWing, ruleSaid, shiftedLine } from "./wilds.ts";
 
 /** A rule's card on the pick: its picture, its name and its sentence. */
@@ -86,7 +87,7 @@ const SHIFTED: { waiting: string | null; line: HTMLElement | null; gone: Release
 };
 function dropShifted(): void {
   SHIFTED.gone?.();
-  SHIFTED.line?.remove();
+  if (SHIFTED.line) lineGone(SHIFTED.line);
   SHIFTED.line = null;
   SHIFTED.gone = null;
 }

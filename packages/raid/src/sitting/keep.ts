@@ -8,7 +8,6 @@
 import { newerThan } from "@sequoia-leaf/core";
 
 import { isFigureId } from "../content/figures.ts";
-import { isComponentId } from "../content/items.ts";
 import { isEra, LEGACY_ERA } from "../content/releases.ts";
 import { MOST_ROOMS } from "../content/rooms.ts";
 import { isTraitId, renamedTrait } from "../content/traits.ts";
@@ -18,6 +17,7 @@ import { endingOf } from "../run.ts";
 import { checkRun, fields, Nonsense, partyAsShare } from "../save.ts";
 import {
   CHAIRS,
+  isRingItem,
   type Member,
   type Offer,
   type Owed,
@@ -29,7 +29,9 @@ import {
 
 const GAME = "little-raid-sitting";
 /**
- * 6: a carousel keeps when the turn of the last let in is up (`ends`), planning the members' seats
+ * 7: a seat's run keeps its rack as how many of each kind (`Run.rack`), where it kept a list
+ * (`items`); the rack and the picks may hold tools (`content/tools.ts`), and a ring's figure may hold
+ * Tongs. 6: a carousel keeps when the turn of the last let in is up (`ends`), planning the members' seats
  * that are ready, and the fights those that have watched theirs; one of an older version reads with
  * nobody ready or done yet, and its carousel's turn up at its deadline. 5: each seat's run keeps its
  * record as a table of version 9 does: its last rooms as rows, the rooms before them as totals. 4:
@@ -40,8 +42,8 @@ const GAME = "little-raid-sitting";
  * three fields; one of versions 1 and 2 is of `LEGACY_ERA`; one of versions 1 to 4 keeps every room
  * of each run as an object.
  */
-export const SITTING_VERSION = 6;
-const READS: readonly number[] = [1, 2, 3, 4, 5, SITTING_VERSION];
+export const SITTING_VERSION = 7;
+const READS: readonly number[] = [1, 2, 3, 4, 5, 6, SITTING_VERSION];
 
 export const encodeSitting = (t: Sitting): string =>
   JSON.stringify({
@@ -81,10 +83,13 @@ export function readWho(v: unknown): Who {
     habit: one(renamedTrait(w.habit), isTraitId, "a regular"),
   };
 }
-/** A seat, its run kept by a sitting of version 1 (`meals`) or since, its record as rows (`rows`: since version 5) or not. */
-function readSeat(v: unknown, meals: boolean, rows: boolean): Seat {
+/**
+ * A seat, its run kept by a sitting of version 1 (`meals`) or since, its record as rows (`rows`: since
+ * version 5) or not, and since the rack had tools (`tooled`: since version 7) or before.
+ */
+function readSeat(v: unknown, meals: boolean, rows: boolean, tooled: boolean): Seat {
   const s = record(v, "a seat");
-  const run = checkRun(s.run, false, meals, rows);
+  const run = checkRun(s.run, false, meals, rows, tooled);
   if (!run.ok) return bad("a seat's run");
   const shown = one(s.shown, isParty, "a seat's board");
   return {
@@ -99,7 +104,7 @@ function readOffer(v: unknown): Offer {
   const o = record(v, "the ring");
   return {
     kind: one(o.kind, isFigureId, "the ring"),
-    item: one(o.item, isComponentId, "the ring"),
+    item: one(o.item, isRingItem, "the ring"),
     by: o.by === null ? null : chair(o.by, "the ring"),
   };
 }
@@ -194,7 +199,7 @@ function read(v: unknown): Sitting {
     room: whole(r.room, 0, MOST_ROOMS, "the room"),
     stage: readStage(r.stage, typeof r.v === "number" ? r.v : SITTING_VERSION),
     seats: list(r.seats, CHAIRS, "the seats").map((seat) =>
-      readSeat(seat, r.v === 1, typeof r.v === "number" && r.v >= 5),
+      readSeat(seat, r.v === 1, typeof r.v === "number" && r.v >= 5, typeof r.v === "number" && r.v >= 7),
     ),
     pairs,
     odd: r.odd === null ? null : readTwo(r.odd, "the odd one out"),

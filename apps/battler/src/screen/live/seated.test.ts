@@ -199,14 +199,14 @@ describe("the run's commands at the live seat", () => {
     const t = structuredClone(room);
     const mine = t.seats[0];
     if (!mine) throw new Error("no seat");
-    mine.run.items = ["bark", "thorn"];
-    const forging = { do: "forge", item: 0, with: 1 } as const;
+    mine.run.rack = { thorn: 1, bark: 1 };
+    const forging = { do: "forge", item: "bark", with: "thorn" } as const;
     const done = command(t, forging, call(now, 9));
     if (!done.ok) throw new Error(done.why);
     const leaf = answeringLeaf(now, done);
     await seated(t, now, leaf.routes);
     expect(doNow(forging)).toEqual({ ok: true, notes: done.notes });
-    expect(S.run?.items).toEqual(["hedgehog"]);
+    expect(S.run?.rack).toEqual({ hedgehog: 1 });
     await until(() => leaf.posted.length > 0 && liveLine()?.waiting() === false, "Leaf to answer it");
     expect(leaf.posted).toMatchObject([forging]);
     expect(liveView()).toEqual(sittingView(done.sitting, ME.id));

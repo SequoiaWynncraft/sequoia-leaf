@@ -10,10 +10,9 @@ import { beatAt, drawStanding, framesOf, hoverAt, nameOf } from "@sequoia-leaf/f
 import { link } from "@sequoia-leaf/kit/card.ts";
 import { el } from "@sequoia-leaf/kit/dom.ts";
 import { type Ctx, makeCanvas } from "@sequoia-leaf/kit/util.ts";
-import { catalogOf, itemName, pieces, type RunView } from "@sequoia-leaf/raid";
+import { catalogOf, pieces, rackName, type RunView } from "@sequoia-leaf/raid";
 import type { FigureId } from "@sequoia-leaf/raid/content/figures.ts";
-import type { ComponentId } from "@sequoia-leaf/raid/content/items.ts";
-import type { Offer } from "@sequoia-leaf/raid/sitting/sitting.ts";
+import type { Offer, RingItem } from "@sequoia-leaf/raid/sitting/sitting.ts";
 import type { SittingView } from "@sequoia-leaf/raid/sitting/view.ts";
 
 import { heldPic } from "../art/icons.ts";
@@ -102,7 +101,7 @@ function spotsAround(ring: readonly Offer[]): Map<number, number> {
  * `feet` is the row of the picture the figure stands on.
  */
 const flyers = new Map<string, { pic: HTMLCanvasElement; feet: number }>();
-function flyerOf(kind: FigureId, item: ComponentId): { pic: HTMLCanvasElement; feet: number } {
+function flyerOf(kind: FigureId, item: RingItem): { pic: HTMLCanvasElement; feet: number } {
   const key = `${kind}:${item}`;
   const had = flyers.get(key);
   if (had) return had;
@@ -163,7 +162,7 @@ function layOut(view: SittingView, ring: readonly Offer[]): void {
     const button = el("button", "ring-offer", {
       type: "button",
       "data-ring": i,
-      "aria-label": `${nameOf(catalogOf(view), offer.kind)}, holding ${itemName(catalogOf(view), offer.item)}`,
+      "aria-label": `${nameOf(catalogOf(view), offer.kind)}, holding ${rackName(catalogOf(view), offer.item)}`,
       onclick: () => {
         if (mineNow()) R.take?.(i);
       },

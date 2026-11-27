@@ -5,13 +5,13 @@
  * figure, so a nearer figure stands in front of it rather than under it.
  */
 import { INK } from "@sequoia-leaf/kit/palette.ts";
-import type { ItemId } from "@sequoia-leaf/raid";
+import type { RackItem } from "@sequoia-leaf/raid";
 
 import { heldPic } from "./art/icons.ts";
 
 /** One picture's place, measured from the board's corner. */
 export interface HeldAt {
-  item: ItemId;
+  item: RackItem;
   x: number;
   y: number;
   w: number;
@@ -22,7 +22,7 @@ export interface HeldAt {
 const OVERLAP = [0, 0, 0, 1] as const;
 
 /** Where each held item's picture goes, for a row whose top edge is at `top`, centred on `x`. */
-export function heldRow(items: readonly ItemId[], x: number, top: number): HeldAt[] {
+export function heldRow(items: readonly RackItem[], x: number, top: number): HeldAt[] {
   const shown = items.slice(0, 3);
   if (shown.length === 0) return [];
   const pics = shown.map((item) => heldPic(item));

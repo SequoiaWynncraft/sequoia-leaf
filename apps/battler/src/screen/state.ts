@@ -29,6 +29,7 @@ import {
   type Catalog,
   catalogOf,
   type Era,
+  isPredicted,
   isRunCommand,
   LEGACY_ERA,
   type Looks,
@@ -312,6 +313,12 @@ export function doNow(asked: RaidCommand): Did | null {
   tellNotes(guess.notes);
   changed();
   return { ok: true, notes: guess.notes };
+}
+
+/** Does a command at once where the rules can (`doNow`), and otherwise asks Leaf for it (`ask`): a Whetstone, which draws. */
+export function doOrAsk(c: RaidCommand): void {
+  if (isPredicted(c)) doNow(c);
+  else void ask(c);
 }
 
 /**

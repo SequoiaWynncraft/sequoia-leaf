@@ -166,10 +166,10 @@ describe("handing an item over", () => {
   });
   test("what a component makes with what the party holds: the rack and loose components on figures, once each", () => {
     const run = begun();
-    run.items = ["thorn", "thorn", "hoard", "bark"];
+    run.rack = { thorn: 2, hoard: 1, bark: 1 };
     put(run, "worm", "bench", 0, ["plume"]);
-    // The thorn at place 0, against everything else that is held.
-    expect(combosWithHeld(run, "thorn", 0)).toEqual([
+    // One of the thorns on the rack, against everything else that is held.
+    expect(combosWithHeld(run, "thorn", true)).toEqual([
       { with: "thorn", makes: "blackthorn" },
       { with: "bark", makes: "hedgehog" },
       { with: "plume", makes: "wasptail" },
@@ -292,7 +292,7 @@ describe("teaching by doing", () => {
     run.acorns = 0;
     const taught = all("buy", "setout", "field", "rustle");
     expect(nudgeFor(run, "plan", taught)).toBeNull();
-    run.items.push("thorn");
+    run.rack = { thorn: 1 };
     expect(nudgeFor(run, "plan", taught)).toBe("item");
     taught.push("item");
     put(run, "worm", "bench", 0);

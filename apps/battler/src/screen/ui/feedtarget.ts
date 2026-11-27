@@ -14,8 +14,10 @@ import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { LEAF } from "@sequoia-leaf/kit/palette.ts";
 import {
   catalogOf,
+  meltValue,
   type Piece,
   pieceAt,
+  type RackItem,
   type RaidCommand,
   type RaidNote,
   type RunView,
@@ -64,6 +66,18 @@ export function fillShopHint(run: RunView, from: Spot | null): void {
   hint.replaceChildren(
     sell,
     ...(offer ? [el("span", "full" in offer ? "feed full" : "feed", { text: feedWords(offer) })] : []),
+  );
+}
+
+/** What the stall says while one of a kind from the rack is carried: what melting it gives. */
+export function fillMeltHint(item: RackItem): void {
+  const hint = document.getElementById("sellhint");
+  document.body.classList.remove("feed-hot");
+  SHOP.feed = null;
+  if (!hint) return;
+  hint.classList.remove("two");
+  hint.replaceChildren(
+    el("span", "sell", {}, "Melt for ", el("span", "k-cur", {}, icon("acorn"), `+${meltValue(item)}`)),
   );
 }
 

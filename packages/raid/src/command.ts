@@ -13,10 +13,13 @@
 import type { Met } from "@sequoia-leaf/core";
 
 import type { EndlessWay } from "./content/endless.ts";
+import { isItemId, type ItemId } from "./content/items.ts";
 import type { LookKind } from "./content/looks.ts";
+import type { RackItem } from "./content/tools.ts";
 import { feed } from "./feed.ts";
 import { isRecord, isWhole } from "./party.ts";
-import { forgeItems } from "./rack.ts";
+import { forgeItems, melt, useTongs, useWhetstone } from "./rack.ts";
+import { isRackItem } from "./racks.ts";
 import {
   abandon,
   beginFight,
@@ -59,10 +62,16 @@ export type RunCommand =
   | { do: "hold"; on: boolean }
   /** Buy experience. */
   | { do: "xp" }
-  /** Hand the item at a place on the rack to a figure. */
-  | { do: "give"; item: number; to: Spot }
-  /** Make the finished item of two components on the rack, in the first one's place. */
-  | { do: "forge"; item: number; with: number }
+  /** Hand one of a kind of item on the rack to a figure. */
+  | { do: "give"; item: ItemId; to: Spot }
+  /** Make what one of each of two kinds on the rack make (two of one kind, for a recipe of two the same). */
+  | { do: "forge"; item: ItemId; with: ItemId }
+  /** Melt one of a kind on the rack for acorns. */
+  | { do: "melt"; item: RackItem }
+  /** Drop the Tongs from the rack on a figure: what it holds goes back to the rack. */
+  | { do: "tongs"; to: Spot }
+  /** Drop a Whetstone from the rack on a figure: each item it holds becomes another of its sort. */
+  | { do: "whetstone"; to: Spot }
   /** Send the party in: the boards are locked and the fight is decided. */
   | { do: "fight" }
   /** Take what the fight paid, and go on to the next room or to the end. */
@@ -97,8 +106,8 @@ function spotOf(v: unknown): Spot | null {
   if (!isRecord(v) || (v.on !== "board" && v.on !== "bench") || !isWhole(v.at, 0, 63)) return null;
   return { on: v.on, at: v.at };
 }
-/** A place on the rack as a command names it. */
-const rackOf = (v: unknown): number | null => (isWhole(v, 0, 399) ? v : null);
+/** A kind of item as a command names it. */
+const itemOf = (v: unknown): ItemId | null => (isItemId(v) ? v : null);
 
 /** Every command of a run. One missing, or with a field missing, does not compile. */
 export const COMMANDS = {
@@ -160,7 +169,7 @@ export const COMMANDS = {
   xp: { read: () => ({ do: "xp" }), whose: "plan", draws: false, run: (run) => buyXp(run) },
   give: {
     read: (v) => {
-      const item = rackOf(v.item);
+      const item = itemOf(v.item);
       const to = spotOf(v.to);
       return to && item !== null ? { do: "give", item, to } : null;
     },
@@ -170,13 +179,37 @@ export const COMMANDS = {
   },
   forge: {
     read: (v) => {
-      const item = rackOf(v.item);
-      const other = rackOf(v.with);
+      const item = itemOf(v.item);
+      const other = itemOf(v.with);
       return item !== null && other !== null ? { do: "forge", item, with: other } : null;
     },
     whose: "plan",
     draws: false,
     run: (run, c) => forgeItems(run, c.item, c.with),
+  },
+  melt: {
+    read: (v) => (isRackItem(v.item) ? { do: "melt", item: v.item } : null),
+    whose: "plan",
+    draws: false,
+    run: (run, c) => melt(run, c.item),
+  },
+  tongs: {
+    read: (v) => {
+      const to = spotOf(v.to);
+      return to && { do: "tongs", to };
+    },
+    whose: "plan",
+    draws: false,
+    run: (run, c) => useTongs(run, c.to),
+  },
+  whetstone: {
+    read: (v) => {
+      const to = spotOf(v.to);
+      return to && { do: "whetstone", to };
+    },
+    whose: "plan",
+    draws: true,
+    run: (run, c) => useWhetstone(run, c.to),
   },
   fight: { read: () => ({ do: "fight" }), whose: "clock", draws: true, run: (run) => beginFight(run) },
   take: { read: () => ({ do: "take" }), whose: "clock", draws: true, run: (run, _, ctx) => takeTakings(run, ctx.met) },

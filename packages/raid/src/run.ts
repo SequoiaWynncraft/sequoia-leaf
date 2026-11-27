@@ -14,13 +14,13 @@
  * started; nothing the run draws is worked out from it after that.
  */
 
-import { draw32, type Met, mix, pick, shuffled } from "@sequoia-leaf/core";
+import { draw32, type Met, mix, pick } from "@sequoia-leaf/core";
 
 import { chairsOn, overfills } from "./chairs.ts";
 import { type BoonId, boonIn, boonNumber, boonOr, FIGHT_BOONS, giftOf, giftsTrait } from "./content/boons.ts";
 import { type Catalog, catalogOf, type Era } from "./content/catalog.ts";
 import { type BossId, type FigureId, figureIn, type Stars, traitsOf } from "./content/figures.ts";
-import type { ComponentId, FinishedId, ItemId } from "./content/items.ts";
+import type { FinishedId, ItemId } from "./content/items.ts";
 import { holdItem } from "./content/recipes.ts";
 import { ECONOMY, MAX_LEVEL, type RoomKind, sellPrice } from "./content/rooms.ts";
 import { topStep, type TraitId, traitNumber } from "./content/traits.ts";
@@ -35,7 +35,9 @@ import { COLS, SEATS } from "./hex.ts";
 import { handOver, takeMade } from "./made.ts";
 import { placedOf } from "./own.ts";
 import { type Party, type TraitState, traitStates, traitSteps } from "./party.ts";
+import { counted, countOn, type Rack, type RackNote, withAll } from "./racks.ts";
 import { keepRoom, noRooms, type RoomRecord, type RoomTotals, totalsOf } from "./record.ts";
+import { componentOptions, type ComponentPick, type Pickable, roomPicks } from "./rewards.ts";
 import { closedNow, roomOf, type RoomRun, setupRules } from "./room.ts";
 import { courseOf, onTrail, onTrailThere, trailOf, type Way } from "./way.ts";
 import { enterRoom, ruleOptions, rulePicks, takeRule } from "./wilds.ts";
@@ -61,7 +63,8 @@ export interface Spot {
 /** Something the player has to choose before anything else happens. */
 export type Choice =
   | { kind: "starter"; options: FigureId[] }
-  | { kind: "component"; options: ComponentId[] }
+  /** Components to take one of; after some rooms a tool among them, or tools instead (`rewards.ts`). */
+  | ComponentPick
   | { kind: "boon"; options: BoonId[]; redraws: number }
   | { kind: "rule"; options: Wing["rule"][] };
 /** How a run ended: its last boss beaten, its health gone, or walked home from. */
@@ -98,8 +101,8 @@ export interface Run {
   xp: number;
   board: (Piece | null)[];
   bench: (Piece | null)[];
-  /** Items nobody is holding: components, finished items, and the emblems charm boons gave. */
-  items: ItemId[];
+  /** The rack: what nobody is holding (components, finished items, emblems, tools), as how many of each kind. */
+  rack: Rack;
   stall: (FigureId | null)[];
   /** The stall is being kept as it is for the next room. */
   held: boolean;
@@ -170,7 +173,7 @@ export const ACORNS_WHYS: readonly AcornsWhy[] = ["room", "win", "interest", "gn
 /** What happened, for a screen to show. Figures are named by `piece`, their own number in the run. */
 export type Note =
   | { t: "starter"; kind: FigureId; piece: number; to: Spot }
-  | { t: "component"; item: ComponentId }
+  | { t: "component"; item: Pickable }
   | { t: "boon"; boon: BoonId }
   | { t: "redrawn"; options: BoonId[] }
   /** `to` is null when the figure went straight into a merge with no place of its own. */
@@ -196,11 +199,13 @@ export type Note =
   | { t: "level"; level: number }
   /** An item handed over, and the item it made with one held (`combine`), if it made one. */
   | { t: "gave"; item: ItemId; piece: number; forged: ItemId | null; holds: ItemId[] }
-  /** Two items on the rack made an item (`combine`), which is at this place on it now. */
-  | { t: "made"; item: ItemId; at: number }
+  /** Two items on the rack made an item (`combine`), which is on it now. */
+  | { t: "made"; item: ItemId }
   | { t: "acorns"; why: AcornsWhy; amount: number }
   /** Items put on the item bench by a boon: A Basket On The Stump's components, or a charm's emblem. */
   | { t: "items"; why: "basket" | "charm"; items: ItemId[] }
+  /** Something melted, the Tongs or a Whetstone used (`racks.ts`). */
+  | RackNote
   | { t: "resolve"; change: number; left: number }
   /** The fight, locked: both boards and its seed to play it from, and how it came out. */
   | { t: "fight"; room: number; seed: number; setup: FightSetup; outcome: FightSummary }
@@ -247,6 +252,8 @@ export const REFUSALS = {
   not_greg: "Only Greg eats.",
   greg_on_greg: "Greg does not eat Greg.",
   greg_full: "Greg is full.",
+  holds_nothing: "It holds nothing.",
+  only_emblems: "It holds no component or finished item.",
 } as const;
 export type Why = keyof typeof REFUSALS;
 
@@ -365,9 +372,6 @@ export function boonOptions(run: Run, not: readonly BoonId[], cat = catalogOf(ru
   }
   return out;
 }
-const componentOptions = (run: Run, count: number): ComponentId[] =>
-  shuffled(run, catalogOf(run).ids.components).slice(0, count);
-
 export function newPiece(run: RunView, kind: FigureId): Piece {
   return { id: run.nextId++, kind, stars: 1, items: [], fed: 0 };
 }
@@ -399,7 +403,7 @@ export function startRun(seed: number, options: RunOptions): Run {
     xp: 0,
     board: Array.from({ length: SEATS }, () => null),
     bench: Array.from({ length: ECONOMY.bench }, () => null),
-    items: [],
+    rack: {},
     stall: [],
     held: false,
     rustles: ECONOMY.freeRustles,
@@ -477,7 +481,7 @@ export function choose(run: Run, option: number): Done {
   } else if (choice.kind === "component") {
     const item = choice.options[option];
     if (item === undefined) return no("not_on_offer");
-    run.items.push(item);
+    run.rack = counted(run.rack, item, 1);
     notes.push({ t: "component", item });
   } else if (choice.kind === "rule") {
     const rule = choice.options[option];
@@ -495,7 +499,7 @@ export function choose(run: Run, option: number): Done {
       notes.push({ t: "acorns", why: "windfall", amount });
     } else if (boon === "basket") {
       const items = Array.from({ length: boonNumber(cat, boon, "components") }, () => pick(run, cat.ids.components));
-      run.items.push(...items);
+      run.rack = withAll(run.rack, items);
       notes.push({ t: "items", why: "basket", items });
     } else if (boon === "blanket") {
       const back = Math.min(boonNumber(cat, boon, "now"), ECONOMY.resolve - run.resolve);
@@ -507,7 +511,7 @@ export function choose(run: Run, option: number): Done {
       run.rustles += boonNumber(cat, boon, "rustles");
     } else if (boonIn(cat, boon).gives) {
       // A charm gives its emblem, for one figure to hold.
-      run.items.push(...giftOf(cat, boon));
+      run.rack = withAll(run.rack, giftOf(cat, boon));
       notes.push({ t: "items", why: "charm", items: giftOf(cat, boon) });
     }
   }
@@ -567,7 +571,7 @@ export function merge(run: RunView, loose: Piece | null, notes: Note[]): void {
       keep.fed = Math.min(traitNumber(catalogOf(run), "greg", "most", 1), keep.fed + gone.fed);
     }
     keep.stars = keep.stars === 1 ? 2 : 3;
-    run.items.push(...spilled);
+    run.rack = withAll(run.rack, spilled);
     if (keep.stars === 3) remember(run.seen.threeStars, keep.kind);
     notes.push({
       t: "merged",
@@ -615,7 +619,7 @@ export function sell(run: RunView, from: Spot): Done {
   if (pieces(run).length <= 1) return no("last_figure");
   const acorns = sellValue(catalogOf(run), piece);
   run.acorns += acorns;
-  run.items.push(...piece.items);
+  run.rack = withAll(run.rack, piece.items);
   put(run, from, null);
   return yes([
     { t: "sold", kind: piece.kind, stars: piece.stars, piece: piece.id, from, acorns, items: piece.items.slice() },
@@ -691,14 +695,13 @@ export function buyXp(run: RunView): Done {
   return yes(notes);
 }
 /**
- * Hands an item from the item bench to a figure. Two items a recipe joins become what they make
- * (`holdItem`); nothing is given that grants a trait its holder carries already.
+ * Hands one of a kind of item from the rack to a figure. Two items a recipe joins become what they
+ * make (`holdItem`); nothing is given that grants a trait its holder carries already.
  */
-export function giveItem(run: RunView, itemAt: number, to: Spot): Done {
+export function giveItem(run: RunView, item: ItemId, to: Spot): Done {
   const stop = notPlanning(run);
   if (stop) return no(stop);
-  const item = run.items[itemAt];
-  if (item === undefined) return no("no_such_item");
+  if (countOn(run.rack, item) === 0) return no("no_such_item");
   const piece = pieceAt(run, to);
   if (!piece) return no("nobody_there");
   const got = holdItem(catalogOf(run), piece, item);
@@ -706,7 +709,7 @@ export function giveItem(run: RunView, itemAt: number, to: Spot): Done {
   const made = takeMade(run, got.made);
   if (!made) return no("boon_held");
   piece.items = got.held;
-  run.items.splice(itemAt, 1);
+  run.rack = counted(run.rack, item, -1);
   return yes([{ t: "gave", item, piece: piece.id, forged: got.forged, holds: piece.items.slice() }, ...made]);
 }
 
@@ -804,11 +807,7 @@ export function takeTakings(run: Run, met?: Met, more?: boolean): Taken {
   gainXp(run, xp, notes);
 
   // Things to choose: a Wilds rule after a boss, then the room's picks (`Room.picks`): components, and a boon after some rooms.
-  const picks: Choice[] = rulePicks(run, run.room);
-  for (let i = 0; i < (won ? room.picks.won : room.picks.lost); i++) {
-    const count = won ? ECONOMY.componentsWon : ECONOMY.componentsLost;
-    picks.push({ kind: "component", options: componentOptions(run, count) });
-  }
+  const picks: Choice[] = [...rulePicks(run, run.room), ...roomPicks(run, room, won)];
   if (room.picks.boon) picks.push({ kind: "boon", options: boonOptions(run, []), redraws: ECONOMY.boonRedraws });
 
   // On to the next room. The last one is fought again until it is won or resolve runs out.

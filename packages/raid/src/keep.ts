@@ -19,9 +19,12 @@ const UINT = 0xffffffff;
 
 const GAME = "little-raid-table";
 /**
- * 9: each run's record keeps its last rooms (`KEPT_ROOMS`), as rows of values (`roomRow`), and the
- * rooms before them as totals (`Run.before`), where it kept every room as an object; one of versions
- * 1 to 8 has its rooms past the last `KEPT_ROOMS` folded as it is read. 8: the table keeps its runs by slot (`held`) with the runs begun in each (`begun`), where it kept
+ * 10: a run keeps its rack as how many of each kind (`Run.rack`), where it kept a list of what lay on
+ * it (`items`); the rack and the picks may hold tools (`content/tools.ts`), and a Whetstone may have
+ * turned an emblem into another charm's. 9: each run's record keeps its last rooms (`KEPT_ROOMS`), as
+ * rows of values (`roomRow`), and the rooms before them as totals (`Run.before`), where it kept every
+ * room as an object; one of versions 1 to 8 has its rooms past the last `KEPT_ROOMS` folded as it is
+ * read. 8: the table keeps its runs by slot (`held`) with the runs begun in each (`begun`), where it kept
  * `run` and `endless` beside `runs` and `ventures`; each run keeps how it set out as one value
  * (`Run.way`), where it kept `trail`, `own` and `endless`; and the deepest rooms won with the
  * member's own figures are kept apart (`apart`). 7: a fight's setup keeps what binds it by what the
@@ -30,14 +33,14 @@ const GAME = "little-raid-table";
  * share of his health (`feed`), where it was meals of 3% each. 4: a run of the Wilds keeps the rule
  * picked for its wing (`Run.wing`), and a fight its rule. 3: the endless run beside the run in hand,
  * and the week's deepest rooms. 2: a run keeps where it stands as one value (`Stage`). A table of
- * versions 1 to 7 is read as well: one of versions 1 to 7 has its runs and their numbers read into
+ * versions 1 to 9 is read as well: one of versions 1 to 9 has its rack's list folded into counts; one of versions 1 to 7 has its runs and their numbers read into
  * their slots, and each run's way read from its three fields; one of versions 4 to 6 has each
  * fight's rule read as that rule's row; one of versions 1 to 5 and its runs are of `LEGACY_ERA`, one
  * of versions 1 to 4 has Greg's meals at 3% each, and one of versions 1 to 3 has no rules, so a run
  * of the Wilds past room 5 picks one at its next boss.
  */
-export const TABLE_VERSION = 9;
-const READS = [1, 2, 3, 4, 5, 6, 7, 8, TABLE_VERSION] as const;
+export const TABLE_VERSION = 10;
+const READS = [1, 2, 3, 4, 5, 6, 7, 8, 9, TABLE_VERSION] as const;
 
 export const encodeTable = (state: Table): string =>
   JSON.stringify({
@@ -62,7 +65,8 @@ export const encodeTable = (state: Table): string =>
  * have been kept (one over, one of another slot, one with no number of `begun`), is let go of.
  */
 function keptRun(v: unknown, version: number, begun: number, slot: Slot): Run | null {
-  const read = v === null || v === undefined ? null : checkRun(v, version === 1, version < 5, version >= 9);
+  const read =
+    v === null || v === undefined ? null : checkRun(v, version === 1, version < 5, version >= 9, version >= 10);
   if (!read?.ok || read.run.stage.phase === "over" || begun <= 0) return null;
   return slotOf(read.run.way) === slot ? read.run : null;
 }

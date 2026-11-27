@@ -12,6 +12,7 @@ import { type FigureId, figureIn, type Stars } from "./content/figures.ts";
 import type { ItemId } from "./content/items.ts";
 import { worth } from "./content/rooms.ts";
 import { traitNumber } from "./content/traits.ts";
+import { withAll } from "./racks.ts";
 import { type Done, notPlanning, pieceAt, refusal, type Refused, type RunView, type Spot } from "./run.ts";
 
 /** What feeding Greg did, for a screen to show. */
@@ -67,7 +68,7 @@ export function feed(run: RunView, from: Spot, to: Spot): Done {
   const greg = pieceAt(run, to);
   if (!eaten || !greg) return refusal("nobody_there");
   greg.fed += meal.gained;
-  run.items.push(...eaten.items);
+  run.rack = withAll(run.rack, eaten.items);
   run.bench[from.at] = null;
   const ate: Fed = {
     t: "fed",

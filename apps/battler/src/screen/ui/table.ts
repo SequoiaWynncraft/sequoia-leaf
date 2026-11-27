@@ -11,13 +11,10 @@ import { folkName } from "@sequoia-leaf/kit/mark.ts";
 import { balance, watch } from "@sequoia-leaf/kit/purse.ts";
 import { tip } from "@sequoia-leaf/kit/tip.ts";
 import {
-  boonIn,
   catalogOf,
   ECONOMY,
   fielded,
   figureIn,
-  type ItemId,
-  itemName,
   MAX_LEVEL,
   picksOf,
   pieces,
@@ -32,7 +29,7 @@ import {
 } from "@sequoia-leaf/raid";
 import { nowCalled, regularOf } from "@sequoia-leaf/raid/content/rooms.ts";
 
-import { boonIcon, glyph, itemIcon, traitIcon } from "../art/icons.ts";
+import { glyph, traitIcon } from "../art/icons.ts";
 import { rimTop, stumpOf } from "../art/table.ts";
 import { fightCatalog, fightEvents, fightUnits } from "../fightview.ts";
 import type { Speed } from "../keep.ts";
@@ -41,11 +38,14 @@ import { acrossName, canBuy, savings, TraitWatch } from "../logic.ts";
 import { facing, shownCounts } from "../screen.ts";
 import { artPx, place, V } from "../stage.ts";
 import { busy, catalogFor, S } from "../state.ts";
-import { acorns, boonRef, figPic, figureRef, itemRef, pic, traitRef, unitRef } from "./cards.ts";
-import { rackDrawn, stallDrawn, traitsDrawn, twins } from "./drawn.ts";
+import { acorns, figPic, figureRef, pic, traitRef, unitRef } from "./cards.ts";
+import { stallDrawn, traitsDrawn, twins } from "./drawn.ts";
 import { forgetLight, paintLight } from "./lit.ts";
 import { oddsRow, runTag, waySign } from "./own.ts";
+import { forgetRack, renderRack } from "./rack.ts";
+import { forgetRackPlace, placeRack } from "./rackfold.ts";
 import { chairsTag, chairsTaken, forgetTrack, renderTrack, trackPlaque } from "./rooms.ts";
+import { lineGone } from "./says.ts";
 import { type TallyView, tallyView } from "./tally.ts";
 
 /** What the buttons ask for. The table only asks; whoever built it answers. */
@@ -68,7 +68,6 @@ export interface Asks {
 
 let asks: Asks | null = null;
 let stallKey = "";
-let rackKey = "";
 let traitKey = "";
 /** The run's trait steps from the last drawing, by the run's number, to tell one that has just gone up. */
 const traitSteps = new TraitWatch();
@@ -188,7 +187,6 @@ export function buildTable(a: Asks): void {
     document.body,
     hud,
     el("div", "k-tip", { id: "foe", hidden: true }),
-    el("div", "", { id: "rack" }),
     el(
       "div",
       "",
@@ -196,6 +194,8 @@ export function buildTable(a: Asks): void {
       // The one polite live region: a refusal or a line of news is read out once.
       el("div", "", { id: "says", role: "status", "aria-atomic": "false" }),
       el("div", "", { id: "traits" }),
+      // At the top right on a wide window; on a phone, beside the traits over the stall (`raid.css`).
+      el("div", "", { id: "rack" }),
       el("div", "k-panel", { id: "shop" }, plan, fightbar, el("div", "k-over", { id: "sellhint" })),
     ),
   );
@@ -210,14 +210,14 @@ export function renderPurse(): void {
   purse.replaceChildren(amount("leaf", balance().leaf), amount("coin", balance().coins));
 }
 
-/** A line of news at the table: a refusal, in the rules' own words. */
+/** A line of news at the table: a refusal, in the rules' own words. Three at most, the oldest giving way. */
 export function toast(text: string, tone: "coral" | "gold" | "leaf" = "coral"): void {
   const says = byId("says");
   if (!says) return;
   while (says.children.length > 2) says.firstElementChild?.remove();
   const line = el("div", `k-toast ${tone === "gold" ? "" : tone}`.trim(), { text });
   says.append(line);
-  window.setTimeout(() => line.remove(), 2200);
+  window.setTimeout(() => lineGone(line), 2200);
 }
 
 function renderResolve(run: RunView): void {
@@ -277,41 +277,6 @@ function renderTraits(run: RunView): void {
     if (lit.includes(state.trait)) replay(chip, "woke");
   });
   paintLight();
-}
-
-function renderRack(run: RunView): void {
-  const rack = byId("rack");
-  if (!rack) return;
-  const key = rackDrawn(run);
-  if (key === rackKey) return;
-  rackKey = key;
-  rack.replaceChildren();
-  rack.classList.toggle("empty", run.items.length === 0 && run.boons.length === 0);
-  if (run.items.length > 0) {
-    const items = el("div", "k-plaque items", {});
-    run.items.forEach((item: ItemId, at) => {
-      const slot = el(
-        "button",
-        "k-slot item",
-        { type: "button", "data-item": at, "aria-label": itemName(catalogOf(run), item) },
-        pic(itemIcon(item)),
-      );
-      // Tapping an item picks it up to give it; a finger kept on it asks what it is. Its card goes beside the rack.
-      link(slot, itemRef(item, at), { acts: true, side: true });
-      items.append(slot);
-    });
-    rack.append(items);
-  }
-  if (run.boons.length > 0) {
-    const boons = el("div", "k-plaque boons", {});
-    for (const boon of run.boons) {
-      const { name } = boonIn(catalogOf(run), boon);
-      const slot = el("button", "k-slot boon", { type: "button", "aria-label": name }, pic(boonIcon(boon)));
-      link(slot, boonRef(boon));
-      boons.append(slot);
-    }
-    rack.append(boons);
-  }
 }
 
 /** What watches the stall's width, to fit its names again. */
@@ -504,9 +469,10 @@ export function placeFoe(): void {
     foe.style.maxWidth = "";
     return;
   }
-  // On a narrow window: over their head, in the last of the sky, and clear of the rack along the right.
+  // On a narrow window: over their head, in the last of the sky, and clear of the rack where it is up beside them.
   const rack = byId("rack")?.getBoundingClientRect();
-  const right = (rack && rack.width > 0 ? rack.left : window.innerWidth) - 8;
+  const beside = rack && rack.width > 0 && rack.top < window.innerHeight / 2;
+  const right = (beside ? rack.left : window.innerWidth) - 8;
   foe.style.maxWidth = `${right - 8}px`;
   const w = foe.offsetWidth;
   foe.style.left = `${Math.round(Math.max(8, Math.min(cx * px - w / 2, right - w)))}px`;
@@ -533,6 +499,7 @@ export function renderTable(): void {
   renderResolve(run);
   renderTraits(run);
   renderRack(run);
+  placeRack(run);
   renderStall(run);
   renderPurseSide(run);
   renderActs(run);
@@ -543,7 +510,8 @@ export function renderTable(): void {
 /** Forgets what was drawn, so that the next drawing starts clean: for a new run. */
 export function forgetTable(): void {
   stallKey = "";
-  rackKey = "";
+  forgetRack();
+  forgetRackPlace();
   traitKey = "";
   forgetTrack();
   forgetLight();

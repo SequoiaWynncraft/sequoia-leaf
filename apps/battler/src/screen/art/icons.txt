@@ -455,6 +455,32 @@ BnnBBBBnnB
 BncB..BncB
 .BB....BB.
 
+# ---------- tools: used once, dropped on a figure ----------
+
+item tongs
+.t......t.
+.St....tS.
+..St..tS..
+...StSS...
+....TT....
+...SttS...
+..nS..Sn..
+.nN....Nn.
+nN......Nn
+n........n
+
+item whetstone
+.......u..
+......uUu.
+.ttttttu..
+tSSwSSSwSt
+sSSSwSSSwS
+TssssssssT
+.TTTTTTTT.
+nnnnnnnnnn
+nNNNNNNNNn
+.bbbbbbbb.
+
 # ---------- boons ----------
 
 boon deeppockets

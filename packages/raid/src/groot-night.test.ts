@@ -113,7 +113,7 @@ describe("the bot", () => {
     run.board[4] = newPiece(run, "apothecary");
     run.board[17] = newPiece(run, "seqwawa");
     run.bench[0] = newPiece(run, "crab8");
-    run.items = ["choruscharm", "sneakcharm"];
+    run.rack = { choruscharm: 1, sneakcharm: 1 };
     planRoom(run, SENSIBLE);
     const on = run.board.flatMap((p) => (p ? [p] : []));
     expect(on.map((p) => p.kind).toSorted()).toEqual(["apothecary", "crab8", "moth", "seqwawa"]);

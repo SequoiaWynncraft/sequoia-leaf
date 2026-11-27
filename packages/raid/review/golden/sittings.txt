@@ -1,18 +1,18 @@
-sitting regulars | 18 rooms, over after 0s, 0 owed | end 387c30fff37d
-sitting regulars seat 0 | chickaree, fond of burrow: place 1, WWLLWWWLWWWWWWWWWW, resolve 10, level 7 | end bd08be55f3c9
-sitting regulars seat 1 | finch, fond of feather: place 4, WWLWWLWWLWWWWLWL, resolve 0, level 7 | end 2fcf7bb78280
-sitting regulars seat 2 | cindernewt, fond of sage: place 5, WWLWWWWLWWLLWL, resolve 0, level 6 | end 2bc975550f2a
-sitting regulars seat 3 | emberkit, fond of fang: place 3, WWWWWLWWWWLLWWWWL, resolve 0, level 7 | end 532345d18efd
-sitting regulars seat 4 | jay, fond of fang: place 7, WWWLWLWLL, resolve 0, level 5 | end 56cb0db48c23
-sitting regulars seat 5 | drizzlefrog, fond of slinger: place 6, WWLWLWWWLWLL, resolve 0, level 6 | end 92a26dd19475
-sitting regulars seat 6 | worm, fond of graid: place 2, WWWLWWWWWWWWWWWLLL, resolve 0, level 7 | end 130dea4a4b20
-sitting regulars seat 7 | crab12, fond of crab: place 8, WWWLWLWLL, resolve 0, level 5 | end 5e11a91fa327
-sitting members | 17 rooms, over after 1105s, 2 owed | draws 4dad77fbd27c end 4fb2c5271b5e
-sitting members seat 0 | Golden one: place 7, WWLLWLWWL, resolve 0, level 5 | end b9c0fa436f92
-sitting members seat 1 | Golden two: place 1, WWWWWWWWWWLLWWWWW, resolve 6, level 7 | end 8f7ac990db74
-sitting members seat 2 | bushgnome, fond of sneak: place 6, WWWLWWWLWWLL, resolve 0, level 6 | end e1a1730c28c7
-sitting members seat 3 | emberkit, fond of ember: place 5, WWWWWWWLLWLLL, resolve 0, level 6 | end 1baa0ec84e8b
-sitting members seat 4 | seqwawa, fond of moss: place 4, WWWLWLWLWWWWWL, resolve 0, level 6 | end cc0945d55056
-sitting members seat 5 | crab12, fond of crab: place 2, WWLWWWWWWWWWLWWLL, resolve 0, level 7 | end c4ce2b7a748f
-sitting members seat 6 | barrowgnome, fond of bulwark: place 8, WWLLWLWL, resolve 0, level 5 | end 41146af43778
-sitting members seat 7 | lanterngnome, fond of sage: place 3, WWLWWLWWLWWWWLL, resolve 0, level 6 | end ce23afb5fa33
+sitting regulars | 17 rooms, over after 0s, 0 owed | end d71cd7be8dc1
+sitting regulars seat 0 | chickaree, fond of burrow: place 1, WWWWWWWWLLLWWWWWW, resolve 4, level 7 | end b56ed7fa646b
+sitting regulars seat 1 | finch, fond of feather: place 6, WWWWWLWLLWWL, resolve 0, level 6 | end 829e613ceece
+sitting regulars seat 2 | cindernewt, fond of sage: place 4, WWLLWWWLLWWWWL, resolve 0, level 6 | end a726df3ea890
+sitting regulars seat 3 | emberkit, fond of fang: place 5, WWWLWWWWWWLLL, resolve 0, level 7 | end 34e91da70d4f
+sitting regulars seat 4 | jay, fond of fang: place 3, WWLWWWWLWWLWWWLL, resolve 0, level 7 | end b0e1c7f038d9
+sitting regulars seat 5 | drizzlefrog, fond of slinger: place 7, WWLLWLWLWWWL, resolve 0, level 6 | end ed89260741db
+sitting regulars seat 6 | worm, fond of graid: place 8, WWLWWLLWLWL, resolve 0, level 6 | end 1bcb01aafa83
+sitting regulars seat 7 | crab12, fond of crab: place 2, WWWLWLWWWWWWWLWLL, resolve 0, level 7 | end 3c2c9154fbc3
+sitting members | 17 rooms, over after 696s, 2 owed | draws ecc87d1bc2e4 end 95a29480c86e
+sitting members seat 0 | Golden one: place 6, WWLLWWWLLWL, resolve 0, level 6 | end 54d3e8456ae9
+sitting members seat 1 | Golden two: place 8, WWLLLL, resolve 0, level 4 | end a0cd6b30aad3
+sitting members seat 2 | bushgnome, fond of sneak: place 7, WWWLWLLWL, resolve 0, level 5 | end b372b5ba3d46
+sitting members seat 3 | emberkit, fond of ember: place 1, WWWWWWWWWWWWWWWLW, resolve 14, level 7 | end 8eefa41ec37a
+sitting members seat 4 | seqwawa, fond of moss: place 5, WWLWWLWLWWLL, resolve 0, level 6 | end 6abe437cdb95
+sitting members seat 5 | crab12, fond of crab: place 3, WWLLWWWWLWLWWL, resolve 0, level 6 | end ef293823aec4
+sitting members seat 6 | barrowgnome, fond of bulwark: place 4, WWWWWWWLLWWLLL, resolve 0, level 7 | end f165226fc548
+sitting members seat 7 | lanterngnome, fond of sage: place 2, WWWWWLWWWWWWDWLWL, resolve 0, level 7 | end 23c62c2f6203
