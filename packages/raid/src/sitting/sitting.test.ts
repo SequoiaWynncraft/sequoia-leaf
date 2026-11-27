@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { below, draw32, mix, type Stream } from "@sequoia-leaf/core";
 
 import { planRoom, SENSIBLE } from "../bot.ts";
+import { WHOSE } from "../command.ts";
 import { FIGURE_IDS, type FigureId, FIGURES } from "../content/figures.ts";
 import { forge } from "../content/items.ts";
 import { PAYOUT } from "../content/keepsakes.ts";
@@ -653,6 +654,30 @@ describe("what people do", () => {
     expect(must(command(t, { do: "rustle" }, call(now, 1, 1))).rng).not.toBe(t.rng);
     // Nobody else's seat is touched.
     expect(seat(must(command(t, { do: "rustle" }, call(now, 1, 1))), 0)).toEqual(seat(t, 0));
+  });
+
+  test("forging on the rack is planning: read off the wire, done at the seat, and predicted by the page as Leaf does it", () => {
+    const t = structuredClone(until(started(63, 2), planning(0)));
+    seat(t, 1).run.items = ["bark", "thorn"];
+    const now = deadline(t) - 5000;
+    const forging: SittingCommand = { do: "forge", item: 0, with: 1 };
+    expect(readCommand({ ...forging, id: "x" })).toEqual(forging);
+    const answer = command(t, forging, call(now, 8, 1));
+    if (!answer.ok) throw new Error(answer.code);
+    expect(seat(answer.sitting, 1).run.items).toEqual([forge("bark", "thorn")]);
+    expect(predict(sittingView(t, member(1).id), forging)).toEqual({
+      view: sittingView(answer.sitting, member(1).id),
+      notes: answer.notes,
+    });
+  });
+
+  test("every command of a run is the member's to plan with or the clock's, and a seat reads only the member's", () => {
+    // Every field a command of a run reads, so that each is read by its name alone.
+    const fields = { option: 0, offer: 0, from: { on: "bench", at: 0 }, to: { on: "board", at: 0 }, seat: 0 };
+    const read = (name: string) => readCommand({ do: name, ...fields, on: true, item: 0, with: 1 })?.do ?? null;
+    const whose = Object.entries(WHOSE);
+    expect(whose.filter(([, w]) => w === "clock").map(([name]) => name)).toEqual(["fight", "take", "abandon"]);
+    for (const [name, w] of whose) expect([name, read(name)]).toEqual([name, w === "plan" ? name : null]);
   });
 
   test("a pick waiting at the lock takes its first option", () => {

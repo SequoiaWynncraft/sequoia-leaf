@@ -10,8 +10,8 @@
  * hears of it.
  */
 import { waitingLook } from "@sequoia-leaf/kit/play.ts";
-import { type FightResult, foughtOf, type RunView } from "@sequoia-leaf/raid";
-import { isSeatCommand, type SittingCommand } from "@sequoia-leaf/raid/sitting/commands.ts";
+import { type FightResult, foughtOf, isPlanning, type RunView } from "@sequoia-leaf/raid";
+import type { SittingCommand } from "@sequoia-leaf/raid/sitting/commands.ts";
 import { sideOf } from "@sequoia-leaf/raid/sitting/sitting.ts";
 import { predict, type SeatView, type SittingView } from "@sequoia-leaf/raid/sitting/view.ts";
 
@@ -103,7 +103,7 @@ const SEAT: Seated = {
   table: () => ({ run: L.line ? shownRun(L.line.view) : null, runs: S.runs }),
   doNow(command) {
     const line = L.line;
-    if (!line || heldOff(command) || !isSeatCommand(command)) return null;
+    if (!line || heldOff(command) || !isPlanning(command)) return null;
     const guess = predict(line.view, command);
     if (!guess) return null;
     if ("refused" in guess) {
@@ -119,7 +119,7 @@ const SEAT: Seated = {
   },
   ask(command, waiting) {
     if (heldOff(command)) return Promise.resolve(null);
-    if (isSeatCommand(command)) return asked(command, waiting);
+    if (isPlanning(command)) return asked(command, waiting);
     const why = "At a live table the clock sets out.";
     refuse(why);
     return Promise.resolve({ ok: false, why });

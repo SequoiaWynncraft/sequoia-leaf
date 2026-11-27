@@ -3,13 +3,15 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { isRecord } from "@sequoia-leaf/kit/net.ts";
 import { scope } from "@sequoia-leaf/kit/scope.ts";
 import { type Reply, type Route, type Sent, type Standin, standin } from "@sequoia-leaf/kit/standin.ts";
-import { foughtOf, newTable, type RaidNote, startRun, tableView } from "@sequoia-leaf/raid";
+import { foughtOf, newTable, type RaidCommand, type RaidNote, startRun, tableView } from "@sequoia-leaf/raid";
+import { WHOSE } from "@sequoia-leaf/raid/command.ts";
+import { forge } from "@sequoia-leaf/raid/content/items.ts";
 import { advance } from "@sequoia-leaf/raid/sitting/clock.ts";
 import { type Call, command, openSitting } from "@sequoia-leaf/raid/sitting/commands.ts";
 import { CLOCK, type Sitting } from "@sequoia-leaf/raid/sitting/sitting.ts";
 import { sittingView } from "@sequoia-leaf/raid/sitting/view.ts";
 
-import { ask, go, onNotes, onRefused, openTable, S, tableNow } from "../state.ts";
+import { ask, doNow, go, onNotes, onRefused, openTable, S, tableNow } from "../state.ts";
 import { openLine } from "./line.ts";
 import { CLOSED_UNSTARTED, NOT_SEATED } from "./reads.ts";
 import { liveLine, liveView, onDone, paidFor, shownRun, sitAt, stepBack, takeUp } from "./seated.ts";
@@ -129,6 +131,67 @@ describe("an answer for the live seat", () => {
     expect((await pending)?.ok).toBe(true);
     expect(S.run).toEqual(shownRun(leaf.after));
     expect(heard.some((n) => n.t === "rustled")).toBe(true);
+  });
+});
+
+/** Leaf for the sitting, answering every batch posted to it with `then`, by the rules. */
+function answeringLeaf(now: number, then: { sitting: Sitting; notes: RaidNote[] }) {
+  const posted: unknown[] = [];
+  const routes: Record<string, Route | Reply> = {
+    "GET /v1/game/play/raid": { status: 200, body: soloTable() },
+    "GET /v1/game/sittings/s1": {
+      status: 200,
+      body: { id: "s1", rev: 1, now: new Date(now).toISOString(), unchanged: true },
+    },
+    "POST /v1/game/sittings/s1": (sent: Sent) => {
+      const commands = isRecord(sent.body) && Array.isArray(sent.body.commands) ? sent.body.commands : [];
+      posted.push(...commands);
+      const results = commands.map((c) => ({ id: isRecord(c) ? c.id : "", notes: wire(then.notes) }));
+      return { status: 200, body: answer("s1", 2, then.sitting, now, results) };
+    },
+  };
+  return { routes, posted };
+}
+
+describe("the run's commands at the live seat", () => {
+  test("forging on the rack is shown at once, as Leaf will do it, and sent to the sitting", async () => {
+    const { t: room, now } = planning();
+    const t = structuredClone(room);
+    const mine = t.seats[0];
+    if (!mine) throw new Error("no seat");
+    mine.run.items = ["bark", "thorn"];
+    const forging = { do: "forge", item: 0, with: 1 } as const;
+    const done = command(t, forging, call(now, 9));
+    if (!done.ok) throw new Error(done.why);
+    const leaf = answeringLeaf(now, done);
+    await seated(t, now, leaf.routes);
+    expect(doNow(forging)).toEqual({ ok: true, notes: done.notes });
+    expect(S.run?.items).toEqual([forge("bark", "thorn")]);
+    await until(() => leaf.posted.length > 0 && liveLine()?.waiting() === false);
+    expect(leaf.posted).toMatchObject([forging]);
+    expect(liveView()).toEqual(sittingView(done.sitting, ME.id));
+    expect(refused).toEqual([]);
+  });
+
+  test("the clock's are neither done nor sent: setting out, the fight, the takings and walking home", async () => {
+    const { t, now } = planning();
+    const leaf = answeringLeaf(now, { sitting: t, notes: [] });
+    await seated(t, now, leaf.routes);
+    const clocks: RaidCommand[] = [{ do: "fight" }, { do: "take" }, { do: "abandon" }];
+    const clockOwned = Object.entries(WHOSE).flatMap(([name, w]): string[] => (w === "clock" ? [name] : []));
+    expect(clocks.map((c): string => c.do)).toEqual(clockOwned);
+    const setOut: RaidCommand[] = [
+      { do: "start", trail: 0 },
+      { do: "start", trail: 0, own: true },
+      { do: "endless", way: "wilds" },
+    ];
+    const all = [...setOut, ...clocks];
+    expect(all.map((c) => [c, doNow(c)])).toEqual(all.map((c) => [c, null]));
+    const asked = await Promise.all(all.map(async (c) => [c, await ask(c)]));
+    expect(asked).toEqual(all.map((c) => [c, { ok: false, why: "At a live table the clock sets out." }]));
+    await Bun.sleep(5);
+    expect(leaf.posted).toEqual([]);
+    expect(S.run).toEqual(shownRun(sittingView(t, ME.id)));
   });
 });
 

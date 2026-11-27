@@ -9,7 +9,7 @@ import type { FightSetup } from "../fight/types.ts";
 import { plan, runView } from "../game.ts";
 import type { Party } from "../party.ts";
 import { foughtOf, type Note, type RunView } from "../run.ts";
-import { isSeatCommand, type SittingCommand } from "./commands.ts";
+import type { SittingCommand } from "./commands.ts";
 import { facing, kindOf, nameOf, notPlanning, type Sitting, type Stage, type Who } from "./sitting.ts";
 
 /** A seat as anyone at the sitting sees it. */
@@ -77,7 +77,7 @@ export function predict(
   view: SittingView,
   c: SittingCommand,
 ): { view: SittingView; notes: Note[] } | { refused: string } | null {
-  if (!isSeatCommand(c) || !isPredicted(c)) return null;
+  if (!isPredicted(c)) return null;
   const stop = notPlanning(view.stage.at);
   if (stop) return { refused: stop };
   if (!view.run) return { refused: "not_seated" };

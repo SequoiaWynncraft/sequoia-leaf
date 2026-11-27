@@ -305,8 +305,10 @@ export {
 export {
   type Aimed,
   forEndless,
+  isPlanning,
   isPredicted,
   isRunCommand,
+  type PlanningCommand,
   type Predicted,
   PREDICTED,
   type RaidCommand,

@@ -41,6 +41,35 @@ export type RunCommand =
 /** A command for a run: the run in hand, or with `endless` the endless run. */
 export type Aimed<C extends RunCommand = RunCommand> = C extends unknown ? C & { endless?: true } : never;
 
+/**
+ * Whose each command of a run is at a live table, where one clock keeps the moment for every seat:
+ * the member plans their room with it (`plan`), or the clock does it for every seat at once
+ * (`clock`: sending the party in, taking what the fight paid, walking home). Setting out is the
+ * clock's too, but it is the table's command, not a run's. A command of a run missing here, or
+ * named twice, does not compile; one marked `plan` is planned at every table, Leaf's and the page's.
+ */
+export const WHOSE = {
+  choose: "plan",
+  redraw: "plan",
+  buy: "plan",
+  sell: "plan",
+  move: "plan",
+  bench: "plan",
+  rustle: "plan",
+  hold: "plan",
+  xp: "plan",
+  give: "plan",
+  forge: "plan",
+  fight: "clock",
+  take: "clock",
+  abandon: "clock",
+} as const satisfies Record<RunCommand["do"], "plan" | "clock">;
+type Planning = { [D in keyof typeof WHOSE]: (typeof WHOSE)[D] extends "plan" ? D : never }[keyof typeof WHOSE];
+/** A command a member plans a room with, at any table. */
+export type PlanningCommand = Extract<RunCommand, { do: Planning }>;
+export const isPlanning = <C extends { do: string }>(c: C): c is Extract<C, { do: Planning }> =>
+  Object.entries(WHOSE).some(([name, whose]) => whose === "plan" && name === c.do);
+
 /** Everything a player can do at the table. */
 export type RaidCommand =
   /**
@@ -70,9 +99,9 @@ export const isRunCommand = (c: RaidCommand): c is Aimed => !TABLE_COMMANDS.some
 /** Whether a command is for the endless run. */
 export const forEndless = (c: RaidCommand): boolean => isRunCommand(c) && c.endless === true;
 
-/** The commands a page may show before Leaf answers: they draw nothing, so Leaf will do just the same. */
+/** The planning commands a page may show before Leaf answers: they draw nothing, so Leaf will do just the same. */
 const predicted = ["move", "bench", "sell", "give", "forge", "hold", "buy", "xp"] as const;
-export const PREDICTED = predicted satisfies readonly RaidCommandName[];
+export const PREDICTED = predicted satisfies readonly Planning[];
 /** A command a page may show before Leaf answers. */
 export type Predicted = Extract<RunCommand, { do: (typeof PREDICTED)[number] }>;
 export const isPredicted = <C extends { do: string }>(c: C): c is Extract<C, { do: (typeof PREDICTED)[number] }> =>
