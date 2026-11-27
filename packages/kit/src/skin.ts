@@ -21,7 +21,7 @@ export const WALK = [0, 1, 0, 2] as const;
 export const SIT = 3;
 
 export interface Body {
-  /** frames[dir][pose]: standing, two steps, sitting. */
+  /** frames[dir][pose]: standing, two steps, sitting. A figure's other poses are asked of `posed`. */
   frames: HTMLCanvasElement[][];
   /** The face alone, 8x8, for cards and buttons. */
   face: HTMLCanvasElement;
@@ -142,76 +142,181 @@ function parts(flat: HTMLCanvasElement): Parts {
   };
 }
 
+/**
+ * How a pose holds the body. A step lifts a foot by a pixel and swings the arms by one, a run by
+ * two; nothing leans, and nothing sticks out of the block the figure is made of.
+ */
+interface Stance {
+  /** Pixels the head, body and arms sink (a breath), or rise (below zero: off the ground). */
+  readonly sink: number;
+  /** Pixels each foot is lifted: the left seen from the front (the fore one seen from the side), then the other. */
+  readonly feet: readonly [number, number];
+  /** Whether the legs part, seen from the side, into a fore half and a back half like scissors. */
+  readonly parted: boolean;
+  /** Pixels the arms swing: the left arm up and the right down from the front, the arm back from the side. */
+  readonly swing: number;
+  readonly sitting: boolean;
+  /** The eyes are shut. */
+  readonly shut: boolean;
+}
+
+const still: Stance = { sink: 0, feet: [0, 0], parted: false, swing: 0, sitting: false, shut: false };
+
+/**
+ * Every pose a figure has, in the order of `POSE`: a `Body`'s own four (standing, the two steps of a
+ * walk, sitting), then those of a figure that walks about on its own (`posed`): the two steps of a
+ * run, off the ground between them, a breath, and a blink.
+ */
+const STANCES: readonly Stance[] = [
+  still,
+  { ...still, feet: [1, 0], parted: true, swing: 1 },
+  { ...still, feet: [0, 1], parted: true, swing: -1 },
+  { ...still, sitting: true },
+  { ...still, feet: [2, 0], parted: true, swing: 2 },
+  { ...still, feet: [0, 2], parted: true, swing: -2 },
+  { ...still, sink: -1, feet: [1, 1] },
+  { ...still, sink: 1 },
+  { ...still, shut: true },
+];
+
+/** Every pose by name, as `STANCES` has them: what `posed` is asked for. */
+export const POSE = { stand: 0, stepA: 1, stepB: 2, sit: 3, runA: 4, runB: 5, air: 6, breath: 7, blink: 8 } as const;
+/** The order of poses in a run: off the ground between the steps, and a foot down on every second one. */
+export const RUN = [POSE.air, POSE.runA, POSE.air, POSE.runB] as const;
+/** How many poses a figure has in all, and how many a `Body` bakes at once. */
+const POSES = STANCES.length;
+const BAKED = 4;
+
+/** The row of a frame its legs start at, and the head's corner: feet end on the row above `FOOT_Y`. */
+const HIPS = 17;
+const LEFT = 2;
+/** Every way a figure faces, in the order of a `Body`'s frames. */
+const WAYS: readonly Dir[] = [0, 1, 2, 3];
+
 /** Facing us or facing away: the two views that show both arms. */
-function poseFront(p: Parts, pose: number, back: boolean): HTMLCanvasElement {
+function poseFront(p: Parts, s: Stance, back: boolean): HTMLCanvasElement {
   const { c, g } = makeCanvas(FRAME_W, FRAME_H);
   const arm = back ? p.armB : p.armF;
   const leg = back ? p.legB : p.legF;
   // The sheet holds the right-hand limbs; seen from the front they are on our left.
   const [armL, armR] = back ? [flipped(arm), arm] : [arm, flipped(arm)];
   const [legL, legR] = back ? [flipped(leg), leg] : [leg, flipped(leg)];
-  const ox = 2;
-  const oy = 3 + (pose === SIT ? (back ? 5 : 2) : 0);
-  if (pose === SIT) {
+  const top = 3 + (s.sitting ? (back ? 5 : 2) : s.sink);
+  if (s.sitting) {
     if (!back) {
-      g.drawImage(legL, 0, 2, 2, 3, ox + 2, oy + 14, 2, 3);
-      g.drawImage(legR, 0, 2, 2, 3, ox + 4, oy + 14, 2, 3);
+      g.drawImage(legL, 0, 2, 2, 3, LEFT + 2, top + 14, 2, 3);
+      g.drawImage(legR, 0, 2, 2, 3, LEFT + 4, top + 14, 2, 3);
     }
   } else {
-    g.drawImage(legL, ox + 2, oy + 14 - (pose === 1 ? 1 : 0));
-    g.drawImage(legR, ox + 4, oy + 14 - (pose === 2 ? 1 : 0));
+    g.drawImage(legL, LEFT + 2, HIPS - s.feet[0]);
+    g.drawImage(legR, LEFT + 4, HIPS - s.feet[1]);
   }
-  const swing = pose === 1 ? 1 : pose === 2 ? -1 : 0;
-  g.drawImage(armL, ox, oy + 8 - swing);
-  g.drawImage(armR, ox + 6, oy + 8 + swing);
-  g.drawImage(back ? p.bodyB : p.bodyF, ox + 2, oy + 8);
-  g.drawImage(back ? p.headB : p.headF, ox, oy);
+  g.drawImage(armL, LEFT, top + 8 - s.swing);
+  g.drawImage(armR, LEFT + 6, top + 8 + s.swing);
+  g.drawImage(back ? p.bodyB : p.bodyF, LEFT + 2, top + 8);
+  g.drawImage(back ? p.headB : p.headF, LEFT, top);
   outlineInPlace(c, g, INK);
   return c;
 }
 
-function poseSide(p: Parts, pose: number, west: boolean): HTMLCanvasElement {
+function poseSide(p: Parts, s: Stance, west: boolean): HTMLCanvasElement {
   const { c, g } = makeCanvas(FRAME_W, FRAME_H);
   const arm = west ? flipped(p.armO) : p.armO;
   const leg = west ? flipped(p.legO) : p.legO;
   const fwd = west ? -1 : 1;
-  const ox = 2;
-  const oy = 3 + (pose === SIT ? 5 : 0);
-  if (pose === SIT) {
-    g.drawImage(leg, 0, 3, 4, 2, ox + 2 + fwd * 3, oy + 12, 4, 2);
-  } else if (pose === 0) {
-    g.drawImage(leg, ox + 2, oy + 14);
+  const top = 3 + (s.sitting ? 5 : s.sink);
+  if (s.sitting) {
+    g.drawImage(leg, 0, 3, 4, 2, LEFT + 2 + fwd * 3, top + 12, 4, 2);
+  } else if (!s.parted) {
+    g.drawImage(leg, LEFT + 2, HIPS - s.feet[0]);
   } else {
     // A leg is split into its front and back halves, which part like scissors.
     const frontSx = west ? 0 : 2;
-    const frontDx = ox + 2 + (west ? -1 : 3);
-    const backDx = ox + 2 + (west ? 3 : -1);
-    g.drawImage(leg, frontSx, 0, 2, 5, frontDx, oy + 14 - (pose === 1 ? 1 : 0), 2, 5);
-    g.drawImage(leg, 2 - frontSx, 0, 2, 5, backDx, oy + 14 - (pose === 2 ? 1 : 0), 2, 5);
+    const frontDx = LEFT + 2 + (west ? -1 : 3);
+    const backDx = LEFT + 2 + (west ? 3 : -1);
+    g.drawImage(leg, frontSx, 0, 2, 5, frontDx, HIPS - s.feet[0], 2, 5);
+    g.drawImage(leg, 2 - frontSx, 0, 2, 5, backDx, HIPS - s.feet[1], 2, 5);
   }
-  g.drawImage(west ? p.bodyL : p.bodyR, ox + 2, oy + 8);
-  const swing = pose === 1 ? -fwd : pose === 2 ? fwd : 0;
-  g.drawImage(arm, ox + 3 + swing, oy + 8);
-  g.drawImage(west ? p.headL : p.headR, ox, oy);
+  g.drawImage(west ? p.bodyL : p.bodyR, LEFT + 2, top + 8);
+  g.drawImage(arm, LEFT + 3 - fwd * s.swing, top + 8);
+  g.drawImage(west ? p.headL : p.headR, LEFT, top);
   outlineInPlace(c, g, INK);
   return c;
+}
+
+/** One frame: facing a way (`Dir`), in a pose (`POSE`), from a figure's parts. */
+function frame(p: Parts, dir: Dir, pose: number): HTMLCanvasElement {
+  const s = STANCES[pose] ?? still;
+  const q = s.shut ? shutEyes(p) : p;
+  return dir === 0 || dir === 3 ? poseFront(q, s, dir === 3) : poseSide(q, s, dir === 1);
 }
 
 /** The walking figure for a skin sheet. Throws if the sheet cannot be read (a picture from elsewhere). */
 export function bake(sheet: Sheet): Body {
   const flat = flatten(sheet);
   const p = parts(flat);
-  const poses = [0, 1, 2, 3];
   return {
-    frames: [
-      poses.map((n) => poseFront(p, n, false)),
-      poses.map((n) => poseSide(p, n, true)),
-      poses.map((n) => poseSide(p, n, false)),
-      poses.map((n) => poseFront(p, n, true)),
-    ],
+    frames: WAYS.map((dir) => Array.from({ length: BAKED }, (_, pose) => frame(p, dir, pose))),
     face: p.headF,
     parts: p,
     tones: strongTones(flat.getContext("2d")?.getImageData(0, 0, flat.width, flat.height).data ?? []),
+  };
+}
+
+/** The poses past a `Body`'s own four, for each body that has been asked for one, made when first asked. */
+const moreOf = new WeakMap<Body, HTMLCanvasElement[][]>();
+
+/**
+ * A figure facing a way in any pose (`POSE`): a `Body`'s own four as it baked them, and the poses of
+ * a figure that walks about on its own (a run, off the ground, a breath, a blink), made from its
+ * parts the first time any of them is asked for.
+ */
+export function posed(body: Body, dir: Dir, pose: number): HTMLCanvasElement | undefined {
+  if (pose < BAKED) return body.frames[dir]?.[pose];
+  let more = moreOf.get(body);
+  if (!more) {
+    const p = body.parts;
+    const way = (d: Dir): HTMLCanvasElement[] =>
+      Array.from({ length: POSES - BAKED }, (_, n) => frame(p, d, BAKED + n));
+    more = WAYS.map(way);
+    moreOf.set(body, more);
+  }
+  return more[dir]?.[pose - BAKED];
+}
+
+/** The row of a head's face its eyes are on, as a skin sheet lays a face out. */
+const EYES = 4;
+
+/**
+ * A head with its eyes shut: on the row of the eyes, within `cols`, every pixel that stands out from
+ * the skin under it is closed, a white to the skin and the eye itself to a lid a little darker.
+ */
+function shut(head: HTMLCanvasElement, cols: readonly number[]): HTMLCanvasElement {
+  const { c, g } = makeCanvas(head.width, head.height);
+  g.drawImage(head, 0, 0);
+  const img = g.getImageData(0, 0, c.width, c.height);
+  const d = img.data;
+  const lum = (i: number): number => (d[i] ?? 0) * 0.3 + (d[i + 1] ?? 0) * 0.59 + (d[i + 2] ?? 0) * 0.11;
+  for (const x of cols) {
+    const eye = (EYES * c.width + x) * 4;
+    const skin = ((EYES + 1) * c.width + x) * 4;
+    if ((d[eye + 3] ?? 0) === 0 || (d[skin + 3] ?? 0) === 0) continue;
+    const off = Math.abs((d[eye] ?? 0) - (d[skin] ?? 0)) + Math.abs((d[eye + 1] ?? 0) - (d[skin + 1] ?? 0));
+    if (off + Math.abs((d[eye + 2] ?? 0) - (d[skin + 2] ?? 0)) < 48) continue;
+    const k = lum(eye) > lum(skin) ? 1 : 0.72;
+    for (let n = 0; n < 3; n++) d[eye + n] = Math.round((d[skin + n] ?? 0) * k);
+  }
+  g.putImageData(img, 0, 0);
+  return c;
+}
+
+/** Parts with the head's eyes shut, seen from the front and from each side (the eye is toward the face's front). */
+function shutEyes(p: Parts): Parts {
+  return {
+    ...p,
+    headF: shut(p.headF, [1, 2, 3, 4, 5, 6]),
+    headR: shut(p.headR, [5, 6, 7]),
+    headL: shut(p.headL, [0, 1, 2]),
   };
 }
 

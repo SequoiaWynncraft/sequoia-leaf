@@ -632,6 +632,17 @@ export class Keymap<Id extends string> implements KeyList {
 export type ActionOf<K> = K extends Keymap<infer Id> ? Id : never;
 
 /**
+ * Walking, the same in every game where the player is somebody (the town, the Works): up, left, down
+ * and right on WASD and the arrows, held. A game's keymap takes them in as they are.
+ */
+export const WALKING: Readonly<Record<"up" | "left" | "down" | "right", KeyAction>> = {
+  up: { shelf: "Walking", does: "Walk up", keys: ["KeyW", "ArrowUp"], held: true },
+  left: { shelf: "Walking", does: "Walk left", keys: ["KeyA", "ArrowLeft"], held: true },
+  down: { shelf: "Walking", does: "Walk down", keys: ["KeyS", "ArrowDown"], held: true },
+  right: { shelf: "Walking", does: "Walk right", keys: ["KeyD", "ArrowRight"], held: true },
+};
+
+/**
  * A game's keymap: each action once, by its id. The player may change its keys, kept under `game`
  * (`settings.ts`), but for the few no game may give away (`isFixedBind`).
  */

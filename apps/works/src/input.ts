@@ -4,9 +4,14 @@
  * area, and a drag with nothing in hand moves the view. With a finger, dragging always moves the
  * view and two fingers zoom, so building is never done by accident: a tap aims, and a second tap
  * (or the Build button) builds; an area is marked by tapping two opposite corners.
+ *
+ * In their own yard the member is somebody (`figure/you.ts`): the walking keys walk them, and Space
+ * brings the view back to them; with nothing in hand a tap or a click on the ground walks there (and
+ * the view takes hold of them again), and one on a piece, a redwood or land for sale opens its card.
+ * Moving the view lets go of them.
  */
 
-import { at, BELT } from "@sequoia-leaf/factory";
+import { at, BELT, NONE, redwoodAt } from "@sequoia-leaf/factory";
 import { point, shown, surface } from "@sequoia-leaf/kit/card.ts";
 import { placeOf } from "@sequoia-leaf/kit/keyboard.ts";
 import { forControl, heldAgain, typing } from "@sequoia-leaf/kit/keys.ts";
@@ -14,8 +19,9 @@ import { LONG_PRESS } from "@sequoia-leaf/kit/press.ts";
 import { type Scope, scope } from "@sequoia-leaf/kit/scope.ts";
 import { unlock } from "@sequoia-leaf/kit/sound.ts";
 
-import { pan, zoom } from "./camera.ts";
+import { holdView, pan, track, zoom } from "./camera.ts";
 import { callerAt } from "./events.ts";
+import { halt, stepYou, walkTo, you } from "./figure/you.ts";
 import { aimOf } from "./hand.ts";
 import { WORKS_KEYS, type WorksAction } from "./keymap.ts";
 import { isWhole } from "./plans.ts";
@@ -30,6 +36,7 @@ import {
   dragOver,
   flip,
   hold,
+  keepAim,
   markEnd,
   markOver,
   markStart,
@@ -64,10 +71,10 @@ export const inputHooks: {
   settingsUp: () => boolean;
 } = { caller: () => {}, letter: () => false, settings: () => {}, settingsUp: () => false };
 
-/** The places of the keys held down that move the view (`WORKS_KEYS.isDown`). */
+/** The places of the keys held down that walk the member, or move the view (`WORKS_KEYS.isDown`). */
 const held = new Set<string>();
 
-/** A key that moves the view, held until it comes up. */
+/** A key that walks the member (or in a visit moves the view), held until it comes up. */
 function moveView(e: KeyboardEvent): void {
   held.add(placeOf(e));
   e.preventDefault();
@@ -90,6 +97,10 @@ const DOES: Readonly<Record<WorksAction, (e: KeyboardEvent, nth: number) => void
   left: moveView,
   down: moveView,
   right: moveView,
+  home: (e) => {
+    e.preventDefault();
+    holdView(true);
+  },
   zoomIn: () => zoomBy(1),
   zoomOut: () => zoomBy(-1),
   tool: (_, nth) => {
@@ -180,13 +191,31 @@ function hoverOn(t: { x: number; y: number }): void {
   pointAt(t.x, t.y);
 }
 
-/** A tap or click on a tile with nothing in hand: ask about what is there. What the view was brought to with no card is no longer marked. */
+/** Whether a tap on a tile asks about what is there: a piece, a redwood, or land for sale. Anything else is ground, which is walked to. */
+function asksAbout(tx: number, ty: number): boolean {
+  const w = S.world;
+  const i = at(w, tx, ty);
+  if (i < 0) return false;
+  const plot = w.land.plots[w.land.plot[i] ?? NONE];
+  return (w.kind[i] ?? NONE) !== NONE || redwoodAt(w, i) || (plot !== undefined && !w.plots.includes(plot.plot));
+}
+
+/**
+ * A tap or click on a tile with nothing in hand: ask about what is there, or with a figure of the
+ * member's own, walk to a point of the ground. What the view was brought to with no card is no longer marked.
+ */
 function ask(tx: number, ty: number, pageX: number, pageY: number): void {
   S.brought = null;
   const p = toYard(pageX, pageY);
   const who = callerAt(p.x, p.y);
   if (who && !S.visiting) {
     inputHooks.caller(who.order);
+    return;
+  }
+  if (you() && !asksAbout(tx, ty)) {
+    closeCard();
+    // A walk asked for takes hold of the view again, as the keys do: a phone has no Space.
+    if (walkTo(p.x, p.y)) holdView(false);
     return;
   }
   if (at(S.world, tx, ty) < 0) {
@@ -446,6 +475,8 @@ function escape(e: KeyboardEvent, enter: boolean): void {
  */
 export function letGo(): void {
   held.clear();
+  // A walk asked for by a tap stops too, as the keys held do.
+  halt();
   for (const d of downs.values()) d.hold.close();
   downs.clear();
   pinch = null;
@@ -453,11 +484,22 @@ export function letGo(): void {
   dragLost();
 }
 
-/** Each frame: the keys that move the view, and what the mouse is over once the view has moved for the frame. */
+/**
+ * Each frame: the walking keys walk the member, who goes on along any way they were sent, and the
+ * view goes with them; in a visit the keys move the view. Then what the mouse is over, once the view
+ * has moved for the frame. Stepping on to another plot changes what is in reach: what is aimed is
+ * worked out again.
+ */
 export function stepInput(dt: number): void {
   const dx = (WORKS_KEYS.isDown(held, "right") ? 1 : 0) - (WORKS_KEYS.isDown(held, "left") ? 1 : 0);
   const dy = (WORKS_KEYS.isDown(held, "down") ? 1 : 0) - (WORKS_KEYS.isDown(held, "up") ? 1 : 0);
-  if (dx !== 0 || dy !== 0) pan(-dx * dt * 620, -dy * dt * 620);
+  const me = you();
+  if (me) {
+    me.steer(dx, dy);
+    if (dx !== 0 || dy !== 0) holdView(false);
+    if (stepYou(dt)) keepAim(true);
+    track(dt);
+  } else if (dx !== 0 || dy !== 0) pan(-dx * dt * 620, -dy * dt * 620);
   followView();
 }
 

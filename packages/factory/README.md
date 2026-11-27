@@ -16,6 +16,7 @@ page (`apps/works`) holds a copy and draws it; the town reads its standing's wor
 | one tick                                                                      | `src/tick.ts`, `src/wire.ts` (who hands to whom), `src/power.ts`              |
 | building, raising, removing, turning, setting pieces, plots                   | `src/build.ts`; many pieces at once: `src/pieces.ts`; colours: `src/lines.ts` |
 | a plan of the whole yard: kept, and put back over the yard                    | `src/whole.ts`                                                                |
+| where a figure may stand in a yard, and how its walking is checked            | `src/footing.ts`                                                              |
 | the node in hand, the line of research, the board                             | `src/orders.ts`, `src/clock.ts`                                               |
 | Leaf's game: commands, Coins, time, the view and the answer                   | `src/game.ts`                                                                 |
 | keeping a yard, and the check                                                 | `src/codec.ts`, `src/bytes.ts`, `src/check.ts`                                |

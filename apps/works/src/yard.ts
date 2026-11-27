@@ -88,6 +88,7 @@ import { type Answered, openPlay, type Play, type Trouble } from "@sequoia-leaf/
 import { balance } from "@sequoia-leaf/kit/purse.ts";
 import { joinVisit, type LiveRoom } from "@sequoia-leaf/kit/realtime.ts";
 
+import { beyondReach } from "./figure/reach.ts";
 import { S } from "./state.ts";
 import { askDue, leafOf, type Link, type LinkEvent, type Room, type RoomEvent, roomStep, step } from "./sync.ts";
 import { ZOOM } from "./zoom.ts";
@@ -505,13 +506,14 @@ export const takesCommands = (): boolean => notNow() === null;
  * the tick the copy stands at; whatever Coins it pays or takes show at once. The rules are asked
  * with the purse as it is at this moment, so that whatever costs more Coins than there are is
  * refused here, with their sentence, however long ago it was aimed: this is the one place a price
- * is judged before it is sent. The rules' refusal is given back, and nothing is sent. A yard the
+ * is judged before it is sent. So is reach, first (`figure/reach.ts`): a piece put down or taken up
+ * out of the member's reach is refused before the rules are asked. The rules' refusal is given back, and nothing is sent. A yard the
  * page was handed by a review page of its own (`S.alone`) is done to in the same way, and sends nothing.
  * The command has its id before the rules do it, the one it is sent under: what Undo would undo is
  * named by it, on the copy as on Leaf.
  */
 export function doNow(act: Act): Did {
-  const no = notNow();
+  const no = notNow() ?? beyondReach(act);
   if (no) return no;
   const id = link.is === "inStep" ? link.leaf.id() : crypto.randomUUID();
   const command: Command = { ...act, tick: S.world.tick, id };

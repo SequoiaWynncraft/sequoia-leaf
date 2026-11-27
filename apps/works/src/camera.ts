@@ -2,14 +2,23 @@
  * Where the member is looking. The picture is always a whole number of screen pixels to each of
  * the yard's, so zooming goes in steps; the camera may travel as far as the forest that rings the
  * clearing, and a little further where the interface covers the edge of the screen.
+ *
+ * In their own yard the view goes with the member's figure (`figure/follow.ts`): dragging it, or
+ * sending it to a place, lets go; walking by the keys, or asking for it back, takes hold again. At the
+ * plan's steps, where the yard is read as a plan, it does not go with the figure.
  */
 
 import { clamp, type Pt } from "@sequoia-leaf/kit/util.ts";
 
 import type { Ground } from "./art/ground.ts";
+import { Follow } from "./figure/follow.ts";
+import { you } from "./figure/you.ts";
 import { corner, sizeBuffers } from "./scene.ts";
-import { S, seenFrom } from "./state.ts";
+import { S, seenFrom, toPage } from "./state.ts";
 import { farSteps, markSize, natural, tilePx, zoomFor } from "./zoom.ts";
+
+/** The view going with the member's figure. */
+const follow = new Follow();
 
 /** How much of the screen the interface covers at each edge, in CSS pixels. */
 export const inset = { top: 0, bottom: 0, left: 0, right: 0 };
@@ -20,14 +29,18 @@ export const inset = { top: 0, bottom: 0, left: 0, right: 0 };
  */
 const SPILL = 96;
 
-let ground: Ground | null = null;
+/** What the camera reads of the yard's picture and the ground it lies on: their sizes, and where the page puts the picture. */
+type Picture = Pick<HTMLCanvasElement, "width" | "height"> & { readonly style: Pick<CSSStyleDeclaration, "transform"> };
+type Extent = Pick<Ground, "x" | "y" | "w" | "h">;
+
+let ground: Extent | null = null;
 /** Steps of zoom the member has asked for, over or under the size that suits the screen. */
 let steps = 0;
-let canvas: HTMLCanvasElement | null = null;
+let canvas: Picture | null = null;
 /** Where the camera is easing to, if it has been sent somewhere. */
 let goal: Pt | null = null;
 
-export function setCamera(c: HTMLCanvasElement, g: Ground): void {
+export function setCamera(c: Picture, g: Extent): void {
   canvas = c;
   ground = g;
 }
@@ -101,32 +114,45 @@ export function pan(dx: number, dy: number): void {
   S.cam.x -= dx * k;
   S.cam.y -= dy * k;
   goal = null;
+  follow.letGo();
   bound();
 }
 
-/** Zooms a step in or out, keeping the point of the page under the pointer where it is. */
+/** Zooms a step in or out, keeping the point of the page under the pointer where it is (going with the figure, the figure). */
 export function zoom(by: number, pageX: number, pageY: number): boolean {
   const before = S.view.z;
+  // Going with the member's figure, it zooms about the figure instead, in this one step: the view
+  // goes on with the figure from where that leaves it, and nothing moves at the next frame.
+  const c = following() ? you() : null;
+  const about = c ? toPage(c.x, c.y) : { x: pageX, y: pageY };
   const k0 = S.view.dpr / before;
-  const wx = S.cam.x + pageX * k0;
-  const wy = S.cam.y + pageY * k0;
+  const wx = S.cam.x + about.x * k0;
+  const wy = S.cam.y + about.y * k0;
   steps += by;
   resize();
   const k1 = S.view.dpr / S.view.z;
-  S.cam.x = wx - pageX * k1;
-  S.cam.y = wy - pageY * k1;
+  S.cam.x = wx - about.x * k1;
+  S.cam.y = wy - about.y * k1;
   goal = null;
   bound();
+  if (c) follow.rebase(middleAt());
   return S.view.z !== before;
 }
 
-/** Puts a point of the yard in the middle of what the interface leaves clear; eased unless `snap`. */
-export function look(x: number, y: number, snap = false): void {
+/** How far the middle of what the interface leaves clear is from the view's corner, in the yard's pixels. */
+function middle(): Pt {
   const k = S.view.dpr / S.view.z;
-  const to = {
-    x: x - S.view.w / 2 - ((inset.left - inset.right) * k) / 2,
-    y: y - S.view.h / 2 - ((inset.top - inset.bottom) * k) / 2,
+  return {
+    x: S.view.w / 2 + ((inset.left - inset.right) * k) / 2,
+    y: S.view.h / 2 + ((inset.top - inset.bottom) * k) / 2,
   };
+}
+
+/** Puts a point of the yard in the middle of what the interface leaves clear; eased unless `snap`. The view lets go of the member's figure. */
+export function look(x: number, y: number, snap = false): void {
+  const m = middle();
+  const to = { x: x - m.x, y: y - m.y };
+  follow.letGo();
   if (snap) {
     S.cam.x = to.x;
     S.cam.y = to.y;
@@ -145,6 +171,51 @@ export function inView(x: number, y: number, pad = 24): boolean {
     y < S.cam.y + S.view.h - inset.bottom * k - pad
   );
 }
+
+/**
+ * Each frame, once the member's figure has moved: the view goes with it while it has hold of it, a
+ * whole number of the yard's pixels from it. At the plan's steps it lets go, once it has put the
+ * figure in view: a page opened at the plan's steps opens on the figure.
+ */
+export function track(dt: number): void {
+  const c = you();
+  if (!c) return;
+  const k = S.view.dpr / S.view.z;
+  const clear = { w: S.view.w - (inset.left + inset.right) * k, h: S.view.h - (inset.top + inset.bottom) * k };
+  const mid = follow.track(c.x, c.y, dt, c.moving, clear);
+  if (S.view.z < 1) follow.letGo();
+  if (!mid) return;
+  const m = middle();
+  S.cam.x = mid.x - Math.round(m.x);
+  S.cam.y = mid.y - Math.round(m.y);
+  goal = null;
+  bound();
+}
+
+/**
+ * The view takes hold of the member's figure again from where it is: walking by the keys does, and
+ * with `home` (Space) it closes on the figure all the way. At the plan's steps, `home` only puts the
+ * figure in the middle of the view.
+ */
+export function holdView(home: boolean): void {
+  const c = you();
+  if (!c || (follow.following && !home)) return;
+  if (S.view.z < 1) {
+    if (home) look(c.x, c.y, true);
+    return;
+  }
+  if (home) follow.home(middleAt());
+  else follow.hold(middleAt());
+}
+
+/** The point of the yard in the middle of what the interface leaves clear. */
+function middleAt(): Pt {
+  const m = middle();
+  return { x: S.cam.x + m.x, y: S.cam.y + m.y };
+}
+
+/** Whether the view goes with the member's figure now. */
+export const following = (): boolean => you() !== null && follow.following && S.view.z >= 1;
 
 /** Each frame: ease towards wherever the camera was sent. */
 export function ease(dt: number): void {
