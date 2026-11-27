@@ -18,8 +18,8 @@ import {
   records,
   shownCategories,
   shownModes,
-  THE_DEEP_WOODS,
   tablesBoard,
+  THE_DEEP_WOODS,
   THE_TRAILS,
   THE_WILDS,
 } from "./modes.ts";

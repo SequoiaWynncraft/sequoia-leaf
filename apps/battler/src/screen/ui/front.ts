@@ -423,9 +423,7 @@ export function frontBody(go: FrontAsks): HTMLElement {
     "k-body menu",
     {},
     takenLine(),
-    runs.length > 0 || live
-      ? el("div", "runs", {}, ...runs.map((r) => strip(go, r.mode, r.run)), live)
-      : null,
+    runs.length > 0 || live ? el("div", "runs", {}, ...runs.map((r) => strip(go, r.mode, r.run)), live) : null,
     el(
       "div",
       "menu-cols",

@@ -70,7 +70,10 @@ function readListed(body: unknown): { open: Listed[]; yours: string | null } | n
   return { open, yours: typeof body.yours === "string" ? body.yours : null };
 }
 
-/** Reads the list, and follows the member's own sitting when they have one and the page does not. Says whether Leaf answered. */
+/**
+ * Reads the list, and follows the member's own sitting when they have one and the page does not.
+ * Says whether it is done: Leaf answered, and the member's own sitting, if they have one, was read.
+ */
 export async function readList(): Promise<boolean> {
   const asked = T.gen;
   const answer = await ask("/v1/game/sittings");
@@ -80,9 +83,10 @@ export async function readList(): Promise<boolean> {
   if (asked !== T.gen) return true;
   const before = JSON.stringify(T.open);
   T.open = listed.open;
-  if (listed.yours && !liveLine()) await follow(listed.yours);
+  // Their own table not read (no answer, or trouble) is not done: the first read is tried again for it.
+  const restored = listed.yours && !liveLine() ? (await follow(listed.yours)) !== null : true;
   if (JSON.stringify(T.open) !== before) T.redraw();
-  return true;
+  return restored;
 }
 
 async function readRecord(): Promise<void> {
@@ -192,7 +196,7 @@ export function leave(): Promise<void> {
 /** The member's record at the tables, for the card's board. */
 export const tablesRecord = (): TablesRecord | null => T.record;
 
-/** The first read of the list, again on the kit's timer (`RETRY`) until Leaf answers it. */
+/** The first read of the list, again on the kit's timer (`RETRY`) until it is done: Leaf answered it, and the member's own table was read. */
 async function firstRead(tries = 0): Promise<void> {
   if (await readList()) return;
   T.scope?.after(backoff(RETRY, tries), () => void firstRead(tries + 1));

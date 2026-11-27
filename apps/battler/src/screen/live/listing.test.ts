@@ -118,6 +118,29 @@ async function leaveHereAfterThere(shown: "left" | "sat"): Promise<void> {
   await leave();
 }
 
+test("a member's own table that did not read at first is read again on the kit's timer, so its strip comes back", async () => {
+  const open = openSitting(call(0));
+  let reads = 0;
+  world = standin({
+    "GET /v1/game/sittings": { status: 200, body: { open: [], yours: "s1" } },
+    "GET /v1/game/sittings/s1": () => {
+      reads++;
+      return reads === 1 ? "offline" : { status: 200, body: answer(1, open) };
+    },
+  });
+  const held = scope();
+  followTables(
+    held,
+    ME,
+    () => undefined,
+    () => false,
+  );
+  await until(() => liveLine() !== null, 2000);
+  expect(reads).toBe(2);
+  expect(liveLine()?.id).toBe("s1");
+  held.close();
+});
+
 test("left in the other tab, Leave here is answered with the member seatless: the table is let go, no complaint", async () => {
   await leaveHereAfterThere("left");
   expect(liveLine()).toBeNull();

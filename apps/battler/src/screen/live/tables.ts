@@ -124,7 +124,7 @@ function startedFoot(view: SittingView): HTMLElement[] {
       ? null
       : button(
           "live-quit",
-          "Leave the table",
+          "Leave",
           () => {
             T.leaving = true;
             T.redraw();
@@ -173,16 +173,17 @@ export function liveStrip(): HTMLElement | null {
     "div",
     "k-card lit run",
     {},
+    // One line, as the runs' strips above it are: its name and where it stands, beside Carry on.
     el(
       "div",
-      "k-col k-grow tight",
+      "what k-grow",
       {},
       el("b", "k-gold", { text: "Live table" }),
       el("span", "k-dim", {
         text: `Room ${view.room + 1}. Health ${mine.resolve}. ${inCount(view)} of ${CHAIRS} still in.`,
       }),
     ),
-    el("div", "k-row acts", {}, button("live-strip-carry", "Carry on", enterTable, "", pic(glyph("play")))),
+    el("div", "k-row acts", {}, button("live-strip-carry", "Carry on", enterTable, "sm", pic(glyph("play")))),
   );
 }
 

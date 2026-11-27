@@ -206,7 +206,7 @@ carousel, regulars in the empty seats. The page is in `src/screen/live/`.
 - **On the front page** (Versus, Live tables, `live/tables.ts` drawing what `live/listing.ts` knows): the tables open to sit at (who
   opened each, how many sat) with Sit down, and Open a table; once sat, the table's eight seats
   (an empty one says "A regular will sit here"), Start for whoever opened it and Leave for anyone;
-  once started, Carry on and Leave the table (asked first: it is going out). The board is the
+  once started, Carry on and Leave (asked first: it is going out). The board is the
   member's record: played, won, in the first four. A table started is a strip along the top too,
   with Carry on, as a run in hand is; a member who closed the page finds it there again.
 - **At the table** the shared table is driven by the seat's run as Leaf shows it (`live/seated.ts`

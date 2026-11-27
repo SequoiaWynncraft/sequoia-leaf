@@ -216,12 +216,7 @@ export const LIVE_TABLES: Mode = {
   board: (at) => tablesBoard(at.tables ?? null),
 };
 
-export const MODES: readonly Mode[] = [
-  THE_TRAILS,
-  THE_WILDS,
-  THE_DEEP_WOODS,
-  LIVE_TABLES,
-];
+export const MODES: readonly Mode[] = [THE_TRAILS, THE_WILDS, THE_DEEP_WOODS, LIVE_TABLES];
 
 /** The runs laid out, each with the mode it is of: the run in hand, then the endless run. */
 export const laidOut = (at: At): { mode: Mode; run: RunView }[] =>
