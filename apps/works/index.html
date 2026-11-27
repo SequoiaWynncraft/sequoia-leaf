@@ -286,7 +286,11 @@
       /*
        * A goal's head and its lists (`ui/goal.ts`), laid out here and nowhere else. A list is a label
        * on a line of its own and a row for each thing: a picture in a slot of one width, the name,
-       * and at the right edge what is counted. A long name wraps in its own column; nothing else moves.
+       * and at the right edge what is counted. A name wraps only between words (the kit's
+       * `.k-thing-name`). In a list with bars (`counted`) every row is as wide as the list's longest
+       * name and widest count (`gl-shadow`), so the names, bars and counts line up, and where the
+       * longest name, a bar of 10 and the widest count do not fit, every row puts its count under
+       * its name.
        */
       .gl {
         display: flex;
@@ -301,18 +305,21 @@
         color: var(--k-ink);
       }
       .gl-row {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
+        display: flex;
+        flex-wrap: wrap;
         align-items: center;
-        column-gap: calc(var(--u) * 4);
+        gap: var(--u) calc(var(--u) * 4);
         min-height: calc(var(--u) * 16);
       }
       .gl-what {
         display: grid;
-        grid-template-columns: calc(var(--u) * 16) minmax(0, 1fr);
+        /* The name takes room first, up to all of it on one line; then the bar. */
+        flex: 1000 1 0;
+        min-width: min-content;
+        max-width: max-content;
+        grid-template-columns: calc(var(--u) * 16) auto;
         align-items: center;
         column-gap: calc(var(--u) * 3);
-        min-width: 0;
         text-align: left;
       }
       .gl-pic {
@@ -321,25 +328,46 @@
         display: grid;
         place-items: center;
       }
-      .gl-name {
-        min-width: 0;
-        overflow-wrap: break-word;
+      /* A name or a count, with what the list holds unseen to keep it as wide as the widest. */
+      .gl-cell {
+        display: grid;
+      }
+      .gl-cell > * {
+        grid-area: 1 / 1;
+      }
+      .gl-shadow {
+        height: 0;
+        overflow: hidden;
+        visibility: hidden;
+      }
+      .gl.counted .gl-what {
+        flex: 0 1 auto;
+        max-width: none;
+      }
+      .gl.counted .gl-end {
+        flex: 1 0 auto;
       }
       .gl-what.k-link:hover .gl-name {
         text-decoration: underline dotted var(--k-faint);
         text-underline-offset: calc(var(--u) * 1.5);
       }
+      /* What is counted takes only its own width, but for a bar, which takes room the name leaves. */
       .gl-end {
+        flex: none;
+        margin-left: auto;
         display: flex;
         align-items: center;
         justify-content: flex-end;
         gap: calc(var(--u) * 3);
       }
+      /* A bar takes what the row leaves, and is never under 10. */
       .gl-end .k-bar {
-        width: calc(var(--u) * 18);
+        flex: 1 1 auto;
+        width: calc(var(--u) * 10);
+        min-width: calc(var(--u) * 10);
       }
       .gl-n {
-        min-width: calc(var(--u) * 26);
+        justify-items: end;
         text-align: right;
         white-space: nowrap;
       }
@@ -357,6 +385,7 @@
       }
       .gl.tight .gl-row {
         display: flex;
+        flex-wrap: nowrap;
         align-items: center;
         gap: calc(var(--u) * 3);
         min-height: 0;
@@ -405,20 +434,15 @@
       }
       .gh-what {
         display: grid;
-        grid-template-columns: calc(var(--u) * 22) minmax(0, 1fr);
+        grid-template-columns: calc(var(--u) * 22) auto;
         align-items: center;
         column-gap: calc(var(--u) * 4);
-        min-width: 0;
         text-align: left;
       }
       .gh-pic {
         width: calc(var(--u) * 22);
         height: calc(var(--u) * 22);
         box-sizing: border-box;
-      }
-      .gh-name {
-        min-width: 0;
-        overflow-wrap: break-word;
       }
       .gh-what.k-link:hover .gh-name {
         text-decoration: underline dotted var(--k-faint);

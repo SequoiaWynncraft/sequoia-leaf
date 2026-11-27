@@ -85,7 +85,7 @@ export function personRow(
       "span",
       "about-who",
       {},
-      el("b", "k-thing-name", { text: r.name }),
+      el("b", "k-thing-name member", { text: r.name }),
       r.line === "" ? null : el("span", "k-dim", { text: r.line }),
     ),
     r.you ? el("span", "k-info-tagged", { text: "You" }) : null,
