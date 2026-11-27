@@ -753,20 +753,25 @@ export function link(target: HTMLElement, ref: Ref | (() => Ref), opts: LinkOpts
 }
 
 /**
+ * The same thing pointed at, somewhere else (the view moved under it, or another tile of it): its
+ * card grows there, and what shows of it goes there too. A card pinned, or one about something
+ * else, stays where it is.
+ */
+function pointedAgain(ref: Ref | null, spot: Spot): void {
+  const at = page.pointAt;
+  if (ref === null || (at && at.x === spot.x && at.y === spot.y && at.w === spot.w && at.h === spot.h)) return;
+  page.pointAt = spot;
+  const o = deck.open;
+  if (o && !o.pinned && o.from === CANVAS && deck.shown() === ref) moveCard(CANVAS, spot);
+}
+
+/**
  * Something drawn on a canvas is pointed at (or nothing is), in a box on the page: its glance shows
  * at once, and its card after a moment, as for an element.
  */
 export function point(ref: Ref | null, x: number, y: number, w = 0, h = 0): void {
   const spot = { x, y, w, h };
-  if (ref === page.pointing) {
-    // The same thing, somewhere else (the view moved under it): what shows of it, and the card it grows into, go there.
-    const at = page.pointAt;
-    if (ref !== null && (!at || at.x !== x || at.y !== y || at.w !== w || at.h !== h)) {
-      page.pointAt = spot;
-      moveCard(CANVAS, spot);
-    }
-    return;
-  }
+  if (ref === page.pointing) return pointedAgain(ref, spot);
   const was = page.pointing;
   page.pointing = ref;
   page.pointWait();

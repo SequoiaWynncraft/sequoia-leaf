@@ -117,6 +117,13 @@ const plan: (Step | [Step, string])[] = [
   ["wait", 400],
   [["eval", "tips.pointed()"], "passing at 700,300"],
   [["eval", "tips.point(null)"], "nothing"],
+  // A card pinned on a canvas (a machine's), then the pointer across two tiles of one other thing (a resource): it stays put.
+  [["eval", "(tips.pick('trait:kin', 100, 300), tips.pointed())"], "pinned at 100,300"],
+  [
+    ["eval", "(tips.point('gem:amber', 600, 300), tips.point('gem:amber', 640, 300), tips.pointed())"],
+    "pinned at 100,300",
+  ],
+  [["eval", "(tips.point(null), tips.pick('trait:kin', 100, 300), tips.pointed())"], "none"],
   ["move", 640, 300],
   ["size", 390, 844],
   ["wait", 400],

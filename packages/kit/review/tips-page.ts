@@ -7,7 +7,7 @@
  * with a longer card (`#mid`), a tip given twice (`#retipped`), a thing with words of its own that
  * describe it (`#helped`), and a link inside a link (`#inner` in `#outer`).
  */
-import { deck, link, point, refresh, register, settle, thing } from "../src/card.ts";
+import { deck, link, pick, point, refresh, register, settle, thing } from "../src/card.ts";
 import { el } from "../src/dom.ts";
 import { tip } from "../src/tip.ts";
 
@@ -150,6 +150,12 @@ const pointAt = (ref: string | null, x = 0, y = 0): string => {
   return ref ?? "nothing";
 };
 
+/** Clicks a thing drawn on a canvas, in a box 20 pixels square at a point: its card is pinned there. */
+const pickAt = (ref: string, x: number, y: number): string => {
+  pick(ref, x, y, 20, 20);
+  return ref;
+};
+
 /** The card a canvas thing opened, and the box it is beside. */
 function pointed(): string {
   const o = deck.open;
@@ -165,4 +171,4 @@ function bar(px: string | null): string {
   return `bar ${px ?? "as the page sets it"}`;
 }
 
-Object.assign(window, { tips: { say, at, keeps, attr, point: pointAt, pointed, bar } });
+Object.assign(window, { tips: { say, at, keeps, attr, point: pointAt, pick: pickAt, pointed, bar } });
