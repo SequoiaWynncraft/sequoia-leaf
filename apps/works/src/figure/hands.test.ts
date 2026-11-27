@@ -11,6 +11,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import {
   BELT,
   build,
+  CRATE,
   create,
   LAND,
   type Leg,
@@ -60,6 +61,15 @@ const mid = (x: number, y: number): { x: number; y: number } => ({ x: x * 16 + 8
 function stands(y: Yard, kind: Piece["kind"], x: number, z: number, span?: number): void {
   if (!build(y, kind, x, z, 0, Infinity, span === undefined ? {} : { span }).ok)
     throw new Error(`nothing built at ${x}, ${z}`);
+}
+/** Does something with a finger, as on a phone: aiming first, and Build (`confirm`) or a second tap to build. */
+function onPhone(act: () => void): void {
+  S.finger = true;
+  try {
+    act();
+  } finally {
+    S.finger = false;
+  }
 }
 /** A leg of a run of belt on row 9, heading east, at grade 2. */
 const beltAt = (x: number): Leg => ({ tunnel: false, x, y: 9, dir: 0, grade: 2 });
@@ -356,21 +366,67 @@ describe("reach", () => {
     expect(S.world.grade[13 * y.land.w + 27]).toBe(2);
   });
 
-  test("a phone's Build is judged on the belt it would lay: on a far mill it is not offered gold", async () => {
+  test("a phone's run start on a machine is its first belt, at the machine's outlet: gold, and Build lays it", async () => {
+    // A mill at 10, 9 facing east: it hands things on to 11, 9.
     const y = everywhere();
+    stands(y, MILL, 10, 9);
+    stands(y, MILL, 10, 16);
+    await opened(y, 100_000);
+    placeYou(HOLLOW);
+    const t = (x: number, z: number): number => z * y.land.w + x;
+    onPhone(() => {
+      S.dir = 3;
+      setTool(BELT);
+      fingerTap(10, 9);
+      // The start is the mill; the belt shown and laid is at its outlet, facing out of it.
+      expect([S.from, aimOf(S.hand)?.x, aimOf(S.hand)?.y, S.dir, gold()]).toEqual([{ x: 10, y: 9 }, 11, 9, 0, true]);
+      expect(handPrint().go).toEqual({ label: "Build", bad: false });
+      expect(confirm()).toBe(true);
+      expect([S.world.kind[t(11, 9)], S.world.dir[t(11, 9)], S.world.kind[t(10, 9)]]).toEqual([BELT, 0, MILL]);
+      // A second tap on a machine lays the same belt as Build: at its outlet, never on the machine.
+      setTool(BELT);
+      fingerTap(10, 16);
+      fingerTap(10, 16);
+      expect([S.world.kind[t(11, 16)], S.world.dir[t(11, 16)], S.world.kind[t(10, 16)]]).toEqual([BELT, 0, MILL]);
+    });
+  });
+
+  test("a machine's outlet that cannot take a belt, or is out of reach, is coral with the reason", async () => {
+    const y = everywhere();
+    stands(y, MILL, 10, 12);
+    stands(y, CRATE, 11, 12);
     stands(y, MILL, 40, 9);
     await opened(y, 100_000);
     placeYou(HOLLOW);
-    S.finger = true;
-    try {
+    onPhone(() => {
+      setTool(BELT);
+      fingerTap(10, 12);
+      const why = aimOf(S.hand)?.why;
+      expect([aimOf(S.hand)?.x, why === null, why === OUT_OF_REACH]).toEqual([11, false, false]);
+      expect(handPrint().go?.bad).toBe(true);
+      expect(confirm()).toBe(false);
+      // A far mill: its outlet, 41, 9, is out of reach.
       setTool(BELT);
       fingerTap(40, 9);
+      expect([aimOf(S.hand)?.x, aimOf(S.hand)?.why]).toEqual([41, OUT_OF_REACH]);
       expect(handPrint().go).toEqual({ label: "Build", bad: true });
       expect(confirm()).toBe(false);
-      expect(S.world.kind[9 * y.land.w + 40]).toBe(MILL);
-    } finally {
-      S.finger = false;
-    }
+      expect(S.world.kind[9 * y.land.w + 41]).not.toBe(BELT);
+    });
+  });
+
+  test("a phone's run start on a crate, which no run leaves from by itself, is judged on the crate's own tile", async () => {
+    const y = everywhere();
+    stands(y, CRATE, 14, 9);
+    await opened(y, 100_000);
+    placeYou(HOLLOW);
+    onPhone(() => {
+      setTool(BELT);
+      fingerTap(14, 9);
+      expect([aimOf(S.hand)?.x, aimOf(S.hand)?.y, gold()]).toEqual([14, 9, false]);
+      expect(handPrint().go?.bad).toBe(true);
+      expect(confirm()).toBe(false);
+    });
   });
 
   test("a card's Remove on a distant piece, with nothing in hand, says why", async () => {
