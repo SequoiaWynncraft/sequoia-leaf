@@ -28,6 +28,7 @@ import {
   liveLine,
   liveView,
   onDone,
+  onSeatView,
   paidFor,
   readyUp,
   shownRun,
@@ -320,11 +321,15 @@ test("Ready is a state the page wants: turned down (an older Leaf's `invalid_com
     body: { code: "invalid_command", message: "Command x is not one of the table's" },
   });
   await until(() => !liveLine()?.waiting(), "Leaf to answer it");
-  // Leaf has not taken it: the next read the page makes sends it again, with the room it is for.
+  // Leaf has not taken it: the next read the page makes sends it again, with the room it is for,
+  // and the seat is drawn again as Ready at once, as the first press drew it.
+  const drawn: boolean[] = [];
+  onSeatView((view) => drawn.push(view.stage.at === "plan" && view.stage.ready.includes(view.you ?? -1)));
   liveLine()?.read();
   await until(() => readies().length === 2, "Ready to be sent again");
   expect(readies().length).toBe(2);
   expect(JSON.stringify(readies()[1]?.body)).toContain(`"room":${t.room}`);
+  expect(drawn.at(-1)).toBe(true);
   // Taken: Leaf shows it, and nothing more is sent.
   const id = (() => {
     const body = readies()[1]?.body;

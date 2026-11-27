@@ -119,8 +119,11 @@ function shownNow(line: Line, command: SittingCommand, quiet = false): Did | nul
   }
   const was = line.view;
   void sent(line, command, quiet);
-  S.run = shownRun(line.view);
-  tellNotes(guess.notes);
+  // The shared table is the seat's only while the member is at it (a want sent again from the front page is not).
+  if (ours(line)) {
+    S.run = shownRun(line.view);
+    tellNotes(guess.notes);
+  }
   // The sitting's own moves change what the live table shows round the board: it hears them as it hears Leaf.
   if (isPlanning(command)) changed();
   else for (const fn of viewHearers) fn(line.view, was);
@@ -189,10 +192,11 @@ function resendWanted(line: Line): void {
   const you = view.you;
   if (line.waiting() || you === null) return;
   const want = L.wanted;
+  // Sent as the member's own press is, so the seat is drawn again with it at once.
   if (want.ready && view.stage.at === "plan" && view.stage.ready.includes(you) !== want.ready.on)
-    void sent(line, { do: "ready", on: want.ready.on, room: want.ready.room }, true);
+    shownNow(line, { do: "ready", on: want.ready.on, room: want.ready.room }, true);
   if (want.watched !== null && view.stage.at === "fight" && !view.stage.done.includes(you))
-    void sent(line, { do: "watched", room: want.watched }, true);
+    shownNow(line, { do: "watched", room: want.watched }, true);
 }
 
 /** The seat's run, if it is in a fight at the table now. */

@@ -25,7 +25,7 @@ import { fadePawns, standAlso } from "../scene.ts";
 import { snd } from "../sounds.ts";
 import { artPx, boardSpot, boardToPage, type Standing, toBoard, V } from "../stage.ts";
 import { figureRef } from "../ui/refs.ts";
-import { figureBox, focusAfter, ringMoves, turnOf } from "./reads.ts";
+import { closeUp, figureBox, focusAfter, ringMoves, stacking, turnOf } from "./reads.ts";
 
 /**
  * The ring on the board, from its corner: its middle, how wide and deep it is, and how fast it turns
@@ -95,11 +95,6 @@ function spotsAround(ring: readonly Offer[]): Map<number, number> {
   const left = standing(ring);
   return new Map(left.map((i, k) => [i, -Math.PI / 2 + (2 * Math.PI * k) / Math.max(1, left.length)]));
 }
-/** The shortest way round from one angle to another. */
-const around = (from: number, to: number): number => {
-  const d = (((to - from) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI);
-  return d - Math.PI;
-};
 
 /**
  * A figure and what it holds, as one small picture, what flies to whoever took it: the figure, and
@@ -267,13 +262,20 @@ function drawRing(g: Ctx): Standing[] {
   if (!view || stage?.at !== "carousel" || !R.up() || R.room !== view.room) return [];
   const dt = Math.max(0, Math.min(0.1, V.t - R.lastT));
   R.lastT = V.t;
-  if (R.held === null) R.turned += dt * RING.turn;
+  // Under the pointer the ring holds still, turning and closing up alike (`closeUp`).
+  const held = R.held !== null;
+  if (!held) R.turned += dt * RING.turn;
   const spots = spotsAround(stage.ring);
-  for (const [i, spot] of spots) R.at[i] = (R.at[i] ?? spot) + around(R.at[i] ?? spot, spot) * Math.min(1, dt * CLOSE);
+  R.at = closeUp(R.at, spots, dt, held, CLOSE);
   const mine = turnOf(view, R.now()).at === "choosing";
   R.box?.classList.toggle("mine", mine);
-  return [...spots.keys()].flatMap((i) => {
+  const places = [...spots.keys()];
+  // The buttons stack as the figures are drawn, so a tap where two overlap takes the one in front.
+  const stack = stacking(places.map((i) => spotOf(i)));
+  return places.flatMap((i, k) => {
     const offer = stage.ring[i];
+    const button = R.buttons[i];
+    if (button && button.style.zIndex !== String(stack[k])) button.style.zIndex = String(stack[k]);
     return offer ? figureAt(g, view, offer, i, mine) : [];
   });
 }

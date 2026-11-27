@@ -9,6 +9,7 @@ import { sittingView } from "@sequoia-leaf/raid/sitting/view.ts";
 import {
   clockLine,
   clockText,
+  closeUp,
   facingLine,
   figureBox,
   focusAfter,
@@ -18,6 +19,7 @@ import {
   playerRows,
   ringMoves,
   secondsTo,
+  stacking,
   turnLine,
   turnOf,
   waitingLine,
@@ -226,6 +228,33 @@ describe("the ring's buttons", () => {
     // The box holds the figure (20 tall over its feet) and its held mark under them.
     expect(still.y).toBeLessThanOrEqual(30 - 20);
     expect(still.y + still.h).toBeGreaterThanOrEqual(30 + 9);
+  });
+});
+
+describe("the ring under the pointer, and its buttons' stacking", () => {
+  test("while the pointer is on a figure nothing in the ring moves, not even to close a gap another's take left; after, each eases to its spot", () => {
+    const at = [0, 1, 2];
+    const spots = new Map([
+      [0, 0.5],
+      [2, 2.5],
+    ]);
+    expect(closeUp(at, spots, 0.1, true, 5)).toEqual(at);
+    const moved = closeUp(at, spots, 0.1, false, 5);
+    expect(moved[0]).toBeCloseTo(0.25);
+    expect(moved[1]).toBe(1);
+    expect(moved[2]).toBeCloseTo(2.25);
+    // The short way round: from just under a full turn to just over none.
+    expect(closeUp([6.2], new Map([[0, 0.1]]), 1, false, 1)[0]).toBeCloseTo(0.1 + 2 * Math.PI);
+  });
+
+  test("buttons stack as the figures are drawn: the nearer feet in front, and of two level, the one further right", () => {
+    expect(
+      stacking([
+        { x: 10, y: 40 },
+        { x: 50, y: 20 },
+        { x: 30, y: 40 },
+      ]),
+    ).toEqual([2, 1, 3]);
   });
 });
 

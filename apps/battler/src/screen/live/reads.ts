@@ -224,6 +224,46 @@ export function figureBox(feet: { x: number; y: number }, tall: number, lift: nu
   return { x: feet.x - 11, y: feet.y - lift - tall - 4, w: 22, h: tall + 14 };
 }
 
+/** The shortest way round from one angle to another, in radians. */
+const around = (from: number, to: number): number => {
+  const d = (((to - from) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI);
+  return d - Math.PI;
+};
+
+/**
+ * The ring's places one frame on (`at`: each place's angle; `spots`: where each place still standing
+ * belongs), each eased the short way round towards its spot by `dt` seconds at `rate` a second. While
+ * the pointer is on a figure (`held`) nothing moves at all, not even to close a gap another's take
+ * left, so the figure under it stays put; the gaps close once it is let go.
+ */
+export function closeUp(
+  at: readonly number[],
+  spots: ReadonlyMap<number, number>,
+  dt: number,
+  held: boolean,
+  rate: number,
+): number[] {
+  if (held) return [...at];
+  const k = Math.min(1, dt * rate);
+  return at.map((a, i) => {
+    const spot = spots.get(i);
+    return spot === undefined ? a : a + around(a, spot) * k;
+  });
+}
+
+/**
+ * How the ring's buttons stack, one number each (higher in front): as the table draws its figures,
+ * the nearer feet in front, and of two level the one further right.
+ */
+export function stacking(feet: readonly { x: number; y: number }[]): number[] {
+  const order = feet
+    .map((_, i) => i)
+    .toSorted((a, b) => (feet[a]?.y ?? 0) - (feet[b]?.y ?? 0) || (feet[a]?.x ?? 0) - (feet[b]?.x ?? 0));
+  const stack = feet.map(() => 0);
+  order.forEach((i, k) => (stack[i] = k + 1));
+  return stack;
+}
+
 /**
  * Which place of the ring keeps the keyboard when the ring is drawn again (somebody took a figure):
  * the one that had it while it still stands, else the next that does; none when none does.
