@@ -19,6 +19,7 @@
 import { mix } from "@sequoia-leaf/core";
 
 import { BOON_IDS, type BoonId, isBoonId } from "./content/boons.ts";
+import { type EndlessWay, isEndlessWay } from "./content/endless.ts";
 import { type FigureId, isBossId, isFigureId, isStars, isUnitKind } from "./content/figures.ts";
 import {
   carries,
@@ -31,8 +32,9 @@ import {
   isItemId,
   type ItemId,
 } from "./content/items.ts";
-import { ECONOMY, MAX_LEVEL, ROOM_COUNT, TRAIL_COUNT } from "./content/rooms.ts";
+import { ECONOMY, MAX_LEVEL, TRAIL_COUNT } from "./content/rooms.ts";
 import { isTraitId, TRAIT_IDS, traitNumber } from "./content/traits.ts";
+import { lastRoom } from "./endless.ts";
 import type { FightResult, FightSetup, FightSummary, Tally } from "./fight/types.ts";
 import { SEATS } from "./hex.ts";
 import { OWNABLE, readRoster, type Roster } from "./own.ts";
@@ -94,6 +96,9 @@ function readPiece(v: unknown, nextId: number): Piece | null {
 /** A run's roster. A run saved before there were runs with the member's own figures is one on the main way. */
 const readOwn = (v: unknown): Roster | null =>
   v === undefined || v === null ? null : (readRoster(v) ?? bad("the roster"));
+/** A run's endless way. A run saved before there were endless runs is one of fifteen rooms. */
+const readEndless = (v: unknown): EndlessWay | null =>
+  v === undefined || v === null ? null : isEndlessWay(v) ? v : bad("the endless way");
 const isChoiceKind = (v: unknown): v is Choice["kind"] => v === "starter" || v === "component" || v === "boon";
 /** A pick waiting, with nothing on offer: as it is shown behind the first, and before it is drawn again. */
 function blankChoice(v: unknown): Choice {
@@ -284,6 +289,7 @@ function readParts(r: Record<string, unknown>, old: boolean, shown: boolean): { 
     nextId,
     last: drawn(() => readLast(r.last), null, false),
     own: readOwn(r.own),
+    endless: readEndless(r.endless),
     seen: {
       fielded: unique(each(seen.fielded, isFigureId, OWNABLE.length, "the almanac notes"), "the almanac notes"),
       threeStars: unique(each(seen.threeStars, isFigureId, OWNABLE.length, "the almanac notes"), "the almanac notes"),
@@ -332,7 +338,7 @@ function readRun(v: unknown, old: boolean): Run {
  */
 function settle(run: Run): void {
   run.trail = Math.min(run.trail, TRAIL_COUNT - 1);
-  run.room = Math.min(run.room, ROOM_COUNT - 1);
+  run.room = Math.min(run.room, lastRoom(run));
   run.resolve = Math.min(run.resolve, ECONOMY.resolve);
   run.level = Math.min(run.level, MAX_LEVEL);
   gainXp(run, 0, []);

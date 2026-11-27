@@ -300,6 +300,27 @@ async function exchanges(): Promise<Record<string, Exchange>> {
   await call("GET /v1/game/people/{player}", "GET", `/v1/game/people/${alice}`, undefined, "bob-token");
   clock.now = T0 + 25 * MINUTE;
   await call("GET /v1/game/people/{player}, unknown", "GET", "/v1/game/people/20000000-0000-0000-0000-000000000009");
+  // The Little Raid's endless run: Alice sets out in the Wilds, beside her run in hand. Bob won room
+  // 31 there last week and room 24 this week. The Wilds' boards, and the Deep Woods' rooms she holds.
+  await call("POST /v1/game/play/{game}, setting out on an endless run", "POST", "/v1/game/play/raid", {
+    player: alice,
+    commands: [{ id: "endless-1", do: "endless", way: "wilds" }],
+  });
+  for (const [slot, room, at] of [
+    ["depth:wilds:ever", 31, T0 - 9 * 24 * 60 * MINUTE],
+    ["depth:wilds:week", 24, clock.now - MINUTE],
+  ] as const) {
+    // oxlint-disable-next-line no-await-in-loop -- one after another
+    await leaf.query(
+      (sql) => sql`
+        INSERT INTO play_kept (player_id, game, slot, data, updated_at)
+        VALUES (${bob}, 'raid', ${slot}, ${JSON.stringify({ room })}, ${at})
+      `,
+    );
+  }
+  await call("GET /v1/game/raid/depths/{way}/{span}", "GET", "/v1/game/raid/depths/wilds/ever");
+  await call("GET /v1/game/raid/depths/{way}/{span}, this week", "GET", "/v1/game/raid/depths/wilds/week");
+  await call("GET /v1/game/raid/held", "GET", "/v1/game/raid/held");
   // The Treasury: what it sells (LE beyond her Leaf for now), a tome request bought (the backend
   // charges it through Leaf), the same again, 40 LE once the staff grant her more, and a guest.
   backend.api = rewardQueue("alice-token", alice, (path, init) => app.request(path, init)).api;

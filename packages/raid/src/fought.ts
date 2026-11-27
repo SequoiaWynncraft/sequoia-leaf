@@ -4,8 +4,10 @@
  * every fight decided, on either way of setting out; nothing a player sees reads it.
  */
 import { type BoonId, isBoonId } from "./content/boons.ts";
-import { regularOf, type RoomKind, ROOMS } from "./content/rooms.ts";
+import { ENDLESS_WAYS, type EndlessWay } from "./content/endless.ts";
+import { regularOf, type RoomKind } from "./content/rooms.ts";
 import { isTraitId, type TraitId } from "./content/traits.ts";
+import { roomAt } from "./endless.ts";
 import type { FightResult, FightSummary } from "./fight/types.ts";
 import { isPlaced, type Party, type Placed, traitSteps } from "./party.ts";
 import { type Fought, resolveLost, type Run } from "./run.ts";
@@ -20,9 +22,10 @@ export type FoughtSide = {
 export type FightRecord = {
   /** The run's number at its table. */
   run: number;
-  way: "main" | "own";
+  /** How the run set out: the main way, the member's own figures, or one of the endless ways. */
+  way: "main" | "own" | EndlessWay;
   trail: number;
-  /** The room, counting from 0 as `ROOMS` does. */
+  /** The room, counting from 0 as `ROOMS` does (an endless run's go on past the fifteenth: `roomAt`). */
   room: number;
   kind: RoomKind;
   /** Who was across: `plan:<n>`, the room's nth plan in `ROOMS`; `regular:<figure>`; or `member:<Leaf id>`. */
@@ -59,7 +62,7 @@ function acrossOf(room: number, foe: Party): string {
   if (foe.by !== undefined) return `member:${foe.by}`;
   const regular = regularOf(foe);
   if (regular) return `regular:${regular.kind}`;
-  return `plan:${ROOMS[room]?.plans.findIndex((plan) => plan.name === foe.title) ?? -1}`;
+  return `plan:${roomAt(room)?.plans.findIndex((plan) => plan.name === foe.title) ?? -1}`;
 }
 
 const sideOf = (party: Party, boons: readonly BoonId[]): FoughtSide => ({
@@ -71,10 +74,10 @@ const sideOf = (party: Party, boons: readonly BoonId[]): FoughtSide => ({
 /** The record of the fight a run (its `runs`th at the table) is fighting, as Leaf decided it. */
 export function fightRecord(runs: number, run: Run, { setup, outcome }: Fought): FightRecord {
   const [ours, theirs] = setup.sides;
-  const kind = ROOMS[run.room]?.kind ?? "spar";
+  const kind = roomAt(run.room)?.kind ?? "spar";
   return {
     run: runs,
-    way: run.own ? "own" : "main",
+    way: run.endless ?? (run.own ? "own" : "main"),
     trail: run.trail,
     room: run.room,
     kind,
@@ -111,7 +114,7 @@ function whereOf(
   v: Record<string, unknown>,
 ): Pick<FightRecord, "run" | "way" | "trail" | "room" | "kind" | "across"> | null {
   const { run, way, trail, room, kind, across } = v;
-  if (!whole(run) || !oneOf(way, ["main", "own"]) || !whole(trail) || !whole(room)) return null;
+  if (!whole(run) || !oneOf(way, ["main", "own", ...ENDLESS_WAYS]) || !whole(trail) || !whole(room)) return null;
   if (!oneOf(kind, ["trouble", "spar", "boss"]) || typeof across !== "string" || across.length > 80) return null;
   return { run, way, trail, room, kind, across };
 }

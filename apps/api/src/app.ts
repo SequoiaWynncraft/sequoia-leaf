@@ -26,6 +26,7 @@ import { Live, LIVE_SOCKETS, LiveTuned } from "./live/live.ts";
 import { LiveRoute } from "./live/route.ts";
 import { Watchers } from "./live/watchers.ts";
 import { Coins } from "./play/coins.ts";
+import { RaidDepths } from "./play/depths.ts";
 import { Play } from "./play/service.ts";
 import { PlayStore } from "./play/store.ts";
 import { Logins } from "./players/logins.ts";
@@ -114,6 +115,7 @@ export const Stores = Layer.mergeAll(
   Tallies.layer,
   Camps.layer,
   PlayStore.layer,
+  RaidDepths.layer,
   Coins.layer,
   Purchases.layer,
   SignIns.layer,

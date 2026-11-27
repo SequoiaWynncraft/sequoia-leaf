@@ -1,4 +1,5 @@
 import type { MinecraftId, PlayerId } from "@sequoia-leaf/core";
+import { ENDLESS_WAYS } from "@sequoia-leaf/raid/content/endless.ts";
 import { Context, type Redacted, Schema } from "effect";
 import {
   HttpApi,
@@ -57,6 +58,8 @@ import {
   Purchased,
   PurseBeside,
   Quests,
+  RaidDepths,
+  RaidHeld,
   Rates,
   RequestBody,
   RequestMade,
@@ -308,6 +311,21 @@ export class GamePlayApi extends HttpApiGroup.make("gamePlay")
   .middleware(Player)
   .prefix("/v1/game") {}
 
+/**
+ * The Little Raid's endless runs: an endless way's board of the deepest rooms won, for all time or
+ * this week, and the rooms of the Deep Woods the caller holds this week.
+ */
+export class GameRaidApi extends HttpApiGroup.make("gameRaid")
+  .add(
+    HttpApiEndpoint.get("depths", "/raid/depths/:way/:span", {
+      params: { way: Schema.Literals(ENDLESS_WAYS), span: Schema.Literals(["ever", "week"]) },
+      success: RaidDepths,
+    }),
+    HttpApiEndpoint.get("held", "/raid/held", { success: RaidHeld }),
+  )
+  .middleware(Player)
+  .prefix("/v1/game") {}
+
 const CampParams = { player: Schema.String };
 
 /** The camps: every one there is, likes given and taken back, and the caller's own camp's visitors. */
@@ -409,6 +427,7 @@ export class LeafApi extends HttpApi.make("sequoia-leaf")
   .add(GamePeopleApi)
   .add(GamePresenceApi)
   .add(GamePlayApi)
+  .add(GameRaidApi)
   .add(GameCampsApi)
   .add(GameRequestsApi)
   .add(GameTallyApi)

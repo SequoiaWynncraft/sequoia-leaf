@@ -363,14 +363,15 @@ An event is something a client would want to show when it happens. Each one is
 written in the same transaction as the change it reports, and has an id that
 only grows.
 
-| Type               | When                        | `data`                                                                                     |
-| ------------------ | --------------------------- | ------------------------------------------------------------------------------------------ |
-| `leaf_earned`      | A raid or war paid Leaf.    | `source`, `leaf`, `xp`, `detail`, `occurred_at`, and for a war `in_claim`                  |
-| `quest_completed`  | A quest finished and paid.  | `quest`, in the shape `/v1/me/quests` uses                                                 |
-| `quest_rerolled`   | The member swapped a quest. | `replaced` and `quest`, the old and the new, and `leaf`, what it cost                      |
-| `level_up`         | XP reached a new level.     | `level`, and `leaf`, what the levels reached paid                                          |
-| `achievement_paid` | A milestone paid Leaf.      | `award_id`, `ladder`, `milestone`, `tier`, `threshold`, `label`, `leaf`, `xp`, `earned_at` |
-| `camp_liked`       | Somebody liked their camp.  | `by`, `{ "id", "username" }`, the first time that person ever liked it                     |
+| Type               | When                                       | `data`                                                                                       |
+| ------------------ | ------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| `leaf_earned`      | A raid or war paid Leaf.                   | `source`, `leaf`, `xp`, `detail`, `occurred_at`, and for a war `in_claim`                    |
+| `quest_completed`  | A quest finished and paid.                 | `quest`, in the shape `/v1/me/quests` uses                                                   |
+| `quest_rerolled`   | The member swapped a quest.                | `replaced` and `quest`, the old and the new, and `leaf`, what it cost                        |
+| `level_up`         | XP reached a new level.                    | `level`, and `leaf`, what the levels reached paid                                            |
+| `achievement_paid` | A milestone paid Leaf.                     | `award_id`, `ladder`, `milestone`, `tier`, `threshold`, `label`, `leaf`, `xp`, `earned_at`   |
+| `camp_liked`       | Somebody liked their camp.                 | `by`, `{ "id", "username" }`, the first time that person ever liked it                       |
+| `held_taken`       | Somebody took a place they held this week. | `game`, `slot` (the raid's `deep:<room>`, counting from 0), and `by`, `{ "id", "username" }` |
 
 `detail` is the raid's name or the territory fought over. `occurred_at` is when
 the raid or war was played, which can be well before the event: a credit that
@@ -416,26 +417,28 @@ reads what it missed itself, then joins the look, and sends each event once.
 
 ### The game's routes
 
-| Route                                 | What it returns                                                       |
-| ------------------------------------- | --------------------------------------------------------------------- |
-| `GET /v1/game/hello`                  | Where to sign in, and whether Leaf may be spent. Needs no session.    |
-| `GET /v1/game/me`                     | The player, their rank, Leaf, XP, level, newest event's id and Coins. |
-| `GET /v1/game/skins/{uuid}`           | A player's skin sheet, as a PNG.                                      |
-| `GET /v1/game/guild/events`           | What happened across the guild, oldest first.                         |
-| `GET /v1/game/guild/events/stream`    | The same as it happens, as server-sent events.                        |
-| `PUT /v1/game/presence`               | Says where in the game the player is; lists who is there and resting. |
-| `GET /v1/game/presence`               | The same lists, saying nothing: for a page in a live room.            |
-| `GET /v1/game/admin/activity`         | For the staff alone: who played, when, where and for how long.        |
-| `GET /v1/game/play/{game}`            | The player's state in a game Leaf plays, as their page is shown it.   |
-| `POST /v1/game/play/{game}`           | Does a batch of commands in that game, and answers what each did.     |
-| `GET /v1/game/play/{game}/standings`  | The game's board: the twenty highest, and the player's own place.     |
-| `GET /v1/game/tally/{board}/{period}` | A board of the Tally: its top ten, and the player's own place.        |
-| `GET /v1/game/camps`                  | Every camp: whose, the things set out, its likes, the player's own.   |
-| `GET /v1/game/camps/visitors`         | Who likes the player's camp, and who stayed in it this week.          |
-| `PUT /v1/game/camps/{player}/like`    | Likes their camp; `DELETE` takes the like back.                       |
-| `GET /v1/game/banners`                | Every pull banner, its dates, and its headliner's id and name.        |
-| `GET /v1/game/requests`               | The Treasury's aspect and tome requests: their price, or why not.     |
-| `POST /v1/game/requests`              | Buys one with Leaf, through the backend.                              |
+| Route                                   | What it returns                                                        |
+| --------------------------------------- | ---------------------------------------------------------------------- |
+| `GET /v1/game/hello`                    | Where to sign in, and whether Leaf may be spent. Needs no session.     |
+| `GET /v1/game/me`                       | The player, their rank, Leaf, XP, level, newest event's id and Coins.  |
+| `GET /v1/game/skins/{uuid}`             | A player's skin sheet, as a PNG.                                       |
+| `GET /v1/game/guild/events`             | What happened across the guild, oldest first.                          |
+| `GET /v1/game/guild/events/stream`      | The same as it happens, as server-sent events.                         |
+| `PUT /v1/game/presence`                 | Says where in the game the player is; lists who is there and resting.  |
+| `GET /v1/game/presence`                 | The same lists, saying nothing: for a page in a live room.             |
+| `GET /v1/game/admin/activity`           | For the staff alone: who played, when, where and for how long.         |
+| `GET /v1/game/play/{game}`              | The player's state in a game Leaf plays, as their page is shown it.    |
+| `POST /v1/game/play/{game}`             | Does a batch of commands in that game, and answers what each did.      |
+| `GET /v1/game/play/{game}/standings`    | The game's board: the twenty highest, and the player's own place.      |
+| `GET /v1/game/raid/depths/{way}/{span}` | An endless raid board: the twenty deepest, and the player's own place. |
+| `GET /v1/game/raid/held`                | The rooms of the Deep Woods the player holds this week.                |
+| `GET /v1/game/tally/{board}/{period}`   | A board of the Tally: its top ten, and the player's own place.         |
+| `GET /v1/game/camps`                    | Every camp: whose, the things set out, its likes, the player's own.    |
+| `GET /v1/game/camps/visitors`           | Who likes the player's camp, and who stayed in it this week.           |
+| `PUT /v1/game/camps/{player}/like`      | Likes their camp; `DELETE` takes the like back.                        |
+| `GET /v1/game/banners`                  | Every pull banner, its dates, and its headliner's id and name.         |
+| `GET /v1/game/requests`                 | The Treasury's aspect and tome requests: their price, or why not.      |
+| `POST /v1/game/requests`                | Buys one with Leaf, through the backend.                               |
 
 Every one but `hello` takes a session, as above, and lets in anyone signed in,
 member of the guild or not. Someone who is neither a member nor a website admin
@@ -669,7 +672,15 @@ The games on it now: `raid`, The Little Raid (`packages/raid`), `works`, the Wor
   letters, digits and `_ . : -` (core's `SLOT`), and a piece at most 16 KiB of
   JSON (`KEPT_BYTES`): one past either is not kept, Leaf logs a warning with
   the game and the slot, and the command and the batch stand. No route serves
-  a piece: it reaches another player only as what their game makes of it.
+  a piece: it reaches another player only as what their game makes of it, but
+  for the raid's endless boards (below).
+- A piece may hold its slot (`Kept.held`): the slot then has one piece, its
+  holder's, the player who left one there last. Keeping it lets go of everybody
+  else's there, and a player whose piece was left this week (from Monday 00:00
+  UTC) gets a `held_taken` event, once. A command that meets a held slot
+  (`Meeting.held`) is given its holder this week, the caller too, and nothing
+  when nobody left one there this week. The raid's Deep Woods hold their
+  sparring rooms from the sixteenth so (`deep:<room>`).
 - Before a command is tried, Leaf asks the game what slot it meets
   (`Game.meets`), and gives it one piece another player left there
   (`Ctx.met`): of those not the caller's own, in the order of their players'
@@ -693,6 +704,16 @@ The games on it now: `raid`, The Little Raid (`packages/raid`), `works`, the Wor
   them ("Someone" for one Leaf has none for); the outer `you` is the caller's
   own `{ "place", "score", "also" }`, or null before they score. Empty for a
   game with no board.
+- The Little Raid's endless runs leave each member's deepest room won in a way
+  for its boards (`depth:<way>:ever` and `depth:<way>:week`, `{ "room" }`, the
+  room counting from 1, when it is won deeper). `GET
+/v1/game/raid/depths/{way}/{span}` (`way` `wilds` or `deep`, `span` `ever` or
+  `week`, the week from Monday 00:00 UTC) answers `{ "top": [{ "place", "id",
+"name", "room", "at", "you" }], "you" }`: the twenty deepest, a tie going to
+  whoever won it first (`at`); `place` is how many won deeper or as deep sooner,
+  and one; the outer `you` is the caller's own `{ "place", "room", "at" }`, or
+  null. `GET /v1/game/raid/held` answers `{ "rooms" }`: the rooms of the Deep
+  Woods the caller holds this week, counting from 1. A guest leaves nothing.
 - `GET /v1/game/play/{game}/of/{player}` answers `{ "rev", "now", "state" }`
   as the owner's own read does, with what a visitor is given of somebody's
   state (`Game.visit`; the Works gives a visitor the yard as its owner's page

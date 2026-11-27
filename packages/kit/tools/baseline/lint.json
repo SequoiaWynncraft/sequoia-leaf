@@ -77,11 +77,10 @@
     "packages/raid/src/bot.ts": 22,
     "packages/raid/src/fight/core.ts": 25,
     "packages/raid/src/fight/engine.ts": 84,
-    "packages/raid/src/game.ts": 66,
     "packages/raid/src/outside.ts": 19,
     "packages/raid/src/run.ts": 70,
     "packages/raid/src/save.ts": 23,
-    "packages/raid/src/spar.ts": 25,
+    "packages/raid/src/spar.ts": 24,
     "packages/raid/src/tally.ts": 38,
     "packages/raid/src/wire.ts": 28,
     "packages/town/src/game.ts": 97

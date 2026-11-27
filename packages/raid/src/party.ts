@@ -97,8 +97,10 @@ export function traitSteps(party: Pick<Party, "figures">): Partial<Record<TraitI
   return steps;
 }
 
-const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
-const isWhole = (v: unknown, least: number, most: number): v is number =>
+/** Whether plain data is an object of fields, and a whole number in a range: for reading what was stored or sent. */
+export const isRecord = (v: unknown): v is Record<string, unknown> =>
+  typeof v === "object" && v !== null && !Array.isArray(v);
+export const isWhole = (v: unknown, least: number, most: number): v is number =>
   typeof v === "number" && Number.isInteger(v) && v >= least && v <= most;
 
 /** Whether something is one figure standing on a party's half, holding no more than it can. */

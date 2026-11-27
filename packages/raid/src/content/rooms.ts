@@ -116,6 +116,8 @@ export interface SparStrength {
   readonly level: number;
   readonly spent: number;
   readonly components: number;
+  /** Deep enough that a member could have found the copies for any star, however seldom the stall offers the figure. */
+  readonly anyStars?: boolean;
 }
 export interface Room {
   readonly kind: RoomKind;

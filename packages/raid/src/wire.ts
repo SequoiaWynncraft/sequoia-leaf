@@ -1,4 +1,5 @@
 import { BOON_IDS, isBoonId } from "./content/boons.ts";
+import { isEndlessWay } from "./content/endless.ts";
 /**
  * Reading back what Leaf sends the page: the table's view and the notes of each command, field by
  * field, into the game's own types. Anything that does not read is a view or a note this version of
@@ -11,6 +12,7 @@ import { FINISHED_IDS, isComponentId, isFinishedId, isItemId } from "./content/i
 import { isLookKind, lookOf, readLooks } from "./content/looks.ts";
 import { ECONOMY, MAX_LEVEL, ROOM_COUNT, TRAIL_COUNT } from "./content/rooms.ts";
 import { isTraitId, TRAIT_IDS } from "./content/traits.ts";
+import { readWeek } from "./depths.ts";
 import type { RaidNote, RunView, TableView } from "./game.ts";
 import { type News, type Payout, readAlmanac, trailOpen } from "./outside.ts";
 import { OWNABLE, readRoster } from "./own.ts";
@@ -20,12 +22,20 @@ import { fields, Nonsense, readRunView } from "./save.ts";
 const { record, whole, flag, list, one, each, items, setup, outcome, bad } = fields;
 const UINT = 0xffffffff;
 const MOST = 1_000_000;
+/** The furthest room a note may name: an endless run's go past the fifteenth. */
+const ROOMY = 9999;
 
 const isRoomKind = (v: unknown): v is "trouble" | "spar" | "boss" => v === "trouble" || v === "spar" || v === "boss";
 const text = (v: unknown, what: string): string => (typeof v === "string" && v.length <= 200 ? v : bad(what));
 
 /** A run as the page is shown it. */
 const runOf = (v: unknown, what: string): RunView => readRunView(v) ?? bad(what);
+/** One of a table's two runs as the page is shown it, or none: the run in hand, or (`endless`) the endless run. */
+function heldOf(v: unknown, endless: boolean): RunView | null {
+  const what = endless ? "the endless run" : "the run";
+  const run = v === null ? null : runOf(v, what);
+  return run && (run.stage.phase === "over" || (run.endless !== null) !== endless) ? bad(what) : run;
+}
 const isEnding = (v: unknown): v is Ending => v === "won" || v === "lost" || v === "left";
 
 /** The table as Leaf shows it to the page, or null for anything this version could not have sent. */
@@ -36,11 +46,12 @@ export function readView(v: unknown): TableView | null {
     const looks = readLooks(r.looks) ?? bad("the looks");
     const trail = whole(r.trail, 0, TRAIL_COUNT - 1, "the trail");
     if (!trailOpen(almanac, trail)) bad("the trail");
-    const run = r.run === null ? null : runOf(r.run, "the run");
-    if (run?.stage.phase === "over") bad("the run");
     return {
       runs: whole(r.runs, 0, 1_000_000_000, "the runs"),
-      run,
+      run: heldOf(r.run, false),
+      endless: heldOf(r.endless, true),
+      ventures: whole(r.ventures, 0, 1_000_000_000, "the endless runs"),
+      week: readWeek(r.week),
       almanac,
       trail,
       looks,
@@ -199,7 +210,7 @@ function runNote(n: Record<string, unknown>): Note {
     case "fight":
       return {
         t: "fight",
-        room: whole(n.room, 0, ROOM_COUNT - 1, what),
+        room: whole(n.room, 0, ROOMY, what),
         seed: whole(n.seed, 0, UINT, what),
         setup: setup(n.setup, what),
         outcome: outcome(n.outcome, what),
@@ -208,7 +219,7 @@ function runNote(n: Record<string, unknown>): Note {
       const standing = list(n.standing, 2, what);
       return {
         t: "result",
-        room: whole(n.room, 0, ROOM_COUNT - 1, what),
+        room: whole(n.room, 0, ROOMY, what),
         result: one(n.result, isResult, what),
         standing: [whole(standing[0], 0, 99, what), whole(standing[1], 0, 99, what)],
       };
@@ -220,7 +231,7 @@ function runNote(n: Record<string, unknown>): Note {
     case "room":
       return {
         t: "room",
-        room: whole(n.room, 0, ROOM_COUNT - 1, what),
+        room: whole(n.room, 0, ROOMY, what),
         kind: one(n.kind, isRoomKind, what),
         who: text(n.who, what),
         title: text(n.title, what),
@@ -240,6 +251,7 @@ function noteOf(v: unknown): RaidNote {
         t: "started",
         trail: whole(n.trail, 0, TRAIL_COUNT - 1, "a note"),
         run: whole(n.run, 1, 1_000_000_000, "a note"),
+        ...(n.endless === undefined ? {} : { endless: one(n.endless, isEndlessWay, "a note") }),
       };
     case "trail":
       return { t: "trail", trail: whole(n.trail, 0, TRAIL_COUNT - 1, "a note") };

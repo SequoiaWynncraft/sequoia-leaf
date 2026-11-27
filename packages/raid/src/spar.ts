@@ -11,7 +11,7 @@ import { pick, type Stream, weighted } from "@sequoia-leaf/core";
  */
 import { FIGURE_IDS, type FigureId, FIGURES, specOf, type Stars, starScale, traitsOf } from "./content/figures.ts";
 import { type ComponentId, holdItem, type ItemId } from "./content/items.ts";
-import { HANDLES, ROOMS, STALL_ODDS, TRAILS } from "./content/rooms.ts";
+import { HANDLES, ROOMS, type SparStrength, STALL_ODDS, TRAILS } from "./content/rooms.ts";
 import { type CallingId, CALLINGS, type KinId, KINS, stepFor, TRAITS } from "./content/traits.ts";
 import { arrange } from "./formation.ts";
 import { countTraits, type Party, type Placed } from "./party.ts";
@@ -47,10 +47,17 @@ function suits(kind: FigureId): readonly ComponentId[] {
   }
 }
 
-/** The party a regular brings to a sparring room, from a seed. */
-export function sparParty(seed: number, roomIndex: number, trailIndex: number): Party {
+/** A sparring partner's strength in a room, as the room says; for a room that says none, a weak one. */
+const sparOf = (roomIndex: number): SparStrength => ROOMS[roomIndex]?.spar ?? { level: 3, spent: 6, components: 0 };
+
+/** The party a regular brings to a sparring room, from a seed: as strong as the room says, or as `strength` says. */
+export function sparParty(
+  seed: number,
+  roomIndex: number,
+  trailIndex: number,
+  strength: SparStrength = sparOf(roomIndex),
+): Party {
   const s: Stream = { rng: seed >>> 0 };
-  const strength = ROOMS[roomIndex]?.spar ?? { level: 3, spent: 6, components: 0 };
   const trail = TRAILS[trailIndex] ?? TRAILS[0];
   const who = pick(s, HANDLES);
   const kin: KinId = pick(s, KINS);
@@ -84,7 +91,9 @@ export function sparParty(seed: number, roomIndex: number, trailIndex: number): 
   for (;;) {
     const able = chosen.filter(
       (c) =>
-        c.stars < 3 && starPrice(c) <= budget && odds(c.kind) >= (c.stars === 1 ? STAR_ODDS.second : STAR_ODDS.third),
+        c.stars < 3 &&
+        starPrice(c) <= budget &&
+        (strength.anyStars === true || odds(c.kind) >= (c.stars === 1 ? STAR_ODDS.second : STAR_ODDS.third)),
     );
     const at = weighted(
       s,

@@ -557,6 +557,15 @@
       "state": {
         "runs": 0,
         "run": null,
+        "endless": null,
+        "ventures": 0,
+        "week": {
+          "at": 1795392000000,
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          }
+        },
         "almanac": {
           "fielded": [],
           "threeStars": [],
@@ -564,7 +573,11 @@
           "topped": [],
           "bosses": [[], [], []],
           "best": [0, 0, 0],
-          "runs": 0
+          "runs": 0,
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          }
         },
         "trail": 0,
         "looks": {
@@ -690,11 +703,21 @@
           "nextId": 2,
           "last": null,
           "own": null,
+          "endless": null,
           "seen": {
             "fielded": [],
             "threeStars": [],
             "forged": [],
             "topped": []
+          }
+        },
+        "endless": null,
+        "ventures": 0,
+        "week": {
+          "at": 1795392000000,
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
           }
         },
         "almanac": {
@@ -704,7 +727,11 @@
           "topped": [],
           "bosses": [[], [], []],
           "best": [0, 0, 0],
-          "runs": 0
+          "runs": 0,
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          }
         },
         "trail": 0,
         "looks": {
@@ -850,11 +877,21 @@
           "nextId": 2,
           "last": null,
           "own": null,
+          "endless": null,
           "seen": {
             "fielded": [],
             "threeStars": [],
             "forged": [],
             "topped": []
+          }
+        },
+        "endless": null,
+        "ventures": 0,
+        "week": {
+          "at": 1795392000000,
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
           }
         },
         "almanac": {
@@ -864,7 +901,11 @@
           "topped": [],
           "bosses": [[], [], []],
           "best": [0, 0, 0],
-          "runs": 0
+          "runs": 0,
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          }
         },
         "trail": 0,
         "looks": {
@@ -996,11 +1037,21 @@
           "nextId": 2,
           "last": null,
           "own": null,
+          "endless": null,
           "seen": {
             "fielded": [],
             "threeStars": [],
             "forged": [],
             "topped": []
+          }
+        },
+        "endless": null,
+        "ventures": 0,
+        "week": {
+          "at": 1795392000000,
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
           }
         },
         "almanac": {
@@ -1010,7 +1061,11 @@
           "topped": [],
           "bosses": [[], [], []],
           "best": [0, 0, 0],
-          "runs": 0
+          "runs": 0,
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          }
         },
         "trail": 0,
         "looks": {
@@ -1189,11 +1244,21 @@
           "nextId": 2,
           "last": null,
           "own": null,
+          "endless": null,
           "seen": {
             "fielded": [],
             "threeStars": [],
             "forged": [],
             "topped": []
+          }
+        },
+        "endless": null,
+        "ventures": 0,
+        "week": {
+          "at": 1795392000000,
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
           }
         },
         "almanac": {
@@ -1203,7 +1268,11 @@
           "topped": [],
           "bosses": [[], [], []],
           "best": [0, 0, 0],
-          "runs": 0
+          "runs": 0,
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          }
         },
         "trail": 0,
         "looks": {
@@ -1337,11 +1406,21 @@
           "nextId": 2,
           "last": null,
           "own": null,
+          "endless": null,
           "seen": {
             "fielded": [],
             "threeStars": [],
             "forged": [],
             "topped": []
+          }
+        },
+        "endless": null,
+        "ventures": 0,
+        "week": {
+          "at": 1795392000000,
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
           }
         },
         "almanac": {
@@ -1351,7 +1430,11 @@
           "topped": [],
           "bosses": [[], [], []],
           "best": [0, 0, 0],
-          "runs": 0
+          "runs": 0,
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          }
         },
         "trail": 0,
         "looks": {
@@ -1405,6 +1488,15 @@
       "state": {
         "runs": 0,
         "run": null,
+        "endless": null,
+        "ventures": 0,
+        "week": {
+          "at": 1795392000000,
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          }
+        },
         "almanac": {
           "fielded": [],
           "threeStars": [],
@@ -1412,7 +1504,11 @@
           "topped": [],
           "bosses": [[], [], []],
           "best": [0, 0, 0],
-          "runs": 0
+          "runs": 0,
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          }
         },
         "trail": 0,
         "looks": {
@@ -2527,6 +2623,305 @@
     "body": {
       "code": "no_such_player",
       "message": "Leaf does not know that player"
+    }
+  },
+  "POST /v1/game/play/{game}, setting out on an endless run": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/play/raid",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000001",
+        "commands": [
+          {
+            "id": "endless-1",
+            "do": "endless",
+            "way": "wilds"
+          }
+        ]
+      }
+    },
+    "status": 200,
+    "body": {
+      "rev": 3,
+      "now": "2026-11-25T12:55:00.000Z",
+      "state": {
+        "runs": 1,
+        "run": {
+          "trail": 0,
+          "room": 0,
+          "stage": {
+            "phase": "plan",
+            "picks": []
+          },
+          "resolve": 20,
+          "acorns": 2,
+          "streak": 0,
+          "level": 1,
+          "xp": 0,
+          "board": [
+            null,
+            null,
+            null,
+            {
+              "id": 1,
+              "kind": "barrowgnome",
+              "stars": 1,
+              "items": [],
+              "fed": 0
+            },
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "bench": [null, null, null, null, null, null, null, null, null],
+          "items": [],
+          "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
+          "held": false,
+          "rustles": 1,
+          "bought": 0,
+          "boons": [],
+          "foe": {
+            "who": "The forest",
+            "title": "A few gnats",
+            "figures": [
+              {
+                "kind": "gnat",
+                "stars": 1,
+                "seat": 2,
+                "items": [],
+                "fed": 0
+              },
+              {
+                "kind": "gnat",
+                "stars": 1,
+                "seat": 4,
+                "items": [],
+                "fed": 0
+              }
+            ],
+            "boons": [],
+            "might": 100
+          },
+          "record": [],
+          "nextId": 2,
+          "last": null,
+          "own": null,
+          "endless": null,
+          "seen": {
+            "fielded": [],
+            "threeStars": [],
+            "forged": [],
+            "topped": []
+          }
+        },
+        "endless": {
+          "trail": 0,
+          "room": 0,
+          "stage": {
+            "phase": "plan",
+            "picks": [
+              {
+                "kind": "starter",
+                "options": ["finch", "emberkit", "crab7"]
+              }
+            ]
+          },
+          "resolve": 20,
+          "acorns": 2,
+          "streak": 0,
+          "level": 1,
+          "xp": 0,
+          "board": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "bench": [null, null, null, null, null, null, null, null, null],
+          "items": [],
+          "stall": ["barrowgnome", "emberkit", "moth", "barrowgnome", "barrowgnome"],
+          "held": false,
+          "rustles": 1,
+          "bought": 0,
+          "boons": [],
+          "foe": {
+            "who": "The forest",
+            "title": "A few gnats",
+            "figures": [
+              {
+                "kind": "gnat",
+                "stars": 1,
+                "seat": 2,
+                "items": [],
+                "fed": 0
+              },
+              {
+                "kind": "gnat",
+                "stars": 1,
+                "seat": 4,
+                "items": [],
+                "fed": 0
+              }
+            ],
+            "boons": [],
+            "might": 100
+          },
+          "record": [],
+          "nextId": 1,
+          "last": null,
+          "own": null,
+          "endless": "wilds",
+          "seen": {
+            "fielded": [],
+            "threeStars": [],
+            "forged": [],
+            "topped": []
+          }
+        },
+        "ventures": 1,
+        "week": {
+          "at": 1795392000000,
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          }
+        },
+        "almanac": {
+          "fielded": [],
+          "threeStars": [],
+          "forged": [],
+          "topped": [],
+          "bosses": [[], [], []],
+          "best": [0, 0, 0],
+          "runs": 0,
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          }
+        },
+        "trail": 0,
+        "looks": {
+          "place": "clearing",
+          "cloth": "plum",
+          "lantern": "iron",
+          "bases": "plain",
+          "owned": ["plum"]
+        },
+        "roster": {}
+      },
+      "purse": {
+        "coins": 275,
+        "leaf": 4163,
+        "version": 19
+      },
+      "results": [
+        {
+          "id": "endless-1",
+          "notes": [
+            {
+              "t": "started",
+              "trail": 0,
+              "run": 1,
+              "endless": "wilds"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "GET /v1/game/raid/depths/{way}/{span}": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/raid/depths/wilds/ever"
+    },
+    "status": 200,
+    "body": {
+      "top": [
+        {
+          "place": 1,
+          "id": "10000000-0000-0000-0000-000000000002",
+          "name": "Bob",
+          "room": 31,
+          "at": "2026-11-16T12:30:00.000Z",
+          "you": false
+        }
+      ],
+      "you": null
+    }
+  },
+  "GET /v1/game/raid/depths/{way}/{span}, this week": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/raid/depths/wilds/week"
+    },
+    "status": 200,
+    "body": {
+      "top": [
+        {
+          "place": 1,
+          "id": "10000000-0000-0000-0000-000000000002",
+          "name": "Bob",
+          "room": 24,
+          "at": "2026-11-25T12:54:00.000Z",
+          "you": false
+        }
+      ],
+      "you": null
+    }
+  },
+  "GET /v1/game/raid/held": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/raid/held"
+    },
+    "status": 200,
+    "body": {
+      "rooms": []
     }
   },
   "GET /v1/game/requests": {

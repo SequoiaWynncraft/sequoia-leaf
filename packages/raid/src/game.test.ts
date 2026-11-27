@@ -13,6 +13,7 @@ import {
 } from "@sequoia-leaf/core";
 
 import { SENSIBLE } from "./bot.ts";
+import { type Predicted, type RaidCommand, readCommand } from "./command.ts";
 import { FIGURE_IDS, FIGURES } from "./content/figures.ts";
 import { EMBLEM_IDS, EMBLEMS } from "./content/items.ts";
 import { newLooks } from "./content/looks.ts";
@@ -26,11 +27,8 @@ import {
   legal,
   planCommands,
   predict,
-  type Predicted,
   RAID,
-  type RaidCommand,
   type RaidNote,
-  readCommand,
   refusalText,
   runView,
   type Table,
@@ -107,6 +105,10 @@ describe("a new player's table", () => {
     expect(RAID.view(state, ctx())).toEqual({
       runs: 0,
       run: null,
+      endless: null,
+      ventures: 0,
+      // The week Leaf's clock is in, Monday 00:00 UTC, with nothing won in it.
+      week: { at: Date.UTC(2027, 0, 11), deepest: { wilds: 0, deep: 0 } },
       almanac: state.almanac,
       trail: 0,
       looks: state.looks,
@@ -461,7 +463,7 @@ describe("keeping a table", () => {
       change(record);
       return JSON.stringify(record);
     };
-    for (const text of ["", "nope", "{}", "[]", "null", changed((r) => (r.v = 3)), changed((r) => (r.game = "x"))]) {
+    for (const text of ["", "nope", "{}", "[]", "null", changed((r) => (r.v = 4)), changed((r) => (r.game = "x"))]) {
       expect(RAID.decode(text)).toBeNull();
     }
     expect(RAID.decode(changed((r) => (r.rng = -1)))).toBeNull();
@@ -988,7 +990,7 @@ describe("another member's board in a sparring room", () => {
     const long = metOf(board, 1000, { name: "x".repeat(81) });
     expect(must(into2, { do: "take" }, { ...at, met: long }).state).toEqual(plain);
     // Nine figures, as many as anybody can field, is a board.
-    expect(fieldCap({ level: MAX_LEVEL, boons: ["extrachair"] })).toBe(9);
+    expect(fieldCap({ level: MAX_LEVEL, boons: ["extrachair"], record: [], endless: null })).toBe(9);
     const nine = { ...board, figures: Array.from({ length: 9 }, (_, seat) => greg(seat)) };
     expect(runOf(must(into2, { do: "take" }, { ...at, met: metOf(nine) }).state).foe.by).toBe(MEMBER);
   });
