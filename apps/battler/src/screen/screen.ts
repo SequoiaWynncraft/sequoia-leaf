@@ -18,11 +18,12 @@ import {
   type Payout,
   playsAsKept,
   type RaidNote,
+  resolveFight,
   type RunSummary,
   type RunView,
 } from "@sequoia-leaf/raid";
 
-import { decided } from "./sides.ts";
+import { acrossOf, decided } from "./sides.ts";
 
 /** How a finished run came out, for the page at the end. */
 export interface Ended {
@@ -50,6 +51,8 @@ export interface Playback {
   room: number;
   boss: BossId | null;
   before: Counts;
+  /** The run's last fight watched again: when it is over the room is planned again, and nothing is taken. */
+  again?: true;
 }
 
 /** What a room paid, as it is counted out. */
@@ -99,7 +102,9 @@ export type Event =
   /** The run has ended (walked home from). */
   | { e: "ended"; ended: Ended }
   /** Opens the last fight's sheet while planning, or puts it away. */
-  | { e: "look" };
+  | { e: "look" }
+  /** Plays the run's last fight again (`Run.last`), from planning or the front page. */
+  | ({ e: "watch" } & Table);
 
 const counts = (run: RunView): Counts => ({ acorns: run.acorns, resolve: run.resolve, xp: run.xp, level: run.level });
 
@@ -114,6 +119,31 @@ export function playbackOf(run: RunView, fought: Fought, runs: number): Playback
     before: counts(run),
   };
 }
+
+/** The run's last fight, to be watched again as it was fought; null for a run that has fought none. */
+export function againOf(run: RunView, runs: number): Playback | null {
+  const setup = run.last;
+  const room = run.record.at(-1)?.room;
+  if (!setup || room === undefined) return null;
+  const fought: Fought = { setup, outcome: resolveFight(setup) };
+  return {
+    key: `again:${runs}:${run.record.length}`,
+    fought,
+    kept: true,
+    room,
+    boss:
+      acrossOf(setup)
+        .figures.map((p) => p.kind)
+        .find(isBossId) ?? null,
+    before: counts(run),
+    again: true,
+  };
+}
+/** The run as the table shows who is across: in a fight watched again, the room it was and whoever it was against. */
+export const facing = (screen: Screen, run: RunView): RunView =>
+  screen.at === "fight" && screen.play.again
+    ? { ...run, room: screen.play.room, foe: acrossOf(screen.play.fought.setup) }
+    : run;
 
 /** The table as Leaf has it: its fight played, its room planned, or the front page for no run. */
 function sat({ run, runs }: Table): Screen {
@@ -136,6 +166,31 @@ export function endedOf(screen: Screen): Ended | null {
   return screen.at === "after" && screen.takings.notes ? endedIn(screen.takings.notes) : null;
 }
 
+/** The fight on screen played to its end: its takings asked for; a fight watched again goes back to planning. */
+function playedOut(screen: Screen, key: string): Screen {
+  if (screen.at !== "fight" || screen.play.key !== key) return screen;
+  return screen.play.again
+    ? { at: "plan", looking: false }
+    : { at: "after", play: screen.play, takings: { notes: null, counted: 0, landed: 0, done: false } };
+}
+/** The takings counted out up to a note, an acorn landed, or all of it counted. */
+function countedOut(screen: Screen, ev: Extract<Event, { e: "count" | "landed" | "counted" }>): Screen {
+  if (screen.at !== "after" || !screen.takings.notes) return screen;
+  const t = screen.takings;
+  const takings =
+    ev.e === "count"
+      ? { ...t, counted: Math.max(t.counted, Math.min(ev.upTo, t.notes?.length ?? 0)) }
+      : ev.e === "landed"
+        ? { ...t, landed: t.landed + 1 }
+        : { ...t, done: true };
+  return { ...screen, takings };
+}
+/** The run's last fight played again, from planning or the front page, while the run is planning a room. */
+function watched(screen: Screen, ev: Table): Screen {
+  const play = ev.run && (screen.at === "plan" || screen.at === "front") ? againOf(ev.run, ev.runs) : null;
+  return play && ev.run?.stage.phase === "plan" ? { at: "fight", play } : screen;
+}
+
 /** Moves the screen on. Whatever does not apply where it is changes nothing. */
 export function step(screen: Screen, ev: Event): Screen {
   switch (ev.e) {
@@ -149,9 +204,7 @@ export function step(screen: Screen, ev: Event): Screen {
       return now.at === "plan" ? { at: "plan", looking: screen.looking && ev.run?.last != null } : now;
     }
     case "played":
-      return screen.at === "fight" && screen.play.key === ev.key
-        ? { at: "after", play: screen.play, takings: { notes: null, counted: 0, landed: 0, done: false } }
-        : screen;
+      return playedOut(screen, ev.key);
     case "taken":
       return screen.at === "after" && screen.takings.notes === null
         ? { ...screen, takings: { ...screen.takings, notes: ev.notes } }
@@ -160,17 +213,8 @@ export function step(screen: Screen, ev: Event): Screen {
       return screen.at === "after" && screen.takings.notes === null ? sat(ev) : screen;
     case "count":
     case "landed":
-    case "counted": {
-      if (screen.at !== "after" || !screen.takings.notes) return screen;
-      const t = screen.takings;
-      const takings =
-        ev.e === "count"
-          ? { ...t, counted: Math.max(t.counted, Math.min(ev.upTo, t.notes?.length ?? 0)) }
-          : ev.e === "landed"
-            ? { ...t, landed: t.landed + 1 }
-            : { ...t, done: true };
-      return { ...screen, takings };
-    }
+    case "counted":
+      return countedOut(screen, ev);
     case "carry": {
       if (screen.at !== "after" || !screen.takings.notes) return screen;
       const ended = endedIn(screen.takings.notes);
@@ -180,6 +224,8 @@ export function step(screen: Screen, ev: Event): Screen {
       return { at: "over", ended: ev.ended };
     case "look":
       return screen.at === "plan" ? { at: "plan", looking: !screen.looking } : screen;
+    case "watch":
+      return watched(screen, ev);
   }
 }
 

@@ -1,8 +1,9 @@
 import { portrait } from "@sequoia-leaf/figures/sprites.ts";
 /**
  * Picks: three cards laid on the table to choose one from. The first figure to set out with, a
- * component after trouble, a boon now and then (with the one redraw). Nothing else can be done
- * until the pick is made, so the cards sit over the board.
+ * component after trouble, a boon now and then (with the one redraw); in the Wilds, after a boss,
+ * one of two rules for the next five rooms, with the boss they end at beside them. Nothing else can
+ * be done until the pick is made, so the cards sit over the board.
  */
 import { link, thing } from "@sequoia-leaf/kit/card.ts";
 import { add, el, icon } from "@sequoia-leaf/kit/dom.ts";
@@ -26,13 +27,16 @@ import {
 } from "@sequoia-leaf/raid";
 
 import { boonIcon, glyphPic, itemIcon, itemPic, traitIcon } from "../art/icons.ts";
+import { rulePic } from "../closed.ts";
 import { fly } from "../fx.ts";
 import { signal } from "../signals.ts";
 import { snd } from "../sounds.ts";
 import { boardSpot } from "../stage.ts";
 import { ask, S } from "../state.ts";
 import { boonRef, figureRef, itemRef, makesLines, pic, rich, traitRef } from "./cards.ts";
+import { bossAhead, ruleCard } from "./rulecards.ts";
 import { wantedBy } from "./suits.ts";
+import { ruleTitle } from "./wilds.ts";
 
 let key = "";
 
@@ -41,7 +45,11 @@ const TITLES: Readonly<Record<Choice["kind"], readonly [string, string | null]>>
   starter: ["Who sets out with you?", null],
   component: ["Something from the room", "Two components make an item."],
   boon: ["A boon", "For the rest of the raid."],
+  rule: ["A rule", "Both sides play by it."],
 };
+/** A pick's title and what is under it: a rule's says which rooms it is for. */
+const titleOf = (run: RunView, choice: Choice): readonly [string, string | null] =>
+  choice.kind === "rule" ? [ruleTitle(run.room), TITLES.rule[1]] : TITLES[choice.kind];
 
 /** A picture on a pick that explains itself when pointed at; a tap on it chooses, as anywhere on the card. */
 function art(c: HTMLCanvasElement, ref: string): HTMLElement {
@@ -104,6 +112,22 @@ function boonCardParts(boon: BoonId): HTMLElement[] {
     el("div", "k-dim", { text: spec.sort === "charm" ? "A charm" : "A boon" }),
     rich(boonShort(boon)),
   ];
+}
+
+/** What one of a pick's cards shows. */
+function partsOf(run: RunView, choice: Choice, i: number): (HTMLElement | null)[] {
+  switch (choice.kind) {
+    case "starter":
+      return starterCard(choice.options[i] ?? "rock");
+    case "component":
+      return componentCard(run, choice.options[i] ?? "thorn");
+    case "boon":
+      return boonCardParts(choice.options[i] ?? "windfall");
+    case "rule": {
+      const rule = choice.options[i] ?? "fog";
+      return [el("span", "art", {}, pic(rulePic(rule), 2)), ...ruleCard(rule)];
+    }
+  }
 }
 
 /** Asks Leaf for three other boons. */
@@ -186,19 +210,18 @@ export function renderPicks(): void {
   box.hidden = false;
   box.classList.remove("down");
   box.dataset.kind = choice.kind;
-  const [title, under] = TITLES[choice.kind];
+  const [title, under] = titleOf(run, choice);
   const cards = el("div", "cards", {});
   choice.options.forEach((_, i) => {
     const card = el("button", "k-card pick k-rise", { type: "button", "data-pick": i });
     card.style.animationDelay = `${i * 70}ms`;
-    if (choice.kind === "starter") add(card, ...starterCard(choice.options[i] ?? "rock"));
-    else if (choice.kind === "component") add(card, ...componentCard(run, choice.options[i] ?? "thorn"));
-    else add(card, ...boonCardParts(choice.options[i] ?? "windfall"));
+    add(card, ...partsOf(run, choice, i));
     card.addEventListener("click", () => void take(i, card));
     // Named by what it is; the links inside it stay stops, so a keyboard can read what each is before choosing.
     card.setAttribute("aria-label", card.querySelector(".k-gold")?.textContent ?? "");
     cards.append(card);
   });
+  if (choice.kind === "rule") cards.append(bossAhead(run.room));
   const head = el(
     "div",
     "k-plaque head",

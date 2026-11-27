@@ -378,6 +378,33 @@ it says `endless: true`. It is the fair game on the first trail: the 28 figures,
   (`endless:<n>`, `Table.ventures`), and is written into nothing else of the almanac: no trophy, no
   trail opened, no standing. Its log lines and fight records carry its way.
 
+## The Wilds' rules (`wilds.ts`, `wing.ts`, `fight/rules.ts`, `content/wilds.ts`)
+
+After the boss in room 5 of the Wilds, and after every boss after it, won or lost, a pick of two
+rules waits ahead of the boss's components (`rulePicks`, a `Choice` of kind `rule`), drawn from the
+run's stream, never the rule just played, so never the same two twice in a row. The rule picked holds
+for the next five rooms, a wing (`Run.wing`, `ruleOf`): rooms 6 to 10, 11 to 15, and so on. Both
+parties play by it. The Deep Woods and the trails have none.
+
+- **Stumps.** 3 seats are stumps, the same on both halves, drawn anew every room (`Wing.stumps`):
+  nobody stands on them or walks through them all fight long.
+- **Narrow Table.** The outside columns are closed all fight long: the board is 5 across.
+- **Long Table.** Both front rows are closed while the parties sit down, and open once the fight is on.
+- **Fog.** No attack reaches further than 2 hexes (abilities reach as they do).
+- **Early Dusk.** Dusk falls after 12 seconds, not 30.
+- **Elbow Room.** A figure that sits down with no friend touching it has 30% more attack (its
+  fight's opening says so, as a boost).
+
+A closed seat (`closedSeats`) takes nobody: a move onto one is refused (`closed_hex`); formation
+(`arrange`) and so the regulars and the bot seat round them; the forest's plans move anyone on one to
+the nearest open seat on its half (`seatOpen`); and when a wing starts, or under Stumps each room,
+the member's figures on one move to the nearest open seat (with none, the bench), each saying so
+(`shifted`). A fight is set up with the rule (`FightSetup.rule`); in it a closed hex holds `CLOSED`
+in `Fight.taken`. The bot picks Fog when more of its board fights up close than from 3 hexes or more,
+Long Table the other way round, and otherwise the first card. A run kept before rules (a table of
+version 3) has none, and picks at its next boss; a rule an update takes out is none, and the run
+picks again for the rest of its wing (`pickAgain`).
+
 ## Chance
 
 Every draw a run makes comes from its stream (`run.rng`, core's `rng.ts`): the first picks, the stall, who
@@ -561,6 +588,10 @@ While no member is still in, every wait is 0 (`later`): the regulars play straig
 | `endless.ts`           | Endless runs: the rooms after the fifteenth, the forest growing, chairs, regulars by depth, the Deep Woods' held rooms |
 | `depths.ts`            | How deep endless runs go: the deepest rooms ever and this week, what a won room leaves, what one is paid for           |
 | `content/endless.ts`   | The endless runs' numbers: growth, chairs, the first held room, regulars after room 15, the rooms that come round      |
+| `wilds.ts`             | The Wilds' rules in a run: the pick after a boss, taking a rule, each room laid out under it                           |
+| `wing.ts`              | Which rule a room is played under, the seats it closes, the nearest open seat                                          |
+| `fight/rules.ts`       | The Wilds' rules in a fight: closed hexes, Fog, Early Dusk, Elbow Room                                                 |
+| `content/wilds.ts`     | The Wilds' rules: their names, sentences and numbers                                                                   |
 | `wire.ts`              | Reading Leaf's view and notes back                                                                                     |
 | `sitting/`             | Eight at once on Leaf's clock: the state, the clock, the carousel, commands, what a page is shown, storing it          |
 | `tally.ts`             | What every figure did in a fight, read from its events                                                                 |
@@ -705,6 +736,15 @@ average, dusk falls in 2 to 5% and none is a draw; fights are won as often with 
 as with 11. In the Deep Woods held boards are won 24% of the time and regulars 63%. Held from room
 3, as first designed, the early rooms filled with the week's luckiest boards and the median run
 ended in room 8 (in room 9 with the last three winners kept and one met by the dice).
+
+`review/wilds.ts` holds each of the Wilds' rules against a plain wing: `bun review/wilds.ts 150`. Each
+bot plays the Wilds to room 40 at most, picking rules by its own plain rule, and wherever a rule is
+picked the wing after it is played seven times more from that moment, under each rule and under
+none. At 150 runs for each of 14 habits (6,356 wings), rooms won in a wing under each rule against the
+plain wing, in points, the widest for any habit: Stumps -3 to +2, Narrow Table -2 to +1, Long Table
+-3 to +4, Fog -5 to +2, Early Dusk -4 to +1, Elbow Room -4 to +1. Each rule is the better of the two
+offered 47% to 52% of the time. With eleven a side, Early Dusk ends 59% of the bots' fights in dusk
+(3% under no rule) and 2% in a draw (0%); regulars as strong as rooms 31 to 45 make them, 86% and 2%.
 
 `review/balance.ts` plays whole runs with the bot under different habits (sensible, a saver who
 levels, a roller who chases stars, one fond of each kin and each calling, and a careless one) and

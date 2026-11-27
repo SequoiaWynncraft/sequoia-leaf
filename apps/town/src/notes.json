@@ -1,5 +1,14 @@
 [
   {
+    "id": "raid-wilds-rules",
+    "at": "2026-11-27T10:20Z",
+    "title": "A rule for every wing",
+    "lines": [
+      "In the Wilds, after the boss in room 5 and after every boss after it, you pick one of 2 rules for the next 5 rooms. Both sides play by it: stumps on the board, a narrower or a longer table, fog, an early dusk, or more attack for a figure with nobody beside it.",
+      "Carrying on a raid in the Wilds from the front page first shows your room, the rule, the boss waiting and how the last room went, with Watch it again."
+    ]
+  },
+  {
     "id": "raid-seat-forge",
     "at": "2026-11-27T10:02Z",
     "title": "Forging at live tables",

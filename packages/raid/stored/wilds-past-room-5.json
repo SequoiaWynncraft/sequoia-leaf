@@ -1,0 +1,308 @@
+{
+  "game": "little-raid-table",
+  "v": 3,
+  "rng": 3325162194,
+  "runs": 0,
+  "run": null,
+  "endless": {
+    "seed": 1004315147,
+    "rng": 152811312,
+    "trail": 0,
+    "room": 6,
+    "stage": {
+      "phase": "plan",
+      "picks": []
+    },
+    "resolve": 17,
+    "acorns": 13,
+    "streak": -1,
+    "level": 4,
+    "xp": 6,
+    "board": [
+      null,
+      null,
+      {
+        "id": 1,
+        "kind": "emberkit",
+        "stars": 2,
+        "items": ["honeycake", "wasptail"],
+        "fed": 0
+      },
+      {
+        "id": 5,
+        "kind": "crab7",
+        "stars": 2,
+        "items": [],
+        "fed": 0
+      },
+      {
+        "id": 4,
+        "kind": "emberkit",
+        "stars": 2,
+        "items": [],
+        "fed": 0
+      },
+      null,
+      null,
+      null,
+      null,
+      null,
+      {
+        "id": 7,
+        "kind": "crab23",
+        "stars": 1,
+        "items": [],
+        "fed": 0
+      },
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "bench": [
+      {
+        "id": 14,
+        "kind": "crab7",
+        "stars": 2,
+        "items": [],
+        "fed": 0
+      },
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "items": [],
+    "stall": ["moth", "slug", "crab7", "glorp", "crab12", "cindernewt"],
+    "held": false,
+    "rustles": 1,
+    "bought": 0,
+    "boons": ["widestall", "blanket"],
+    "foe": {
+      "who": "The forest",
+      "title": "A stiff wind",
+      "figures": [
+        {
+          "kind": "mud",
+          "stars": 2,
+          "seat": 3,
+          "items": [],
+          "fed": 0
+        },
+        {
+          "kind": "bramble",
+          "stars": 2,
+          "seat": 2,
+          "items": [],
+          "fed": 0
+        },
+        {
+          "kind": "wasp",
+          "stars": 2,
+          "seat": 5,
+          "items": [],
+          "fed": 0
+        },
+        {
+          "kind": "gust",
+          "stars": 2,
+          "seat": 15,
+          "items": [],
+          "fed": 0
+        },
+        {
+          "kind": "gust",
+          "stars": 2,
+          "seat": 19,
+          "items": [],
+          "fed": 0
+        },
+        {
+          "kind": "magpie",
+          "stars": 2,
+          "seat": 17,
+          "items": [],
+          "fed": 0
+        }
+      ],
+      "boons": [],
+      "might": 100
+    },
+    "record": [
+      {
+        "room": 0,
+        "kind": "trouble",
+        "result": "win",
+        "standing": [1, 0],
+        "boss": null
+      },
+      {
+        "room": 1,
+        "kind": "trouble",
+        "result": "win",
+        "standing": [2, 0],
+        "boss": null
+      },
+      {
+        "room": 2,
+        "kind": "spar",
+        "result": "win",
+        "standing": [4, 0],
+        "boss": null
+      },
+      {
+        "room": 3,
+        "kind": "spar",
+        "result": "win",
+        "standing": [2, 0],
+        "boss": null
+      },
+      {
+        "room": 4,
+        "kind": "boss",
+        "result": "win",
+        "standing": [5, 0],
+        "boss": "oldbramble"
+      },
+      {
+        "room": 5,
+        "kind": "spar",
+        "result": "loss",
+        "standing": [0, 2],
+        "boss": null
+      }
+    ],
+    "nextId": 15,
+    "last": {
+      "seed": 3608722275,
+      "sides": [
+        {
+          "who": "You",
+          "title": "",
+          "figures": [
+            {
+              "kind": "emberkit",
+              "stars": 2,
+              "seat": 2,
+              "items": ["honeycake", "wasptail"],
+              "fed": 0
+            },
+            {
+              "kind": "crab7",
+              "stars": 2,
+              "seat": 3,
+              "items": [],
+              "fed": 0
+            },
+            {
+              "kind": "emberkit",
+              "stars": 2,
+              "seat": 4,
+              "items": [],
+              "fed": 0
+            },
+            {
+              "kind": "crab23",
+              "stars": 1,
+              "seat": 10,
+              "items": [],
+              "fed": 0
+            }
+          ],
+          "boons": [],
+          "might": 100
+        },
+        {
+          "who": "a Moth",
+          "title": "brought Crab Sneaks",
+          "figures": [
+            {
+              "kind": "bushgnome",
+              "stars": 1,
+              "seat": 2,
+              "items": [],
+              "fed": 0
+            },
+            {
+              "kind": "crab12",
+              "stars": 2,
+              "seat": 24,
+              "items": ["plume"],
+              "fed": 0
+            },
+            {
+              "kind": "crab7",
+              "stars": 2,
+              "seat": 3,
+              "items": [],
+              "fed": 0
+            },
+            {
+              "kind": "moth",
+              "stars": 2,
+              "seat": 23,
+              "items": [],
+              "fed": 0
+            }
+          ],
+          "boons": [],
+          "might": 100
+        }
+      ]
+    },
+    "own": null,
+    "endless": "wilds",
+    "seen": {
+      "fielded": ["emberkit", "crab7", "crab23"],
+      "threeStars": [],
+      "forged": ["honeycake", "wasptail"],
+      "topped": []
+    }
+  },
+  "ventures": 1,
+  "almanac": {
+    "fielded": [],
+    "threeStars": [],
+    "forged": [],
+    "topped": [],
+    "bosses": [[], [], []],
+    "best": [0, 0, 0],
+    "runs": 0,
+    "deepest": {
+      "wilds": 5,
+      "deep": 0
+    }
+  },
+  "trail": 0,
+  "looks": {
+    "place": "clearing",
+    "cloth": "bare",
+    "lantern": "iron",
+    "bases": "plain",
+    "owned": []
+  },
+  "week": {
+    "at": 1799625600000,
+    "deepest": {
+      "wilds": 5,
+      "deep": 0
+    }
+  }
+}

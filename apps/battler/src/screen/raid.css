@@ -1217,6 +1217,54 @@ b.dmg.true {
   filter: brightness(1.25);
 }
 
+/* ---------- the Wilds' rules ---------- */
+
+/*
+ * The rule of a fight played under one: a line of its own just above the stall, over the bench, which
+ * nothing uses while the figures fight; while it is up, the toasts stand above it (`--rule-band`).
+ */
+#rule {
+  position: fixed;
+  z-index: 4;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--sheet-floor, 0px) + var(--u) * 2);
+  margin-inline: auto;
+  width: fit-content;
+  max-width: min(calc(100vw - var(--u) * 8), calc(var(--u) * 300));
+  padding: var(--u) calc(var(--u) * 3);
+  font: var(--f-ui);
+  text-align: center;
+  pointer-events: none;
+}
+body[data-rule] #says {
+  margin-bottom: calc(var(--rule-band, 0px) + var(--u) * 5);
+}
+/* Beside the two rules, the boss their rooms end with: a third place in the row, not a card to pick. */
+#picks .ahead {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 2);
+  padding: calc(var(--u) * 3);
+  text-align: center;
+}
+/* The card that picks a run of the Wilds back up: its buttons along the bottom, Carry on the widest. */
+.mode.back {
+  max-width: calc(var(--u) * 260);
+  margin-inline: auto;
+}
+.back-foot {
+  flex-wrap: wrap;
+  gap: calc(var(--u) * 3);
+}
+.back-foot > .k-btn {
+  flex: 1 1 auto;
+}
+.back-foot > #back-carry {
+  flex-basis: 100%;
+}
+
 /* ---------- the front page: the ways to play ---------- */
 
 /* As tall as the window lets it be, whatever is chosen: the card, the board and the button keep their places. */
@@ -1599,6 +1647,11 @@ b.dmg.true {
   }
   .pick .art {
     grid-row: 1 / span 5;
+  }
+  /* The boss ahead of the rules, in a row of its own under them. */
+  #picks .ahead {
+    flex-direction: row;
+    padding: calc(var(--u) * 2) calc(var(--u) * 3);
   }
   .pick .k-wrap {
     justify-content: flex-start;

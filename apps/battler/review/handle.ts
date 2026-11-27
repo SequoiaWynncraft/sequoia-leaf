@@ -90,6 +90,8 @@ export interface Handle {
   woods(...ops: unknown[]): Promise<void>;
   /** Sits down to the run in a slot, as a strip's Carry on does. */
   sit(slot: Slot): string;
+  /** Has a Wilds rule waiting first, offered alone (where the play server stages it), and picks it unless told not to. */
+  rule(id: string, pick?: boolean): Promise<string>;
   /** Has the member hold what pulling these copies of each figure awards (`{ greg: 3 }`), where the play server stages it. */
   pulled(copies: Record<string, number>): Promise<void>;
   /** Has the nth of the play server's other members be the first banner's member (null: nobody), and asks who it is again. */
@@ -320,6 +322,11 @@ export function openHandle(): void {
     sit(slot) {
       sitDown(slot);
       return S.screen.at;
+    },
+    async rule(id, pick = true) {
+      await staged({ rule: id });
+      if (pick) await ask({ do: "choose", option: 0 }, null);
+      return settle();
     },
     async pulled(copies) {
       await staged({ pulled: copies });

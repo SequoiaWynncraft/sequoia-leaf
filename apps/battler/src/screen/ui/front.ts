@@ -17,6 +17,7 @@ import { paintLook } from "../art/place.ts";
 import { liveStrip, tablesBody, tablesFoot, tablesRecord } from "../live/tables.ts";
 import { snd } from "../sounds.ts";
 import { ask, S, type Slot } from "../state.ts";
+import { backCard, backUp, showBack, wildsLaid } from "./back.ts";
 import { figPic, pic } from "./cards.ts";
 import { endlessWhere } from "./endless.ts";
 import {
@@ -41,6 +42,8 @@ import { readNow, readWoods, spanTabs, takenLine, woodsAt, woodsAway, woodsOpts 
 export interface FrontAsks {
   /** Sits down to the run in a slot: the run in hand, or the endless run. */
   carryOn: (slot: Slot) => void;
+  /** Sits down to the run in a slot and plays its last fight again. */
+  watch: (slot: Slot) => void;
   start: (trail: number, own: boolean) => void;
   /** Sets out on an endless run, one way or the other. */
   endless: (way: EndlessWay) => void;
@@ -69,6 +72,7 @@ const kept: { mode: ModeId; trail: number | null; home: Slot | null } = { mode: 
 export const frontAway = (): void => {
   kept.home = null;
   kept.trail = null;
+  showBack(false);
   woodsAway();
 };
 
@@ -409,8 +413,22 @@ function bottom(go: FrontAsks): HTMLElement {
   );
 }
 
-/** What the front page's panel holds. */
-export function frontBody(go: FrontAsks): HTMLElement {
+/** Carrying on with a run of the Wilds puts its card up first (`back.ts`); any other run sits down. */
+const backFirst = (go: FrontAsks): FrontAsks => ({
+  ...go,
+  carryOn: (slot) => {
+    if (slot !== "endless" || wildsLaid() === null) return go.carryOn(slot);
+    snd.tap();
+    showBack(true);
+    go.redraw();
+  },
+});
+
+/** What the front page's panel holds: the menu, or the card of a run of the Wilds being picked back up. */
+export function frontBody(asked: FrontAsks): HTMLElement {
+  const wilds = wildsLaid();
+  if (backUp() && wilds) return el("div", "k-body menu", {}, backCard(asked, wilds));
+  const go = backFirst(asked);
   readNow("guild", () => readGuild(go.redraw));
   const at = atNow();
   const shown = shownModes(MODES);

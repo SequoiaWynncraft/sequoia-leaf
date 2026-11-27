@@ -50,12 +50,13 @@ function suits(kind: FigureId): readonly ComponentId[] {
 /** A sparring partner's strength in a room, as the room says; for a room that says none, a weak one. */
 const sparOf = (roomIndex: number): SparStrength => ROOMS[roomIndex]?.spar ?? { level: 3, spent: 6, components: 0 };
 
-/** The party a regular brings to a sparring room, from a seed: as strong as the room says, or as `strength` says. */
+/** The party a regular brings to a sparring room, from a seed: as strong as the room says, or as `strength` says; seated off the `closed` seats. */
 export function sparParty(
   seed: number,
   roomIndex: number,
   trailIndex: number,
   strength: SparStrength = sparOf(roomIndex),
+  closed?: ReadonlySet<number>,
 ): Party {
   const s: Stream = { rng: seed >>> 0 };
   const trail = TRAILS[trailIndex] ?? TRAILS[0];
@@ -127,6 +128,7 @@ export function sparParty(
   const seats = arrange(
     chosen.map((c) => ({ kind: c.kind, health: specOf(c.kind).hp * starScale(c.stars) })),
     stepFor("sneak", counts.sneak ?? 0) > 0,
+    closed,
   );
   const figures: Placed[] = chosen.map((c, i) => ({
     kind: c.kind,

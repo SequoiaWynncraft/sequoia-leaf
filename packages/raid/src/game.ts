@@ -183,11 +183,7 @@ const UINT = 0xffffffff;
 
 /** A pick waiting behind the first: its kind, but not what it will offer. */
 function unseen(choice: Choice): Choice {
-  return choice.kind === "boon"
-    ? { kind: "boon", options: [], redraws: choice.redraws }
-    : choice.kind === "component"
-      ? { kind: "component", options: [] }
-      : { kind: "starter", options: [] };
+  return choice.kind === "boon" ? { kind: "boon", options: [], redraws: choice.redraws } : { ...choice, options: [] };
 }
 
 /** Where a run stands as the page is shown it: only the first of the picks waiting says what it offers. */
@@ -219,6 +215,7 @@ export function runView(run: RunView): RunView {
     last: run.last,
     own: run.own,
     endless: run.endless,
+    wing: run.wing,
     seen: run.seen,
   };
 }
@@ -528,11 +525,13 @@ export function planCommands(view: TableView, habit: Habit, endless = false): Ra
 
 const GAME = "little-raid-table";
 /**
- * 3: the endless run beside the run in hand, and the week's deepest rooms. 2: a run keeps where it
- * stands as one value (`Stage`). A table of versions 1 and 2 is read as well.
+ * 4: a run of the Wilds keeps the rule picked for its wing (`Run.wing`), and a fight its rule. 3: the
+ * endless run beside the run in hand, and the week's deepest rooms. 2: a run keeps where it stands as
+ * one value (`Stage`). A table of versions 1 to 3 is read as well: its runs have no rule, and a run of
+ * the Wilds past room 5 picks one at its next boss.
  */
-export const TABLE_VERSION = 3;
-const READS = [1, 2, TABLE_VERSION] as const;
+export const TABLE_VERSION = 4;
+const READS = [1, 2, 3, TABLE_VERSION] as const;
 
 export const encodeTable = (state: Table): string =>
   JSON.stringify({

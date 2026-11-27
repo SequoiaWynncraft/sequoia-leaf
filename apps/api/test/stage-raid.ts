@@ -12,7 +12,8 @@
  *
  * The endless run: `{ venture: { way, seed, room, level, acorns } }` sets out on one, in a room
  * (counting from 0) with every room before it won, at a level and with acorns; any other step with
- * `slot: "endless"` is done to it rather than to the run in hand. `stageWoods` fills the endless
+ * `slot: "endless"` is done to it rather than to the run in hand. `{ rule: "fog" }` has a Wilds rule
+ * waiting to be picked first, offered alone: picking it plays the wing under it. `stageWoods` fills the endless
  * boards with other members, and has one of them hold rooms of the Deep Woods.
  */
 import { type PlayerId, utcWeekStart } from "@sequoia-leaf/core";
@@ -26,6 +27,7 @@ import {
   isFigureId,
   isFinishedId,
   isMemberId,
+  isRuleId,
   layOutAfresh,
   MAX_LEVEL,
   RAID,
@@ -114,6 +116,8 @@ function step(table: Table, op: Record<string, unknown>, made: number[], own: Ro
     const met = { player: "20000000-0000-4000-8000-0000000000aa", name: op.member, data: run.foe, of: 1 };
     run.foe = boardMet(met, false, run.endless ? ENDLESS.chairs : 0) ?? run.foe;
   }
+  if (isRuleId(op.rule) && run.stage.phase === "plan")
+    run.stage.picks = [{ kind: "rule", options: [op.rule] }, ...run.stage.picks.filter((c) => c.kind !== "rule")];
   if (op.strip === true) {
     for (const piece of [...run.board, ...run.bench]) if (piece) piece.items = [];
   }

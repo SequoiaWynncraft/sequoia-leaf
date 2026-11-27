@@ -34,7 +34,9 @@ import type { FightResult, FightSetup, FightSummary } from "./fight/types.ts";
 import { across } from "./foe.ts";
 import { COLS, SEATS } from "./hex.ts";
 import { placedOf, type Roster, stallOdds, stallPool } from "./own.ts";
-import { type Party, type Placed, type TraitState, traitStates, traitSteps } from "./party.ts";
+import { type Party, type TraitState, traitStates, traitSteps } from "./party.ts";
+import { enterRoom, ruleOptions, rulePicks, takeRule } from "./wilds.ts";
+import { closedNow, ruleSetup, type Wing } from "./wing.ts";
 
 // ---------- what a run is ----------
 
@@ -57,7 +59,8 @@ export interface Spot {
 export type Choice =
   | { kind: "starter"; options: FigureId[] }
   | { kind: "component"; options: ComponentId[] }
-  | { kind: "boon"; options: BoonId[]; redraws: number };
+  | { kind: "boon"; options: BoonId[]; redraws: number }
+  | { kind: "rule"; options: Wing["rule"][] };
 /** How a run ended: its last boss beaten, its health gone, or walked home from. */
 export type Ending = "won" | "lost" | "left";
 /**
@@ -117,6 +120,8 @@ export interface Run {
   own: Roster | null;
   /** For an endless run (`endless.ts`), which of its ways it set out on; null for a run of fifteen rooms. */
   endless: EndlessWay | null;
+  /** In the Wilds, the rule picked for a wing (`wing.ts`): it holds while the run is in that wing. Null before the first pick. */
+  wing: Wing | null;
   /** Things this run has done that the almanac remembers. */
   seen: {
     fielded: FigureId[];
@@ -188,6 +193,8 @@ export type Note =
     }
   | { t: "sold"; kind: FigureId; stars: Stars; piece: number; from: Spot; acorns: number; items: ItemId[] }
   | { t: "moved"; piece: number; from: Spot; to: Spot; swapped: number | null }
+  /** Moved off a seat a Wilds rule closed, as the room was laid out under it. */
+  | { t: "shifted"; piece: number; from: number; to: Spot }
   | { t: "rustled"; cost: number; stall: (FigureId | null)[] }
   | { t: "held"; on: boolean }
   | { t: "xp"; gained: number; cost: number }
@@ -214,6 +221,7 @@ export const REFUSALS = {
   pick_starter: "Pick who sets out with you first.",
   pick_boon: "Pick a boon first.",
   pick_component: "Pick a component first.",
+  pick_rule: "Pick a rule first.",
   nothing_to_choose: "There is nothing to choose.",
   not_one_of_three: "That is not one of the three.",
   not_on_offer: "That is not on offer.",
@@ -225,6 +233,7 @@ export const REFUSALS = {
   nobody_there: "Nobody is there.",
   last_figure: "Somebody has to go on the raid.",
   no_such_place: "There is no such place.",
+  closed_hex: "That hex is closed.",
   already_there: "It is already there.",
   field_full: "You can field no more figures for now.",
   top_level: "There is no level above this one.",
@@ -257,12 +266,8 @@ const yes = (notes: Note[]): Done => ({ ok: true, notes });
 // ---------- looking at a run ----------
 
 /** Everyone the party owns, board first. */
-export function pieces(run: Pick<Run, "board" | "bench">): Piece[] {
-  const out: Piece[] = [];
-  for (const p of run.board) if (p) out.push(p);
-  for (const p of run.bench) if (p) out.push(p);
-  return out;
-}
+export const pieces = (run: Pick<Run, "board" | "bench">): Piece[] =>
+  [...run.board, ...run.bench].filter((p) => p !== null);
 export const fielded = (run: Pick<Run, "board">): number => run.board.reduce((n, p) => n + (p ? 1 : 0), 0);
 /** How many figures may be fielded: the level, one more with An Extra Chair, and an endless run's chairs. */
 export const fieldCap = (run: Pick<Run, "level" | "boons" | "record" | "endless">): number =>
@@ -315,14 +320,10 @@ export const sellValue = (piece: Piece): number => sellPrice(FIGURES[piece.kind]
 export const rustleCost = (run: Pick<Run, "rustles">): number => (run.rustles > 0 ? 0 : ECONOMY.rustle);
 /** The party as it would go into a fight now. */
 export function partyOf(run: Pick<Run, "board" | "boons" | "own">): Party {
-  const figures: Placed[] = [];
-  run.board.forEach((p, seat) => {
-    if (p) figures.push(placedOf(run, p, seat));
-  });
   return {
     who: "You",
     title: "",
-    figures,
+    figures: run.board.flatMap((p, seat) => (p ? [placedOf(run, p, seat)] : [])),
     boons: run.boons.filter((b) => FIGHT_BOONS.includes(b)),
     might: 100,
   };
@@ -348,9 +349,7 @@ function drawOffer(run: Run): FigureId | null {
   return pool.length > 0 ? pick(run, pool) : null;
 }
 function restock(run: Run): void {
-  const stall: (FigureId | null)[] = [];
-  for (let i = 0; i < stallSize(run); i++) stall.push(drawOffer(run));
-  run.stall = stall;
+  run.stall = Array.from({ length: stallSize(run) }, () => drawOffer(run));
 }
 
 // ---------- choices ----------
@@ -421,6 +420,7 @@ export function startRun(seed: number, options: RunOptions = {}): Run {
     last: null,
     own: options.own ?? null,
     endless: options.endless ?? null,
+    wing: null,
     seen: { fielded: [], threeStars: [], forged: [], topped: [] },
   };
   run.stage = {
@@ -454,6 +454,7 @@ export function layOutAfresh(run: Run, seed: number): void {
       const count = Math.min(ECONOMY.componentsWon, Math.max(ECONOMY.componentsLost, choice.options.length));
       return { kind: "component", options: componentOptions(run, count) };
     }
+    if (choice.kind === "rule") return { kind: "rule", options: ruleOptions(run, null) };
     return { kind: "boon", options: boonOptions(run, []), redraws: Math.min(choice.redraws, ECONOMY.boonRedraws) };
   });
   run.stage = { phase: "plan", picks };
@@ -466,15 +467,14 @@ export function notPlanning({ stage }: Pick<Run, "stage">): Why | null {
   if (stage.phase === "over") return "raid_over";
   if (stage.phase === "fight") return "fighting";
   const up = stage.picks[0];
-  if (!up) return null;
-  return up.kind === "starter" ? "pick_starter" : up.kind === "boon" ? "pick_boon" : "pick_component";
+  return up ? `pick_${up.kind}` : null;
 }
 
 /** Settles the choice that is waiting, by taking one of its options. */
 export function choose(run: Run, option: number): Done {
   const { stage } = run;
   if (stage.phase === "over") return no("raid_over");
-  const choice = stage.phase === "plan" ? stage.picks[0] : undefined;
+  const choice = picksOf(run)[0];
   if (stage.phase !== "plan" || !choice) return no("nothing_to_choose");
   const notes: Note[] = [];
   if (choice.kind === "starter") {
@@ -490,6 +490,10 @@ export function choose(run: Run, option: number): Done {
     if (item === undefined) return no("not_on_offer");
     run.items.push(item);
     notes.push({ t: "component", item });
+  } else if (choice.kind === "rule") {
+    const rule = choice.options[option];
+    if (rule === undefined) return no("not_on_offer");
+    notes.push(...takeRule(run, rule));
   } else {
     const boon = choice.options[option];
     if (boon === undefined) return no("not_on_offer");
@@ -500,8 +504,7 @@ export function choose(run: Run, option: number): Done {
       run.acorns += amount;
       notes.push({ t: "acorns", why: "windfall", amount });
     } else if (boon === "basket") {
-      const items: ItemId[] = [];
-      for (let i = 0; i < boonNumber(boon, "components"); i++) items.push(pick(run, COMPONENT_IDS));
+      const items: ItemId[] = Array.from({ length: boonNumber(boon, "components") }, () => pick(run, COMPONENT_IDS));
       run.items.push(...items);
       notes.push({ t: "items", why: "basket", items });
     } else if (boon === "blanket") {
@@ -645,6 +648,7 @@ export function move(run: RunView, from: Spot, to: Spot): Done {
   if (piece === undefined || there === undefined) return no("no_such_place");
   if (!piece) return no("nobody_there");
   if (from.on === to.on && from.at === to.at) return no("already_there");
+  if (to.on === "board" && closedNow(run).has(to.at)) return no("closed_hex");
   if (!there && to.on === "board" && from.on === "bench" && fielded(run) >= fieldCap(run)) {
     return no("field_full", fieldCap(run));
   }
@@ -736,10 +740,8 @@ export function beginFight(run: Run): Begun {
   if (fielded(run) === 0) return no("board_empty");
   if (fielded(run) > fieldCap(run)) return no("too_many_fielded");
   for (const p of run.board) if (p) remember(run.seen.fielded, p.kind);
-  for (const state of traitsNow(run)) {
-    if (state.step >= topStep(state.trait)) remember(run.seen.topped, state.trait);
-  }
-  const setup: FightSetup = { seed: draw32(run), sides: [partyOf(run), structuredClone(run.foe)] };
+  for (const state of traitsNow(run)) if (state.step >= topStep(state.trait)) remember(run.seen.topped, state.trait);
+  const setup: FightSetup = { seed: draw32(run), sides: [partyOf(run), structuredClone(run.foe)], ...ruleSetup(run) };
   const outcome = resolveFight(setup);
   run.stage = { phase: "fight", fight: { setup, outcome } };
   return { ok: true, notes: [{ t: "fight", room: run.room, seed: setup.seed, setup, outcome }], setup };
@@ -825,8 +827,8 @@ export function takeTakings(run: Run, met?: Met, more?: boolean): Taken {
   notes.push({ t: "xp", gained: xp, cost: 0 });
   gainXp(run, xp, notes);
 
-  // Things to choose: components from trouble and bosses, a boon after some rooms.
-  const picks: Choice[] = [];
+  // Things to choose: a Wilds rule after a boss, components from trouble and bosses, a boon after some rooms.
+  const picks: Choice[] = rulePicks(run, run.room);
   if (room.kind !== "spar") {
     for (let i = 0; i < (room.kind === "boss" && won ? 2 : 1); i++) {
       const count = won ? ECONOMY.componentsWon : ECONOMY.componentsLost;
@@ -844,7 +846,7 @@ export function takeTakings(run: Run, met?: Met, more?: boolean): Taken {
   run.rustles = ECONOMY.freeRustles + (run.boons.includes("regular") ? boonNumber("regular", "rustles") : 0);
   if (run.held) run.held = false;
   else restock(run);
-  run.foe = foeOf(run, draw32(run), met);
+  notes.push(...enterRoom(run, draw32(run), met));
   const next = roomOf(run);
   if (next) notes.push({ t: "room", room: run.room, kind: next.kind, who: run.foe.who, title: run.foe.title });
   const waiting = picks[0];

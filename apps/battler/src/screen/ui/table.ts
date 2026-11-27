@@ -40,7 +40,7 @@ import { fightEvents, fightUnits } from "../fightview.ts";
 import type { Speed } from "../keep.ts";
 import { light } from "../light.ts";
 import { canBuy, opening, savings, TraitWatch } from "../logic.ts";
-import { shownCounts } from "../screen.ts";
+import { facing, shownCounts } from "../screen.ts";
 import { artPx, place, V } from "../stage.ts";
 import { busy, S } from "../state.ts";
 import { acorns, boonRef, figPic, figureRef, itemRef, pic, traitRef, unitRef } from "./cards.ts";
@@ -535,8 +535,8 @@ export function renderTable(): void {
   renderStall(run);
   renderPurseSide(run);
   renderActs(run);
-  renderFightBar(run);
-  renderFoe(run);
+  renderFightBar(facing(S.screen, run));
+  renderFoe(facing(S.screen, run));
 }
 
 /** Forgets what was drawn, so that the next drawing starts clean: for a new run. */

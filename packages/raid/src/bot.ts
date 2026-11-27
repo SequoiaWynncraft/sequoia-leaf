@@ -19,6 +19,7 @@ import {
 } from "./content/items.ts";
 import { ECONOMY, MAX_LEVEL } from "./content/rooms.ts";
 import { stepFor, TRAIT_IDS, type TraitId } from "./content/traits.ts";
+import type { RuleId } from "./content/wilds.ts";
 import { arrange } from "./formation.ts";
 import { SEATS } from "./hex.ts";
 import { countTraits } from "./party.ts";
@@ -48,6 +49,7 @@ import {
   takeTakings,
   toBench,
 } from "./run.ts";
+import { closedNow } from "./wing.ts";
 
 /**
  * The actions the bot plans with, on a run `R`. Played directly they are the run's own; a page that
@@ -213,6 +215,16 @@ function likesBoon(run: RunView, habit: Habit, boon: BoonId): number {
   if (boon === "smallfry") score = run.board.filter((p) => p && FIGURES[p.kind].tier <= 2).length * 1.3;
   return score;
 }
+/**
+ * How much it likes a Wilds rule, by a plain rule of its own: Fog when more of its board fights up
+ * close than from 3 hexes or more, Long Table when it is the other way round, and nothing else
+ * above any other (the first card, then).
+ */
+function likesRule(run: RunView, rule: RuleId): number {
+  const reach = run.board.flatMap((p) => (p ? [FIGURES[p.kind].range] : []));
+  const lean = reach.filter((r) => r <= 1).length - reach.filter((r) => r >= 3).length;
+  return rule === "fog" ? lean : rule === "long" ? -lean : 0;
+}
 function likesComponent(run: RunView, item: ComponentId): number {
   const own = pieces(run);
   const loose = own.some((p) => p.items.some(isComponentId)) || run.items.some(isComponentId);
@@ -236,6 +248,9 @@ function settleChoices<R extends RunView>(run: R, habit: Habit, s: Stream, hands
         } else if (choice.kind === "boon") {
           const boon = choice.options[i];
           if (boon !== undefined) score = likesBoon(run, habit, boon);
+        } else if (choice.kind === "rule") {
+          const rule = choice.options[i];
+          if (rule !== undefined) score = likesRule(run, rule);
         } else if (isComponentId(option)) score = likesComponent(run, option);
         if (score > bestScore) {
           best = i;
@@ -344,9 +359,11 @@ function seatParty<R extends RunView>(run: R, habit: Habit, hands: Hands<R>): vo
   const own = pieces(run);
   const party = bestParty(habit, own, fieldCap(run));
   const counts = countTraits(party);
+  const closed = closedNow(run);
   const seats = arrange(
     party.map((p) => ({ kind: p.kind, health: specOf(p.kind).hp * starScale(p.stars) })),
     stepFor("sneak", counts.sneak ?? 0) > 0,
+    closed,
   );
   const want = new Map<number, number>();
   party.forEach((p, i) => want.set(p.id, seats[i] ?? i));
@@ -359,7 +376,7 @@ function seatParty<R extends RunView>(run: R, habit: Habit, hands: Hands<R>): vo
   });
   run.bench.forEach((p, slot) => {
     if (!p || !want.has(p.id)) return;
-    const seat = run.board.indexOf(null);
+    const seat = run.board.findIndex((b, s) => b === null && !closed.has(s));
     if (seat >= 0) hands.move(run, { on: "bench", at: slot }, { on: "board", at: seat });
   });
   // Then everyone to their own seat: each move puts at least one of them right.
@@ -373,7 +390,8 @@ function seatParty<R extends RunView>(run: R, habit: Habit, hands: Hands<R>): vo
 function seatCarelessly<R extends RunView>(run: R, s: Stream, hands: Hands<R>): void {
   run.bench.forEach((p, slot) => {
     if (!p || fielded(run) >= fieldCap(run)) return;
-    const free = run.board.flatMap((b, seat) => (b ? [] : [seat]));
+    const closed = closedNow(run);
+    const free = run.board.flatMap((b, seat) => (b || closed.has(seat) ? [] : [seat]));
     hands.move(run, { on: "bench", at: slot }, { on: "board", at: pick(s, free) });
   });
 }

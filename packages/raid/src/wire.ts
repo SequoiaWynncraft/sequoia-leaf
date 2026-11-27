@@ -123,8 +123,8 @@ function newsOf(v: unknown): News {
 
 const isAcornsWhy = (v: unknown): v is AcornsWhy => ACORNS_WHYS.some((why) => why === v);
 const isResult = (v: unknown): v is "win" | "loss" | "draw" => v === "win" || v === "loss" || v === "draw";
-const isChoiceKind = (v: unknown): v is "starter" | "component" | "boon" =>
-  v === "starter" || v === "component" || v === "boon";
+const isChoiceKind = (v: unknown): v is "starter" | "component" | "boon" | "rule" =>
+  v === "starter" || v === "component" || v === "boon" || v === "rule";
 
 /** One of the run's own notes. */
 function runNote(n: Record<string, unknown>): Note {
@@ -262,6 +262,8 @@ function noteOf(v: unknown): RaidNote {
     }
     case "made":
       return { t: "made", item: one(n.item, isFinishedId, "a note"), at: whole(n.at, 0, 399, "a note") };
+    case "shifted":
+      return { t: "shifted", piece: piece(n.piece), from: whole(n.from, 0, 63, "a note"), to: spot(n.to, "a note") };
     case "ended":
       return {
         t: "ended",

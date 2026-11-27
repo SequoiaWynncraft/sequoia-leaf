@@ -68,6 +68,12 @@ export async function startEndless(way: EndlessWay): Promise<boolean> {
   return true;
 }
 
+/** Sits down to the run in a slot and plays its last fight again; then the room is planned as it was. */
+export function watchAgain(slot: Slot): void {
+  playSlot(slot);
+  go({ e: "watch", ...tableNow() });
+}
+
 /** Steps back from the board to the front page; the run is kept as it is. */
 export function toFront(): void {
   go({ e: "front" });
