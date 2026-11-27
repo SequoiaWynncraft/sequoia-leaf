@@ -7,6 +7,7 @@ import { beatAt, drawFigure, drawStanding, drawStars, framesOf, hoverAt } from "
  */
 import { CREAM, GOLD, INK, SKY, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { R } from "@sequoia-leaf/kit/pix.ts";
+import { write } from "@sequoia-leaf/kit/text.ts";
 import { clamp, type Ctx } from "@sequoia-leaf/kit/util.ts";
 import { chairsOn, fieldCap, type ItemId, levelOf, pieceAt, type RunView, type Stars } from "@sequoia-leaf/raid";
 import { type FigureId, isBossId, type UnitKind } from "@sequoia-leaf/raid/content/figures.ts";
@@ -20,7 +21,7 @@ import { drawClosed } from "./closed.ts";
 import { drawFightMarks } from "./fightmarks.ts";
 import { drawFight, drawFightAir, fightBump, fightHeldUnder, fightOn } from "./fightview.ts";
 import { burst, drawFlyers, drawFxOver, drawFxUnder, wordsFx } from "./fx.ts";
-import { cellXY, GAP, HEX_H, HEX_W, ROW, seatXY, slotXY } from "./geometry.ts";
+import { BOARD_H, cellXY, GAP, HEX_H, HEX_W, ROW, seatXY, slotXY } from "./geometry.ts";
 import type { Marks } from "./gesture.ts";
 import { handMarks } from "./hand.ts";
 import { drawHeld, type HeldAt, heldAt, heldRow, heldTop } from "./held.ts";
@@ -235,19 +236,47 @@ function drawMarks(g: Ctx): void {
   g.globalAlpha = 1;
 }
 
-/** The room's chairs, as a column of pips beside the front line: gold for a chair taken, hollow for a free one. */
+/** Where the column of chairs starts, under the front line, and how long it may be: to the board's near edge, never past it. */
+const CAP_TOP = HOME_ROWS * ROW + 4;
+const CAP_ROOM = BOARD_H - CAP_TOP;
+/** The most chairs shown as pips, closer together past ten: fewer on a phone, where the table is narrow. */
+const mostPips = (): number => (V.w < 320 ? 10 : 12);
+/** Whether the chairs are written as a count ("9/14") under one pip, there being more than read as pips at a glance. */
+const capInWords = (run: RunView): boolean => fieldCap(run) > mostPips();
+
+/**
+ * The room's chairs, as a column of pips beside the front line: gold for a chair taken, hollow for a
+ * free one; past ten they close up to stay beside the board, and past what reads at a glance it is
+ * one pip and the count under it (`wordsCap`).
+ */
 function drawCap(g: Ctx, run: RunView): void {
   const cap = fieldCap(run);
   const on = chairsOn(run);
   const x = V.bx - 7;
-  const y0 = V.by + HOME_ROWS * ROW + 4;
+  const y0 = V.by + CAP_TOP;
   const flash = V.t - boardFull.at < 0.5 && Math.floor(V.t * 12) % 2 === 0;
-  for (let i = 0; i < cap; i++) {
-    const y = y0 + i * 6;
-    R(g, x, y, 5, 5, INK);
-    R(g, x + 1, y + 1, 3, 3, i < on ? (flash ? "#e67967" : GOLD[1]) : "#3d2050");
-    if (i < on) R(g, x + 1, y + 1, 2, 1, flash ? "#f4a08c" : GOLD[2]);
+  const pips = capInWords(run) ? 1 : cap;
+  const step = Math.min(6, Math.floor(CAP_ROOM / pips));
+  const size = step - 1;
+  for (let i = 0; i < pips; i++) {
+    const y = y0 + i * step;
+    const full = capInWords(run) ? on > 0 : i < on;
+    R(g, x, y, size, size, INK);
+    R(g, x + 1, y + 1, size - 2, size - 2, full ? (flash ? "#e67967" : GOLD[1]) : "#3d2050");
+    if (full) R(g, x + 1, y + 1, size - 3, 1, flash ? "#f4a08c" : GOLD[2]);
   }
+}
+/** The chairs as a count under their pip, when there are more than read as pips: those taken over those there are. */
+function wordsCap(ctx: Ctx, px: number): void {
+  const run = S.run;
+  if (!run || S.screen.at === "front" || S.screen.at === "over" || fightOn() || !capInWords(run)) return;
+  const x = Math.round((V.bx - 4.5) * V.z);
+  const y = (V.by + CAP_TOP + 7) * V.z;
+  const words = { px, bold: true, colour: GOLD[2], align: "center", edge: INK } as const;
+  write(ctx, String(chairsOn(run)), x, y, words);
+  ctx.fillStyle = GOLD[2];
+  ctx.fillRect(x - 5 * px, y + 10 * px, 10 * px, px);
+  write(ctx, String(fieldCap(run)), x, y + 12 * px, words);
 }
 
 /**
@@ -438,6 +467,7 @@ function drawItemMarks(g: Ctx, marks: Marks): void {
 }
 
 export function wordsScene(ctx: Ctx, px: number): void {
+  wordsCap(ctx, px);
   wordsFx(ctx, px);
 }
 

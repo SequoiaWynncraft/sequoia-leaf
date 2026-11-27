@@ -110,7 +110,7 @@ export function buildTable(a: Asks): void {
   const last = el(
     "button",
     "k-btn wood sm",
-    { id: "lastfight", type: "button", onclick: a.lastFight, hidden: true },
+    { id: "lastfight", type: "button", onclick: a.lastFight, "data-off": "" },
     pic(glyph("swords")),
     el("span", "", { text: "Last fight" }),
   );
@@ -152,7 +152,8 @@ export function buildTable(a: Asks): void {
     { id: "plan" },
     rustle,
     hold,
-    el("div", "", { id: "stall" }),
+    // Five empty slots until there is a run: the panel has its height from the start, which the table is fitted above.
+    el("div", "", { id: "stall" }, ...Array.from({ length: 5 }, emptySlot)),
     acornsBtn,
     level,
     levelUp,
@@ -313,10 +314,20 @@ function renderRack(run: RunView): void {
   }
 }
 
-/** The stall whose width is watched, and the watcher. */
-let stallWatched: HTMLElement | null = null;
+/** What watches the stall's width, to fit its names again. */
 let stallWatcher: ResizeObserver | null = null;
 
+/** Where an offer's picture goes: as tall as the tallest figure's, on every card and empty slot alike. */
+const artRoom = (): string => `height: calc(var(--u) * ${portraitRoom()} * var(--fs))`;
+/** A slot of the stall with nothing in it, built as an offer is, so that it is just as tall. */
+const emptySlot = (): HTMLElement =>
+  el("div", "k-slot offer gone", {}, el("div", "art", { style: artRoom() }), el("div", "name"), el("div", "foot"));
+
+/**
+ * The stall: cards of one height whatever they hold (raid.css), an offer bought leaving a slot built
+ * as a card is, so that the panel under the table never changes size and the table above it never
+ * moves.
+ */
 function renderStall(run: RunView): void {
   const stall = byId("stall");
   if (!stall) return;
@@ -324,19 +335,14 @@ function renderStall(run: RunView): void {
   const cat = catalogOf(run);
   if (key === stallKey) return;
   stallKey = key;
-  if (stallWatched !== stall && typeof ResizeObserver === "function") {
-    // A stall made narrower (the purse beside it grew, the window shrank) asks again whether its names fit.
-    stallWatcher?.disconnect();
-    // On the next frame, outside the watcher's own delivery: fitting can change the stall's height.
-    stallWatcher = new ResizeObserver(() => requestAnimationFrame(() => fitNames(stall)));
-    stallWatcher.observe(stall);
-    stallWatched = stall;
-  }
+  // A stall made narrower (the window shrank) asks again which names fit, on the next frame.
+  if (!stallWatcher && typeof ResizeObserver === "function")
+    (stallWatcher = new ResizeObserver(() => requestAnimationFrame(() => fitNames(stall)))).observe(stall);
   stall.replaceChildren();
   stall.style.setProperty("--n", String(run.stall.length));
   run.stall.forEach((kind, i) => {
     if (!kind) {
-      stall.append(el("div", "k-slot offer gone", {}));
+      stall.append(emptySlot());
       return;
     }
     const spec = figureIn(cat, kind);
@@ -347,7 +353,7 @@ function renderStall(run: RunView): void {
       "button",
       `k-card offer t${spec.tier}${canBuy(run, i) ? "" : " cant"}${have >= 2 ? " lit" : ""}`,
       { type: "button", "data-offer": i, "aria-label": `${nameOf(cat, kind)}, ${acornsSaid(price)}` },
-      el("div", "art", { style: `height: calc(var(--u) * ${portraitRoom()} * var(--fs))` }, figPic(portrait(kind))),
+      el("div", "art", { style: artRoom() }, figPic(portrait(kind))),
       el("div", "name", { text: nameOf(cat, kind) }),
       el(
         "div",
@@ -522,7 +528,8 @@ export function renderTable(): void {
   if (plan) plan.inert = picking;
   renderTrack(run);
   const last = byId("lastfight");
-  if (last) last.hidden = S.screen.at !== "plan" || run.last === null || picksOf(run).length > 0;
+  // Off rather than gone: its room in the bar is held, so the health and the corner never slide.
+  if (last) last.toggleAttribute("data-off", S.screen.at !== "plan" || run.last === null || picksOf(run).length > 0);
   renderResolve(run);
   renderTraits(run);
   renderRack(run);
@@ -573,9 +580,14 @@ export function wakeChip(trait: string): void {
   if (chip) replay(chip, "woke");
 }
 
-/** When a name has a word wider than its card, every name on the stall is set in the small style, as a phone sets them. */
+/**
+ * A name too long for its card in the usual size (a word wider than the card, or more than two
+ * lines) is set in the small style, card by card: the room for a name is the same either way
+ * (raid.css), so no name changes the size of its card or of any other.
+ */
 function fitNames(stall: HTMLElement): void {
-  stall.classList.remove("tight");
-  const names = [...stall.querySelectorAll<HTMLElement>(".offer .name")];
-  if (names.some((name) => name.scrollWidth > name.clientWidth)) stall.classList.add("tight");
+  for (const name of stall.querySelectorAll<HTMLElement>(".offer .name")) {
+    name.classList.remove("small");
+    name.classList.toggle("small", name.scrollWidth > name.clientWidth || name.scrollHeight > name.clientHeight);
+  }
 }
