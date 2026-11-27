@@ -155,6 +155,11 @@ export const MOST: readonly ("stops" | null)[] = KIND_DEFS.map((d: KindDef) => d
 /** What each kind does a minute, as a verb and what it does it to (`KindDef.does`); and whether its price is a tile's. */
 export const DOES: readonly (readonly [string, string] | null)[] = KIND_DEFS.map((d: KindDef) => d.does ?? null);
 export const PER_TILE = flagOf((d) => d.perTile);
+/** The kind that studies, where research is studied (`KindDef.studies`). */
+export const STUDYING: Kind = sure(
+  kindNamed(KIND_DEFS.find((d: KindDef) => d.studies === true)?.name),
+  "kind that studies",
+);
 /** The kind that gathers the things from the ground (`KindDef.gathers`). */
 export const GATHERING: Kind = sure(
   kindNamed(KIND_DEFS.find((d: KindDef) => d.gathers === true)?.name),

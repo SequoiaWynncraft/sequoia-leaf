@@ -14,7 +14,7 @@
  * It is kept by what it prints (`tierPrint`, `shows`); its bars are asked of the yard at every
  * refresh, so a thing delivered moves a bar and builds nothing again.
  */
-import { type Goal, GOALS, QUEUE, ready, STUDY } from "@sequoia-leaf/factory";
+import { type Goal, GOALS, QUEUE, ready, STUDYING } from "@sequoia-leaf/factory";
 import { el, icon, replay } from "@sequoia-leaf/kit/dom.ts";
 
 import { takeInHand } from "../plots.ts";
@@ -82,7 +82,7 @@ export function beginButton(g: Goal, how: Begin): HTMLElement {
   if (how === "take") return button("sm", ["Take"], (b) => take(g, b));
   if (how === "build")
     return button("sm", ["Build a Study"], () => {
-      setTool(STUDY);
+      setTool(STUDYING);
       tierHooks.close();
     });
   return button("sm", ["Study"], () => {

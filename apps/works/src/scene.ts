@@ -13,51 +13,28 @@
  */
 
 import {
-  ALL_ITEMS,
   BACK,
-  BELT,
-  BENCH,
-  BOILER,
   condition,
-  CRATE,
-  DEPOT,
   type Dir,
   DRAW,
   DX,
   DY,
-  GATHERER,
+  FIXED,
   GIVES,
-  held as holds,
   holderOf,
   isFilled,
   isItem,
-  item as thing,
-  ITEM_COUNT,
-  ITEMS,
-  JOINER,
   type Kind,
-  LEFT,
   litOf,
-  MILL,
   NONE,
   openOf,
   PACE,
-  PYLON,
   REACH,
-  RECIPE,
-  RECIPES,
-  RIGHT,
-  SORTER,
-  SPLITTER,
+  REACHES,
+  SHUTS,
   STATES,
-  STOP,
-  STUDY,
   tilesOf,
   TROUBLE,
-  TUNNEL,
-  WHEEL,
-  WORK,
-  WORKSHOP,
   type Yard,
 } from "@sequoia-leaf/factory";
 import { CORAL, CREAM, GOLD, INK, SKY } from "@sequoia-leaf/kit/palette.ts";
@@ -67,16 +44,19 @@ import { widthOf, write } from "@sequoia-leaf/kit/text.ts";
 import { clamp, type Ctx, hash, makeCanvas, must, type Pt } from "@sequoia-leaf/kit/util.ts";
 
 import { walkers } from "./actors.ts";
-import { armAt, type Arms, arms, beltTile, marksOf, PAINTS, ride, STEPS, TILE, withArm, woodOf } from "./art/belts.ts";
+import { type Arms, beltTile, marksOf, PAINTS, ride, STEPS, TILE, woodOf } from "./art/belts.ts";
 import { BEYOND, glint, type Ground } from "./art/ground.ts";
 import type { Art } from "./art/index.ts";
-import { DEPOT as DEPOT_ART, FLAG_AT, gathererHat, lookOf } from "./art/machines.ts";
+import { DEPOT as DEPOT_ART, lookOf } from "./art/machines.ts";
 import type { Sprite } from "./art/pal.ts";
 import { drawPlan, drawPlanMarks } from "./far.ts";
-import { bits, burst, floaters, puff, rings, smoke } from "./fx.ts";
+import { bits, floaters, rings } from "./fx.ts";
 import { heldBox, heldMarks } from "./held.ts";
+import { straight } from "./kinds/carrier.ts";
+import { pageOf } from "./kinds/index.ts";
+import type { Drawn, KindPage } from "./kinds/kind.ts";
 import { lampsIn } from "./lamps.ts";
-import { armsAt, asIf, type Layout, layout, pylonTop, sendsRight, sortSide } from "./layout.ts";
+import { armsAt, asIf, type Layout, layout, pylonTop } from "./layout.ts";
 import { eachPerson } from "./people.ts";
 import { pinMark } from "./pinned.ts";
 import { builds, draws, type Group, handGrade, type Mark, S, seenFrom, standsOn, tileNudge } from "./state.ts";
@@ -366,19 +346,6 @@ function light(x: number, y: number, r: number, power: number, reach = false): v
 /** Things flown a little way: what the depot takes in hops over its sill. */
 const hops: { pic: HTMLCanvasElement; x: number; y: number; dx: number; dy: number; t: number }[] = [];
 
-/** A mill's faces: it saws, fires or presses, by what arrives. */
-const FACES = ["saw", "kiln", "press"] as const;
-const SAW = 0;
-const KILN = 1;
-/** The face a mill shows making each thing, and taking each thing in, looked up once by name; `NONE` where none says. */
-const FACE_OUT = new Uint8Array(ITEM_COUNT).fill(NONE);
-const FACE_IN = new Uint8Array(ITEM_COUNT).fill(NONE);
-for (const r of RECIPES) {
-  if (r.face === undefined || r.by !== "mill") continue;
-  const face = FACES.indexOf(r.face);
-  FACE_OUT[thing(r.out)] = face;
-  for (const name of ITEMS) if ((r.from[name] ?? 0) > 0) FACE_IN[thing(name)] = face;
-}
 const WORKING = STATES.indexOf("working");
 const UNPOWERED = STATES.indexOf("unpowered");
 
@@ -430,7 +397,7 @@ function carry(to: Yard): void {
   else if (!from || Math.abs(to.tick - from.tick) > 600) mem.for.fill(NONE);
 }
 
-/** Makes the tile's memory afresh for a piece it was not kept for. A new mill's face is guessed from the gatherer that points into it, until something arrives. */
+/** Makes the tile's memory afresh for a piece it was not kept for: what its kind remembers at first (a new mill's face, `kinds/mill.ts`). */
 function memOf(y: Yard, i: number): void {
   const k = y.kind[i] ?? NONE;
   if (mem.for[i] === k) return;
@@ -442,18 +409,7 @@ function memOf(y: Yard, i: number): void {
   mem.ready[i] = 0;
   mem.struck[i] = 0;
   mem.puffAt[i] = 0;
-  let face = SAW;
-  if (k === MILL) {
-    const W = y.land.w;
-    const x = i % W;
-    const z = (i - x) / W;
-    for (let d = 0; d < 4; d++) {
-      const j = (z + (DY[d] ?? 0)) * W + x + (DX[d] ?? 0);
-      const f = y.kind[j] === GATHERER && y.dir[j] === BACK[d] ? (FACE_IN[y.land.deposit[j] ?? NONE] ?? NONE) : NONE;
-      if (f !== NONE) face = f;
-    }
-  }
-  mem.face[i] = face;
+  mem.face[i] = pageOf(k)?.fresh?.(y, i) ?? 0;
 }
 
 /** How the piece on a tile stands (`condition`), read at most twice a second. */
@@ -474,29 +430,44 @@ function reading(y: Yard, i: number): number {
 const troubled = (i: number): boolean =>
   (mem.cond[i] ?? -1) >= TROUBLE && (mem.since[i] ?? -1) >= 0 && S.t - (mem.since[i] ?? 0) > 1.5;
 
-/** The face a mill shows now: of what it makes, holds ready or is told to make, else of what it holds. */
-function faceOf(y: Yard, i: number, r: number): number {
-  const h = y.holders;
-  const making = h.making[r] ?? NONE;
-  const out = h.out[r] ?? NONE;
-  const n = making !== NONE ? making : out !== NONE ? out : (y.set[i] ?? NONE);
-  let f = FACE_OUT[n] ?? NONE;
-  if (f === NONE && (h.count[r] ?? 0) > 0)
-    for (const k of ALL_ITEMS) if (holds(h, r, k) > 0 && FACE_IN[k] !== NONE) f = FACE_IN[k] ?? NONE;
-  if (f !== NONE) mem.face[i] = f;
-  return mem.face[i] ?? SAW;
-}
-
-const first = <T>(list: readonly T[], i: number): T | undefined => list[clamp(Math.floor(i), 0, list.length - 1)];
-/** Whether the stream is on one side of a tile. */
-const wet = (y: Yard, i: number, side: Dir): boolean => y.land.water[i + DX[side] + DY[side] * y.land.w] === 1;
+/** What drawing a piece is given (`kinds/kind.ts`): one, filled afresh for each piece. */
+const onTile: Drawn = {
+  i: 0,
+  d: 0,
+  grade: 0,
+  look: 0,
+  span: 0,
+  open: true,
+  x: 0,
+  top: 0,
+  foot: 0,
+  cx: 0,
+  z: 0,
+  a: 1,
+  real: true,
+  ghost: 0,
+  powered: true,
+  working: false,
+  r: -1,
+  out: NONE,
+  making: NONE,
+  work: 0,
+  t: 0,
+  pace: 1,
+  seenX: 0,
+  seenY: 0,
+  mem,
+  stand: (s, x, y, z, a = 1) => stand(s, x, y, z, a),
+  put: (c, x, y, z, a = 1) => put(c, x, y, z, a),
+};
 
 /**
  * Puts one piece into the frame: the kind `k` facing `d` on tile `i`, at a `grade` (0 for a kind with
  * none), with a tunnel's `span` and a crate `open` or shut. `x`, `top` is its tile's top-left corner
- * in the picture. A grade above the first is drawn in its own look (`lookOf`), with the grade's mark
- * in the tile's top-left corner. `ghost` draws it as something not yet built: faint, at rest, and
- * with nothing remembered or read of what it holds; a real one (`ghost` 0) is what stands on the tile.
+ * in the picture. Its kind draws it (`KindPage.draw`); what lies flat with the floor draws nothing
+ * here. A grade above the first wears the grade's mark in the tile's top-left corner. `ghost` draws it
+ * as something not yet built: faint, at rest, and with nothing remembered or read of what it holds; a
+ * real one (`ghost` 0) is what stands on the tile.
  */
 function piece(
   art: Art,
@@ -512,198 +483,65 @@ function piece(
   now: Moment,
   ghost: number,
 ): void {
-  const m = art.m;
-  const look = lookOf(grade);
-  const foot = top + TILE;
-  const cx = x + 8;
-  const z = foot + camY;
-  const a = ghost > 0 ? ghost : 1;
   const real = ghost === 0;
-  const powered = !real || litOf(y)[i] === 1;
   const c = real ? reading(y, i) : -1;
-  const working = c >= 0 && c % TROUBLE === WORKING;
+  const page = pageOf(k);
+  if (!page?.draw) return;
   const h = y.holders;
   const r = real ? holderOf(y, i) : -1;
-  const out = r >= 0 ? (h.out[r] ?? NONE) : NONE;
-  const making = r >= 0 ? (h.making[r] ?? NONE) : NONE;
-  const work = r >= 0 ? (h.work[r] ?? 0) : 0;
-  const t = S.t;
-  let head = foot - 16;
-  switch (k) {
-    case GATHERER: {
-      const hat = gathererHat(grade);
-      const left = d === 2 || (d !== 0 && hash(i, 4, 7) > 0.5);
-      const p = work / WORK.gather;
-      const pose = !powered ? 4 : out !== NONE ? 3 : !working ? 0 : p < 0.2 ? 0 : p < 0.4 ? 1 : p < 0.72 ? 2 : 3;
-      const row = (left ? m.gnomeLeft : m.gnome)[hat];
-      const s = row?.[pose];
-      if (!s) break;
-      stand(s, cx, foot - 1, z, a);
-      head = foot - 15;
-      // His basket at his back; from the third grade a wheelbarrow in its place, out beside him.
-      if (look >= 2) {
-        const barrow = left ? m.barrowLeft : m.barrow;
-        put(barrow, left ? x + 11 : x + 5 - barrow.width, foot - barrow.height, z - 0.2, a);
-      } else put(m.basket, left ? x + 15 - m.basket.width : x, foot - m.basket.height, z - 0.2, a);
-      // From the second grade he has a rake, stood in the ground on his other side.
-      if (look > 0) stand(left ? m.rakeLeft : m.rake, x + (left ? 2 : 13), foot - 1, z - 0.1, a);
-      const carried = out !== NONE ? out : pose === 3 ? (y.land.deposit[i] ?? NONE) : NONE;
-      if (isItem(carried) && real) {
-        const pic = art.item(carried);
-        put(pic, cx - Math.floor(pic.width / 2), foot - 16 - pic.height, z + 0.1);
-        head -= pic.height;
-      }
-      if (!powered) put(art.zed.c, cx + 3, foot - 19 - Math.round(Math.sin(S.t * 2) * 1.5), z + 0.3);
-      break;
-    }
-    case MILL: {
-      const face = real && r >= 0 ? faceOf(y, i, r) : SAW;
-      const frames = (face === SAW ? m.saw : face === KILN ? m.kiln : m.press)[look] ?? [];
-      const p = making !== NONE ? work / (RECIPE[making]?.work ?? 24) : 0;
-      const step = !working
-        ? 0
-        : face === SAW
-          ? 1 + (Math.floor(t * 14) % 2)
-          : face === KILN
-            ? 1 + (Math.floor(t * 8 + i) % 3)
-            : p < 0.3
-              ? 0
-              : p < 0.6
-                ? 1
-                : 2;
-      const s = first(frames, step);
-      if (!s) break;
-      stand(s, cx, foot, z, a);
-      head = foot - s.c.height + 2;
-      if (working && face === KILN) {
-        if (S.t > (mem.puffAt[i] ?? 0)) {
-          mem.puffAt[i] = S.t + 0.5 + hash(i, Math.floor(S.t), 3) * 0.4;
-          smoke(cx + 4 + seenX, foot - 19 + seenY, "#9a82a8");
-        }
-      }
-      if (working && face === SAW && S.t > (mem.puffAt[i] ?? 0)) {
-        mem.puffAt[i] = S.t + 0.25;
-        puff(cx + 3 + seenX, foot - 8 + seenY, 1, "#cbb894", 4);
-      }
-      break;
-    }
-    case BENCH: {
-      const p = making !== NONE ? work / (RECIPE[making]?.work ?? 40) : 0;
-      const beat = (p * 2) % 1;
-      const step = !working ? 0 : beat < 0.55 ? 0 : beat < 0.75 ? 1 : 2;
-      const s = first(m.bench[look] ?? [], step);
-      if (!s) break;
-      stand(s, cx, foot, z, a);
-      if (real) {
-        if (step === 2 && mem.struck[i] !== 1) burst(cx - 2 + seenX, foot - 9 + seenY, 3, [GOLD[2], CREAM], 22);
-        mem.struck[i] = step === 2 ? 1 : 0;
-      }
-      break;
-    }
-    case WORKSHOP: {
-      const s = m.workshop[look]?.[working || !real ? 1 : 0]?.[working ? Math.floor(t * 6) % 2 : 0];
-      if (!s) break;
-      stand(s, cx, foot, z, a);
-      head = foot - 25;
-      break;
-    }
-    case CRATE: {
-      const s = m.crate[y.open.crate > 32 ? 1 : 0]?.[open ? 1 : 0];
-      if (s) stand(s, cx, foot - 1, z, a);
-      break;
-    }
-    case PYLON: {
-      const tall = y.open.reach > 100;
-      // Short of power the lamps burn low, and gutter.
-      const dim = now.pace < 1 && Math.sin(S.t * 9 + i) > 0.86 - now.pace;
-      const level = !powered ? 0 : now.pace < 1 ? (dim ? 0 : 1) : 2;
-      const s = m.pylon[tall ? 1 : 0]?.[real ? level : 2];
-      if (s) stand(s, cx, foot, z, a);
-      head = foot - (tall ? 34 : 26);
-      break;
-    }
-    case WHEEL: {
-      // It hangs over whichever side the stream is on.
-      const lean = wet(y, i, 0) ? 5 : wet(y, i, 2) ? -5 : 0;
-      const drop = wet(y, i, 1) ? 4 : wet(y, i, 3) ? -3 : 0;
-      const s = first(m.wheel, powered && real ? Math.floor(t * 8) % 4 : 0);
-      if (s) stand(s, cx + lean, foot + drop, z + (drop > 0 ? 3 : 0), a);
-      head = foot - 20;
-      if (real && powered && S.t > (mem.puffAt[i] ?? 0)) {
-        mem.puffAt[i] = S.t + 0.3;
-        puff(cx + lean + seenX, foot + drop - 1 + seenY, 1, "#93cfd0", 5);
-      }
-      break;
-    }
-    case BOILER: {
-      const burning = real && powered && r >= 0 && (h.fuel[r] ?? 0) > 0;
-      const s = first(m.boiler, burning ? 1 + (Math.floor(t * 7) % 2) : ghost > 0 ? 1 : 0);
-      if (s) stand(s, cx, foot, z, a);
-      head = foot - 23;
-      if (burning) {
-        if (S.t > (mem.puffAt[i] ?? 0)) {
-          mem.puffAt[i] = S.t + 0.3 + hash(i, Math.floor(S.t * 3), 5) * 0.3;
-          smoke(cx + 5 + seenX, foot - 24 + seenY, "#cdb6d8");
-        }
-      }
-      break;
-    }
-    case TUNNEL: {
-      const s = m.hood[look]?.[span > 0 ? d : BACK[d]];
-      if (s) stand(s, cx, foot + 1, z - 2, a);
-      break;
-    }
-    case STUDY: {
-      // Unlit, the lamp is out; lit, the book lies shut until there is a folio to read, and a page turns for each.
-      const p = work / WORK.study;
-      const state = !powered ? 0 : !working ? (real ? 1 : 2) : p < 0.6 ? 2 : p < 0.8 ? 3 : 4;
-      const s = m.study[look]?.[state];
-      if (!s) break;
-      stand(s, cx, foot, z, a);
-      head = foot - 24;
-      break;
-    }
-    case STOP: {
-      // Its cart takes what it is handed, rolls under, and comes back empty.
-      const took = real ? (mem.puffAt[i] ?? 0) : 0;
-      const since = took > 0 ? S.t - took : 9;
-      const cart = since < 0 || since >= 0.5 ? 0 : since < 0.1 ? 1 : since < 0.22 ? 2 : since < 0.36 ? 3 : 4;
-      const s = m.stop[cart];
-      if (s) stand(s, cx, foot, z, a);
-      head = foot - 20;
-      break;
-    }
-    case SPLITTER: {
-      // It lies flat with the floor; the way it puts first wears a flag, standing in that way's arrowhead.
-      const side = firstSide(y, i);
-      if (side === null) return;
-      const [fx, fy] = FLAG_AT[side];
-      const s = m.pennant[side];
-      if (s) stand(s, x + fx, top + fy, top + fy + camY, a);
-      return;
-    }
-    default:
-      // What lies flat (belts, joiners, sorters) is drawn with the floor.
-      return;
-  }
-  // The grade's mark, in the same corner of every graded piece: a belt has it in its own tile.
-  const pip = m.pips[grade - 2];
+  onTile.i = i;
+  onTile.d = d;
+  onTile.grade = grade;
+  onTile.look = lookOf(grade);
+  onTile.span = span;
+  onTile.open = open;
+  onTile.x = x;
+  onTile.top = top;
+  onTile.foot = top + TILE;
+  onTile.cx = x + 8;
+  onTile.z = onTile.foot + camY;
+  onTile.a = ghost > 0 ? ghost : 1;
+  onTile.real = real;
+  onTile.ghost = ghost;
+  onTile.powered = !real || litOf(y)[i] === 1;
+  onTile.working = c >= 0 && c % TROUBLE === WORKING;
+  onTile.r = r;
+  onTile.out = r >= 0 ? (h.out[r] ?? NONE) : NONE;
+  onTile.making = r >= 0 ? (h.making[r] ?? NONE) : NONE;
+  onTile.work = r >= 0 ? (h.work[r] ?? 0) : 0;
+  onTile.t = S.t;
+  onTile.pace = now.pace;
+  onTile.seenX = seenX;
+  onTile.seenY = seenY;
+  onTile.mem = mem;
+  const head = page.draw(art, y, onTile);
+  if (head === null) return;
+  wear(art, page, c, head);
+}
+
+/**
+ * What a piece standing up wears, once its kind has drawn it and said where its head is: its grade's
+ * mark, in the same corner of every graded piece (a belt has it in its own tile); the brass pointer on
+ * its way out, and whatever it holds there with nowhere to send it; and over its head, trouble that
+ * has lasted.
+ */
+function wear(art: Art, page: KindPage, c: number, head: number): void {
+  const { i, d, x, top, cx, z, a, real, out } = onTile;
+  const pip = art.m.pips[onTile.grade - 2];
   if (pip) put(pip, x, top, z + 0.55, a);
-  // The brass pointer on its way out, and whatever it is holding with nowhere to send it.
-  const hands = k === GATHERER || k === MILL || k === BENCH || k === WORKSHOP || k === CRATE;
-  if (hands) {
-    const p = (ghost > 0 || S.picked === i ? m.pointerLit : m.pointer)[d];
+  if (page.pointer) {
+    const p = (onTile.ghost > 0 || S.picked === i ? art.m.pointerLit : art.m.pointer)[d];
     const ex = cx + DX[d] * 8;
     const ey = top + 8 + DY[d] * 8;
     if (p) put(p, ex - Math.floor(p.width / 2), ey - Math.floor(p.height / 2), z + 0.4, a);
-    if (real && isItem(out) && k !== GATHERER && k !== CRATE) {
+    if (real && isItem(out) && page.pointer === "holding") {
       const pic = art.item(out);
       put(pic, ex - DX[d] * 4 - Math.floor(pic.width / 2), ey - DY[d] * 4 - Math.floor(pic.height / 2) - 2, z + 0.5);
     }
   }
   if (!real) return;
-  // Trouble that has lasted says so over the machine's head.
-  if (troubled(i) && !(k === GATHERER && !powered)) {
+  // Trouble that has lasted says so over the machine's head: but over one that shows where power does not reach in its own way.
+  if (troubled(i) && !(page.sleeps && !onTile.powered)) {
     const badge = grown(c % TROUBLE === UNPOWERED ? art.bolt : art.bang);
     stand(badge, cx, head - 2 - Math.round(Math.abs(Math.sin(S.t * 4 + i)) * 2), z + 0.6);
   }
@@ -991,14 +829,7 @@ function inHand(g: Ctx, art: Art, w: Yard, grp: Group, now: Moment, cx: number, 
         const a = draws(k) ? armsAt(yard, i) : 0;
         const grade = yard.grade[i] ?? 0;
         if (a !== 0) h.drawImage(beltTile(a, d, 0, woodOf(grade), yard.tint[i] ?? 0, marksOf(grade)), x, top);
-        const over =
-          k === SPLITTER
-            ? art.m.splitter[d]
-            : k === JOINER
-              ? art.m.joiner[d]
-              : k === SORTER
-                ? art.sorter(d, yard.set[i] ?? NONE, sendsRight(yard, i))
-                : undefined;
+        const over = pageOf(k)?.top?.(art, yard, i, d, false);
         if (over) h.drawImage(over, x, top);
         const pip = over ? art.m.pips[grade - 2] : undefined;
         if (pip) h.drawImage(pip, x, top);
@@ -1058,20 +889,20 @@ interface Tiled {
  * What lies flat and stays put until the yard changes: every tile that carries, gathered by its
  * shape, way, colour and grade; over those, the splitters' arrowheads, the joiners' tops and the
  * sorters' boards, gathered by picture; over those, the grade's mark of each splitter, joiner and
- * sorter above the first, as a belt wears it in its tile; and where the splitters are.
+ * sorter above the first, as a belt wears it in its tile; and where the pieces with a vane are (a splitter).
  */
 let laid: {
   of: Layout;
   belts: (Tiled & { arms: Arms; dir: Dir; tint: number; grade: number })[];
   tops: (Tiled & { pic: HTMLCanvasElement })[];
   marks: (Tiled & { pic: HTMLCanvasElement })[];
-  splitters: number[];
+  vanes: number[];
 } | null = null;
 function laidOf(L: Layout, art: Art): NonNullable<typeof laid> {
   if (laid?.of === L) return laid;
   const y = L.yard;
   const { land } = y;
-  const made: NonNullable<typeof laid> = { of: L, belts: [], tops: [], marks: [], splitters: [] };
+  const made: NonNullable<typeof laid> = { of: L, belts: [], tops: [], marks: [], vanes: [] };
   const belts = new Map<number, Path2D>();
   const tops = new Map<HTMLCanvasElement, Path2D>();
   const marks = new Map<HTMLCanvasElement, Path2D>();
@@ -1102,7 +933,8 @@ function laidOf(L: Layout, art: Art): NonNullable<typeof laid> {
     }
     here(tiles);
     // The grade's mark lies over what is laid on the tile, so no arrowhead or board hides it.
-    const pip = k === SPLITTER || k === JOINER || k === SORTER ? art.m.tilePips[grade - 2] : undefined;
+    const page = pageOf(k);
+    const pip = page?.top ? art.m.tilePips[grade - 2] : undefined;
     if (pip) {
       let on = marks.get(pip);
       if (!on) {
@@ -1112,22 +944,11 @@ function laidOf(L: Layout, art: Art): NonNullable<typeof laid> {
       }
       here(on);
     }
-    if (k === JOINER) top(art.m.joiner[d]);
-    if (k === SORTER) top(art.sorter(d, y.set[i] ?? NONE, sendsRight(y, i)));
-    if (k !== SPLITTER) continue;
-    made.splitters.push(i);
-    // An arrowhead on each way out that leads somewhere.
-    [d, LEFT[d], RIGHT[d]].forEach((side, n) => {
-      if (armAt(a, side) === 2) top(art.m.heads[n]?.[d]);
-    });
+    if (page?.laid) page.laid(art, y, i, d, a, top);
+    else if (page?.top) top(page.top(art, y, i, d, false));
+    if (page?.vane) made.vanes.push(i);
   }
   return (laid = made);
-}
-/** The side of its tile a splitter's way put first leaves by, or null for none. */
-function firstSide(y: Yard, i: number): Dir | null {
-  const d = dirAt(y, i);
-  const way = y.first[i] ?? 0;
-  return way === 1 ? d : way === 2 ? LEFT[d] : way === 3 ? RIGHT[d] : null;
 }
 /** A picture as something to fill tiles with: side by side, from the yard's own corner. */
 const fills = new Map<HTMLCanvasElement, CanvasPattern>();
@@ -1141,7 +962,7 @@ function lay(g: Ctx, pic: HTMLCanvasElement, tiles: Path2D): void {
 const lapping: { pic: HTMLCanvasElement; x: number; y: number; w: number; h: number }[] = [];
 
 /** Whether a tool is one that the reach of power matters to. */
-const wantsPower = (kind: Kind): boolean => (DRAW[kind] ?? 0) > 0 || (GIVES[kind] ?? 0) > 0 || kind === PYLON;
+const wantsPower = (kind: Kind): boolean => (DRAW[kind] ?? 0) > 0 || (GIVES[kind] ?? 0) > 0 || REACHES[kind] === 1;
 
 /**
  * What every layer of a frame reads: the yard and its layout, the picture, where the camera is (the
@@ -1296,7 +1117,7 @@ function flatLayer(f: Frame): void {
       const prog8 = w.prog[i] ?? 0;
       // In from the side it was handed over on, out the way the tile sends it.
       const from = cameFrom(w, i);
-      const to: number = k === SPLITTER ? sendWay(w, i, a) : k === SORTER && n === w.set[i] ? sortSide(w, i) : d;
+      const to: number = pageOf(k)?.rides?.(w, i, a, n) ?? d;
       const prog = Math.min(1, prog8 / 8 + (prog8 < 8 ? now.lead * alongAt(w, i) : 0));
       if (hooded(w, i, prog)) continue;
       const pic = art.item(n);
@@ -1305,7 +1126,7 @@ function flatLayer(f: Frame): void {
       g.drawImage(pic, left, top);
       // A splitter or a joiner to the left or above is topped after this is drawn, and this lies over its top.
       const beside = left < x && tx > 0 ? w.kind[i - 1] : top < y && ty > 0 ? w.kind[i - land.w] : NONE;
-      if (beside === SPLITTER || beside === JOINER || beside === SORTER) {
+      if (pageOf(beside ?? NONE)?.top !== undefined) {
         const over = (lapping[laps++] ??= { pic, x: 0, y: 0, w: 0, h: 0 });
         over.pic = pic;
         over.x = left;
@@ -1330,12 +1151,12 @@ function flatLayer(f: Frame): void {
     const over = lapping[k];
     if (over) g.drawImage(over.pic, 0, 0, over.w, over.h, over.x, over.y, over.w, over.h);
   }
-  for (const i of flat.splitters) {
+  for (const i of flat.vanes) {
     const a = L.arms[i] ?? 0;
     const tx = i % land.w;
     const ty = (i - tx) / land.w;
     if (a === 0 || w.item[i] !== NONE || tx < tx0 || tx > tx1 || ty < ty0 || ty > ty1) continue;
-    const v = art.m.vane[sendWay(w, i, a)];
+    const v = pageOf(w.kind[i] ?? NONE)?.vane?.(art, w, i, a);
     if (v) g.drawImage(v, tx * TILE - cx + 5, ty * TILE - cy + 5);
   }
 }
@@ -1349,9 +1170,9 @@ function standingLayer(f: Frame): void {
     for (let tx = tx0; tx <= tx1; tx++) {
       const i = ty * land.w + tx;
       const k = w.kind[i] ?? NONE;
-      if (k === NONE || k === DEPOT) continue;
+      if (k === NONE || FIXED[k] === 1) continue;
       const r = holderOf(w, i);
-      const open = k !== CRATE || r < 0 || w.holders.open[r] === 1;
+      const open = SHUTS[k] !== 1 || r < 0 || w.holders.open[r] === 1;
       piece(art, w, i, k, dirAt(w, i), w.grade[i] ?? 0, w.span[i] ?? 0, open, tx * TILE - cx, ty * TILE - cy, now, 0);
     }
 
@@ -1433,8 +1254,8 @@ function standingLayer(f: Frame): void {
       const x = (i % land.w) * TILE + 8;
       const y = Math.floor(i / land.w) * TILE + 8;
       const stop = L.intoStop[n] ?? -1;
-      // A sorter sends the thing it is set to out to its side.
-      const way = w.kind[i] === SORTER && had === w.set[i] ? sortSide(w, i) : dirAt(w, i);
+      // The way it sends what it had: ahead, unless its kind says (a sorter, the thing it is set to to its side).
+      const way = pageOf(w.kind[i] ?? NONE)?.sends?.(w, i, had) ?? dirAt(w, i);
       hops.push({ pic: art.item(had), x: x + DX[way] * 8, y: y + DY[way] * 8, dx: DX[way], dy: DY[way], t: S.t });
       if (stop >= 0) {
         memOf(w, stop);
@@ -1475,10 +1296,7 @@ function standingLayer(f: Frame): void {
 function lamps(f: Frame): void {
   const { w, L, cx, cy, W, H, now } = f;
   const working = (i: number): boolean => reading(w, i) % TROUBLE === WORKING;
-  const kiln = (i: number): boolean => {
-    const r = holderOf(w, i);
-    return r >= 0 && faceOf(w, i, r) === KILN;
-  };
+  const kiln = (i: number): boolean => pageOf(w.kind[i] ?? NONE)?.fire?.(w, i, mem) ?? false;
   for (const l of lampsIn(w, L.gate, { x: cx, y: cy, w: W, h: H }, now.pace, working, kiln))
     light(l.x - cx, l.y - cy, l.r, l.power, l.reach);
 }
@@ -1549,7 +1367,7 @@ function marksLayer(f: Frame): void {
   if (S.hover && tool === null) {
     const i = S.hover.y * land.w + S.hover.x;
     const k = S.hover.x >= 0 && S.hover.y >= 0 && S.hover.x < land.w && S.hover.y < land.h ? w.kind[i] : NONE;
-    if (k === DEPOT) corners(g, dx - 24, dfoot - 48, 48, 48, GOLD[2], true);
+    if (FIXED[k ?? NONE] === 1) corners(g, dx - 24, dfoot - 48, 48, 48, GOLD[2], true);
     else if (k !== NONE) corners(g, S.hover.x * TILE - cx, S.hover.y * TILE - cy, TILE, TILE, GOLD[2], true);
   }
   if (S.mark) marked(g, w, S.mark, cx, cy);
@@ -1563,7 +1381,7 @@ function marksLayer(f: Frame): void {
       const y = leg.y * TILE - cy;
       if (!leg.tunnel)
         g.drawImage(
-          beltTile(armsFor(leg.dir), leg.dir, steps[leg.grade] ?? step, woodOf(leg.grade), 0, marksOf(leg.grade)),
+          beltTile(straight(leg.dir), leg.dir, steps[leg.grade] ?? step, woodOf(leg.grade), 0, marksOf(leg.grade)),
           x,
           y,
         );
@@ -1580,7 +1398,7 @@ function marksLayer(f: Frame): void {
     for (const turn of S.run.turns) {
       const grade = w.grade[turn.y * land.w + turn.x] ?? 1;
       g.drawImage(
-        beltTile(armsFor(turn.dir), turn.dir, steps[grade] ?? step, woodOf(grade), 0, marksOf(grade)),
+        beltTile(straight(turn.dir), turn.dir, steps[grade] ?? step, woodOf(grade), 0, marksOf(grade)),
         turn.x * TILE - cx,
         turn.y * TILE - cy,
       );
@@ -1605,25 +1423,12 @@ function marksLayer(f: Frame): void {
       const mark = used;
       // At the grade it would stand at: the one in hand, or the higher one of a piece of its kind it would only turn.
       const grade = S.aim.grade ?? handGrade();
-      if (tool === BELT || tool === SPLITTER || tool === JOINER || tool === TUNNEL || tool === SORTER) {
+      const page = pageOf(tool);
+      if (page?.aimArms) {
         g.globalAlpha = 0.8;
-        const a =
-          tool === SPLITTER
-            ? splitArms(S.dir)
-            : tool === TUNNEL
-              ? tunnelArms(S.dir)
-              : tool === SORTER
-                ? sortArms(S.dir, S.right)
-                : armsFor(S.dir);
+        const a = page.aimArms(S.dir, S.right);
         g.drawImage(beltTile(a, S.dir, steps[grade] ?? step, woodOf(grade), 0, marksOf(grade)), x, y);
-        const top =
-          tool === SPLITTER
-            ? art.m.splitter[S.dir]
-            : tool === JOINER
-              ? art.m.joiner[S.dir]
-              : tool === SORTER
-                ? art.sorter(S.dir, NONE, S.right)
-                : undefined;
+        const top = page.top?.(art, null, -1, S.dir, S.right);
         if (top) g.drawImage(top, x, y);
         const pip = top ? art.m.pips[grade - 2] : undefined;
         if (pip) g.drawImage(pip, x, y);
@@ -1631,8 +1436,8 @@ function marksLayer(f: Frame): void {
       }
       piece(art, w, on.y * land.w + on.x, tool, S.dir, grade, 1, true, x, y, now, bad ? 0.5 : 0.8);
       const far = S.aim.far ?? -1;
-      if (tool === TUNNEL && far >= 0) {
-        const out = art.m.hood[lookOf(grade)]?.[BACK[S.dir]];
+      if (far >= 0) {
+        const out = page?.far?.(art, grade, S.dir);
         const fx = far % land.w;
         const fy = (far - fx) / land.w;
         if (out) put(out.c, fx * TILE - cx + 8 - out.ax, fy * TILE - cy + TILE + 1 - out.ay, 0, 0.8);
@@ -1646,7 +1451,7 @@ function marksLayer(f: Frame): void {
       g.globalAlpha = 1;
       used = mark;
       const col = bad ? CORAL : GOLD[2];
-      if (tool === PYLON) {
+      if (REACHES[tool] === 1) {
         const ring = ((REACH.pylon * w.open.reach) / 10_000) * TILE;
         pixelRing(g, x + 8, y + 8, ring, ring, col, 2);
       }
@@ -1665,27 +1470,6 @@ function marksLayer(f: Frame): void {
     pixelRing(g, x, y, r + 1, r + 1, GOLD[0], 2);
   }
 }
-
-/** The way a splitter sends its next thing: the first, from the one whose turn it is, that leads somewhere. */
-function sendWay(y: Yard, i: number, a: Arms): Dir {
-  const d = dirAt(y, i);
-  // The way put first, when it leads somewhere: where things go while it takes them.
-  const out = firstSide(y, i);
-  if (out !== null && armAt(a, out) === 2) return out;
-  for (let k = 0; k < 3; k++) {
-    // Its next way out is under its next way in (`tick.ts`).
-    const turn = (((y.turn[i] ?? 0) & 3) + k) % 3;
-    const side = turn === 0 ? d : turn === 1 ? LEFT[d] : RIGHT[d];
-    if (armAt(a, side) === 2) return side;
-  }
-  return d;
-}
-
-/** A straight belt's arms, pointing a way; a splitter's, every way out open; a sorter's, ahead and to its side; a tunnel's, in from behind. */
-const armsFor = (dir: Dir): Arms => withArm(withArm(0, dir, 2), BACK[dir], 1);
-const splitArms = (dir: Dir): Arms => withArm(arms(2, 2, 2, 2), BACK[dir], 1);
-const sortArms = (dir: Dir, right: boolean): Arms => withArm(armsFor(dir), (right ? RIGHT : LEFT)[dir], 2);
-const tunnelArms = (dir: Dir): Arms => withArm(0, BACK[dir], 1);
 
 /** How far across its tile a thing on the piece there moves in a tick, as the frame shows it between ticks: its grade's pace. */
 const alongAt = (y: Yard, i: number): number => ALONG[y.grade[i] ?? 0] ?? 0;

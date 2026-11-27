@@ -8,43 +8,28 @@
  */
 
 import {
-  BACK,
-  BELT,
-  BOILER,
-  DEPOT,
-  type Dir,
+  FIXED,
   gradeOf,
-  JOINER,
-  LEFT,
   litOf,
   nextOf,
   NONE,
-  type Piece,
   piecesAt,
   plotState,
   type Plotted,
-  PYLON,
   REACH,
+  REACHES,
   redwoodAt,
-  RIGHT,
-  SORTER,
-  sortWay,
-  SPLITTER,
   squared,
-  STOP,
-  takes,
   tilesOf,
-  toward,
-  TUNNEL,
   wayOut,
-  WHEEL,
+  waysOf,
   type Yard,
 } from "@sequoia-leaf/factory";
 import type { Pt } from "@sequoia-leaf/kit/util.ts";
 
-import { armAt, type Arms, TILE, withArm } from "./art/belts.ts";
+import { type Arms, TILE } from "./art/belts.ts";
+import { pageOf } from "./kinds/index.ts";
 import { draws, type Group } from "./state.ts";
-import { dirAt } from "./tiles.ts";
 
 export interface Sign {
   plot: Plotted;
@@ -82,80 +67,10 @@ export const pylonTop = (x: number, y: number, tall: boolean): Pt => ({
   y: (y + 1) * TILE - (tall ? 33 : 25),
 });
 
-/** Whether the piece on a tile is a sorter that sends the thing it is set to to its right. */
-export const sendsRight = (y: Yard, i: number): boolean => y.kind[i] === SORTER && sortWay(y, i) === 2;
+export { keepsRight, sendsRight, sortSide } from "./kinds/sorter.ts";
 
-/** Whether a piece, as kept or in hand, is a sorter that sends the thing it is set to to its right. */
-export const keepsRight = (p: Piece): boolean => p.kind === SORTER && p.first === 2;
-
-/** The side of its tile a sorter sends the thing it is set to out by: its left, or its right. */
-export const sortSide = (y: Yard, i: number): Dir => (sendsRight(y, i) ? RIGHT : LEFT)[dirAt(y, i)];
-
-/** The ways a splitter or a sorter sends things: ahead, left and right (`wayOut` says which are shut). */
-const waysOf = (k: number): number => (k === SPLITTER || k === SORTER ? 3 : 0);
-
-/** Whether the piece on `from` hands things to the tile `to`, as the belts are drawn. */
-function feeds(y: Yard, from: number, to: number): boolean {
-  if (from < 0 || to < 0) return false;
-  const k = y.kind[from] ?? NONE;
-  if (k === NONE || k === DEPOT || k === PYLON || k === WHEEL || k === BOILER) return false;
-  // A splitter or sorter feeds whatever on one of its ways out takes things from it.
-  const ways = waysOf(k);
-  if (ways > 0) {
-    for (let w = 0; w < ways; w++) if (wayOut(y, from, w) === to) return takes(y, to, from);
-    return false;
-  }
-  // Two belts facing each other pass nothing, and are not drawn as joined.
-  return nextOf(y, from) === to && nextOf(y, to) !== from;
-}
-
-/**
- * A splitter's arms, its ways out on the sides `ways` (ahead, left, right) and behind on `back`: a
- * shut way wears its bar, and a way in is drawn as behind is, coming in. Of the rest, only the ways
- * out that something takes things from; a splitter nothing takes from shows every way that is open.
- */
-function splitterArms(y: Yard, i: number, ways: readonly number[], back: number): Arms {
-  let a = withArm(0, back, 1);
-  const shut = y.shut[i] ?? 0;
-  const ins = y.ins[i] ?? 0;
-  ways.forEach((side, n) => {
-    if ((shut >> n) & 1) a = withArm(a, side, 3);
-    else if ((ins >> n) & 1) a = withArm(a, side, 1);
-  });
-  const open = ways.filter((side) => armAt(a, side) === 0);
-  const led = open.filter((side) => feeds(y, i, toward(y.land, i, side)));
-  for (const side of led.length > 0 ? led : open) a = withArm(a, side, 2);
-  return a;
-}
-
-/** The arms of the piece on a tile that carries: for the yard as it stands, or with pieces in hand set into it. 0 for the rest. */
-export function armsAt(y: Yard, i: number): Arms {
-  const k = y.kind[i] ?? NONE;
-  const d = y.dir[i] ?? 0;
-  const back = BACK[d & 3] ?? 2;
-  const left = LEFT[d & 3] ?? 3;
-  const right = RIGHT[d & 3] ?? 1;
-  if (k === BELT || k === JOINER) {
-    let a = withArm(0, d, 2);
-    let fed = false;
-    for (const side of [back, left, right])
-      if (feeds(y, toward(y.land, i, side), i)) {
-        a = withArm(a, side, 1);
-        fed = true;
-      }
-    // A belt nothing feeds is drawn as a straight piece; a joiner shows all three of its ways in.
-    if (!fed) {
-      a = withArm(a, back, 1);
-      if (k === JOINER) a = withArm(withArm(a, left, 1), right, 1);
-    }
-    return a;
-  }
-  if (k === SPLITTER) return splitterArms(y, i, [d, left, right], back);
-  // A sorter takes in from behind and sends ahead, and the one thing it is set to, to its side.
-  if (k === SORTER) return withArm(withArm(withArm(0, back, 1), d, 2), sortSide(y, i), 2);
-  if (k === TUNNEL) return (y.span[i] ?? 0) > 0 ? withArm(0, back, 1) : withArm(0, d, 2);
-  return 0;
-}
+/** The arms of the piece on a tile that carries, as its kind draws its belt: for the yard as it stands, or with pieces in hand set into it. 0 for the rest. */
+export const armsAt = (y: Yard, i: number): Arms => pageOf(y.kind[i] ?? NONE)?.arms?.(y, i) ?? 0;
 
 /**
  * The lines last worked out, and what they were worked out from: the tiles of the pylons power
@@ -168,7 +83,7 @@ function wires(y: Yard): Int32Array {
   const W = y.land.w;
   const lit = litOf(y);
   const pylons: number[] = [];
-  for (let i = 0; i < y.kind.length; i++) if (y.kind[i] === PYLON && lit[i] === 1) pylons.push(i);
+  for (let i = 0; i < y.kind.length; i++) if (REACHES[y.kind[i] ?? NONE] === 1 && lit[i] === 1) pylons.push(i);
   const depot = y.land.depot.join();
   const s = strung;
   if (
@@ -300,12 +215,13 @@ export function layout(y: Yard): Layout {
   const intoDepot: number[] = [];
   const intoStop: number[] = [];
   const arms = new Uint8Array(y.kind.length);
-  /** Where a tile hands to, if that is the depot (-1) or a cart stop (its tile); or -2. */
-  const taker = (to: number): number => (y.kind[to] === DEPOT ? -1 : y.kind[to] === STOP ? to : -2);
+  /** Where a tile hands to, if that is the depot (-1) or what it is handed is drawn going into, a cart stop (its tile); or -2. */
+  const taker = (to: number): number =>
+    FIXED[y.kind[to] ?? NONE] === 1 ? -1 : pageOf(y.kind[to] ?? NONE)?.cart ? to : -2;
   let built = 0;
   for (let i = 0; i < y.kind.length; i++) {
     const k = y.kind[i] ?? NONE;
-    if (k === NONE || k === DEPOT) continue;
+    if (k === NONE || FIXED[k] === 1) continue;
     built++;
     arms[i] = draws(k) ? armsAt(y, i) : 0;
     const ways = waysOf(k);

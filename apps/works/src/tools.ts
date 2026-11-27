@@ -19,10 +19,10 @@ import {
   at,
   BELT,
   boxOf,
-  DEPOT,
   type Dir,
   DX,
   DY,
+  FIXED,
   gradeOf,
   highest,
   isGraded,
@@ -46,11 +46,11 @@ import {
   replaces,
   RIGHT,
   route,
-  SORTER,
   standRefusal,
   tilesOf,
   TUNNEL,
   tunnelExit,
+  turnable,
   upgradePrice,
   within,
   worthAt,
@@ -63,6 +63,7 @@ import { PAINTS, TILE } from "./art/belts.ts";
 import { OUT_OF_REACH, reachOf, withReach } from "./figure/reach.ts";
 import { float, flutter, puff, sparkle } from "./fx.ts";
 import { aimOf, groupOf, markOf, runOf, type Tile } from "./hand.ts";
+import { flips } from "./kinds/index.ts";
 import { keepsRight, sendsRight } from "./layout.ts";
 import { aimed, DUST, landed, paid, refused } from "./outcome.ts";
 import { aimYard, isWhole, piecesInHand, pressYard } from "./plans.ts";
@@ -167,7 +168,7 @@ export function aimAt(x: number, y: number): void {
       return;
     case "remove": {
       const there = kindAt(w, x, y);
-      const why = there === NONE ? "Nothing to remove here" : there === DEPOT ? "The depot cannot be removed" : null;
+      const why = there === NONE ? "Nothing to remove here" : FIXED[there] === 1 ? "The depot cannot be removed" : null;
       go({ do: "aim", aim: aimed(x, y, reachOf({ do: "remove", x, y }) ?? why, 0) });
       return;
     }
@@ -300,7 +301,7 @@ export function raiseAt(x: number, y: number): boolean {
   const w = S.world;
   const i = at(w, x, y);
   const k = i < 0 ? NONE : (w.kind[i] ?? NONE);
-  if (!isKind(k) || k === DEPOT) return false;
+  if (!isKind(k) || FIXED[k] === 1) return false;
   const grade = (w.grade[i] ?? 0) + 1;
   const cost = priceAt(w, k, x, y, grade);
   const did = doNow({ do: "build", kind: k, x, y, dir: dirOf(i), grade });
@@ -374,8 +375,7 @@ export function paintAt(x: number, y: number, more = false, pointer = -1): boole
 export function turnAt(x: number, y: number): boolean {
   const w = S.world;
   const i = at(w, x, y);
-  const k = kindAt(w, x, y);
-  if (k === NONE || k === DEPOT || k === TUNNEL) {
+  if (!turnable(w, x, y)) {
     yardSfx.no();
     return false;
   }
@@ -430,7 +430,7 @@ export function rotate(): void {
 
 /** A sorter in hand, brought over a sorter, sends to that one's side, as it faces its way, until it is flipped. */
 function sideOver(tool: Kind, i: number): void {
-  if (tool !== SORTER || S.world.kind[i] !== SORTER || S.right === sendsRight(S.world, i)) return;
+  if (!flips(tool) || S.world.kind[i] !== tool || S.right === sendsRight(S.world, i)) return;
   S.right = !S.right;
   toolHooks.changed();
 }
@@ -443,7 +443,7 @@ export function flip(): void {
     if (on) flipAt(on.x, on.y);
     return;
   }
-  if (h.is !== "build" || h.kind !== SORTER) return;
+  if (h.is !== "build" || !flips(h.kind)) return;
   S.right = !S.right;
   yardSfx.turn();
   keepAim(true);
@@ -453,7 +453,7 @@ export function flip(): void {
 /** Flips the sorter on a tile to send the thing it is set to to its other side. Says whether it did. */
 export function flipAt(x: number, y: number): boolean {
   const i = at(S.world, x, y);
-  if (kindAt(S.world, x, y) !== SORTER) {
+  if (!flips(kindAt(S.world, x, y))) {
     yardSfx.no();
     return false;
   }
@@ -466,10 +466,10 @@ export function flipAt(x: number, y: number): boolean {
 /** Takes up the tool for whatever stands on a tile, facing the way it faces (a sorter to its side too), at its grade. */
 export function pickFrom(x: number, y: number): boolean {
   const k = kindAt(S.world, x, y);
-  if (k === NONE || k === DEPOT || !isKind(k) || !usable(k)) return false;
+  if (k === NONE || FIXED[k] === 1 || !isKind(k) || !usable(k)) return false;
   const i = at(S.world, x, y);
   S.dir = dirOf(i);
-  if (k === SORTER) S.right = sendsRight(S.world, i);
+  if (flips(k)) S.right = sendsRight(S.world, i);
   if (isGraded(k)) S.grades[k] = S.world.grade[i] ?? 1;
   setTool(k);
   yardSfx.pick();
@@ -512,8 +512,8 @@ function reckon(path: readonly Tile[]): void {
     const prev = path[k - 1];
     let dir = next ? way(t, next) : prev ? way(prev, t) : S.dir;
     // A run that ends beside the depot was meant to go in: its last belt turns to face the wall.
-    if (!next && prev && kindAt(w, t.x + DX[dir], t.y + DY[dir]) !== DEPOT)
-      for (const d of [0, 1, 2, 3] as const) if (kindAt(w, t.x + DX[d], t.y + DY[d]) === DEPOT) dir = d;
+    if (!next && prev && FIXED[kindAt(w, t.x + DX[dir], t.y + DY[dir])] !== 1)
+      for (const d of [0, 1, 2, 3] as const) if (FIXED[kindAt(w, t.x + DX[d], t.y + DY[d])] === 1) dir = d;
     const there = kindAt(w, t.x, t.y);
     const i = at(w, t.x, t.y);
     if (there === NONE) {
@@ -846,7 +846,7 @@ function setDown(): boolean {
   const changes = g.at.some((p) => {
     const i = at(w, p.x, p.y);
     if (kindAt(w, p.x, p.y) !== p.kind) return false;
-    const turns = (p.kind !== TUNNEL && dirOf(i) !== p.dir) || sendsRight(w, i) !== keepsRight(p);
+    const turns = (turnable(w, p.x, p.y) && dirOf(i) !== p.dir) || sendsRight(w, i) !== keepsRight(p);
     return turns || gradeOf(p.kind, p.grade) !== (w.grade[i] ?? 0);
   });
   const moving = g.as === "move";

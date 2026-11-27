@@ -9,8 +9,9 @@
  */
 import {
   aim,
+  DOES,
   feeders,
-  GATHERER,
+  GATHERING,
   held,
   highest,
   holderOf,
@@ -24,7 +25,6 @@ import {
   NONE,
   RECIPES_N,
   status,
-  STUDY,
   type Yard,
 } from "@sequoia-leaf/factory";
 import { num, perMinute } from "@sequoia-leaf/kit/say.ts";
@@ -54,12 +54,12 @@ export function numbersOf(w: Yard, i: number): string[] {
   const k = w.kind[i] ?? NONE;
   const { share, effective } = machineRate(w, i);
   if (share >= 1 || share <= 0) return [];
-  if (k === GATHERER) {
-    const raw = w.land.deposit[i] ?? NONE;
-    return isItem(raw) ? [`Gathers ${perMinute(effective, called(effective, raw))}: power is short.`] : [];
-  }
-  if (k === STUDY) return [`Studies ${perMinute(effective, "folios")}: power is short.`];
-  return [];
+  // What it does a minute, as its kind says it (`KindDef.does`): what a gatherer gathers is its deposit's thing.
+  const does = DOES[k];
+  if (!does) return [];
+  if (k !== GATHERING) return [`${does[0]} ${perMinute(effective, does[1])}: power is short.`];
+  const raw = w.land.deposit[i] ?? NONE;
+  return isItem(raw) ? [`${does[0]} ${perMinute(effective, called(effective, raw))}: power is short.`] : [];
 }
 
 /** The machines that make so many of a part a minute: of the first grade, and of the highest the yard may build. */

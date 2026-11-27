@@ -24,9 +24,10 @@ import {
   unlockedBy,
 } from "@sequoia-leaf/factory";
 
-import { DEPOT_PIC, KIND_PIC } from "../art/index.ts";
+import { DEPOT_PIC } from "../art/index.ts";
 import { ROWS } from "../art/items.ts";
 import { PAL } from "../art/pal.ts";
+import { PAGES } from "../kinds/index.ts";
 import { PERK_ART } from "./cards.ts";
 import { TOOL_ICON } from "./parts.ts";
 import { pictureRef, unlockRef } from "./refs.ts";
@@ -43,7 +44,7 @@ function pictured(u: Unlock): boolean {
   switch (u.is) {
     case "kind":
     case "grade":
-      return typeof KIND_PIC[kindName(u.kind)] === "function";
+      return typeof PAGES[kindName(u.kind)].picture === "function";
     case "recipe":
       return drawn(ROWS[itemName(u.item)]);
     case "tool":
@@ -69,7 +70,8 @@ describe("a picture for everything a screen shows", () => {
 
   test("every kind of piece, the depot too", () => {
     expect(new Set(ALL_KINDS.map(kindName)).size).toBe(ALL_KINDS.length);
-    for (const k of ALL_KINDS) expect([kindName(k), typeof KIND_PIC[kindName(k)]]).toEqual([kindName(k), "function"]);
+    for (const k of ALL_KINDS)
+      expect([kindName(k), typeof PAGES[kindName(k)].picture]).toEqual([kindName(k), "function"]);
   });
 
   test("the depot's picture for a card is whole in the card's slot: 20 pixels square and its edge, every letter a colour", () => {

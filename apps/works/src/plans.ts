@@ -14,7 +14,7 @@ import {
   blueprintCode,
   blueprintRefusal,
   cleanCode,
-  DEPOT,
+  FIXED,
   locked,
   NONE,
   type Piece,
@@ -170,7 +170,7 @@ export function pressYard(): boolean {
 
 /** Save yard, once the yard may keep plans of the whole yard: with Select in hand, nothing marked, and something standing to keep. */
 export const yardSaveOffered = (stage: Stage | null): boolean =>
-  stage?.is === "empty" && wholeKnown() && S.world.kind.some((k) => k !== NONE && k !== DEPOT);
+  stage?.is === "empty" && wholeKnown() && S.world.kind.some((k) => k !== NONE && FIXED[k] !== 1);
 
 /** Save yard pressed: the places are offered to keep the whole yard in, or with it pressed again, put away. */
 export function askSaveYard(): void {

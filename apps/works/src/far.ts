@@ -9,16 +9,16 @@
  */
 
 import {
-  DEPOT,
   DRAW,
   DX,
   DY,
+  FIXED,
   GIVES,
   type Kind,
   litOf,
   NONE,
-  PYLON,
   REACH,
+  REACHES,
   tilesOf,
   type Yard,
 } from "@sequoia-leaf/factory";
@@ -85,7 +85,7 @@ function handMarks(g: Ctx, y: Yard, grp: Group, dx: number, dy: number, P: numbe
 }
 
 /** Whether a tool is one that the reach of power matters to. */
-const wantsPower = (kind: Kind): boolean => (DRAW[kind] ?? 0) > 0 || (GIVES[kind] ?? 0) > 0 || kind === PYLON;
+const wantsPower = (kind: Kind): boolean => (DRAW[kind] ?? 0) > 0 || (GIVES[kind] ?? 0) > 0 || REACHES[kind] === 1;
 
 /**
  * The plan, laid on the picture where the camera is. `cornerX`, `cornerY` is where the picture's
@@ -129,7 +129,8 @@ function planYou(g: Ctx, dx: number, dy: number, k: number): void {
 function around(o: Over, i: number, col: string, breathe: boolean, out = 0): void {
   const { land } = o.y;
   const depot = land.depot[1] * land.w + land.depot[0];
-  if (o.y.kind[i] === DEPOT) box(o.g, o.X(depot) - o.P, o.Y(depot) - o.P, o.P * 3, o.P * 3, col, breathe, out);
+  if (FIXED[o.y.kind[i] ?? NONE] === 1)
+    box(o.g, o.X(depot) - o.P, o.Y(depot) - o.P, o.P * 3, o.P * 3, col, breathe, out);
   else box(o.g, o.X(i), o.Y(i), o.P, o.P, col, breathe, out);
 }
 
@@ -228,7 +229,7 @@ export function drawPlanMarks(g: Ctx, y: Yard, dx: number, dy: number): void {
       g.fillRect(x, top, P, P);
       const far = S.aim.far ?? -1;
       if (far >= 0) g.fillRect(X(far), Y(far), P, P);
-      if (tool === PYLON) {
+      if (REACHES[tool] === 1) {
         // How far its light would reach.
         const r = ((REACH.pylon * y.open.reach) / 10_000) * P;
         const n = Math.max(12, Math.round(r * 3));

@@ -7,14 +7,11 @@
 import {
   aim,
   ALL_ITEMS,
-  BOILER,
   costOf,
-  CRATE,
-  DEPOT,
   FELL_PRICE,
   fellRefusal,
-  FUEL,
-  GATHERER,
+  FIXED,
+  GATHERING,
   GIVES,
   type Goal,
   GOALS,
@@ -37,6 +34,7 @@ import {
   locked,
   machineRate,
   makeable,
+  MOST,
   NODES,
   NONE,
   orderAt,
@@ -49,12 +47,10 @@ import {
   recipesFor,
   redwoodAt,
   RIGHT,
-  SORTER,
-  SPLITTER,
+  RULES,
   status,
-  STOP,
   stops,
-  STUDY,
+  STUDIES,
   takes,
   TOOLS,
   toward,
@@ -65,6 +61,7 @@ import {
 import { perMinute, whole } from "@sequoia-leaf/kit/say.ts";
 
 import { WORKS_KEYS } from "../keymap.ts";
+import { pageOf } from "../kinds/index.ts";
 import { layout, sendsRight } from "../layout.ts";
 import { draws, S } from "../state.ts";
 import { usable } from "../tools.ts";
@@ -136,14 +133,15 @@ function machinePrint(k: Kind, grade = 1): MachinePrint {
     graded: isGraded(k) && (grade > 1 || highest(w.open, k) > 1),
     later: !draws(k),
     price: grade > 1 ? price(k, grade) : costOf(w, k),
-    gives: k === DEPOT ? w.open.depot : (GIVES[k] ?? 0),
+    // The depot's power is what is open says it makes.
+    gives: FIXED[k] === 1 ? w.open.depot : (GIVES[k] ?? 0),
     key: key ?? null,
     recipes: recipesFor(w.open, k).map((r) => r.out),
-    open: k === DEPOT || locked(w.open, { build: k, grade }) === null,
+    open: FIXED[k] === 1 || locked(w.open, { build: k, grade }) === null,
     spare: grade > 1 ? 0 : (w.spare[k] ?? 0),
     // What it does a minute is its pace, on the card itself (`paceOf`).
     numbers: [],
-    stops: k === STOP ? [stops(w), w.open.stops] : null,
+    stops: MOST[k] === "stops" ? [stops(w), w.open.stops] : null,
   };
 }
 
@@ -164,6 +162,11 @@ function waysPrint(i: number): WaysPrint {
   };
 }
 
+/** Whether a kind takes a command that sets something on a piece (its rules' `set`): a sorter its thing, a splitter its ways. */
+const sets = (k: Kind, what: "sort" | "way"): boolean => RULES[k]?.set[what] !== undefined;
+/** How many its card says a kind may hold, where it says (`KindPage.holdsUp`). */
+const holdsUp = (k: Kind): number | null => pageOf(k)?.holdsUp?.(S.world) ?? null;
+
 function standingPrint(i: number, k: Kind): StandingPrint {
   const w = S.world;
   const x = i % w.land.w;
@@ -178,7 +181,7 @@ function standingPrint(i: number, k: Kind): StandingPrint {
   // A piece of a grade the yard may build higher is raised where it stands, for what the rules ask.
   const raise = isGraded(k) && grade > 0 && grade < highest(w.open, k) ? priceAt(w, k, x, y, grade + 1) : null;
   // A sorter is told one thing of what the yard can make, or has had at the depot.
-  const can = k === SORTER ? new Set(makeable(w)) : null;
+  const can = sets(k, "sort") ? new Set(makeable(w)) : null;
   return {
     card: "standing",
     x,
@@ -190,18 +193,18 @@ function standingPrint(i: number, k: Kind): StandingPrint {
     spare: st?.spare ?? null,
     missing: st?.missing ?? [],
     holding: r < 0 ? [] : ALL_ITEMS.filter((t) => held(h, r, t) > 0).map((t) => [t, held(h, r, t)] as const),
-    most: k === BOILER ? FUEL : k === CRATE ? w.open.crate : null,
+    most: holdsUp(k),
     count: r < 0 ? 0 : (h.count[r] ?? 0),
     making: making ? making.out : null,
     flow: flowOf(w, i, saysNumbers(w)),
-    gathering: k === GATHERER ? asItem(w.land.deposit[i] ?? NONE) : null,
+    gathering: k === GATHERING ? asItem(w.land.deposit[i] ?? NONE) : null,
     // What it makes now, said even when that is none: where power does not reach, 0 /min.
     perMinute: rate.nominal > 0 ? perMinute(rate.effective) : null,
     numbers: saysNumbers(w) ? numbersOf(w, i) : [],
     set,
     sorts: can ? ALL_ITEMS.filter((t) => can.has(t) || (w.depot[t] ?? 0) > 0 || set === t) : [],
     right: sendsRight(w, i),
-    studying: k === STUDY ? (w.line[0] ?? null) : null,
+    studying: STUDIES[k] === 1 ? (w.line[0] ?? null) : null,
     research: researchOpen() && S.panel !== "research",
     raise: raise === null ? null : { to: grade + 1, cost: raise, enough: coins() >= raise },
     open: r < 0 || h.open[r] === 1,
@@ -210,7 +213,8 @@ function standingPrint(i: number, k: Kind): StandingPrint {
     move: usable("select"),
     refund: worthAt(w, i),
     free: w.free[i] === 1,
-    ways: k === SPLITTER ? waysPrint(i) : null,
+    // A piece whose ways out its card presses, a step at a time (a splitter's).
+    ways: sets(k, "way") ? waysPrint(i) : null,
     visiting: S.visiting !== null,
   };
 }

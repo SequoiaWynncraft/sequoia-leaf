@@ -6,7 +6,7 @@
  * the piece, the view is brought to it with no card, and it is marked all the same.
  */
 
-import { DEPOT, NONE, otherMouth, type Yard } from "@sequoia-leaf/factory";
+import { FIXED, NONE, otherMouth, type Yard } from "@sequoia-leaf/factory";
 import { GOLD, INK } from "@sequoia-leaf/kit/palette.ts";
 import { R } from "@sequoia-leaf/kit/pix.ts";
 import type { Ctx } from "@sequoia-leaf/kit/util.ts";
@@ -73,7 +73,7 @@ function pinBox(g: Ctx, x: number, y: number, w: number, h: number, t: number): 
 export function pinMark(g: Ctx, w: Yard, cx: number, cy: number, dx: number, dy: number): void {
   const t = Math.max(1, Math.ceil(3 / S.view.z));
   for (const i of markedTiles()) {
-    if (w.kind[i] === DEPOT) pinBox(g, dx, dy, 48, 48, t);
+    if (FIXED[w.kind[i] ?? NONE] === 1) pinBox(g, dx, dy, 48, 48, t);
     else pinBox(g, (i % w.land.w) * TILE - cx, Math.floor(i / w.land.w) * TILE - cy, TILE, TILE, t);
   }
 }
