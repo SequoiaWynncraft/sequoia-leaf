@@ -18,6 +18,7 @@ import {
   type EndlessWay,
   HZ,
   isBossId,
+  LAST_ERA,
   MEASURES,
   picksOf,
   pieceAt,
@@ -405,7 +406,12 @@ export function openHandle(): void {
         });
       };
       const party = (kinds: string[]) => ({ who: "watched", title: "", figures: seated(kinds), boons: [], might: 100 });
-      startFight({ seed, sides: [party(ours), party(theirs)] }, S.prefs.speed, S.looks.bases, () => undefined);
+      startFight(
+        { seed, era: LAST_ERA, sides: [party(ours), party(theirs)] },
+        S.prefs.speed,
+        S.looks.bases,
+        () => undefined,
+      );
       return "watching";
     },
     when(kind) {

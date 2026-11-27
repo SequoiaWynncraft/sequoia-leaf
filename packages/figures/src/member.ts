@@ -10,8 +10,9 @@
 import { ask } from "@sequoia-leaf/kit/net.ts";
 import { bake, type Body, lookFor, NOBODY, paintSkin, skinFigure } from "@sequoia-leaf/kit/skin.ts";
 import { readBanners } from "@sequoia-leaf/pulls/wire.ts";
+import { type Banner, BANNERS } from "@sequoia-leaf/raid/content/banners.ts";
 import { specOf } from "@sequoia-leaf/raid/content/figures.ts";
-import { isMemberId, MEMBER_IDS, type MemberId } from "@sequoia-leaf/raid/content/members.ts";
+import { isMemberId, type MemberId } from "@sequoia-leaf/raid/content/members.ts";
 
 import { wear } from "./sprites.ts";
 
@@ -20,17 +21,28 @@ import { wear } from "./sprites.ts";
  * at once as nobody yet, then by name in their made-up look, then in their own skin once it has
  * come. By then the raid's figure of them (`framesOf`, `nameOf`) is the same person.
  */
-export async function meetMembers(seen: (banner: MemberId, name: string, body: Body) => void): Promise<void> {
-  const known = (banner: MemberId, name: string, body: Body): void => {
-    wear(banner, name, body);
+export async function meetMembers(seen: (banner: string, name: string, body: Body) => void): Promise<void> {
+  const known = (banner: string, figure: MemberId, name: string, body: Body): void => {
+    wear(figure, name, body);
     seen(banner, name, body);
   };
   const nobody = bake(paintSkin(NOBODY));
-  for (const banner of MEMBER_IDS) known(banner, specOf(banner).name, nobody);
-  for (const { id, headliner } of readBanners((await ask("/v1/game/banners")).body) ?? []) {
-    if (!headliner || !isMemberId(id)) continue;
-    const { name } = headliner;
-    known(id, name, bake(paintSkin(lookFor(name))));
-    skinFigure(headliner.id, (body) => known(id, name, body));
+  for (const { id } of BANNERS) {
+    const figure = memberOf(id, BANNERS);
+    if (figure) known(id, figure, specOf(figure).name, nobody);
   }
+  // Leaf says who by the banner; the figure they are is the one that banner names, whatever its id.
+  for (const { id, headliner } of readBanners((await ask("/v1/game/banners")).body) ?? []) {
+    const figure = memberOf(id, BANNERS);
+    if (!headliner || !figure) continue;
+    const { name } = headliner;
+    known(id, figure, name, bake(paintSkin(lookFor(name))));
+    skinFigure(headliner.id, (body) => known(id, figure, name, body));
+  }
+}
+
+/** The figure a banner names as its headliner, when it is drawn from a member's skin; null for any other banner. */
+export function memberOf(banner: string, rows: readonly Banner[]): MemberId | null {
+  const row = rows.find((b) => b.id === banner);
+  return row?.look === "skin" && isMemberId(row.headliner) ? row.headliner : null;
 }

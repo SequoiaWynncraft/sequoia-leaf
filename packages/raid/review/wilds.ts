@@ -1,4 +1,6 @@
 import { fondOf, type Habit, planRoom, SENSIBLE } from "@sequoia-leaf/raid/bot.ts";
+import { catalogAt } from "@sequoia-leaf/raid/content/catalog.ts";
+import { LAST_ERA } from "@sequoia-leaf/raid/content/releases.ts";
 /**
  * The Wilds' rules against a plain wing, with bots of different habits:
  *
@@ -107,7 +109,7 @@ for (const habit of HABITS) {
   const line = emptyLine();
   byHabit.set(habit.name, line);
   for (let n = 0; n < runs; n++) {
-    const run = startRun(n * 7919 + 13, { trail: 0, endless: "wilds" });
+    const run = startRun(n * 7919 + 13, { era: LAST_ERA, trail: 0, endless: "wilds" });
     for (let guard = 0; guard < 400 && run.stage.phase !== "over" && run.room <= deepest; guard++) {
       const pick = picksOf(run)[0];
       if (pick?.kind === "rule") {
@@ -179,11 +181,11 @@ const regulars: Record<"dusk" | "plain", Eleven> = {
 const DUSK: FightRule = { id: "dusk", stumps: [] };
 for (let seed = 1; seed <= 400; seed++) {
   const room = 30 + (seed % 15);
-  const ours = regularAt(seed * 2, room, 0, sparAt(room));
-  const theirs = regularAt(seed * 2 + 1, room, 0, sparAt(room));
+  const ours = regularAt(catalogAt(LAST_ERA), seed * 2, room, 0, sparAt(room));
+  const theirs = regularAt(catalogAt(LAST_ERA), seed * 2 + 1, room, 0, sparAt(room));
   if (ours.figures.length < 11 || theirs.figures.length < 11) continue;
   for (const rule of [DUSK, null]) {
-    const f = resolveFight({ seed, sides: [ours, theirs], ...(rule ? { rule } : {}) });
+    const f = resolveFight({ seed, era: LAST_ERA, sides: [ours, theirs], ...(rule ? { rule } : {}) });
     countEleven(regulars[rule ? "dusk" : "plain"], f);
   }
 }

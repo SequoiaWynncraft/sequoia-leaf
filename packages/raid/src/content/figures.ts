@@ -1065,5 +1065,3 @@ function filled(kind: UnitKind, words: "text" | "short", stars: Stars): string {
 export const abilityText = (kind: UnitKind, stars: Stars): string => filled(kind, "text", stars);
 /** What an ability does at a number of stars, in a few words for a card. */
 export const abilityShort = (kind: UnitKind, stars: Stars): string => filled(kind, "short", stars);
-/** The figures of a tier, in the order of the table. */
-export const figuresOfTier = (tier: Tier): FigureId[] => FIGURE_IDS.filter((id) => FIGURES[id].tier === tier);

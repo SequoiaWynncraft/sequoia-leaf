@@ -9,6 +9,7 @@
 import type { Met } from "@sequoia-leaf/core";
 
 import { boonNumber } from "./content/boons.ts";
+import { catalogOf } from "./content/catalog.ts";
 import { CYCLE, ENDLESS, type EndlessWay } from "./content/endless.ts";
 import { MAX_LEVEL, type Room, ROOM_COUNT, ROOMS, type SparStrength } from "./content/rooms.ts";
 import { boardMet, forest, opposition, regularAt } from "./foe.ts";
@@ -92,16 +93,16 @@ export function heldRoom(slot: string): number | null {
  * Under a Wilds rule nobody sits on a seat it closes: the regular is seated round them, and the
  * forest's plan moves anyone on one to the nearest open seat (`seatOpen`).
  */
-export function foeOf(run: Pick<Run, "room" | "trail" | "wing"> & Way, seed: number, met?: Met): Party {
-  if (!run.endless) return opposition(seed, run.room, run.trail, met, run.own !== null);
+export function foeOf(run: Pick<Run, "room" | "trail" | "wing" | "era"> & Way, seed: number, met?: Met): Party {
+  if (!run.endless) return opposition(catalogOf(run), seed, run.room, run.trail, met, run.own !== null);
   const room = roomAt(run.room);
   const closed = closedNow(run);
   if (room && room.kind !== "spar") {
     const party = forest(seed, run.room, room, run.trail, grownAt(run.room));
     return { ...party, figures: seatOpen(party.figures, closed) };
   }
-  const regular = regularAt(seed, run.room, run.trail, sparAt(run.room), closed);
-  const held = isHeld(run, run.room) && met ? boardMet(met, false, ENDLESS.chairs) : null;
+  const regular = regularAt(catalogOf(run), seed, run.room, run.trail, sparAt(run.room), closed);
+  const held = isHeld(run, run.room) && met ? boardMet(catalogOf(run), met, false, ENDLESS.chairs) : null;
   return held ?? regular;
 }
 

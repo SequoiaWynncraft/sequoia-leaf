@@ -3,6 +3,24 @@
  * README beside this file for how the pieces fit and how to drive them.
  */
 
+// What exists, when: the one door to the figures (`available`), by the era Leaf's clock is in.
+export {
+  available,
+  type Catalog,
+  catalogAt,
+  catalogOf,
+  everyFigure,
+  type Figure,
+  type Figures,
+  figureOf,
+  prizeOf,
+  type Purpose,
+  type Rarity,
+  RARITY_IDS,
+} from "./content/catalog.ts";
+export { type Era, eraAt, eraOf, isEra, LAST_ERA, LEGACY_ERA, type ReleaseId, RELEASES } from "./content/releases.ts";
+export { type Banner, BANNERS, GROVE } from "./content/banners.ts";
+
 // What is in the game: plain tables.
 export {
   abilityNumber,
@@ -11,11 +29,9 @@ export {
   type AbilitySpec,
   BOSS_IDS,
   type BossId,
-  FIGURE_IDS,
   type FigureId,
   type FigureSpec,
   FIGURES,
-  figuresOfTier,
   isBossId,
   isFigureId,
   isUnitKind,
@@ -33,8 +49,8 @@ export {
   type UnitKind,
   type UnitSpec,
 } from "./content/figures.ts";
-export { figuresFor, levelOf, OWNABLE, placedOf, type Roster, rosterOf, stallOdds, stallPool } from "./own.ts";
-export { isMemberId, MEMBER_IDS, type MemberId } from "./content/members.ts";
+export { levelOf, placedOf, type Roster, rosterOf, stallOdds, stallPool } from "./own.ts";
+export { isMemberId, type MemberId } from "./content/members.ts";
 export {
   formNumber,
   formText,
@@ -234,7 +250,6 @@ export {
   sellValue,
   type Spot,
   spotOf,
-  STALL_POOL,
   layOutAfresh,
   playsAsKept,
   startRun,

@@ -12,6 +12,7 @@
 import type { Met } from "@sequoia-leaf/core";
 import { CARELESS, fondOf, type Habit, planRoom, ROLLER, SAVER, SENSIBLE } from "@sequoia-leaf/raid/bot.ts";
 import { ENDLESS, type EndlessWay } from "@sequoia-leaf/raid/content/endless.ts";
+import { LAST_ERA } from "@sequoia-leaf/raid/content/releases.ts";
 import { ROOM_COUNT } from "@sequoia-leaf/raid/content/rooms.ts";
 import { CALLINGS, KINS } from "@sequoia-leaf/raid/content/traits.ts";
 import { roomAt } from "@sequoia-leaf/raid/endless.ts";
@@ -104,7 +105,7 @@ for (let n = 0; n < total; n++) {
   const habit = HABITS[n % HABITS.length] ?? SENSIBLE;
   if (n % week === 0) holders.clear();
   const counted = n >= warm;
-  const run = startRun(n * 7919 + 13, { trail: 0, endless: way });
+  const run = startRun(n * 7919 + 13, { era: LAST_ERA, trail: 0, endless: way });
   for (let guard = 0; guard < 400 && run.stage.phase !== "over"; guard++) {
     planRoom(run, habit);
     const room = run.room;

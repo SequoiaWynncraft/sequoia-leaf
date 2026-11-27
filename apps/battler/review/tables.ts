@@ -19,7 +19,7 @@ import { liveLine, liveView, takeFromRing } from "../src/screen/live/seated.ts";
 import { OWN } from "../src/screen/sides.ts";
 import { ask, doNow, S } from "../src/screen/state.ts";
 
-const BLANK = tableView(newTable({ seed: 1 }), { awards: [], now: 0 });
+const BLANK = tableView(newTable({ seed: 1, now: 0 }), { awards: [], now: 0 });
 const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 /** Waits until the page's line has nothing waiting for Leaf; still waiting after 5 seconds, the tour stops. */

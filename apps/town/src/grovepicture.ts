@@ -16,13 +16,13 @@ import { ell, rgb } from "@sequoia-leaf/kit/pix.ts";
 import { type Body, WALK } from "@sequoia-leaf/kit/skin.ts";
 import { widthOf, write } from "@sequoia-leaf/kit/text.ts";
 import { clamp, type Ctx, hash, lerp, makeCanvas, must, vnoise } from "@sequoia-leaf/kit/util.ts";
-import { PRIZES, type PullsNote } from "@sequoia-leaf/pulls";
+import type { PullsNote } from "@sequoia-leaf/pulls";
 import { figureThing } from "@sequoia-leaf/town/things.ts";
 
 import { type CampArt, pictureOf } from "./campart.ts";
 import { buildStage, type Light, type Stage as Backdrop } from "./grovestage.ts";
 import type { makeGroveUi } from "./groveui.ts";
-import { GROVE, RARITY_NAMES, type Reveal, seedsOf, type showing, type Timeline } from "./pulls.ts";
+import { GROVE, RARITY_NAMES, type Reveal, seedsOf, setHeadliner, type showing, type Timeline } from "./pulls.ts";
 import type { Sprites } from "./sprites.ts";
 
 // ---------------------------------------------------------------- what a ceremony shows
@@ -256,8 +256,8 @@ export function makeGrovePicture(sprites: Sprites, art: CampArt, ui: ReturnType<
    */
   function picture(prize: string, beat: 0 | 1 = 0): HTMLCanvasElement {
     const [kind, id = ""] = prize.split(":");
-    if (kind === "headliner") return grove.person()?.body.frames[0]?.[0] ?? art.parcel.c;
-    return pictureOf(art, figureThing(id), 0, beat)?.c ?? art.parcel.c;
+    if (kind === "headliner" && !setHeadliner(id)) return grove.person()?.body.frames[0]?.[0] ?? art.parcel.c;
+    return pictureOf(art, figureThing(setHeadliner(id) ?? id), 0, beat)?.c ?? art.parcel.c;
   }
 
   /** A picture `k` art pixels to each of its own. */
@@ -609,7 +609,7 @@ export function makeGrovePicture(sprites: Sprites, art: CampArt, ui: ReturnType<
       [92, -22, 100],
       [0, 0, 132],
     ] as const;
-    PRIZES.Treant.forEach((prize, i) => {
+    ui.treants().forEach((prize, i) => {
       const [dx, dy, box] = stands[i % stands.length] ?? [0, 0, 100];
       const beat = beatAt(ti, i / 3);
       const pic = picture(prize, beat);

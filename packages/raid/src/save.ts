@@ -21,6 +21,7 @@
 import { mix } from "@sequoia-leaf/core";
 
 import { BOON_IDS, type BoonId, isBoonId } from "./content/boons.ts";
+import { everyFigure } from "./content/catalog.ts";
 import { type EndlessWay, isEndlessWay } from "./content/endless.ts";
 import { type FigureId, isBossId, isFigureId, isStars, isUnitKind } from "./content/figures.ts";
 import {
@@ -34,13 +35,14 @@ import {
   isItemId,
   type ItemId,
 } from "./content/items.ts";
+import { type Era, isEra, LEGACY_ERA } from "./content/releases.ts";
 import { ECONOMY, MAX_LEVEL, TRAIL_COUNT } from "./content/rooms.ts";
 import { isTraitId, TRAIT_IDS, traitNumber } from "./content/traits.ts";
 import { isRuleId, RULE_IDS } from "./content/wilds.ts";
 import { lastRoom } from "./endless.ts";
 import type { FightResult, FightRule, FightSetup, FightSummary, Tally } from "./fight/types.ts";
 import { SEATS } from "./hex.ts";
-import { OWNABLE, readRoster, type Roster } from "./own.ts";
+import { readRoster, type Roster } from "./own.ts";
 import { isParty, type Party } from "./party.ts";
 import {
   type Choice,
@@ -163,13 +165,15 @@ function readFightRule(v: unknown, what: string): FightRule {
   const r = record(v, what);
   return { id: one(r.id, isRuleId, what), stumps: unique(each(r.stumps, isSeat, SEATS, what), what) };
 }
-/** A fight's setup: a seed and two parties, and the Wilds rule it is played under. One set up before there were rules has none. */
+/** An era as a run or a setup keeps it; one kept before there were eras is of the era live then. */
+const readEra = (v: unknown, what: string): Era => (v === undefined ? LEGACY_ERA : one(v, isEra, what));
+/** A fight's setup: a seed, its era and two parties, and the Wilds rule it is played under. One set up before there were rules has none. */
 function readSetup(v: unknown, what: string): FightSetup {
   const r = record(v, what);
   const sides = list(r.sides, 2, what);
   const ours = one(sides[0], isParty, what);
   const theirs = one(sides[1], isParty, what);
-  const setup: FightSetup = { seed: whole(r.seed, 0, UINT, what), sides: [ours, theirs] };
+  const setup: FightSetup = { seed: whole(r.seed, 0, UINT, what), era: readEra(r.era, what), sides: [ours, theirs] };
   if (r.rule !== undefined) setup.rule = readFightRule(r.rule, what);
   return setup;
 }
@@ -305,6 +309,7 @@ function readParts(
   // A run saved while some figures were locked lists the ones its stall could offer; every figure can now.
   const seen = record(r.seen, "the almanac notes");
   const run: RunView = {
+    era: readEra(r.era, "the era"),
     trail: whole(r.trail, 0, ROOMY, "the trail"),
     room,
     stage: readStage(r, old, shown, drawn),
@@ -336,8 +341,11 @@ function readParts(
     endless: readEndless(r.endless),
     wing: readWing(r.wing, shown),
     seen: {
-      fielded: unique(each(seen.fielded, isFigureId, OWNABLE.length, "the almanac notes"), "the almanac notes"),
-      threeStars: unique(each(seen.threeStars, isFigureId, OWNABLE.length, "the almanac notes"), "the almanac notes"),
+      fielded: unique(each(seen.fielded, isFigureId, everyFigure().length, "the almanac notes"), "the almanac notes"),
+      threeStars: unique(
+        each(seen.threeStars, isFigureId, everyFigure().length, "the almanac notes"),
+        "the almanac notes",
+      ),
       forged: unique(each(seen.forged, isFinishedId, FINISHED_IDS.length, "the almanac notes"), "the almanac notes"),
       topped: unique(each(seen.topped, isTraitId, TRAIT_IDS.length, "the almanac notes"), "the almanac notes"),
     },

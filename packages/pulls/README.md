@@ -14,9 +14,11 @@ the banners route's answer.
 ## What is won
 
 Seven rarities (`RARITIES`), each with its colour, in three tiers: filler (Leafkin, Sapling, Sprite),
-mid (Dryad, Druid) and top (Treant, Yggdrasil). Every prize (`PRIZES`) is one of The Little Raid's
-figures (`figure:<id>`) or a banner's headliner (`headliner:<banner>`). A figure's rarity is its
-price in the raid (`tier` in `packages/raid`), so a figure added there is in a pool:
+mid (Dryad, Druid) and top (Treant, Yggdrasil). Every prize is one of The Little Raid's figures
+(`figure:<id>`) or a banner's headliner (`headliner:<banner>`), as the raid's catalogue gives them
+at the era Leaf's clock is in (`prizesOf`, through `available`): this package lists no prize and no
+banner of its own. A figure's rarity is the catalogue's (`prize`), today by its price in the raid,
+and a figure is in the pools once its release has joined them:
 
 | Rarity    | Figures                                       |
 | --------- | --------------------------------------------- |

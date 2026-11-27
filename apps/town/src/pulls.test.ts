@@ -1,15 +1,23 @@
 import { expect, test } from "bun:test";
 
+import { type Ctx, isRefused } from "@sequoia-leaf/core";
 import { pressedTwice } from "@sequoia-leaf/kit/dom.ts";
 import { scope } from "@sequoia-leaf/kit/scope.ts";
 import { press } from "@sequoia-leaf/kit/standin.ts";
-import { BANNERS, draw, EARLIER, headliner, PRIZES, type Rarity, RATES } from "@sequoia-leaf/pulls";
+import { BANNERS, draw, EARLIER, headliner, prizesOf, PULLS, type Rarity, RATES } from "@sequoia-leaf/pulls";
 import type { BannerPerson } from "@sequoia-leaf/pulls/wire.ts";
+import { catalogAt } from "@sequoia-leaf/raid/content/catalog.ts";
+import { eraAt, RELEASES } from "@sequoia-leaf/raid/content/releases.ts";
 
 import {
+  askAgain,
+  asksNow,
   bannerLine,
+  bookCount,
   cannotPull,
   chances,
+  clearing,
+  GROVE,
   groveState,
   nextFree,
   offers,
@@ -18,6 +26,7 @@ import {
   past,
   percent,
   pityLine,
+  prizeBook,
   prizeName,
   pullSpend,
   RARITY_NAMES,
@@ -28,9 +37,15 @@ import {
   takesCommand,
   ticked,
   timeline,
+  viewKey,
 } from "./pulls.ts";
 
-const banner = BANNERS[0] ?? { id: "banner-1", from: 0, until: 0 };
+const banner = BANNERS[0] ?? { id: "banner-1", opens: "base", from: 0, until: 0, headliner: "banner-1", look: "skin" };
+/** Wednesday 25 November 2026, 12:00 UTC: banner-1 is open, and its era; what its pools give then. */
+const T0 = Date.UTC(2026, 10, 25, 12);
+const ERA = eraAt(T0);
+const GROVE_PRIZES = prizesOf(catalogAt(ERA), "grove");
+const BANNER_PRIZES = prizesOf(catalogAt(ERA), banner.id);
 /** A banner with a made-up headliner, and the same banner with nobody yet. */
 const WITH: BannerPerson[] = [{ ...banner, headliner: { id: "mossback", name: "Mossback" } }];
 const WITHOUT: BannerPerson[] = [{ ...banner, headliner: null }];
@@ -59,7 +74,7 @@ test("what a reveal says of a prize: its name, whether it is new, and the Seeds 
 
 test("every prize in the pools, and every prize of earlier pulls, has a name", () => {
   const earlier = Object.values(EARLIER).flat();
-  for (const prize of [...RARITY_NAMES.flatMap((r) => PRIZES[r]), ...earlier])
+  for (const prize of [...RARITY_NAMES.flatMap((r) => BANNER_PRIZES[r]), ...earlier])
     expect(prizeName(prize, WITH)).not.toBe(prize.split(":")[1] ?? "");
   expect([prizeName("thing:plank-path", WITH), prizeName("look:gingham", WITH)]).toEqual([
     "Plank path",
@@ -73,17 +88,41 @@ test("the pity line counts towards the pull that is certain, and a lost 50/50 na
   expect(owedLine({ owed: false }, "Mossback")).toBeNull();
 });
 
-test("a banner is shown only while it is open and has a person", () => {
+test("a banner is shown only while Leaf's view has it open, a member's once Leaf has said who it is", () => {
   const open = { open: [{ id: banner.id, until: banner.until }] };
-  expect(showing(open, WITH)).toEqual({
+  expect(showing(open, WITH, BANNERS)).toEqual({
     id: banner.id,
     until: banner.until,
+    name: "Mossback",
     person: { id: "mossback", name: "Mossback" },
+    headliner: banner.headliner,
   });
-  expect(showing(open, WITHOUT)).toBeNull();
-  expect(showing({ open: [] }, WITH)).toBeNull();
-  const shown = showing(open, WITH);
-  if (shown) expect(bannerLine(shown, "UTC")).toBe("Mossback's banner is open until 8 December, 00:00.");
+  expect(showing(open, WITHOUT, BANNERS)).toBeNull();
+  expect(showing({ open: [] }, WITH, BANNERS)).toBeNull();
+  expect(bannerLine(showing(open, WITH, BANNERS), "UTC")).toBe("Mossback's banner is open until 8 December, 00:00.");
+});
+
+test("a banner whose headliner the set draws is shown at once: nobody has to be its headliner", () => {
+  const penguins = {
+    id: "made-up",
+    opens: "groot",
+    from: 0,
+    until: banner.until,
+    headliner: "greg",
+    look: "set",
+  } as const;
+  const open = { open: [{ id: penguins.id, until: penguins.until }] };
+  // Leaf's people name nobody for it; the set's own figure is the headliner, by its own name.
+  const people: BannerPerson[] = [{ id: penguins.id, from: 0, until: penguins.until, headliner: null }];
+  expect(showing(open, people, [penguins])).toEqual({
+    id: penguins.id,
+    until: penguins.until,
+    name: "Greg",
+    person: null,
+    headliner: "greg",
+  });
+  // A member's banner still waits for Leaf to say who.
+  expect(showing(open, people, [{ ...penguins, look: "skin" }])).toBeNull();
 });
 
 test("the chances shown are what RATES makes of a pull with no guarantee near", () => {
@@ -98,12 +137,7 @@ test("the chances shown are what RATES makes of a pull with no guarantee near", 
     const n = 300_000;
     const stream = { rng: 20_261_122 };
     for (let i = 0; i < n; i++) {
-      const { rarity } = draw(
-        { top: 0, mid: 0, owed: false },
-        inBanner ? headliner(banner.id) : null,
-        stream,
-        banner.from,
-      );
+      const { rarity } = draw({ top: 0, mid: 0, owed: false }, inBanner ? BANNER_PRIZES : GROVE_PRIZES, stream);
       drawn[rarity] = (drawn[rarity] ?? 0) + 1;
     }
     for (const r of RARITY_NAMES) expect(Math.abs((drawn[r] ?? 0) / n - shown[r])).toBeLessThan(0.004);
@@ -145,7 +179,7 @@ test("the rules' numbers are what a million seeded pulls in a banner do", () => 
     const at = c.top + 1;
     const certainMid = c.mid + 1 >= midEvery;
     const owed = c.owed;
-    const { rarity } = draw(c, headliner(banner.id), stream, banner.from);
+    const { rarity } = draw(c, BANNER_PRIZES, stream);
     const top = rarity === "Treant" || rarity === "Yggdrasil";
     const [n = 0, won = 0] = tries.get(at) ?? [];
     tries.set(at, [n + 1, won + (top ? 1 : 0)]);
@@ -178,7 +212,7 @@ test("the rules' numbers are what a million seeded pulls in a banner do", () => 
   expect(Math.abs(share(rampFrom + 1) - (first + rise))).toBeLessThan(0.015);
   // So few pulls get that far that it is drawn on its own.
   for (let i = 0; i < 1000; i++)
-    expect(draw({ top: certainAt - 1, mid: 0, owed: false }, null, stream, banner.from).rarity).toBe("Treant");
+    expect(draw({ top: certainAt - 1, mid: 0, owed: false }, GROVE_PRIZES, stream).rarity).toBe("Treant");
   expect(tries.has(certainAt + 1)).toBe(false);
   expect(Math.abs(fifties.won / fifties.free - fifty)).toBeLessThan(0.02);
   expect(fifties.owedWon).toBe(fifties.owed);
@@ -275,7 +309,7 @@ test("the next free pull is said until the most are waiting", () => {
 
 test("Seeds buy a mid-tier figure the player does not have, and the history is newest first, earlier prizes in it", () => {
   // A mid-tier look of earlier pulls is held, and is not among what Seeds buy.
-  const list = offers({ have: { "figure:badger": 1, "look:baize": 1 }, seeds: RATES.exchange.Dryad }, PRIZES);
+  const list = offers({ have: { "figure:badger": 1, "look:baize": 1 }, seeds: RATES.exchange.Dryad, era: ERA });
   expect(list.map((o) => o.prize)).toEqual([
     "figure:badger",
     "figure:fogowl",
@@ -315,4 +349,80 @@ test("Seeds buy a mid-tier figure the player does not have, and the history is n
     },
     { prize: "thing:pinecone", rarity: "Leafkin", pool: "Evergreen", when: "25 November, 12:00", top: null },
   ]);
+});
+
+/** Leaf's word on a pull at a moment. */
+const ctxAt = (now: number, seed = 1): Ctx => ({
+  now,
+  player: { id: "mossback", guest: false },
+  seed,
+  room: 0,
+  awards: [],
+  postcards: {},
+});
+/** Every prize Leaf draws from a pool at a moment, over many ten-pulls that each start certain of a top-tier prize. */
+function drawnAt(pool: string, now: number): string[] {
+  const drawn = new Set<string>();
+  const certain = { top: RATES.top.certainAt - 1, mid: 0, owed: false };
+  for (let seed = 1; seed <= 300; seed++) {
+    const state = { ...PULLS.create(ctxAt(now, seed)), counters: { grove: certain, banner: certain } };
+    const answer = PULLS.apply(state, { do: "pull", pool, n: 10, with: "leaf", era: eraAt(now) }, ctxAt(now, seed));
+    if (isRefused(answer)) throw new Error(`${pool} refused at ${now}: ${answer.refused}`);
+    for (const note of answer.notes) drawn.add(note.prize);
+  }
+  return [...drawn].toSorted();
+}
+
+test("the prize book lists what Leaf draws from each pool open, and counts that, a millisecond before each release and at it", () => {
+  for (const release of RELEASES.filter((r) => r.at > 0)) {
+    for (const now of [release.at - 1, release.at]) {
+      const view = PULLS.view(PULLS.create(ctxAt(now)), ctxAt(now));
+      for (const pool of [GROVE, ...view.open.map((b) => b.id)]) {
+        const listed = prizeBook(view, pool).flatMap(([, list]) => list);
+        expect([pool, now, ...listed.toSorted()]).toEqual([pool, now, ...drawnAt(pool, now)]);
+      }
+    }
+  }
+});
+
+test("a view of a new era draws the Grove's words again, and the page asks Leaf for one when a release is due", () => {
+  const night = Date.UTC(2026, 11, 8);
+  const view = PULLS.view(PULLS.create(ctxAt(night - 1)), ctxAt(night - 1));
+  const later = PULLS.view(PULLS.create(ctxAt(night - 1)), ctxAt(night));
+  expect(viewKey({ ...view, open: later.open })).not.toBe(viewKey({ ...later }));
+  expect(viewKey(view)).toBe(viewKey({ ...view }));
+  // By the page's clock a release is due: Leaf is asked, and only its answer says what is open.
+  expect(askAgain({ ...view, free: { waiting: 1, next: Infinity } }, night - 1)).toBe(false);
+  expect(askAgain({ ...view, free: { waiting: 1, next: Infinity } }, night)).toBe(true);
+});
+
+test("the clearing: the always-open pool's first three Treants on their stands, or a banner's own headliner the set draws", () => {
+  const night = Date.UTC(2026, 11, 8);
+  const view = PULLS.view(PULLS.create(ctxAt(night)), ctxAt(night));
+  // From 8 December the grove gives four Treants; three stand, and the prize book counts all four.
+  expect(prizeBook(view, GROVE).find(([rarity]) => rarity === "Treant")?.[1]).toHaveLength(4);
+  expect(clearing(view, null)).toHaveLength(3);
+  const book = prizeBook(view, GROVE);
+  expect(bookCount({ have: { "figure:seqwawa": 1, "figure:greg": 2, "look:baize": 1 } }, book)).toBe(
+    `Yours: 2 of ${book.flatMap(([, list]) => list).length}`,
+  );
+  const shown = showing({ open: [{ id: banner.id, until: banner.until }] }, WITH, BANNERS);
+  expect(clearing(view, shown)).toHaveLength(3);
+});
+
+test("a town left open across a banner's closing asks Leaf again once it is due, and then says no banner", () => {
+  const ends = banner.until;
+  const state = PULLS.create(ctxAt(ends - 120_000));
+  const before = PULLS.view(state, ctxAt(ends - 120_000));
+  const card = (v: typeof before) => bannerLine(showing(v, WITH, BANNERS), "UTC");
+  expect(card(before)).toBe("Mossback's banner is open until 8 December, 00:00.");
+  // Asked two minutes before it ends: nothing is due until it ends, and then not sooner than a minute after asking.
+  const asked = ends - 120_000;
+  expect(asksNow(before, ends - 1, asked)).toBe(false);
+  expect(asksNow(before, ends, ends - 30_000)).toBe(false);
+  expect(asksNow(before, ends, asked)).toBe(true);
+  // What Leaf answers then is what the card says: the banner has ended.
+  expect(card(PULLS.view(state, ctxAt(ends)))).toBeNull();
+  // With no pulls yet the card asks, a minute apart at most.
+  expect([asksNow(null, ends, ends - 60_000), asksNow(null, ends, ends - 59_999)]).toEqual([true, false]);
 });

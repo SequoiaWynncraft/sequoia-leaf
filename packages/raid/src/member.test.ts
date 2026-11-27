@@ -9,8 +9,10 @@ import { readFileSync } from "node:fs";
 import type { Ctx, Met } from "@sequoia-leaf/core";
 
 import { GOOD_WITH } from "./content/advice.ts";
-import { abilityNumber, abilityText, FIGURE_IDS, type FigureId, FIGURES, type Stars } from "./content/figures.ts";
-import { isMemberId, MEMBER_IDS, MEMBERS } from "./content/members.ts";
+import { BANNERS } from "./content/banners.ts";
+import { abilityNumber, abilityText, type FigureId, FIGURES, type Stars, TIERS } from "./content/figures.ts";
+import { isMemberId, MEMBERS } from "./content/members.ts";
+import { LEGACY_ERA } from "./content/releases.ts";
 import { MAX_LEVEL, ROOMS, STALL_ODDS, TRAIL_COUNT } from "./content/rooms.ts";
 import { HZ, summon } from "./fight/core.ts";
 import type { FightEvent } from "./fight/types.ts";
@@ -18,26 +20,28 @@ import { boardMet, opposition } from "./foe.ts";
 import { RAID, type Table } from "./game.ts";
 import { cellAt, distance } from "./hex.ts";
 import { newAlmanac } from "./outside.ts";
-import { levelOf, OWNABLE, rosterOf, stallOdds, stallPool } from "./own.ts";
+import { levelOf, rosterOf, stallOdds, stallPool } from "./own.ts";
 import { isParty, traitStates } from "./party.ts";
-import {
-  buy,
-  choose,
-  giveItem,
-  move,
-  partyOf,
-  picksOf,
-  pieces,
-  type Run,
-  rustle,
-  sell,
-  STALL_POOL,
-  startRun,
-} from "./run.ts";
+import { buy, choose, giveItem, move, partyOf, picksOf, pieces, type Run, rustle, sell, startRun } from "./run.ts";
 import { checkRun } from "./save.ts";
 import { sparParty } from "./spar.ts";
-import { fightOf, onCell, only, partyOfFigures, ready, steps, stepUntil, still, unitOf } from "./testkit.ts";
+import {
+  CAT,
+  EVERYONES,
+  fightOf,
+  onCell,
+  only,
+  partyOfFigures,
+  ready,
+  steps,
+  stepUntil,
+  still,
+  unitOf,
+} from "./testkit.ts";
 import { readView } from "./wire.ts";
+
+/** Every banner's headliner. */
+const HEADLINERS = BANNERS.map((b) => b.headliner);
 
 const UNIT = "banner-1";
 /** What the pulls award a member who has pulled the first banner's member four times, and Greg once. */
@@ -85,19 +89,19 @@ const boardWith = (kind: FigureId): Met => ({
 
 describe("the twenty-eight", () => {
   test("stay twenty-nine: a banner's member is a figure, and not one of them", () => {
-    expect(FIGURE_IDS.length).toBe(29);
-    expect(OWNABLE).toEqual([...FIGURE_IDS, ...MEMBER_IDS]);
-    const stall: readonly string[] = STALL_POOL;
-    expect(stall).toEqual([...FIGURE_IDS]);
-    for (const id of MEMBER_IDS) {
+    expect(EVERYONES.length).toBe(29);
+    expect(CAT.order).toEqual([...EVERYONES, ...HEADLINERS]);
+    const stall: readonly string[] = TIERS.flatMap((tier) => stallPool({ own: null, era: LEGACY_ERA }, tier));
+    expect(stall).toEqual([...EVERYONES]);
+    for (const id of HEADLINERS) {
       expect(stall).not.toContain(id);
-      expect(FIGURES[id]).toBe(MEMBERS[id]);
+      expect(isMemberId(id) && FIGURES[id] === MEMBERS[id]).toBe(true);
       expect([FIGURES[id].tier, FIGURES[id].extra, new Set(GOOD_WITH[id]).size]).toEqual([5, [], 3]);
     }
-    expect(MEMBER_IDS.every(isMemberId) && !FIGURE_IDS.some(isMemberId)).toBe(true);
+    expect(HEADLINERS.every(isMemberId) && !EVERYONES.some(isMemberId)).toBe(true);
   });
   test("a banner's member is nobody in particular: its name is what any guild member is", () => {
-    for (const id of MEMBER_IDS) expect(MEMBERS[id].name).toBe("A guild member");
+    for (const id of HEADLINERS) expect(FIGURES[id].name).toBe("A guild member");
   });
 });
 
@@ -107,12 +111,12 @@ describe("the main way, whatever a member has pulled", () => {
     expect(run.own).toBeNull();
     const seen = offered(run);
     expect([...seen.keys()].filter(isMemberId)).toEqual([]);
-    expect(seen.size).toBe(FIGURE_IDS.length);
-    for (const tier of [1, 2, 3, 4, 5]) expect(stallPool(run, tier).filter(isMemberId)).toEqual([]);
+    expect(seen.size).toBe(EVERYONES.length);
+    for (const tier of TIERS) expect(stallPool(run, tier).filter(isMemberId)).toEqual([]);
   });
   test("its opening pick is never a banner's member", () => {
     for (let seed = 1; seed < 200; seed++) {
-      const pick = picksOf(startRun(seed))[0];
+      const pick = picksOf(startRun(seed, { era: LEGACY_ERA }))[0];
       expect(pick?.kind === "starter" && !pick.options.some(isMemberId)).toBe(true);
     }
   });
@@ -121,19 +125,19 @@ describe("the main way, whatever a member has pulled", () => {
       ROOMS.forEach((room, at) => {
         if (room.kind !== "spar") return;
         for (let seed = 1; seed <= 150; seed++) {
-          expect(sparParty(seed, at, trail).figures.some((p) => isMemberId(p.kind))).toBe(false);
+          expect(sparParty(CAT, seed, at, trail).figures.some((p) => isMemberId(p.kind))).toBe(false);
         }
       });
     }
   });
   test("a board holding one is not met at all: the regular waits there", () => {
     const met = boardWith(UNIT);
-    expect(boardMet(met)).toBeNull();
+    expect(boardMet(CAT, met)).toBeNull();
     for (let seed = 1; seed <= 40; seed++) {
-      expect(opposition(seed, 2, 0, met)).toEqual(opposition(seed, 2, 0));
+      expect(opposition(CAT, seed, 2, 0, met)).toEqual(opposition(CAT, seed, 2, 0));
     }
     // The same board without the member is met, so it is the member that keeps it out.
-    expect(boardMet(boardWith("greg"))?.by).toBe(met.player);
+    expect(boardMet(CAT, boardWith("greg"))?.by).toBe(met.player);
   });
 });
 
@@ -201,13 +205,13 @@ describe("a run with the member's own figures", () => {
   });
   test("a board holding it is met, with its level", () => {
     const met = boardWith(UNIT);
-    const board = boardMet(met, true);
+    const board = boardMet(CAT, met, true);
     expect(board?.figures.map((p) => [p.kind, p.stars, p.level])).toEqual([
       [UNIT, 2, 3],
       ["crab7", 1, undefined],
     ]);
     expect([board?.who, board?.by]).toEqual(["Quillfeather", met.player]);
-    expect(opposition(1, 2, 0, met, true).by).toBe(met.player);
+    expect(opposition(CAT, 1, 2, 0, met, true).by).toBe(met.player);
   });
 });
 
@@ -230,8 +234,8 @@ describe("a table kept in a run with a banner's member", () => {
   });
   test("a run that has fielded every figure a member can have still reads", () => {
     const raw = JSON.parse(text);
-    raw.run.seen.fielded = [...OWNABLE];
-    raw.run.seen.threeStars = [...OWNABLE];
+    raw.run.seen.fielded = [...CAT.order];
+    raw.run.seen.threeStars = [...CAT.order];
     expect(checkRun(raw.run).ok).toBe(true);
   });
   test("the almanac is of the twenty-eight: a run with the member's own figures writes nothing in it", () => {

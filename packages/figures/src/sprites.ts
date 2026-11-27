@@ -14,8 +14,8 @@ import { CORAL, GOLD, GREEN, INK, SKY } from "@sequoia-leaf/kit/palette.ts";
 import { bitmap, flipped, outlined, rgb } from "@sequoia-leaf/kit/pix.ts";
 import { bake as walking, type Body, NOBODY, paintSkin } from "@sequoia-leaf/kit/skin.ts";
 import { type Ctx, makeCanvas, must } from "@sequoia-leaf/kit/util.ts";
+import { everyShared } from "@sequoia-leaf/raid/content/catalog.ts";
 import {
-  FIGURE_IDS,
   FIGURES,
   isBossId,
   isFigureId,
@@ -361,7 +361,7 @@ export function portrait(kind: UnitKind, o: Shown = {}): HTMLCanvasElement {
   return c;
 }
 /** How tall the tallest portrait of a figure a member can own is, for a place that shows any of them. */
-export const portraitRoom = (): number => Math.max(...FIGURE_IDS.map((kind) => framesOf(kind).room + 2));
+export const portraitRoom = (): number => Math.max(...everyShared().map((kind) => framesOf(kind).room + 2));
 
 // ---------- bases ----------
 

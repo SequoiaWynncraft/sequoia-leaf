@@ -19,15 +19,7 @@ import { openPlay, type Play, type Trouble, waitingLook } from "@sequoia-leaf/ki
 import { bake, type Body, lookFor, paintSkin, skinOf } from "@sequoia-leaf/kit/skin.ts";
 import { noise, note, penta, sfx, tone } from "@sequoia-leaf/kit/sound.ts";
 import { must } from "@sequoia-leaf/kit/util.ts";
-import {
-  BANNERS,
-  isOpen,
-  type PullsCommand,
-  type PullsNote,
-  type PullsView,
-  RARITIES,
-  RATES,
-} from "@sequoia-leaf/pulls";
+import { BANNERS, type PullsCommand, type PullsNote, type PullsView, RARITIES } from "@sequoia-leaf/pulls";
 import { type BannerPerson, readBanners, readNotes, readView } from "@sequoia-leaf/pulls/wire.ts";
 
 import type { CampArt } from "./campart.ts";
@@ -57,6 +49,7 @@ import { makeGroveUi } from "./groveui.ts";
 import { hush } from "./hud.ts";
 import { troubleCard } from "./leaf.ts";
 import {
+  asksNow,
   bannerLine,
   GROVE,
   type GroveState,
@@ -211,7 +204,7 @@ export function makeGrove(sprites: Sprites, art: CampArt, stage: Stage): Grove {
   let metAt = 0;
 
   const view = (): PullsView => must(play, "the pulls").state;
-  const banner = (): ReturnType<typeof showing> => showing(view(), banners);
+  const banner = (): ReturnType<typeof showing> => showing(view(), banners, BANNERS);
   /** The Grove's one state: what may be pressed in it, and whether a command may be sent (`takesCommand`). */
   const state = (): GroveState => {
     // On the way out, or not here at all: the stage says.
@@ -240,7 +233,7 @@ export function makeGrove(sprites: Sprites, art: CampArt, stage: Stage): Grove {
   /** The pool on show is one that is open: a banner that has ended gives way to the always-open pool. */
   function settle(): void {
     const b = banner();
-    if (b) meet(b.person);
+    if (b?.person) meet(b.person);
     if (pool !== GROVE && pool !== b?.id) pool = GROVE;
   }
 
@@ -275,26 +268,25 @@ export function makeGrove(sprites: Sprites, art: CampArt, stage: Stage): Grove {
   }
 
   /**
-   * Asks Leaf for the pulls again when a free pull has fallen due or a banner is due to open or to
-   * end by the page's clock, a minute apart at most.
+   * Asks Leaf for the pulls again when a free pull has fallen due, a banner is due to open or to end,
+   * or a release to open, by the page's clock, a minute apart at most. What is open and what each
+   * pool gives is only ever what Leaf's answer says.
    */
   function keepFresh(): void {
-    const v = view();
     const now = Date.now();
-    const due =
-      (v.free.waiting < RATES.free.most && now >= v.free.next) ||
-      BANNERS.some(({ id }) => isOpen(id, now) !== v.open.some((b) => b.id === id));
-    if (!due || now - asked < 60_000) return;
+    if (!asksNow(play?.state ?? null, now, asked)) return;
     asked = now;
-    void Promise.all([play?.refresh(), meetBanners()]).then(settle);
+    void (play ? Promise.all([play.refresh(), meetBanners()]).then(settle) : open());
   }
 
-  /** The banner open now and whose it is, in a line, for the Grove's card in town; asks Leaf whose, if it does not know. */
+  /**
+   * The banner open now and whose it is, in a line, for the Grove's card in town. What is open is
+   * Leaf's to say: the pulls are asked for here, and again as `asksNow` says, in town as in the Grove.
+   */
   hooks.groveBanner = (): string | null => {
-    const now = Date.now();
     void meetBanners();
-    const b = showing({ open: BANNERS.filter(({ id }) => isOpen(id, now)) }, banners);
-    return b ? bannerLine(b) : null;
+    keepFresh();
+    return play ? bannerLine(showing(play.state, banners, BANNERS)) : null;
   };
 
   // ---------------------------------------------------------------- the page
@@ -310,7 +302,7 @@ export function makeGrove(sprites: Sprites, art: CampArt, stage: Stage): Grove {
       sfx.tap();
     },
     state,
-    pull: (n, paid, button) => void send({ do: "pull", pool, n, with: paid }, button, n),
+    pull: (n, paid, era, button) => void send({ do: "pull", pool, n, with: paid, era }, button, n),
     exchange: (prize, button) => void send({ do: "exchange", prize }, button, null),
     leave,
     done,
@@ -382,6 +374,8 @@ export function makeGrove(sprites: Sprites, art: CampArt, stage: Stage): Grove {
     if ("refused" in answer) {
       sfx.no();
       ui.said(refusedLine(answer.refused));
+      // Shown other prizes than the pool gives now: Leaf's are asked for, and shown.
+      if (answer.refused === "prizes_changed") void leaf.refresh().then(settle);
     } else begin(answer.notes, repeat);
     mark();
   }

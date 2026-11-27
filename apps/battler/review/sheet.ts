@@ -7,19 +7,12 @@ import { drawFigure, drawStanding, drawStars, framesOf } from "@sequoia-leaf/fig
 import { BARK, CREAM, GOLD, INK } from "@sequoia-leaf/kit/palette.ts";
 import { write } from "@sequoia-leaf/kit/text.ts";
 import { makeCanvas, must } from "@sequoia-leaf/kit/util.ts";
-import {
-  FIGURE_IDS,
-  FIGURES,
-  specOf,
-  SUMMON_IDS,
-  TROUBLE_IDS,
-  type UnitKind,
-} from "@sequoia-leaf/raid/content/figures.ts";
-import { MEMBER_IDS } from "@sequoia-leaf/raid/content/members.ts";
+import { everyFigure } from "@sequoia-leaf/raid/content/catalog.ts";
+import { FIGURES, specOf, SUMMON_IDS, TROUBLE_IDS, type UnitKind } from "@sequoia-leaf/raid/content/figures.ts";
 
 export function showSheet(): void {
   const zoom = 3;
-  const kinds: UnitKind[] = [...FIGURE_IDS, ...MEMBER_IDS, ...SUMMON_IDS, ...TROUBLE_IDS];
+  const kinds: UnitKind[] = [...everyFigure(), ...SUMMON_IDS, ...TROUBLE_IDS];
   const wide = 424;
   const cells: { kind: UnitKind; x: number; y: number; w: number }[] = [];
   let x = 0;

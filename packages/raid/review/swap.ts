@@ -20,8 +20,10 @@
  * is a gauge: the bots are rough players, and every board here was built without the figure.
  */
 import { fondOf, type Habit, planRoom, ROLLER, SAVER, SENSIBLE } from "@sequoia-leaf/raid/bot.ts";
-import { type FigureId, FIGURES, figuresOfTier, isFigureId, type Stars } from "@sequoia-leaf/raid/content/figures.ts";
-import { MEMBER_IDS } from "@sequoia-leaf/raid/content/members.ts";
+import { BANNERS } from "@sequoia-leaf/raid/content/banners.ts";
+import { available, catalogAt } from "@sequoia-leaf/raid/content/catalog.ts";
+import { type FigureId, FIGURES, isFigureId, type Stars } from "@sequoia-leaf/raid/content/figures.ts";
+import { LAST_ERA } from "@sequoia-leaf/raid/content/releases.ts";
 import { ROOM_COUNT, worth } from "@sequoia-leaf/raid/content/rooms.ts";
 import { CALLINGS, KINS } from "@sequoia-leaf/raid/content/traits.ts";
 import { openFight, resolveFight } from "@sequoia-leaf/raid/fight/engine.ts";
@@ -33,7 +35,10 @@ import { beginFight, startRun, takeTakings } from "@sequoia-leaf/raid/run.ts";
 
 const args = process.argv.slice(2);
 const runs = Number(args[0] ?? 60);
-const FIVES: readonly FigureId[] = [...MEMBER_IDS, ...figuresOfTier(5)];
+const FIVES: readonly FigureId[] = [
+  ...BANNERS.map((b) => b.headliner),
+  ...available(catalogAt(LAST_ERA), { for: "stall", figures: { pool: "fair" }, tier: 5 }),
+];
 const measured: readonly FigureId[] = args[1] ? args[1].split(",").filter(isFigureId) : FIVES;
 const STARS: readonly Stars[] = [1, 2, 3];
 /** The first room whose fights are kept: room 5, where a five-acorn figure can first be on a stall. */
@@ -97,7 +102,7 @@ interface Kept {
 const kept: Kept[] = [];
 for (const habit of HABITS) {
   for (let n = 1; n <= runs; n++) {
-    const run = startRun(n * 7919 + 13, { trail: 0 });
+    const run = startRun(n * 7919 + 13, { era: LAST_ERA, trail: 0 });
     for (let guard = 0; guard < 200 && run.stage.phase !== "over"; guard++) {
       planRoom(run, habit);
       const room = run.room;
@@ -128,7 +133,7 @@ function table(title: string, fights: readonly Kept[], put: (kind: FigureId, sta
         const party = swapped(ours, given);
         // The measured figure is the first put in, so the first of those added at the end.
         const seat = party.figures[party.figures.length - given.length]?.seat;
-        const match: FightSetup = { seed: setup.seed, sides: [party, theirs] };
+        const match: FightSetup = { seed: setup.seed, era: setup.era, sides: [party, theirs] };
         const fight = resolveFight(match);
         all.add(fight, seated(match, seat));
         if (!wonBefore) hard.add(fight);
@@ -173,7 +178,11 @@ for (const kind of measured) {
           might: 100,
           figures: [{ kind, stars, seat, items: [], fed: 0 }],
         };
-        const match: FightSetup = { seed: seed * 31 + room, sides: [ours, opposition(seed * 977 + room, room, 0)] };
+        const match: FightSetup = {
+          seed: seed * 31 + room,
+          era: LAST_ERA,
+          sides: [ours, opposition(catalogAt(LAST_ERA), seed * 977 + room, room, 0)],
+        };
         score.add(resolveFight(match), seated(match, seat));
       }
     }

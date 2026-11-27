@@ -481,7 +481,7 @@ export function playRoom(run: Run, habit: Habit): Taken {
   return takeTakings(run);
 }
 /** Plays a whole run from a seed. */
-export function playRun(seed: number, habit: Habit, options: RunOptions = {}): Run {
+export function playRun(seed: number, habit: Habit, options: RunOptions): Run {
   const run = startRun(seed, options);
   for (let guard = 0; guard < 200 && run.stage.phase !== "over"; guard++) {
     if (!playRoom(run, habit).ok) break;

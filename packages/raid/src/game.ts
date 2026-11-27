@@ -51,6 +51,7 @@ import {
   wear,
   wornOf,
 } from "./content/looks.ts";
+import { type Era, eraAt, isEra, LEGACY_ERA } from "./content/releases.ts";
 import { ROOMS, TRAIL_COUNT } from "./content/rooms.ts";
 import { paidFor, reached, readWeek, type Week, weekAt } from "./depths.ts";
 import { heldSlot, isHeld, roomAt } from "./endless.ts";
@@ -99,6 +100,8 @@ export type { RunView } from "./run.ts";
 export interface Table {
   /** The table's own stream: each new run's seed is drawn from it. */
   rng: number;
+  /** The era on Leaf's clock as the table was last brought to a moment: what a run set out now draws from. */
+  era: Era;
   /** Runs begun at this table. The run in hand is the last of them, and pays under its number. */
   runs: number;
   /** The run in hand, or none. A run that ends is let go of at once. */
@@ -117,6 +120,8 @@ export interface Table {
 
 /** What the player's page is given. */
 export interface TableView {
+  /** The era Leaf's clock is in: what the page reads the catalogue by (`catalogOf`). */
+  era: Era;
   runs: number;
   run: RunView | null;
   endless: RunView | null;
@@ -182,6 +187,7 @@ const stageView = (stage: Stage): Stage =>
 /** A run as the page is shown it. Each field is named, so nothing new is shown by accident. */
 export function runView(run: RunView): RunView {
   return {
+    era: run.era,
     trail: run.trail,
     room: run.room,
     stage: stageView(run.stage),
@@ -212,6 +218,7 @@ export function runView(run: RunView): RunView {
 /** What the page is shown of the table: the week as it stands now (`weekAt`), a new one with nothing won in it yet. */
 export function tableView(state: Table, ctx: Pick<Ctx, "awards" | "now">): TableView {
   return {
+    era: state.era,
     runs: state.runs,
     run: state.run ? runView(state.run) : null,
     endless: state.endless ? runView(state.endless) : null,
@@ -286,7 +293,7 @@ function setOut(s: Table, { trail, own: asked }: Exclude<SetOut, { course: Endle
   const log: Logged[] = [];
   const coins = putDown(s, s.run, notes, log, ctx.room);
   s.runs += 1;
-  s.run = startRun(draw32(s), own ? { trail, own } : { trail });
+  s.run = startRun(draw32(s), own ? { era: s.era, trail, own } : { era: s.era, trail });
   s.trail = trail;
   notes.push({ t: "started", trail, run: s.runs });
   log.push({ kind: LOGGED.raidStarted, data: { trail, ...wayLogged(s.run) } });
@@ -299,7 +306,7 @@ function setOutEndless(s: Table, { course: way }: Extract<SetOut, { course: Endl
   const log: Logged[] = [];
   const coins = putDown(s, s.endless, notes, log, ctx.room);
   s.ventures += 1;
-  s.endless = startRun(draw32(s), { endless: way });
+  s.endless = startRun(draw32(s), { era: s.era, endless: way });
   notes.push({ t: "started", trail: 0, run: s.ventures, endless: way });
   log.push({ kind: LOGGED.raidStarted, data: { trail: 0, endless: way } });
   return { state: s, notes, coins, log };
@@ -322,6 +329,8 @@ function kept(s: Table, run: Run, decided: Fought, ctx: Ctx): Kept[] {
 function play(s: Table, c: Aimed, ctx: Ctx): Answer {
   const run = heldIn(s, aimedAt(c));
   if (!run) return no("no_run");
+  // The run moves now: it draws from the era it is moved in.
+  run.era = s.era;
   const room = run.record.length;
   // The takings are paid from the fight as it was decided when the party set out, against whoever was across.
   const before = foughtOf(run);
@@ -387,7 +396,8 @@ export function applyCommand(state: Table, c: RaidCommand, ctx: Ctx): Answer {
   if (c.do === "start" && !("course" in c) && !trailOpen(state.almanac, c.trail)) return no("trail_closed");
   if (putsDownUnfought(state, c)) return no("unfought");
   const s = structuredClone(state);
-  // Leaf's dice, stirred into every stream before anything is drawn.
+  // Leaf's clock says the era the command is done in; Leaf's dice are stirred into every stream before anything is drawn.
+  s.era = eraAt(ctx.now);
   s.rng = mix(s.rng, ctx.seed);
   for (const run of [s.run, s.endless]) if (run) run.rng = mix(run.rng, ctx.seed);
   return isRunCommand(c) ? play(s, c, ctx) : doTable(s, c, ctx);
@@ -493,6 +503,8 @@ export function predict(
   const held = heldIn(view, slot);
   if (!held) return { refused: "no_run" };
   const run = structuredClone(held);
+  // The run moves in the era Leaf's view is of, as it does at Leaf (`play`).
+  run.era = view.era;
   const done = plan(run, c);
   if (!done) return null;
   if (!done.ok) return { refused: done.code };
@@ -526,20 +538,23 @@ export function planCommands(view: TableView, habit: Habit, endless = false): Ra
 
 const GAME = "little-raid-table";
 /**
- * 5: what Greg has eaten is a share of his health (`feed`), where it was meals of 3% each. 4: a run
- * of the Wilds keeps the rule picked for its wing (`Run.wing`), and a fight its rule. 3: the endless
- * run beside the run in hand, and the week's deepest rooms. 2: a run keeps where it stands as one
- * value (`Stage`). A table of versions 1 to 4 is read as well: its Greg's meals are 3% each, and a
- * table of versions 1 to 3 has no rules, so a run of the Wilds past room 5 picks one at its next boss.
+ * 6: the table, each run and each fight's setup keep their era (`releases.ts`). 5: what Greg has
+ * eaten is a share of his health (`feed`), where it was meals of 3% each. 4: a run of the Wilds
+ * keeps the rule picked for its wing (`Run.wing`), and a fight its rule. 3: the endless run beside
+ * the run in hand, and the week's deepest rooms. 2: a run keeps where it stands as one value
+ * (`Stage`). A table of versions 1 to 5 is read as well: it and its runs are of `LEGACY_ERA`, one of
+ * versions 1 to 4 has Greg's meals at 3% each, and one of versions 1 to 3 has no rules, so a run of
+ * the Wilds past room 5 picks one at its next boss.
  */
-export const TABLE_VERSION = 5;
-const READS = [1, 2, 3, 4, TABLE_VERSION] as const;
+export const TABLE_VERSION = 6;
+const READS = [1, 2, 3, 4, 5, TABLE_VERSION] as const;
 
 export const encodeTable = (state: Table): string =>
   JSON.stringify({
     game: GAME,
     v: TABLE_VERSION,
     rng: state.rng,
+    era: state.era,
     runs: state.runs,
     run: state.run,
     endless: state.endless,
@@ -560,6 +575,9 @@ function keptRun(v: unknown, version: number, begun: number, endless: boolean): 
   if (!read?.ok || read.run.stage.phase === "over" || begun <= 0) return null;
   return (read.run.endless !== null) === endless ? read.run : null;
 }
+
+/** A table's era as it kept it, or null for one that is none; a table kept before there were eras is of the era live then. */
+const keptEra = (v: unknown): Era | null => (v === undefined ? LEGACY_ERA : isEra(v) ? v : null);
 
 /**
  * A table from the text Leaf stored, or null for anything not of these versions' shape. Under
@@ -582,8 +600,11 @@ export function decodeTable(text: string): Table | null {
   const looks = readLooks(raw.looks);
   if (!almanac || !looks) return null;
   const ventures = isWhole(raw.ventures, 0, 1_000_000_000) ? raw.ventures : 0;
+  const era = keptEra(raw.era);
+  if (era === null) return null;
   return {
     rng,
+    era,
     runs,
     run: keptRun(raw.run, version, runs, false),
     endless: keptRun(raw.endless, version, ventures, true),
@@ -596,19 +617,23 @@ export function decodeTable(text: string): Table | null {
 }
 
 /**
- * Nothing at the table happens by itself, however long the player is away, but this: a look won as
- * a pull's prize (`pull:look:<id>` among `ctx.awards`) is owned, as one bought is.
+ * Nothing at the table happens by itself, however long the player is away, but this: the era moves
+ * with Leaf's clock, and a look won as a pull's prize (`pull:look:<id>` among `ctx.awards`) is
+ * owned, as one bought is. A run moves into the era only when it next moves (`play`).
  */
-function wonLooks(state: Table, ctx: Pick<Ctx, "awards">): Table {
+function advance(state: Table, ctx: Pick<Ctx, "awards" | "now">): Table {
   const won = ctx.awards
     .map((award) => award.replace(/^pull:look:/, ""))
     .filter((id): id is LookId => isBoughtLook(id) && !state.looks.owned.includes(id));
-  return won.length === 0 ? state : { ...state, looks: { ...state.looks, owned: [...state.looks.owned, ...won] } };
+  const era = eraAt(ctx.now);
+  if (won.length === 0 && era === state.era) return state;
+  return { ...state, era, looks: { ...state.looks, owned: [...state.looks.owned, ...won] } };
 }
 
 /** A new player's table: nothing laid out, an empty almanac, the plain looks. */
-export const newTable = (ctx: Pick<Ctx, "seed">): Table => ({
+export const newTable = (ctx: Pick<Ctx, "seed" | "now">): Table => ({
   rng: mix(ctx.seed >>> 0, 0x7ab1e),
+  era: eraAt(ctx.now),
   runs: 0,
   run: null,
   endless: null,
@@ -626,7 +651,7 @@ const trophies = (almanac: Almanac): string[] => [...beatenBosses(almanac)].map(
 export const RAID: Game<Table, RaidCommand, TableView, RaidNote> = {
   id: "raid",
   create: newTable,
-  advance: wonLooks,
+  advance,
   apply: applyCommand,
   // A sparring room may be against the board another member fought it with.
   meets,

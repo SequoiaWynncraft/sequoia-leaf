@@ -4,6 +4,7 @@ import type { Ctx } from "@sequoia-leaf/core";
 
 import { legal, type RaidCommand } from "./command.ts";
 import type { ItemId } from "./content/items.ts";
+import { LEGACY_ERA } from "./content/releases.ts";
 import { predict, RAID, readCommand, refusalText, type Table, tableView } from "./game.ts";
 import { forgeItems } from "./rack.ts";
 import { beginFight, choose, giveItem, pieces, type Run, spotOf, startRun, summariseRun } from "./run.ts";
@@ -11,7 +12,7 @@ import { readNotes } from "./wire.ts";
 
 /** A run in its first room, its starter on the board, with these items on the rack. */
 function planning(items: ItemId[]): Run {
-  const run = startRun(5);
+  const run = startRun(5, { era: LEGACY_ERA });
   choose(run, 0);
   run.items = items;
   return run;
@@ -78,7 +79,7 @@ describe("two components on the rack", () => {
   });
 
   test("outside planning it is refused: a pick waiting, a fight, a raid that is over", () => {
-    const picking = startRun(5);
+    const picking = startRun(5, { era: LEGACY_ERA });
     picking.items = ["thorn", "plume"];
     expect(forgeItems(picking, 0, 1)).toMatchObject({ ok: false, code: "pick_starter" });
     const fighting = planning(["thorn", "plume"]);

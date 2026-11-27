@@ -7,6 +7,7 @@ import {
   COMMANDS,
   foughtOf,
   isPlanning,
+  LEGACY_ERA,
   newTable,
   type RaidCommand,
   type RaidNote,
@@ -51,8 +52,8 @@ function planning(): { t: Sitting; now: number } {
 
 /** The solo raid as Leaf has it: a run of its own. */
 function soloTable(): unknown {
-  const table = newTable({ seed: 1 });
-  table.run = startRun(5);
+  const table = newTable({ seed: 1, now: 0 });
+  table.run = startRun(5, { era: LEGACY_ERA });
   return { state: wire(tableView(table, { awards: [], now: 0 })), rev: 0 };
 }
 
@@ -119,7 +120,7 @@ describe("an answer for the live seat", () => {
     await until(() => leaf.posted.length > 0);
     stepBack();
     const solo = S.run;
-    expect(solo?.stall).toEqual(startRun(5).stall);
+    expect(solo?.stall).toEqual(startRun(5, { era: LEGACY_ERA }).stall);
     leaf.answerRustle();
     expect(await pending).toBeNull();
     // The line took Leaf's answer; the solo raid heard nothing of it.

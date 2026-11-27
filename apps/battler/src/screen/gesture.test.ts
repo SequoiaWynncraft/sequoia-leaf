@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { choose, FINISHED, GOOD_WITH, pieces, type RunView, spotOf, startRun } from "@sequoia-leaf/raid";
+import { choose, FINISHED, GOOD_WITH, LEGACY_ERA, pieces, type RunView, spotOf, startRun } from "@sequoia-leaf/raid";
 
 import { type Gesture, type HandEvent, handStep, type Held, IDLE, marksOf, tapOf } from "./gesture.ts";
 import { reachOf, reachOfOffer } from "./logic.ts";
@@ -8,7 +8,7 @@ import { type Aim, dropOf } from "./making.ts";
 
 /** A run in its first room, its starter on the board and an item on the rack. */
 function planning(): RunView {
-  const run = startRun(5);
+  const run = startRun(5, { era: LEGACY_ERA });
   choose(run, 0);
   run.items = ["thorn"];
   return run;

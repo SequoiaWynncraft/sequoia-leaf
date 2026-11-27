@@ -4,14 +4,16 @@ import { CASTS } from "../fight/abilities.ts";
 import { COLS, HOME_ROWS } from "../hex.ts";
 import type { Carrier } from "../party.ts";
 import { BOON_IDS, BOONS, boonText } from "./boons.ts";
+import { available, catalogAt } from "./catalog.ts";
 import {
   abilityText,
   BOSS_IDS,
   FIGURE_IDS,
+  type FigureId,
   FIGURES,
-  figuresOfTier,
   specOf,
   SUMMON_IDS,
+  type Tier,
   TIERS,
   traitsOf,
   TROUBLE_IDS,
@@ -34,6 +36,10 @@ import {
   itemText,
 } from "./items.ts";
 import { MEMBER_IDS } from "./members.ts";
+import { LEGACY_ERA } from "./releases.ts";
+
+/** Everyone's figures of a tier, as the carousel would ring them. */
+const figuresOfTier = (tier: Tier): readonly FigureId[] => available(catalogAt(LEGACY_ERA), { for: "carousel", tier });
 import { BOSS_ROOMS, ECONOMY, MAX_LEVEL, ROOMS, sellPrice, STALL_ODDS, TRAILS, worth } from "./rooms.ts";
 import { CALLINGS, KINS, stepFor, TRAIT_IDS, TRAITS, traitText } from "./traits.ts";
 

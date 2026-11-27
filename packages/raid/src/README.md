@@ -96,10 +96,10 @@ carries more than three.
 | 5    | Seqwawa | Moss           | Mender + Rooted | 850    | 0      | 4     | **No GG Left Behind.** Every friend gets 140 health back. The last friend to fall, if it fell in the last 3 seconds, gets back up with 200 health.                                                         |
 
 **A banner's member.** Each pull banner has one more figure, which is a guild member
-(`content/members.ts`: `MEMBER_IDS`, by the banner's id). It is a figure like any other, at five
-acorns, and not one of the twenty-eight (`FIGURE_IDS`): the main way's stall never offers it, no
-regular brings it, a board holding it is not met on the main way, and the almanac does not count
-it. Only a run with the member's own figures sells it, to a member who has pulled it (below). Its
+(`content/members.ts`, by the banner's id; the banner names it as its headliner, `content/banners.ts`).
+It is a figure like any other, at five acorns, and not one of everyone's figures (`access` in the
+catalogue): the main way's stall never offers it, no regular brings it, a board holding it is not
+met on the main way, and the almanac does not count it. Only a run with the member's own figures sells it, to a member who has pulled it (below). Its
 name in the rules is "A guild member"; the page gives it the member's name and their picture. Its
 rules are made for the member: the first banner's is gaz, a Sage whose ability is his own line.
 
@@ -324,9 +324,20 @@ sparring partners more to spend and more items. The rules do not change.
 won, 50 for every boss beaten, 120 for winning, and a quarter or a half more on the harder trails.
 A whole raid on the first trail is 510. The almanac remembers which figures have been fielded and
 taken to three stars, which items forged, which traits switched all the way on, which bosses beaten
-and the furthest room met on each trail. None of it changes a fight or the stall: all twenty-eight
-figures can be offered to everyone from their first run (`STALL_POOL`). The next trail opens when the
+and the furthest room met on each trail. None of it changes a fight or the stall: every figure open
+can be offered to everyone from their first run (`available`). The next trail opens when the
 last is cleared.
+
+**What exists, when** (`content/releases.ts`, `content/catalog.ts`, `content/banners.ts`). The
+figures come in releases, each opening at a moment of Leaf's clock; an era is how many are open.
+A catalogue is what an era has, and `available(catalog, purpose)` is the only list of figures: what
+a stall, a first pick, a regular, a carousel, a pull, the exchange or the almanac may draw from. A
+table, a run, a sitting, a fight's setup and every view carry their era (`catalogOf`): Leaf sets it
+from its clock before every command and at each of a sitting's deadlines, at the deadline's own
+moment, and the page reads the era Leaf sent. A run moves into a new era with its next command;
+what it drew before stays as drawn, and a fight is its setup's era's for ever. A release opened
+while a banner is open (`joins: "next"`) joins the pulls with the next release, so a banner's
+prizes are what it opened with.
 
 **Two ways to set out.** `start` says which: with all figures (what everything above describes), or
 with `own: true` the figures the member has pulled at the Grove. The first never reads anything a
@@ -340,7 +351,7 @@ are that banner's member). The run keeps that roster to its end, whatever is pul
 meanwhile. A member who has pulled no figure is refused (`nothing_pulled`).
 
 - The stall sells every one-acorn figure, and above one acorn only the figures in the roster
-  (`stallPool`), a banner's member among them (`figuresFor`). The odds by level are the table's, with the share of a cost the roster has nothing
+  (`stallPool`, through `available`), a banner's member among them. The odds by level are the table's, with the share of a cost the roster has nothing
   of going to the others (`stallOdds`). The opening pick is from the one-acorn figures.
 - A level is 3% more health and attack, 18% at most, on that figure wherever it stands in the run;
   a one-acorn figure not pulled is level 0. It multiplies with stars and with what items add, and
@@ -659,6 +670,9 @@ While no member is still in, every wait is 0 (`later`): the regulars play straig
 | `content/groot.ts`     | Groot's true forms: names, the one change each, their numbers                                                          |
 | `content/lore.ts`      | Lore lines for the almanac: the expansion's so far                                                                     |
 | `content/members.ts`   | The banners' members: for each pull banner, a figure that is a guild member                                            |
+| `content/releases.ts`  | The releases, each at a moment of Leaf's clock, and the era (how many are open) at a moment                            |
+| `content/catalog.ts`   | What each era has, and `available`: the only list of figures for a draw, the pulls and the almanac                     |
+| `content/banners.ts`   | The pull banners: the release each opens with, its dates, its headliner                                                |
 | `content/traits.ts`    | Kins and callings: steps, sentences, numbers                                                                           |
 | `content/items.ts`     | Components, finished items, emblems, what forges into what, how a figure holds them                                    |
 | `content/boons.ts`     | The boons                                                                                                              |

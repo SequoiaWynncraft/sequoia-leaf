@@ -25,7 +25,9 @@
 import { makeHold, openPlay, type Play, type Trouble, waitingLook } from "@sequoia-leaf/kit/play.ts";
 import {
   type Almanac,
+  type Era,
   isRunCommand,
+  LEGACY_ERA,
   type Looks,
   newAlmanac,
   newLooks,
@@ -64,6 +66,8 @@ export const S: {
   week: TableView["week"];
   /** The figures the member has pulled, with their levels. */
   roster: Roster;
+  /** The era Leaf's clock is in, as Leaf said it: what the page reads the catalogue by (`catalogOf`). */
+  era: Era;
   prefs: Prefs;
   /** What the table is showing; moved on by `go`. */
   screen: Screen;
@@ -77,6 +81,7 @@ export const S: {
   runs: 0,
   week: { at: 0, deepest: { wilds: 0, deep: 0 } },
   roster: {},
+  era: LEGACY_ERA,
   prefs: newPrefs(),
   screen: { at: "front" },
 };
@@ -144,7 +149,8 @@ export function heldOff(command: RaidCommand): boolean {
 export const busy = (): boolean => hold.held(true);
 
 /** What the page shows, as text, to tell whether Leaf's answer changed it. */
-const picture = (): string => JSON.stringify([S.run, S.laid, S.almanac, S.looks, S.trail, S.runs, S.week, S.roster]);
+const picture = (): string =>
+  JSON.stringify([S.run, S.laid, S.almanac, S.looks, S.trail, S.runs, S.week, S.roster, S.era]);
 
 /** The run in a slot of Leaf's table. */
 const inSlot = (view: TableView, slot: Slot): RunView | null => (slot === "endless" ? view.endless : view.run);
@@ -157,6 +163,7 @@ function take(view: TableView): void {
   S.runs = S.slot === "endless" ? view.ventures : view.runs;
   S.week = view.week;
   S.roster = view.roster;
+  S.era = view.era;
   S.laid = { run: view.run, endless: view.endless };
   // A run that has ended stays on the table, for its last page, while the screen shows it.
   S.run = LIVE.seat ? LIVE.seat.run() : (inSlot(view, S.slot) ?? endedOf(S.screen)?.run ?? null);
@@ -165,6 +172,13 @@ function take(view: TableView): void {
 /** Leaf's run in the slot the table plays (or the live seat's), as the page has it, and its number: what the screen sits down to. */
 export const tableNow = (): Table =>
   LIVE.seat?.table() ?? { run: table ? inSlot(table.state, S.slot) : null, runs: S.runs };
+
+/**
+ * What a page over the table shows, as text, to tell whether it must be drawn again: the page, the
+ * era Leaf's view is of (which the almanac's figures are of), the run and the runs laid out.
+ */
+export const pagesKey = (id: string | null): string =>
+  `${id}:${S.era}:${S.runs}:${S.run?.room ?? 0}:${endedOf(S.screen) ? 1 : 0}:${laidKey()}`;
 
 /** Where both runs laid out stand, as text: what their strips on the front page say. */
 export const laidKey = (): string =>

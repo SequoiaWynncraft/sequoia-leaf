@@ -10,6 +10,7 @@
  */
 import { mix } from "@sequoia-leaf/core";
 import { planRoom, SENSIBLE } from "@sequoia-leaf/raid/bot.ts";
+import { eraAt } from "@sequoia-leaf/raid/content/releases.ts";
 import { advance, begin } from "@sequoia-leaf/raid/sitting/clock.ts";
 import { encodeSitting } from "@sequoia-leaf/raid/sitting/keep.ts";
 import { CHAIRS, type Member, seatsIn, type Sitting } from "@sequoia-leaf/raid/sitting/sitting.ts";
@@ -21,6 +22,7 @@ const START = 1_000_000;
 function started(seed: number, members: readonly Member[]): Sitting {
   const t: Sitting = {
     rng: mix(seed, 0x5171),
+    era: eraAt(START),
     by: "x",
     room: 0,
     stage: { at: "open", until: START, sat: [] },

@@ -1,16 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { type FightEvent, type FightSetup, playsAsKept, recordFight, summarise } from "@sequoia-leaf/raid";
-import {
-  FIGURE_IDS,
-  isUnitKind,
-  specOf,
-  type Stars,
-  TROUBLE_IDS,
-  type UnitKind,
-} from "@sequoia-leaf/raid/content/figures.ts";
+import { type FightEvent, type FightSetup, LEGACY_ERA, playsAsKept, recordFight, summarise } from "@sequoia-leaf/raid";
+import { isUnitKind, specOf, type Stars, TROUBLE_IDS, type UnitKind } from "@sequoia-leaf/raid/content/figures.ts";
 import { CASTS } from "@sequoia-leaf/raid/fight/abilities.ts";
-import { at, partyOfFigures } from "@sequoia-leaf/raid/testkit.ts";
+import { at, EVERYONES, partyOfFigures } from "@sequoia-leaf/raid/testkit.ts";
 
 import type { Speed } from "./keep.ts";
 import { leadOf, LOOKS, SWING_LEAD, VOICES } from "./looks.ts";
@@ -45,18 +38,19 @@ const setupOf = (
   stars: Stars = 1,
 ): FightSetup => ({
   seed,
+  era: LEGACY_ERA,
   sides: [partyOfFigures(seated(ours, stars)), partyOfFigures(seated(theirs, stars))],
 });
 
 /** Every figure, the banner's member, the forest's own and its bosses, in fights of eight against eight. */
 const SETUPS: readonly FightSetup[] = [
-  setupOf(FIGURE_IDS.slice(0, 8), FIGURE_IDS.slice(8, 16), 1),
-  setupOf(FIGURE_IDS.slice(16, 24), FIGURE_IDS.slice(0, 8), 2, 2),
-  setupOf([...FIGURE_IDS.slice(24), "banner-1", "glorp", "worm", "fogowl"], FIGURE_IDS.slice(8, 16), 3, 2),
+  setupOf(EVERYONES.slice(0, 8), EVERYONES.slice(8, 16), 1),
+  setupOf(EVERYONES.slice(16, 24), EVERYONES.slice(0, 8), 2, 2),
+  setupOf([...EVERYONES.slice(24), "banner-1", "glorp", "worm", "fogowl"], EVERYONES.slice(8, 16), 3, 2),
   // Groot at five, falling and rising in true forms, and Seqwawa standing them back up.
-  setupOf(["worm", "moth", "rock", "greg", "whitefox", "seqwawa"], FIGURE_IDS.slice(18, 26), 5, 2),
+  setupOf(["worm", "moth", "rock", "greg", "whitefox", "seqwawa"], EVERYONES.slice(18, 26), 5, 2),
   setupOf(
-    FIGURE_IDS.slice(8, 16),
+    EVERYONES.slice(8, 16),
     TROUBLE_IDS.filter((k) => k !== "oldbramble" && k !== "hoardmagpie"),
     4,
   ),

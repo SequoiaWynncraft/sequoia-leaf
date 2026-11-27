@@ -4,10 +4,11 @@ import { below, draw32, mix, type Stream } from "@sequoia-leaf/core";
 
 import { planRoom, SENSIBLE } from "../bot.ts";
 import { COMMANDS } from "../command.ts";
-import { FIGURE_IDS, type FigureId, FIGURES } from "../content/figures.ts";
+import { type FigureId, FIGURES } from "../content/figures.ts";
 import { forge } from "../content/items.ts";
 import { PAYOUT } from "../content/keepsakes.ts";
 import { newLooks } from "../content/looks.ts";
+import { LEGACY_ERA } from "../content/releases.ts";
 import { BOSS_ROOMS, ECONOMY, ROOM_COUNT } from "../content/rooms.ts";
 import { resolveFight } from "../fight/engine.ts";
 import type { FightSummary } from "../fight/types.ts";
@@ -26,10 +27,11 @@ import {
   startRun,
   summariseRun,
 } from "../run.ts";
+import { EVERYONES } from "../testkit.ts";
 import { hasTaken, join } from "./carousel.ts";
 import { advance, pairings } from "./clock.ts";
 import { type Answer, type Call, command, openSitting, paidOff, readCommand, type SittingCommand } from "./commands.ts";
-import { decodeSitting, encodeSitting } from "./keep.ts";
+import { decodeSitting, encodeSitting, SITTING_VERSION } from "./keep.ts";
 import {
   CHAIRS,
   CLOCK,
@@ -151,6 +153,7 @@ function wishes(seen: Sitting, who: number, members: number, dice: Stream): Sitt
     trail: 0,
     looks: newLooks(),
     roster: {},
+    era: LEGACY_ERA,
   };
   const plan = planCommands(view, SENSIBLE).flatMap((c) => readCommand(c) ?? []);
   return below(dice, 6) === 0 ? [...plan, { do: "rustle" }] : plan;
@@ -558,10 +561,10 @@ describe("the carousel", () => {
   });
 
   test("a taken figure goes to the bench; with a full bench it makes three of a kind, or is sold on the spot", () => {
-    const run = startRun(5);
+    const run = startRun(5, { era: LEGACY_ERA });
     choose(run, 0);
     const [starter] = pieces(run);
-    const others = FIGURE_IDS.filter((kind) => kind !== starter?.kind && FIGURES[kind].tier === 2);
+    const others = EVERYONES.filter((kind) => kind !== starter?.kind && FIGURES[kind].tier === 2);
     const [twin = "kettle", ...rest] = others;
     const kinds: FigureId[] = [twin, twin, ...rest, "leafling", "rock", "badger"];
     for (const kind of kinds.slice(0, ECONOMY.bench)) join(run, kind, "bark");
@@ -841,7 +844,7 @@ describe("a stored sitting", () => {
     };
     expect(spoiled(() => {})).toEqual(t);
     expect(decodeSitting("{")).toBeNull();
-    expect(decodeSitting(encodeSitting(t).replace('"v":2', '"v":9'))).toBeNull();
+    expect(decodeSitting(encodeSitting(t).replace(`"v":${SITTING_VERSION}`, '"v":9'))).toBeNull();
     expect(decodeSitting(encodeSitting(t).replace('"little-raid-sitting"', '"little-raid-table"'))).toBeNull();
     expect(spoiled((raw) => void (raw.rng = -1))).toBeNull();
     expect(spoiled((raw) => void raw.seats.pop())).toBeNull();

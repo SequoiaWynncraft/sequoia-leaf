@@ -3,7 +3,9 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 
 import { type Ctx, isRefused } from "@sequoia-leaf/core";
 import type { Habit } from "@sequoia-leaf/raid/bot.ts";
+import { catalogAt } from "@sequoia-leaf/raid/content/catalog.ts";
 import { ENDLESS } from "@sequoia-leaf/raid/content/endless.ts";
+import { LEGACY_ERA } from "@sequoia-leaf/raid/content/releases.ts";
 import { boardMet } from "@sequoia-leaf/raid/foe.ts";
 import { readFight } from "@sequoia-leaf/raid/fought.ts";
 import { RAID, type Table } from "@sequoia-leaf/raid/game.ts";
@@ -180,9 +182,9 @@ describe("every row the goldens keep", () => {
   test.each(rows("board"))("%s is met as a board, with levels only on a lane that keeps them", (name, text) => {
     const data: unknown = JSON.parse(text);
     if (name.includes("-own")) {
-      expect(boardMet(met(data), true)?.figures.some((p) => (p.level ?? 0) > 0)).toBe(true);
+      expect(boardMet(catalogAt(LEGACY_ERA), met(data), true)?.figures.some((p) => (p.level ?? 0) > 0)).toBe(true);
     } else {
-      const board = boardMet(met(data), false, name.includes("-held") ? ENDLESS.chairs : 0);
+      const board = boardMet(catalogAt(LEGACY_ERA), met(data), false, name.includes("-held") ? ENDLESS.chairs : 0);
       expect(board?.figures.length).toBeGreaterThan(0);
       expect(board?.figures.some((p) => p.level !== undefined)).toBe(false);
     }

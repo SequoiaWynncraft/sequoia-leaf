@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 
 import { type Ctx, isRefused } from "@sequoia-leaf/core";
+import { eraAt } from "@sequoia-leaf/raid/content/releases.ts";
 
 import { BANNERS, HISTORY, PULLS, type Pulls, rarityOf, RATES } from "./game.ts";
 
@@ -46,7 +47,13 @@ describe("every stored state kept as a fixture", () => {
     expect(PULLS.view(state, ctx())).toBeDefined();
     const at = { ...ctx(), now: Math.max(T0, state.free.next) };
     expect(
-      isRefused(PULLS.apply(PULLS.advance(state, at), { do: "pull", pool: "grove", n: 1, with: "free" }, at)),
+      isRefused(
+        PULLS.apply(
+          PULLS.advance(state, at),
+          { do: "pull", pool: "grove", n: 1, with: "free", era: eraAt(at.now) },
+          at,
+        ),
+      ),
     ).toBe(false);
   });
   test("there is one for each kind of state Leaf keeps", () => {
@@ -81,7 +88,7 @@ describe("a state stored under other content or numbers", () => {
   });
 
   test("a pull from a retired banner is refused as closed, not as nonsense", () => {
-    const command = PULLS.command({ do: "pull", pool: "banner-0", n: 1, with: "free" });
+    const command = PULLS.command({ do: "pull", pool: "banner-0", n: 1, with: "free", era: eraAt(T0) });
     expect(command).not.toBeNull();
     if (!command) return;
     const answer = PULLS.apply(read(retired()), command, ctx());
@@ -95,7 +102,7 @@ describe("a state stored under other content or numbers", () => {
       }),
     );
     expect(state.counters.grove).toEqual({ top: RATES.top.certainAt - 1, mid: RATES.mid.certainAt - 1, owed: false });
-    const done = PULLS.apply(state, { do: "pull", pool: "grove", n: 1, with: "leaf" }, ctx());
+    const done = PULLS.apply(state, { do: "pull", pool: "grove", n: 1, with: "leaf", era: eraAt(T0) }, ctx());
     if (isRefused(done)) throw new Error(done.refused);
     expect(done.notes[0]?.rarity).toBe("Treant");
   });

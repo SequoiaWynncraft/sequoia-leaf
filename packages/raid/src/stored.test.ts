@@ -3,8 +3,10 @@ import { readdirSync, readFileSync } from "node:fs";
 
 import { type Ctx, isRefused } from "@sequoia-leaf/core";
 
-import { FIGURE_IDS, FIGURES } from "./content/figures.ts";
+import { everyFigure } from "./content/catalog.ts";
+import { FIGURES } from "./content/figures.ts";
 import { HOLDS } from "./content/items.ts";
+import { LEGACY_ERA } from "./content/releases.ts";
 import { ECONOMY, MAX_LEVEL, TRAIL_COUNT } from "./content/rooms.ts";
 import { traitNumber } from "./content/traits.ts";
 import { RAID, type Table, TABLE_VERSION } from "./game.ts";
@@ -133,7 +135,13 @@ describe("a table of version 1", () => {
     const picks: { run: Kept1 } = JSON.parse(fixture("picks-waiting.json"));
     expect(runOf(read(fixture("picks-waiting.json"))).stage).toEqual({ phase: "plan", picks: picks.run.choices });
     const fighting: { run: Kept1 } = JSON.parse(fixture("fighting.json"));
-    expect(foughtOf(runOf(read(fixture("fighting.json"))))).toEqual(fighting.run.fight);
+    // A fight kept before there were eras is of the era live then.
+    const { fight } = fighting.run;
+    if (!fight) throw new Error("the fixture fights");
+    expect(foughtOf(runOf(read(fixture("fighting.json"))))).toEqual({
+      ...fight,
+      setup: { ...fight.setup, era: LEGACY_ERA },
+    });
   });
   test("is stored again as the version now, and reads back the same", () => {
     for (const [, text] of FIXTURES) {
@@ -341,6 +349,6 @@ describe("text that is not a table", () => {
     ]) {
       expect(RAID.decode(text)).toBeNull();
     }
-    expect(FIGURE_IDS).toContain("worm");
+    expect(everyFigure()).toContain("worm");
   });
 });

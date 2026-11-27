@@ -6,7 +6,9 @@ import type { Ctx, Done } from "@sequoia-leaf/core";
 import { planRoom, SENSIBLE } from "./bot.ts";
 import type { RaidCommand } from "./command.ts";
 import { legal } from "./command.ts";
+import { catalogAt } from "./content/catalog.ts";
 import type { FigureId, Stars } from "./content/figures.ts";
+import { LEGACY_ERA } from "./content/releases.ts";
 import { RULE_IDS, type RuleId, WILDS } from "./content/wilds.ts";
 import { foeOf, roomAt } from "./endless.ts";
 import { HZ } from "./fight/core.ts";
@@ -49,7 +51,7 @@ function strong(run: Run, room: number): Run {
   run.foe = foeOf(run, 99);
   return run;
 }
-const wilds = (seed: number, room: number): Run => strong(startRun(seed, { endless: "wilds" }), room);
+const wilds = (seed: number, room: number): Run => strong(startRun(seed, { era: LEGACY_ERA, endless: "wilds" }), room);
 /** Fights the room the run is in and takes the takings. */
 function fought(run: Run): RaidNote[] {
   const begun = beginFight(run);
@@ -96,10 +98,10 @@ describe("the pick of a rule", () => {
       fought(run);
       expect(rulePick(run)).toBeUndefined();
     }
-    const deep = strong(startRun(3, { endless: "deep" }), WILDS.first);
+    const deep = strong(startRun(3, { era: LEGACY_ERA, endless: "deep" }), WILDS.first);
     fought(deep);
     expect(rulePick(deep)).toBeUndefined();
-    const trail = strong(startRun(3), WILDS.first);
+    const trail = strong(startRun(3, { era: LEGACY_ERA }), WILDS.first);
     fought(trail);
     expect(rulePick(trail)).toBeUndefined();
   });
@@ -145,6 +147,7 @@ describe("the pick of a rule", () => {
 /** A fight's setup under a rule, or none. */
 const setupOf = (ours: Placed[], theirs: Placed[], rule?: FightRule, seed = 7): FightSetup => ({
   seed,
+  era: LEGACY_ERA,
   sides: [partyOfFigures(ours), partyOfFigures(theirs)],
   ...(rule ? { rule } : {}),
 });
@@ -235,6 +238,7 @@ describe("each rule in the fight", () => {
     expect(distance(frogAt, rockAt)).toBe(3);
     const f = openFight({
       seed: 3,
+      era: LEGACY_ERA,
       sides: [partyOfFigures([onCell("drizzlefrog", 0, frogAt)]), partyOfFigures([onCell("rock", 1, rockAt)])],
       rule: { id: "fog", stumps: [] },
     });
@@ -328,7 +332,7 @@ describe("closed hexes", () => {
           expect(run.board.flatMap((p, s) => (p && closed.has(s) ? [s] : []))).toEqual([]);
         }
         const closed = closedSeats({ id: rule, stumps: [3, 9, 24] });
-        const regular = sparParty(seed, 16, 0, { level: 9, spent: 60, components: 4 }, closed);
+        const regular = sparParty(catalogAt(LEGACY_ERA), seed, 16, 0, { level: 9, spent: 60, components: 4 }, closed);
         expect(regular.figures.length).toBeGreaterThan(5);
         expect(regular.figures.filter((p) => closed.has(p.seat))).toEqual([]);
         const seats = arrange(

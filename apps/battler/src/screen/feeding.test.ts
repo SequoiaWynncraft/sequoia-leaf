@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   choose,
   type FigureId,
+  LEGACY_ERA,
   newAlmanac,
   newLooks,
   type Piece,
@@ -17,7 +18,7 @@ import { feedOffer, feedWords, gregsOf } from "./feeding.ts";
 
 /** A run in its first room, planning, with these on the board from seat 0 and these on the bench from hollow 0. */
 function planning(board: FigureId[], bench: FigureId[], fed = 0): RunView {
-  const run = startRun(5);
+  const run = startRun(5, { era: LEGACY_ERA });
   choose(run, 0);
   run.board.fill(null);
   run.bench.fill(null);
@@ -75,6 +76,7 @@ describe("the feed target", () => {
   test("letting go does as the rules do, and what they turn down reads as their sentence", () => {
     const run = planning(["greg"], ["badger"]);
     const view: TableView = {
+      era: LEGACY_ERA,
       runs: 1,
       run,
       endless: null,

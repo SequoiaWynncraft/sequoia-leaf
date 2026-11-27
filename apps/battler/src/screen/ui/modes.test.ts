@@ -1,6 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
-import { type Almanac, type EndlessWay, newAlmanac, type RoomRecord, type RunView, startRun } from "@sequoia-leaf/raid";
+import {
+  type Almanac,
+  type EndlessWay,
+  LEGACY_ERA,
+  newAlmanac,
+  type RoomRecord,
+  type RunView,
+  startRun,
+} from "@sequoia-leaf/raid";
 
 import { endlessWhere } from "./endless.ts";
 import {
@@ -39,12 +47,12 @@ const at = (over: Partial<At> = {}): At => ({
 const WON: RoomRecord = { room: 0, kind: "trouble", result: "win", standing: [3, 0], boss: null };
 /** A run laid out, before its first room is fought or (`fought`) after it. */
 function laidOut(fought: boolean): RunView {
-  const run = startRun(3);
+  const run = startRun(3, { era: LEGACY_ERA });
   return { ...run, record: fought ? [WON] : [] };
 }
 /** An endless run laid out one way, in a room (from 0), having fought its rooms before it or (`room` 0) none. */
 function endless(way: EndlessWay, room = 0): RunView {
-  const run = startRun(3, { endless: way });
+  const run = startRun(3, { era: LEGACY_ERA, endless: way });
   return { ...run, room, record: Array.from({ length: room }, (_, i) => ({ ...WON, room: i })) };
 }
 /** An almanac with the first trail cleared and room 15 reached on it, and room 4 on the second. */

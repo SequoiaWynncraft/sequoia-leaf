@@ -1,12 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
 import { boonNumber } from "../content/boons.ts";
-import { FIGURE_IDS, FIGURES, specOf, starScale } from "../content/figures.ts";
+import { FIGURES, specOf, starScale } from "../content/figures.ts";
+import { LEGACY_ERA } from "../content/releases.ts";
 import { FIGHT, levelBoost, LEVELS } from "../content/rooms.ts";
 import { traitNumber } from "../content/traits.ts";
 import { backRow, CELLS, cellSeat, distance, HOME_ROWS, rowOf, seatCell } from "../hex.ts";
 import {
   at,
+  EVERYONES,
   fightOf,
   inOrder,
   onCell,
@@ -26,6 +28,7 @@ import type { Fight, FightSetup } from "./types.ts";
 
 const brawl = (seed: number): FightSetup => ({
   seed,
+  era: LEGACY_ERA,
   sides: [
     partyOfFigures(
       [
@@ -134,9 +137,10 @@ describe("sitting down", () => {
     const f = fightOf([], [at("gnat", 3, 0)]);
     expect(f.over).toBe(true);
     expect(f.result).toBe("loss");
-    expect(resolveFight({ seed: 1, sides: [partyOfFigures([at("gnat", 0, 0)]), partyOfFigures([])] }).result).toBe(
-      "win",
-    );
+    expect(
+      resolveFight({ seed: 1, era: LEGACY_ERA, sides: [partyOfFigures([at("gnat", 0, 0)]), partyOfFigures([])] })
+        .result,
+    ).toBe("win");
   });
 });
 
@@ -289,7 +293,7 @@ describe("walking", () => {
     expect(only(events, "move").filter((e) => e.id === crab.id).length).toBeGreaterThan(4);
   });
   test("from the back row, a figure that reaches further than two hexes attacks their front row without a step", () => {
-    for (const id of FIGURE_IDS) {
+    for (const id of EVERYONES) {
       // Seqwawa's reach only says where it sits: it never attacks.
       if (FIGURES[id].range <= 2 || FIGURES[id].attack === 0) continue;
       const f = fightOf([at(id, 3, HOME_ROWS - 1)], [at("mud", 3, 0)]);
@@ -601,6 +605,7 @@ describe("dusk", () => {
     // Two Rocks again, but ours has a Winter Hoard and regrows a little every second.
     const summary = resolveFight({
       seed: 4,
+      era: LEGACY_ERA,
       sides: [partyOfFigures([at("rock", 3, 0, 1, ["hoard"])]), partyOfFigures([at("rock", 3, 0, 1)])],
     });
     expect(summary.dusk).toBe(true);
@@ -659,7 +664,7 @@ function levelled(seed: number): FightSetup {
   ours.figures.forEach((p, i) => {
     p.level = 1 + (i % 6);
   });
-  return { seed, sides: [ours, theirs] };
+  return { seed, era: LEGACY_ERA, sides: [ours, theirs] };
 }
 
 describe("a level", () => {

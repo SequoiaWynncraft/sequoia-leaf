@@ -9,7 +9,8 @@ import { pick, type Stream, weighted } from "@sequoia-leaf/core";
  * `Party`, the same shape as a member's board. It holds components and what they forge into, never
  * an emblem.
  */
-import { FIGURE_IDS, type FigureId, FIGURES, specOf, type Stars, starScale, traitsOf } from "./content/figures.ts";
+import { available, type Catalog } from "./content/catalog.ts";
+import { type FigureId, FIGURES, specOf, type Stars, starScale, traitsOf } from "./content/figures.ts";
 import { type ComponentId, holdItem, type ItemId } from "./content/items.ts";
 import { HANDLES, ROOMS, type SparStrength, STALL_ODDS, TRAILS } from "./content/rooms.ts";
 import { type CallingId, CALLINGS, type KinId, KINS, stepFor, TRAITS } from "./content/traits.ts";
@@ -50,8 +51,12 @@ function suits(kind: FigureId): readonly ComponentId[] {
 /** A sparring partner's strength in a room, as the room says; for a room that says none, a weak one. */
 const sparOf = (roomIndex: number): SparStrength => ROOMS[roomIndex]?.spar ?? { level: 3, spent: 6, components: 0 };
 
-/** The party a regular brings to a sparring room, from a seed: as strong as the room says, or as `strength` says; seated off the `closed` seats. */
+/**
+ * The party a regular brings to a sparring room, from a seed, of the figures the catalogue has for
+ * regulars: as strong as the room says, or as `strength` says; seated off the `closed` seats.
+ */
 export function sparParty(
+  cat: Catalog,
   seed: number,
   roomIndex: number,
   trailIndex: number,
@@ -73,9 +78,10 @@ export function sparParty(
   // Who came: different figures the stall offers at the partner's level, each paid for, with an
   // acorn kept back for every place still to fill. A cost turns up as often as the stall offers it.
   const chosen: { kind: FigureId; stars: Stars }[] = [];
+  const regulars = available(cat, { for: "regular" });
   for (let n = 0; n < strength.level; n++) {
     const left = strength.level - n - 1;
-    const pool = FIGURE_IDS.filter(
+    const pool = regulars.filter(
       (id) => odds(id) > 0 && FIGURES[id].tier <= budget - left && !chosen.some((c) => c.kind === id),
     );
     const at = weighted(

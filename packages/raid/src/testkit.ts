@@ -3,13 +3,20 @@
  * them stand still as targets, and pick out what happened. Nothing in the game uses this.
  */
 import { isPlanning, type RunCommand } from "./command.ts";
-import type { Stars, UnitKind } from "./content/figures.ts";
+import { available, type Catalog, catalogAt } from "./content/catalog.ts";
+import type { FigureId, Stars, UnitKind } from "./content/figures.ts";
 import type { ItemId } from "./content/items.ts";
+import { LEGACY_ERA } from "./content/releases.ts";
 import { openFight, stepFight } from "./fight/engine.ts";
 import type { Fight, FightEvent, Unit } from "./fight/types.ts";
 import { cellSeat, COLS, type Side } from "./hex.ts";
 import type { Party, Placed } from "./party.ts";
 import { beginFight, newPiece, type Run, takeTakings } from "./run.ts";
+
+/** The catalogue the tests play in: the era live when eras came in (`LEGACY_ERA`). */
+export const CAT: Catalog = catalogAt(LEGACY_ERA);
+/** Everyone's figures in it, in its order: the twenty-eight. */
+export const EVERYONES: readonly FigureId[] = available(CAT, { for: "regular" });
 
 /** Numbers in order, and words in order, for comparing lists whose order does not matter. */
 export const inOrder = (numbers: readonly number[]): number[] => numbers.toSorted((a, b) => a - b);
@@ -45,6 +52,7 @@ export function fightOf(
 ): Fight {
   return openFight({
     seed: more.seed ?? 7,
+    era: LEGACY_ERA,
     sides: [partyOfFigures(ours, more.ours), partyOfFigures(theirs, more.theirs)],
   });
 }

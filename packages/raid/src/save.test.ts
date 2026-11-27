@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
 import { planRoom, SENSIBLE } from "./bot.ts";
-import { FIGURE_IDS, FIGURES } from "./content/figures.ts";
+import { FIGURES } from "./content/figures.ts";
 import { FINISHED_IDS, isEmblemId } from "./content/items.ts";
+import { LEGACY_ERA } from "./content/releases.ts";
 import { ECONOMY } from "./content/rooms.ts";
 import { TRAIT_IDS } from "./content/traits.ts";
 import {
@@ -19,6 +20,7 @@ import {
   takeTakings,
 } from "./run.ts";
 import { checkRun, type Loaded } from "./save.ts";
+import { EVERYONES } from "./testkit.ts";
 
 /** A run as a table keeps it, written out and read back. */
 const saveRun = (run: Run): string => JSON.stringify({ run });
@@ -26,7 +28,7 @@ const loadRun = (text: string): Loaded => checkRun(JSON.parse(text).run);
 
 /** A run played by the bot up to a room, stopped in the middle of planning it. */
 function midRun(seed: number, rooms: number): Run {
-  const run = startRun(seed);
+  const run = startRun(seed, { era: LEGACY_ERA });
   for (let i = 0; i < rooms && run.stage.phase !== "over"; i++) {
     planRoom(run, SENSIBLE);
     if (!beginFight(run).ok) break;
@@ -101,7 +103,7 @@ describe("saving a run", () => {
     expect(refused(tampered(run, (raw) => (raw.streak = 1.5)))).toContain("the streak");
     expect(refused(tampered(run, (raw) => (raw.streak = run.record.length + 1)))).toContain("the streak");
     expect(refused(tampered(run, (raw) => (raw.streak = -run.streak)))).toContain("the streak");
-    expect(refused(tampered(startRun(3), (raw) => (raw.streak = 1)))).toContain("the streak");
+    expect(refused(tampered(startRun(3, { era: LEGACY_ERA }), (raw) => (raw.streak = 1)))).toContain("the streak");
   });
   test("the stall, the random stream and the next room all come back", () => {
     const run = midRun(8, 5);
@@ -128,7 +130,7 @@ describe("saving a run", () => {
     expect(a.record.length).toBeGreaterThan(5);
   });
   test("a run saved before its first pick, and one saved in the middle of a fight, load too", () => {
-    const fresh = startRun(5);
+    const fresh = startRun(5, { era: LEGACY_ERA });
     expect(reload(fresh)).toEqual(fresh);
     expect(picksOf(reload(fresh))[0]?.kind).toBe("starter");
     const fighting = midRun(5, 2);
@@ -144,8 +146,8 @@ describe("saving a run", () => {
   test("a run that has met every figure, forged every item and topped every trait loads back whole", () => {
     const run = midRun(31, 6);
     run.seen = {
-      fielded: [...FIGURE_IDS],
-      threeStars: [...FIGURE_IDS],
+      fielded: [...EVERYONES],
+      threeStars: [...EVERYONES],
       forged: [...FINISHED_IDS],
       topped: [...TRAIT_IDS],
     };
@@ -230,7 +232,7 @@ describe("loading puts right what today's rules would not allow", () => {
         run.level,
         run.room,
       ]);
-      expect(laid.stall.every((offer) => offer === null || FIGURE_IDS.some((id) => id === offer))).toBe(true);
+      expect(laid.stall.every((offer) => offer === null || EVERYONES.some((id) => id === offer))).toBe(true);
       expect(laid.foe.figures.length).toBeGreaterThan(0);
     }
     const boon = again[3];
@@ -250,7 +252,7 @@ describe("loading puts right what today's rules would not allow", () => {
   test("a stall or a bench of another size is today's size, and starters that cost more are offered as they were", () => {
     expect(mustLoad(tampered(run, (raw) => (raw.stall = [null]))).stall).toHaveLength(ECONOMY.stall);
     expect(mustLoad(tampered(run, (raw) => listIn(raw.bench).push(null))).bench).toHaveLength(ECONOMY.bench);
-    const fresh = startRun(4);
+    const fresh = startRun(4, { era: LEGACY_ERA });
     const greg = mustLoad(
       tampered(fresh, (raw) => (raw.stage = { phase: "plan", picks: [{ kind: "starter", options: ["greg"] }] })),
     );
@@ -335,9 +337,9 @@ describe("loading refuses nonsense", () => {
     expect(loaded.ok && loaded.run).toEqual(run);
   });
   test("a run with its first pick still waiting may have nobody; any other must have somebody", () => {
-    const fresh = startRun(4);
+    const fresh = startRun(4, { era: LEGACY_ERA });
     expect(loadRun(saveRun(fresh)).ok).toBe(true);
-    const picked = startRun(4);
+    const picked = startRun(4, { era: LEGACY_ERA });
     choose(picked, 0);
     expect(refused(tampered(picked, (raw) => (raw.board = listIn(raw.board).map(() => null))))).toContain("the party");
   });

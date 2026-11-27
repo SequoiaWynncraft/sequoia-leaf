@@ -88,7 +88,7 @@ import { pieces as richPieces } from "../rich.ts";
 import { doNow, S } from "../state.ts";
 import { chairsSaid } from "./endless.ts";
 import { feedActions } from "./feedtarget.ts";
-import { figuresHere, levelOnCard, oddsStats } from "./own.ts";
+import { figuresAt, levelOnCard, oddsStats } from "./own.ts";
 import { figureRef, itemRef, pieceRef, traitRef } from "./refs.ts";
 import { itemsOf, wantedBy } from "./suits.ts";
 import { fedLine, sortWord } from "./words.ts";
@@ -357,7 +357,7 @@ export function traitDesc(id: TraitId, run: RunView | null, lore = false): Descr
       state ? el("b", "", { text: `${count}/${state.next}` }) : null,
     ),
     blocks,
-    rows: [{ label: "Every figure", look: "tiles", things: membersOf(id, figuresHere()).map((f) => member(f, run)) }],
+    rows: [{ label: "Every figure", look: "tiles", things: membersOf(id, figuresAt(run)).map((f) => member(f, run)) }],
   };
 }
 
@@ -517,7 +517,7 @@ export function registerCards(): void {
       level: foe.level ?? 0,
       whose: `${acrossName(run.foe)}'s`,
       party: run.foe,
-      numbers: startNumbers(run.foe, foe.seat),
+      numbers: startNumbers(run.era, run.foe, foe.seat),
     });
   });
   register("unit", (raw) => {

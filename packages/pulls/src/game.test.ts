@@ -2,9 +2,10 @@ import { describe, expect, it } from "bun:test";
 
 import { type Ctx, isRefused } from "@sequoia-leaf/core";
 import { RAID } from "@sequoia-leaf/raid";
-import { FIGURE_IDS, FIGURES } from "@sequoia-leaf/raid/content/figures.ts";
+import { available, catalogAt, prizeOf } from "@sequoia-leaf/raid/content/catalog.ts";
+import { FIGURES } from "@sequoia-leaf/raid/content/figures.ts";
 import { isBoughtLook } from "@sequoia-leaf/raid/content/looks.ts";
-import { MEMBER_IDS } from "@sequoia-leaf/raid/content/members.ts";
+import { eraAt, eraOf } from "@sequoia-leaf/raid/content/releases.ts";
 import { TOWN } from "@sequoia-leaf/town";
 import { figureThing, isThing, memberThing } from "@sequoia-leaf/town/things.ts";
 
@@ -15,8 +16,8 @@ import {
   EARLIER,
   headliner,
   HISTORY,
-  PRIZES,
-  prizesAt,
+  type Prizes,
+  prizesOf,
   PULLS,
   type Pulls,
   type PullsCommand,
@@ -40,11 +41,13 @@ const ctx = (now = T0, guest = false, seed = 7): Ctx => ({
 });
 const fresh = (): Pulls => PULLS.create(ctx());
 const counters = (top = 0, mid = 0, owed = false): Counters => ({ top, mid, owed });
-const pull = (pool: string, n: 1 | 10 = 10, paid: "leaf" | "free" = "leaf"): PullsCommand => ({
+/** A pull, shown the prizes of the era at `at` (T0's, unless said). */
+const pull = (pool: string, n: 1 | 10 = 10, paid: "leaf" | "free" = "leaf", at = T0): PullsCommand => ({
   do: "pull",
   pool,
   n,
   with: paid,
+  era: eraAt(at),
 });
 const exchange = (prize: string): PullsCommand => ({ do: "exchange", prize });
 
@@ -59,72 +62,91 @@ function refused(state: Pulls, c: PullsCommand, at = ctx()): string | null {
   const answer = PULLS.apply(state, c, at);
   return isRefused(answer) ? answer.refused : null;
 }
+/** The raid's catalogue at T0, and what its two pools give then. */
+const CAT = catalogAt(eraAt(T0));
+const GROVE = prizesOf(CAT, "grove");
+const BANNER = prizesOf(CAT, "banner-1");
 /** The tiers drawn from the same counters with each of `n` streams. */
 const tiers = (c: Counters, n: number) =>
-  new Set(Array.from({ length: n }, (_, seed) => RARITIES[draw({ ...c }, null, { rng: seed }, T0).rarity].tier));
+  new Set(Array.from({ length: n }, (_, seed) => RARITIES[draw({ ...c }, GROVE, { rng: seed }).rarity].tier));
 
-/** The figures of one of the raid's prices, as prizes. */
-const priced = (price: number): string[] =>
-  FIGURE_IDS.filter((id) => FIGURES[id].tier === price).map((id) => `figure:${id}`);
+/**
+ * Everyone's figures; those the pools have at T0, as prizes, which Seqwawa joins on 8 December (it
+ * came with the expansion's first release, while banner-1 was open); and those of one of the raid's prices.
+ */
+const everyones = available(CAT, { for: "regular" });
+const pooled = everyones.filter((id) => id !== "seqwawa");
+const priced = (price: number): string[] => pooled.filter((id) => FIGURES[id].tier === price).map(prizeOf);
+/** Every prize of a pool. */
+const all = (prizes: Prizes): string[] => Object.values(prizes).flat();
 /** Whether a prize of earlier pulls is a thing the town has, or a look the raid's table sells. */
 function known(prize: string): boolean {
   const [kind = "", id = ""] = prize.split(/:(.*)/);
   return kind === "thing" ? isThing(id) : kind === "look" && isBoughtLook(id);
 }
 
-/** The top-tier prizes the grove gives at a moment, over many streams. */
-function treants(now: number): Set<string> {
+/** The Treants a pool gives at a moment, as the catalogue of that moment's era has them, over many streams. */
+function treants(pool: string, now: number): string[] {
+  const prizes = prizesOf(catalogAt(eraAt(now)), pool);
   const seen = new Set<string>();
-  for (let seed = 0; seed < 400; seed++) seen.add(draw(counters(79), null, { rng: seed }, now).prize);
-  return seen;
+  for (let seed = 0; seed < 400; seed++) {
+    const d = draw(counters(79), prizes, { rng: seed });
+    if (d.rarity === "Treant") seen.add(d.prize);
+  }
+  return [...seen].toSorted();
 }
 
 describe("a figure made while a banner is open", () => {
-  it("joins the pools when the next banner opens: Seqwawa is no prize during banner-1, and is one from 8 December", () => {
+  it("joins the pools as the next release opens: Seqwawa is no prize during banner-1, and is one from 8 December", () => {
     const opens = Date.UTC(2026, 11, 8);
-    expect(treants(T0).has("figure:seqwawa")).toBe(false);
-    expect(treants(opens - 1).has("figure:seqwawa")).toBe(false);
-    expect(treants(opens).has("figure:seqwawa")).toBe(true);
+    const three = ["figure:greg", "figure:hearthcat", "figure:whitefox"];
+    expect([treants("grove", T0), treants("grove", opens - 1)]).toEqual([three, three]);
+    expect(treants("grove", opens)).toEqual([...three, "figure:seqwawa"].toSorted());
     // Lost on the 50/50, banner-1 pays out of the three it opened with.
-    const lost = new Set<string>();
-    for (let seed = 0; seed < 400; seed++) {
-      const d = draw(counters(79), headliner("banner-1"), { rng: seed }, T0);
-      if (d.rarity === "Treant") lost.add(d.prize);
-    }
-    expect([...lost].toSorted()).toEqual(["figure:greg", "figure:hearthcat", "figure:whitefox"]);
+    expect(treants("banner-1", opens - 1)).toEqual(three);
+    // On the stall it is from the first.
+    expect(available(CAT, { for: "stall", figures: { pool: "fair" }, tier: 5 })).toContain("seqwawa");
+  });
+});
+
+describe("a pull shown one list of prizes", () => {
+  it("is refused when the pool gives others by Leaf's clock, and nothing is paid; the same list in another era is pulled", () => {
+    const opens = Date.UTC(2026, 11, 8);
+    const s = fresh();
+    // Shown the grove a millisecond before Seqwawa joined it, and pulled as it did.
+    expect(refused(s, pull("grove", 10, "leaf", opens - 1), ctx(opens))).toBe("prizes_changed");
+    expect(refused({ ...s, free: { ...s.free, waiting: 1 } }, pull("grove", 1, "free", opens - 1), ctx(opens))).toBe(
+      "prizes_changed",
+    );
+    expect(refused(s, pull("grove", 10, "leaf", opens), ctx(opens))).toBeNull();
+    // The base alone gave the grove what it gives until 8 December: shown then, it is pulled now.
+    expect(refused(s, { do: "pull", pool: "grove", n: 10, with: "leaf", era: eraOf("base") }, ctx(T0))).toBeNull();
   });
 });
 
 describe("the prizes", () => {
   it("are the raid's figures, each in one rarity by its price there, and a banner's headliner", () => {
-    const all = Object.values(PRIZES).flat();
-    expect(all.toSorted()).toEqual(
-      [
-        ...FIGURE_IDS.map((id) => `figure:${id}`).filter((p) => p !== "figure:seqwawa"),
-        "headliner:banner-1",
-      ].toSorted(),
-    );
-    expect([PRIZES.Leafkin, PRIZES.Sapling, PRIZES.Sprite, prizesAt("Treant", Infinity)]).toEqual([
+    const every = all(BANNER);
+    expect(every.toSorted()).toEqual([...pooled.map(prizeOf), "headliner:banner-1"].toSorted());
+    expect([BANNER.Leafkin, BANNER.Sapling, BANNER.Sprite, BANNER.Treant]).toEqual([
       priced(1),
       priced(2),
       priced(3),
       priced(5),
     ]);
-    expect([...PRIZES.Dryad, ...PRIZES.Druid].toSorted()).toEqual(priced(4).toSorted());
-    expect(PRIZES.Dryad).toEqual(["figure:badger", "figure:fogowl", "figure:heron"]);
-    expect(PRIZES.Druid).toEqual(["figure:crab40", "figure:apothecary"]);
-    expect(Object.values(PRIZES).map((list) => list.length)).toEqual([7, 7, 6, 3, 2, 3, 1]);
-    expect(PRIZES.Yggdrasil).toEqual(["headliner:banner-1"]);
+    expect([...BANNER.Dryad, ...BANNER.Druid].toSorted()).toEqual(priced(4).toSorted());
+    expect(BANNER.Dryad).toEqual(["figure:badger", "figure:fogowl", "figure:heron"]);
+    expect(BANNER.Druid).toEqual(["figure:crab40", "figure:apothecary"]);
+    expect(Object.values(BANNER).map((list) => list.length)).toEqual([7, 7, 6, 3, 2, 3, 1]);
+    expect(BANNER.Yggdrasil).toEqual(["headliner:banner-1"]);
+    // The grove gives the same, but no headliner.
+    expect(GROVE).toEqual({ ...BANNER, Yggdrasil: [] });
     // The town has a thing to send for each figure, and for each banner's headliner.
-    expect(FIGURE_IDS.filter((id) => !isThing(figureThing(id)))).toEqual([]);
+    expect(everyones.filter((id) => !isThing(figureThing(id)))).toEqual([]);
     expect(BANNERS.filter(({ id }) => !isThing(memberThing(id)))).toEqual([]);
-    // And each banner's member is a figure of the raid, which no `figure:` prize is.
-    expect(BANNERS.map(({ id }) => id)).toEqual([...MEMBER_IDS]);
-    expect(
-      Object.values(PRIZES)
-        .flat()
-        .filter((prize) => MEMBER_IDS.some((id) => prize === `figure:${id}`)),
-    ).toEqual([]);
+    // And each banner's headliner is a figure of the raid, which no `figure:` prize is.
+    expect(BANNERS.map((b) => [b.id, b.headliner])).toEqual([["banner-1", "banner-1"]]);
+    expect(every.filter((prize) => BANNERS.some((b) => prize === `figure:${b.headliner}`))).toEqual([]);
     expect(rarityOf("figure:greg")).toBe("Treant");
     expect(rarityOf("figure:seqwawa")).toBe("Treant");
     expect(rarityOf("figure:nobody")).toBeUndefined();
@@ -136,11 +158,7 @@ describe("the prizes", () => {
     expect(earlier.filter((prize) => !known(prize))).toEqual([]);
     expect(new Set(earlier).size).toBe(earlier.length);
     expect(earlier).toHaveLength(69);
-    expect(
-      Object.values(PRIZES)
-        .flat()
-        .filter((prize) => earlier.includes(prize)),
-    ).toEqual([]);
+    expect(all(BANNER).filter((prize) => earlier.includes(prize))).toEqual([]);
     expect([rarityOf("look:plum"), rarityOf("thing:fountain"), rarityOf("thing:rock")]).toEqual([
       "Druid",
       "Treant",
@@ -169,7 +187,7 @@ describe("a pull", () => {
     for (let seed = 0; seed < 200; seed++) {
       const c = counters(79);
       const s = { rng: seed };
-      const first = draw(c, headliner("banner-1"), s, T0);
+      const first = draw(c, BANNER, s);
       if (first.fifty === "won") {
         expect(first).toMatchObject({ prize: "headliner:banner-1", rarity: "Yggdrasil" });
         expect(c.owed).toBe(false);
@@ -181,7 +199,7 @@ describe("a pull", () => {
       seen.lost += 1;
       // The banner after it: its next top-tier prize is its own headliner, and nothing is owed after it.
       c.top = 79;
-      expect(draw(c, headliner("banner-2"), s, T0)).toEqual({
+      expect(draw(c, { ...BANNER, Yggdrasil: [headliner("banner-2")] }, s)).toEqual({
         prize: "headliner:banner-2",
         rarity: "Yggdrasil",
         top: 80,
@@ -193,7 +211,7 @@ describe("a pull", () => {
     expect(seen.lost).toBeGreaterThan(70);
     // The grove has no headliner and no 50/50.
     const grove = counters(79);
-    expect(draw(grove, null, { rng: 1 }, T0)).toMatchObject({ rarity: "Treant", top: 80 });
+    expect(draw(grove, GROVE, { rng: 1 })).toMatchObject({ rarity: "Treant", top: 80 });
     expect(grove).toEqual(counters());
   });
 
@@ -211,7 +229,7 @@ describe("a pull", () => {
     expect(refused(s, pull("banner-1"), ctx(Date.UTC(2026, 10, 22, 23, 59)))).toBe("closed");
     expect(refused(s, pull("banner-1"), ctx(Date.UTC(2026, 10, 23)))).toBeNull();
     expect(refused(s, pull("banner-1"), ctx(Date.UTC(2026, 11, 8)))).toBe("closed");
-    expect(refused(s, pull("grove"), ctx(Date.UTC(2030, 0, 1)))).toBeNull();
+    expect(refused(s, pull("grove", 10, "leaf", Date.UTC(2030, 0, 1)), ctx(Date.UTC(2030, 0, 1)))).toBeNull();
     expect(PULLS.view(s, ctx()).open).toEqual([{ id: "banner-1", until: Date.UTC(2026, 11, 8) }]);
     expect(PULLS.view(s, ctx(Date.UTC(2026, 11, 8))).open).toEqual([]);
     // A banner these rules do not know (one retired, or never) is closed.
@@ -321,7 +339,11 @@ describe("keeping it", () => {
     ).toEqual(counters(79));
     const { rng, ...shown } = s;
     expect(rng).toBeNumber();
-    expect(PULLS.view(s, ctx())).toEqual({ ...shown, open: [{ id: "banner-1", until: Date.UTC(2026, 11, 8) }] });
+    expect(PULLS.view(s, ctx())).toEqual({
+      ...shown,
+      open: [{ id: "banner-1", until: Date.UTC(2026, 11, 8) }],
+      era: eraAt(T0),
+    });
     expect(PULLS.awards?.(s)?.filter((id) => id.startsWith("pull:"))).toEqual(
       Object.keys(s.have).map((prize) => `pull:${prize}`),
     );
@@ -417,15 +439,15 @@ describe("a million pulls", () => {
     Yggdrasil: banner ? (want.top * 2) / 3 : 0,
   });
 
-  it.each([
-    ["a banner", headliner("banner-1")],
-    ["the always-open pool", null],
+  it.each<[string, Prizes]>([
+    ["a banner", BANNER],
+    ["the always-open pool", GROVE],
   ])(
     "from %s give only figures and its headliner, each tier and rarity as often as RATES works out to",
-    (_pool, headline) => {
+    (_pool, prizes) => {
       expect(want.top).toBeCloseTo(0.018696, 6);
       expect(want.mid).toBeCloseTo(0.121153, 6);
-      const share = shares(headline !== null);
+      const share = shares(prizes.Yggdrasil.length > 0);
 
       const N = 1_000_000;
       const got: Record<Rarity, number> = {
@@ -444,20 +466,15 @@ describe("a million pulls", () => {
       let fillers = 0;
       let mostFillers = 0;
       for (let i = 0; i < N; i++) {
-        const { prize, rarity, top } = draw(c, headline, s, T0);
+        const { prize, rarity, top } = draw(c, prizes, s);
         got[rarity] += 1;
         drawn.add(prize);
         longest = Math.max(longest, top);
         fillers = RARITIES[rarity].tier === "filler" ? fillers + 1 : 0;
         mostFillers = Math.max(mostFillers, fillers);
       }
-      // Every figure banner-1 opened with comes, and nothing else but the banner's headliner.
-      expect([...drawn].toSorted()).toEqual(
-        [
-          ...FIGURE_IDS.map((id) => `figure:${id}`).filter((p) => p !== "figure:seqwawa"),
-          ...(headline === null ? [] : [headline]),
-        ].toSorted(),
-      );
+      // Every figure comes, and nothing else but the banner's headliner.
+      expect([...drawn].toSorted()).toEqual([...pooled.map(prizeOf), ...prizes.Yggdrasil].toSorted());
       // Few rounds ever reach the 80th pull: the chance on each pull from the 66th is high.
       expect(longest).toBeLessThanOrEqual(RATES.top.certainAt);
       expect(mostFillers).toBe(RATES.mid.certainAt - 1);

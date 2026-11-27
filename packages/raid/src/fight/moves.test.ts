@@ -4,6 +4,7 @@
  */
 import { describe, expect, test } from "bun:test";
 
+import { LEGACY_ERA } from "../content/releases.ts";
 import { FIGHT } from "../content/rooms.ts";
 import { cellAt, distance, neighbours, walkLength } from "../hex.ts";
 import { fightOf, onCell, only, partyOfFigures, steps, still, unitOf } from "../testkit.ts";
@@ -242,7 +243,7 @@ describe("a fight full of figures that move, linger and channel", () => {
     onCell("crab23", 1, cellAt(4, 2)),
     onCell("mossmote", 1, cellAt(6, 0)),
   ];
-  const setup: FightSetup = { seed: 4242, sides: [partyOfFigures(ours), partyOfFigures(theirs)] };
+  const setup: FightSetup = { seed: 4242, era: LEGACY_ERA, sides: [partyOfFigures(ours), partyOfFigures(theirs)] };
   test("the same setup gives the same fight, event for event", () => {
     const once = recordFight(setup);
     const again = recordFight(setup);

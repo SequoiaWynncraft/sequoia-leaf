@@ -14,8 +14,10 @@ import { rulesVersions } from "@sequoia-leaf/core/build/rules.ts";
 import { CARELESS, fondOf, type Habit, planRoom, ROLLER, SAVER, SENSIBLE } from "@sequoia-leaf/raid/bot.ts";
 import { GOOD_WITH } from "@sequoia-leaf/raid/content/advice.ts";
 import { BOON_IDS, type BoonId, BOONS } from "@sequoia-leaf/raid/content/boons.ts";
-import { FIGURE_IDS, type FigureId, FIGURES, isFigureId } from "@sequoia-leaf/raid/content/figures.ts";
+import { everyShared } from "@sequoia-leaf/raid/content/catalog.ts";
+import { type FigureId, FIGURES, isFigureId } from "@sequoia-leaf/raid/content/figures.ts";
 import { FINISHED, FINISHED_IDS, type FinishedId, holdItem, isFinishedId } from "@sequoia-leaf/raid/content/items.ts";
+import { LAST_ERA } from "@sequoia-leaf/raid/content/releases.ts";
 import { ROOM_COUNT, ROOMS, TRAILS } from "@sequoia-leaf/raid/content/rooms.ts";
 import { CALLINGS, KINS, TRAIT_IDS, type TraitId, TRAITS } from "@sequoia-leaf/raid/content/traits.ts";
 import { resolveFight } from "@sequoia-leaf/raid/fight/engine.ts";
@@ -46,7 +48,7 @@ const trying = (habit: Habit): boolean => !habit.careless;
 const byRoom = Array.from({ length: ROOM_COUNT }, () => new Tally());
 const byPlan = new Map<string, Tally>();
 const byTrait = new Map<string, Tally>();
-const byFigure = tallies<FigureId>(FIGURE_IDS);
+const byFigure = tallies<FigureId>(everyShared());
 const byFigureStars = new Map<string, Tally>();
 const byItem = tallies<FinishedId>(FINISHED_IDS);
 /**
@@ -67,7 +69,7 @@ function trySuits(setup: FightSetup, base: FightSummary): void {
       const held = holdItem(p, item);
       if ("refused" in held) return;
       const figures = ours.figures.with(i, { ...p, items: held.held });
-      const now = margin(resolveFight({ seed: setup.seed, sides: [{ ...ours, figures }, theirs] }));
+      const now = margin(resolveFight({ seed: setup.seed, era: setup.era, sides: [{ ...ours, figures }, theirs] }));
       const key = `${p.kind} ${item}`;
       const t = bySuit.get(key) ?? { sum: 0, n: 0 };
       t.sum += now - was;
@@ -105,7 +107,7 @@ for (const habit of HABITS) {
   const line: Line = { name: habit.name, wing1: 0, wing2: 0, met: 0, beat: 0, rooms: 0, level: 0, ends: [] };
   for (let i = 0; i < ROOM_COUNT + 1; i++) line.ends.push(0);
   for (let n = 1; n <= runs; n++) {
-    const run = startRun(n * 7919 + 13, { trail });
+    const run = startRun(n * 7919 + 13, { era: LAST_ERA, trail });
     for (let guard = 0; guard < 200 && run.stage.phase !== "over"; guard++) {
       planRoom(run, habit);
       const room = run.room;
@@ -151,7 +153,7 @@ for (const habit of HABITS) {
       }
       for (const u of taken.fight.units) {
         if (u.side !== 0 || u.summoned || total <= 0) continue;
-        const kind = FIGURE_IDS.find((id) => id === u.kind);
+        const kind = everyShared().find((id) => id === u.kind);
         if (!kind) continue;
         const s = share.get(kind) ?? { dealt: 0, fights: 0 };
         s.dealt += u.dealt / total;
@@ -253,7 +255,7 @@ if (shows("traits")) {
 if (shows("figures")) {
   table(
     "Figures fielded",
-    FIGURE_IDS.map((id): [FigureId, Tally, string] => {
+    everyShared().map((id): [FigureId, Tally, string] => {
       const s = share.get(id);
       const dealt = s && s.fights > 0 ? ` deals ${pct(s.dealt / s.fights).trim()}` : "";
       return [id, byFigure.get(id) ?? new Tally(), `${FIGURES[id].tier} ${FIGURES[id].name}${dealt}`];
@@ -289,7 +291,7 @@ if (shows("suits")) {
     return t && t.n > 0 ? (t.sum / t.n) * 100 : Number.NaN;
   };
   let clashes = 0;
-  for (const id of FIGURE_IDS) {
+  for (const id of everyShared()) {
     const ranked = FINISHED_IDS.filter((item) => !Number.isNaN(gain(id, item))).toSorted(
       (a, b) => gain(id, a) - gain(id, b),
     );

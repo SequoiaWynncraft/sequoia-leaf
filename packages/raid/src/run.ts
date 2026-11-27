@@ -1,4 +1,4 @@
-import { draw32, type Met, mix, pick, shuffled, weighted } from "@sequoia-leaf/core";
+import { draw32, type Met, mix, pick, shuffled } from "@sequoia-leaf/core";
 
 /**
  * A run: one little raid, from the first pick to the last room. It is plain data (so it saves as it
@@ -16,7 +16,7 @@ import { draw32, type Met, mix, pick, shuffled, weighted } from "@sequoia-leaf/c
  * started; nothing the run draws is worked out from it after that.
  */
 import { BOON_IDS, type BoonId, boonNumber, BOONS, FIGHT_BOONS } from "./content/boons.ts";
-import { type BossId, FIGURE_IDS, type FigureId, FIGURES, type Stars } from "./content/figures.ts";
+import { type BossId, type FigureId, FIGURES, type Stars } from "./content/figures.ts";
 import {
   COMPONENT_IDS,
   type ComponentId,
@@ -26,15 +26,17 @@ import {
   isEmblemId,
   type ItemId,
 } from "./content/items.ts";
+import type { Era } from "./content/releases.ts";
 import { ECONOMY, MAX_LEVEL, ROOM_COUNT, type RoomKind, ROOMS, sellPrice, TRAILS } from "./content/rooms.ts";
 import { topStep, type TraitId, traitNumber } from "./content/traits.ts";
+import { drawOffer, starters } from "./draws.ts";
 import { type EndlessWay, extraChairs, foeOf, lastRoom, roomOf } from "./endless.ts";
 import type { Fed } from "./feed.ts";
 import { resolveFight } from "./fight/engine.ts";
 import type { FightResult, FightSetup, FightSummary } from "./fight/types.ts";
 import { across } from "./foe.ts";
 import { COLS, SEATS } from "./hex.ts";
-import { placedOf, type Roster, stallOdds, stallPool } from "./own.ts";
+import { placedOf, type Roster } from "./own.ts";
 import { type Party, type TraitState, traitStates, traitSteps } from "./party.ts";
 import { enterRoom, ruleOptions, rulePicks, takeRule } from "./wilds.ts";
 import { closedNow, ruleSetup, type Wing } from "./wing.ts";
@@ -87,6 +89,8 @@ export interface Run {
   seed: number;
   /** The random stream: every draw the run makes comes from it. */
   rng: number;
+  /** The era it last moved in (`releases.ts`): what its draws draw from (`catalogOf`). */
+  era: Era;
   trail: number;
   /** The room being planned for or fought, counting from 0. */
   room: number;
@@ -342,18 +346,9 @@ export const roomNow = roomOf;
 
 // ---------- the stall ----------
 
-/** Who the stall may offer on the main way: every figure, to everyone, from the first run. Nothing won or bought anywhere changes it. */
-export const STALL_POOL: readonly FigureId[] = FIGURE_IDS;
-/** The one-acorn figures, which a run's first pick offers. */
-const CHEAPEST = STALL_POOL.filter((id) => FIGURES[id].tier === 1);
-
 /** How many offers the stall has: more with A Wider Stall. */
 export const stallSize = (run: Pick<Run, "boons">): number =>
   run.boons.includes("widestall") ? boonNumber("widestall", "offers") : ECONOMY.stall;
-function drawOffer(run: Run): FigureId | null {
-  const pool = stallPool(run, 1 + weighted(run, stallOdds(run)));
-  return pool.length > 0 ? pick(run, pool) : null;
-}
 function restock(run: Run): void {
   run.stall = Array.from({ length: stallSize(run) }, () => drawOffer(run));
 }
@@ -391,6 +386,8 @@ export function remember<T>(list: T[], v: T): void {
 // ---------- starting ----------
 
 export interface RunOptions {
+  /** The era it sets out in. */
+  era: Era;
   /** Which trail, counting from 0. */
   trail?: number;
   /** For a run with the member's own figures, their roster; left out on the main way. */
@@ -399,11 +396,12 @@ export interface RunOptions {
   endless?: EndlessWay;
 }
 /** Starts a run. It begins with a choice waiting: one of three one-acorn figures to set out with. */
-export function startRun(seed: number, options: RunOptions = {}): Run {
+export function startRun(seed: number, options: RunOptions): Run {
   const trail = Math.min(TRAILS.length - 1, Math.max(0, Math.trunc(options.trail ?? 0)));
   const run: Run = {
     seed: seed >>> 0,
     rng: mix(seed >>> 0, 1),
+    era: options.era,
     trail,
     room: 0,
     stage: { phase: "plan", picks: [] },
@@ -431,7 +429,7 @@ export function startRun(seed: number, options: RunOptions = {}): Run {
   };
   run.stage = {
     phase: "plan",
-    picks: [{ kind: "starter", options: shuffled(run, CHEAPEST).slice(0, ECONOMY.starters) }],
+    picks: [{ kind: "starter", options: starters(run) }],
   };
   restock(run);
   run.foe = foeOf(run, draw32(run));
@@ -454,8 +452,7 @@ export function layOutAfresh(run: Run, seed: number): void {
   run.bought = 0;
   run.rustles = ECONOMY.freeRustles + (run.boons.includes("regular") ? boonNumber("regular", "rustles") : 0);
   const picks = picksOf(run).map((choice): Choice => {
-    if (choice.kind === "starter")
-      return { kind: "starter", options: shuffled(run, CHEAPEST).slice(0, ECONOMY.starters) };
+    if (choice.kind === "starter") return { kind: "starter", options: starters(run) };
     if (choice.kind === "component") {
       const count = Math.min(ECONOMY.componentsWon, Math.max(ECONOMY.componentsLost, choice.options.length));
       return { kind: "component", options: componentOptions(run, count) };
@@ -747,7 +744,8 @@ export function beginFight(run: Run): Begun {
   if (fielded(run) > fieldCap(run)) return no("too_many_fielded");
   for (const p of run.board) if (p) remember(run.seen.fielded, p.kind);
   for (const state of traitsNow(run)) if (state.step >= topStep(state.trait)) remember(run.seen.topped, state.trait);
-  const setup: FightSetup = { seed: draw32(run), sides: [partyOf(run), structuredClone(run.foe)], ...ruleSetup(run) };
+  const sides: FightSetup["sides"] = [partyOf(run), structuredClone(run.foe)];
+  const setup: FightSetup = { seed: draw32(run), era: run.era, sides, ...ruleSetup(run) };
   const outcome = resolveFight(setup);
   run.stage = { phase: "fight", fight: { setup, outcome } };
   return { ok: true, notes: [{ t: "fight", room: run.room, seed: setup.seed, setup, outcome }], setup };

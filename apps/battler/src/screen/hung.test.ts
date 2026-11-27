@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { FightSetup } from "@sequoia-leaf/raid";
+import { LEGACY_ERA } from "@sequoia-leaf/raid";
 import { at, partyOfFigures } from "@sequoia-leaf/raid/testkit.ts";
 
 import { fateOf, hangs, type Hung, stillCaught } from "./hung.ts";
@@ -14,6 +15,7 @@ import { advance, openPlayback } from "./playback.ts";
  */
 const SETUP: FightSetup = {
   seed: 3,
+  era: LEGACY_ERA,
   sides: [
     partyOfFigures([at("banner-1", 3, 3, 2), at("crab40", 3, 0, 2), at("glorp", 2, 0, 2), at("greg", 4, 0, 2)]),
     partyOfFigures([at("rock", 3, 0, 2), at("crab40", 2, 0, 2), at("badger", 4, 0, 2), at("kettle", 3, 2, 2)]),

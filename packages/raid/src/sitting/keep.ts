@@ -6,6 +6,7 @@
  */
 import { isFigureId } from "../content/figures.ts";
 import { isComponentId } from "../content/items.ts";
+import { isEra, LEGACY_ERA } from "../content/releases.ts";
 import { isTraitId } from "../content/traits.ts";
 import { isParty } from "../party.ts";
 import { endingOf } from "../run.ts";
@@ -23,16 +24,19 @@ import {
 
 const GAME = "little-raid-sitting";
 /**
- * 2: what Greg has eaten is a share of his health (`feed`), where it was meals of 3% each; its runs
- * keep the Wilds' wing as version 1's did. A sitting of version 1 is read as well.
+ * 3: the sitting, each seat's run and each fight's setup keep their era. 2: what Greg has eaten is
+ * a share of his health (`feed`), where it was meals of 3% each; its runs keep the Wilds' wing as
+ * version 1's did. A sitting of versions 1 and 2 is read as well, of `LEGACY_ERA`.
  */
-export const SITTING_VERSION = 2;
+export const SITTING_VERSION = 3;
+const READS: readonly number[] = [1, 2, SITTING_VERSION];
 
 export const encodeSitting = (t: Sitting): string =>
   JSON.stringify({
     game: GAME,
     v: SITTING_VERSION,
     rng: t.rng,
+    era: t.era,
     by: t.by,
     room: t.room,
     stage: t.stage,
@@ -151,11 +155,12 @@ function agree(t: Sitting): void {
 
 function read(v: unknown): Sitting {
   const r = record(v, "the sitting");
-  if (r.game !== GAME || (r.v !== 1 && r.v !== SITTING_VERSION)) bad("the version");
+  if (r.game !== GAME || !READS.some((version) => version === r.v)) bad("the version");
   const pairs = list(r.pairs, CHAIRS / 2, "the pairs").map((p) => readTwo(p, "the pairs"));
   unique(pairs.flat(), "the pairs");
   const t: Sitting = {
     rng: whole(r.rng, 0, UINT, "the random stream"),
+    era: r.v === SITTING_VERSION ? one(r.era, isEra, "the era") : LEGACY_ERA,
     by: text(r.by, 64, "who opened it"),
     room: whole(r.room, 0, 999, "the room"),
     stage: readStage(r.stage),

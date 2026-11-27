@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 
 import * as kit from "@sequoia-leaf/kit/palette.ts";
-import { FIGURE_IDS, SUMMON_IDS, TROUBLE_IDS } from "@sequoia-leaf/raid/content/figures.ts";
+import { everyShared } from "@sequoia-leaf/raid/content/catalog.ts";
+import { SUMMON_IDS, TROUBLE_IDS } from "@sequoia-leaf/raid/content/figures.ts";
 import { TRUE_FORM_IDS } from "@sequoia-leaf/raid/content/groot.ts";
 
 import { artOf } from "./figures.ts";
@@ -9,12 +10,12 @@ import { FIGURE_PAL, TOWNS_OWN } from "./pal.ts";
 import { readRows } from "./rows.ts";
 
 test("every figure a member can own has its pictures, standing and casting", () => {
-  const missing = FIGURE_IDS.filter((id) => artOf(id).rows.length === 0 || (artOf(id).cast ?? []).length === 0);
+  const missing = everyShared().filter((id) => artOf(id).rows.length === 0 || (artOf(id).cast ?? []).length === 0);
   expect(missing).toEqual([]);
 });
 
 test("everything on the board is drawn in the town's colours: the kit's palette, and what the town's own creatures have", () => {
-  const kinds = [...FIGURE_IDS, ...SUMMON_IDS, ...TROUBLE_IDS];
+  const kinds = [...everyShared(), ...SUMMON_IDS, ...TROUBLE_IDS];
   const arts = [
     ...kinds.map((id) => [id, artOf(id)] as const),
     ...TRUE_FORM_IDS.map((id) => [`${id} true`, artOf(id, "true")] as const),
@@ -31,7 +32,7 @@ test("everything on the board is drawn in the town's colours: the kit's palette,
 });
 
 test("figures.txt names only the stump's figures and their other pictures, and every figure stands", async () => {
-  const kinds: readonly string[] = [...FIGURE_IDS, ...SUMMON_IDS, ...TROUBLE_IDS];
+  const kinds: readonly string[] = [...everyShared(), ...SUMMON_IDS, ...TROUBLE_IDS];
   const named = [...readRows(await Bun.file(new URL("figures.txt", import.meta.url)).text()).keys()];
   const forms: readonly string[] = TRUE_FORM_IDS;
   const stray = (name: string): boolean => {
@@ -53,7 +54,9 @@ test("each of Groot's five has a true form, standing and casting, every row of a
 });
 
 test("Seqwawa stands a hex and a half tall, and its small picture keeps the room the stall had", () => {
-  const before = FIGURE_IDS.filter((id) => id !== "seqwawa").map((id) => artOf(id).rows.length);
+  const before = everyShared()
+    .filter((id) => id !== "seqwawa")
+    .map((id) => artOf(id).rows.length);
   const tallest = Math.max(...before);
   const art = artOf("seqwawa");
   expect(art.rows.length).toBeGreaterThan(tallest);
