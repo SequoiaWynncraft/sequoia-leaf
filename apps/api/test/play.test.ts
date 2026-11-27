@@ -54,6 +54,7 @@ import { staged as stagedYard } from "@sequoia-leaf/factory/test/yards.ts";
 import { PULLS } from "@sequoia-leaf/pulls";
 import {
   beatenBosses,
+  eraAt,
   foughtOf,
   picksOf,
   planCommands,
@@ -3625,7 +3626,7 @@ async function pulled(commands: readonly unknown[], player: PlayerId = alice) {
   expect(response.status).toBe(200);
   return Schema.decodeUnknownSync(Answered)(await response.json());
 }
-const tenPulls = (id: string) => ({ id, do: "pull", pool: "grove", n: 10, with: "leaf" });
+const tenPulls = (id: string) => ({ id, do: "pull", pool: "grove", n: 10, with: "leaf", era: eraAt(T0) });
 
 describe("pulls", () => {
   it("ten take 10,000 Leaf once, as one spend; sent again, they take nothing; and each prize won is awarded", async () => {

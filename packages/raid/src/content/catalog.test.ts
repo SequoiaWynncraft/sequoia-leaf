@@ -293,6 +293,36 @@ describe("picked up across a release", () => {
   );
 });
 
+describe("a live table across a release", () => {
+  test.each(DATED.map((r) => [r.id, r.at] as const))(
+    "plans a room begun before %s in the era it began in, the regulars' lock too; the next room is the new era's",
+    (_id, at) => {
+      const member = { id: "10000000-0000-0000-0000-00000000ca7c", name: "A member" };
+      // Started 20 seconds before: the carousel ends 8 seconds before, and the room's planning, begun then, locks after.
+      const opened = openSitting({ now: at - 20_000, seed: 5, player: member });
+      const started = command(opened, { do: "start" }, { now: at - 20_000, seed: 6, player: member });
+      if (!started.ok) throw new Error(started.why);
+      const [old, now] = [eraAt(at - 1), eraAt(at)];
+      const planning = advance(started.sitting, at - 1);
+      expect([planning.stage.at, planning.era]).toEqual(["plan", old]);
+      const lock = planning.stage.at === "plan" ? planning.stage.until : 0;
+      expect(lock).toBeGreaterThan(at);
+      // The member rerolls after the release: in the era the room began in.
+      const rerolled = command(planning, { do: "rustle" }, { now: at + 1000, seed: 7, player: member });
+      if (!rerolled.ok) throw new Error(rerolled.why);
+      expect([rerolled.sitting.era, rerolled.sitting.seats[0]?.run.era]).toEqual([old, old]);
+      // At the lock everyone's fight, the regulars' planned with the rest, is the room's era; what comes next is the new one.
+      const locked = advance(rerolled.sitting, lock);
+      expect(locked.stage.at).toBe("fight");
+      const setups = locked.seats.flatMap((seat) =>
+        seat.run.stage.phase === "fight" ? [seat.run.stage.fight.setup.era] : [],
+      );
+      expect(setups).toEqual(Array.from({ length: 8 }, () => old));
+      expect([locked.era, ...seats(locked)]).toEqual(Array.from({ length: 9 }, () => now));
+    },
+  );
+});
+
 // ---------- nothing else lists the figures ----------
 
 /** The repository's own TypeScript files, from its root, skipping what is installed. */

@@ -16,7 +16,14 @@ export interface Banner {
   readonly until: number;
   /** A five-acorn figure that only a run with the member's own figures sells, to whoever pulled it. */
   readonly headliner: FigureId;
+  /**
+   * How the headliner is drawn: by the set, or (`skin`) from the skin of the member Leaf says it is
+   * (`banner_people`), who is all a page waits for before it shows the banner.
+   */
+  readonly look: Look;
 }
+/** How a figure is drawn: by the set, or from a member's skin. */
+export type Look = "set" | "skin";
 
 export const BANNERS: readonly Banner[] = [
   {
@@ -25,6 +32,7 @@ export const BANNERS: readonly Banner[] = [
     from: Date.UTC(2026, 10, 23),
     until: Date.UTC(2026, 11, 8),
     headliner: "banner-1",
+    look: "skin",
   },
 ];
 

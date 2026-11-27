@@ -8,7 +8,7 @@
  * A run, a table, a sitting, a fight's setup and the views Leaf sends each carry their era, and
  * `catalogOf` reads the catalogue from it: never from a clock.
  */
-import { type Banner, BANNERS, GROVE } from "./banners.ts";
+import { type Banner, BANNERS, GROVE, type Look } from "./banners.ts";
 import { type FigureId, FIGURES, type FigureSpec, type Tier } from "./figures.ts";
 import { type Era, eraOf, LAST_ERA, pullsEra, type ReleaseId, RELEASES } from "./releases.ts";
 
@@ -21,11 +21,15 @@ export type Rarity = (typeof RARITY_IDS)[number];
 /** Who may have a figure: everyone, or, for a banner's headliner, whoever pulled it. */
 export type Access = "shared" | { readonly headliner: Banner["id"] };
 
-/** A figure as a catalogue has it: its words and numbers, the release it came with, who may have it, and its rarity as a prize. */
+/**
+ * A figure as a catalogue has it: its words and numbers, the release it came with, who may have it,
+ * its rarity as a prize, and how it is drawn (everyone's by the set; a headliner as its banner says).
+ */
 export interface Figure extends FigureSpec {
   readonly since: ReleaseId;
   readonly access: Access;
   readonly prize: Rarity;
+  readonly look: Look;
 }
 
 /**
@@ -70,14 +74,14 @@ function build(era: Era): Catalog {
   const came: FigureId[] = [];
   const banners: Banner[] = [];
   for (const { id: since } of RELEASES.slice(0, era)) {
-    const arrive = (id: FigureId, access: Access, prize: Rarity): void => {
-      figures[id] = { ...FIGURES[id], since, access, prize };
+    const arrive = (id: FigureId, access: Access, prize: Rarity, look: Look): void => {
+      figures[id] = { ...FIGURES[id], since, access, prize, look };
       came.push(id);
     };
-    for (const [prize, ids] of SHARED[since]) for (const id of ids) arrive(id, "shared", prize);
+    for (const [prize, ids] of SHARED[since]) for (const id of ids) arrive(id, "shared", prize, "set");
     for (const banner of BANNERS.filter((b) => b.opens === since)) {
       banners.push(banner);
-      arrive(banner.headliner, { headliner: banner.id }, "Yggdrasil");
+      arrive(banner.headliner, { headliner: banner.id }, "Yggdrasil", banner.look);
     }
   }
   const order = [...DRAWN.filter((id) => figures[id]), ...came.filter((id) => !DRAWN.includes(id))];
@@ -98,6 +102,9 @@ export const catalogOf = (held: { readonly era: Era }): Catalog => catalogAt(hel
 /** Every figure any release has: what stored data may name, never what anything offers. */
 export const everyFigure = (): readonly FigureId[] => catalogAt(LAST_ERA).order;
 /** Every figure any release brings everyone, no headliner: what the camp can hold a carving of. */
+/** Every figure any release has that the set draws: everyone's, and each headliner of the set's own. */
+export const everySetDrawn = (): readonly FigureId[] =>
+  catalogAt(LAST_ERA).order.filter((id) => catalogAt(LAST_ERA).figures[id]?.look === "set");
 export const everyShared = (): readonly FigureId[] =>
   catalogAt(LAST_ERA).order.filter((id) => catalogAt(LAST_ERA).figures[id]?.access === "shared");
 

@@ -10,9 +10,12 @@ import { catalogAt } from "@sequoia-leaf/raid/content/catalog.ts";
 import { eraAt, RELEASES } from "@sequoia-leaf/raid/content/releases.ts";
 
 import {
+  askAgain,
   bannerLine,
+  bookCount,
   cannotPull,
   chances,
+  clearing,
   GROVE,
   groveState,
   nextFree,
@@ -33,9 +36,10 @@ import {
   takesCommand,
   ticked,
   timeline,
+  viewKey,
 } from "./pulls.ts";
 
-const banner = BANNERS[0] ?? { id: "banner-1", opens: "base", from: 0, until: 0, headliner: "banner-1" };
+const banner = BANNERS[0] ?? { id: "banner-1", opens: "base", from: 0, until: 0, headliner: "banner-1", look: "skin" };
 /** Wednesday 25 November 2026, 12:00 UTC: banner-1 is open, and its era; what its pools give then. */
 const T0 = Date.UTC(2026, 10, 25, 12);
 const ERA = eraAt(T0);
@@ -83,17 +87,41 @@ test("the pity line counts towards the pull that is certain, and a lost 50/50 na
   expect(owedLine({ owed: false }, "Mossback")).toBeNull();
 });
 
-test("a banner is shown only while it is open and has a person", () => {
+test("a banner is shown only while Leaf's view has it open, a member's once Leaf has said who it is", () => {
   const open = { open: [{ id: banner.id, until: banner.until }] };
-  expect(showing(open, WITH)).toEqual({
+  expect(showing(open, WITH, BANNERS)).toEqual({
     id: banner.id,
     until: banner.until,
+    name: "Mossback",
     person: { id: "mossback", name: "Mossback" },
+    headliner: banner.headliner,
   });
-  expect(showing(open, WITHOUT)).toBeNull();
-  expect(showing({ open: [] }, WITH)).toBeNull();
-  const shown = showing(open, WITH);
-  if (shown) expect(bannerLine(shown, "UTC")).toBe("Mossback's banner is open until 8 December, 00:00.");
+  expect(showing(open, WITHOUT, BANNERS)).toBeNull();
+  expect(showing({ open: [] }, WITH, BANNERS)).toBeNull();
+  expect(bannerLine(showing(open, WITH, BANNERS), "UTC")).toBe("Mossback's banner is open until 8 December, 00:00.");
+});
+
+test("a banner whose headliner the set draws is shown at once: nobody has to be its headliner", () => {
+  const penguins = {
+    id: "made-up",
+    opens: "groot",
+    from: 0,
+    until: banner.until,
+    headliner: "greg",
+    look: "set",
+  } as const;
+  const open = { open: [{ id: penguins.id, until: penguins.until }] };
+  // Leaf's people name nobody for it; the set's own figure is the headliner, by its own name.
+  const people: BannerPerson[] = [{ id: penguins.id, from: 0, until: penguins.until, headliner: null }];
+  expect(showing(open, people, [penguins])).toEqual({
+    id: penguins.id,
+    until: penguins.until,
+    name: "Greg",
+    person: null,
+    headliner: "greg",
+  });
+  // A member's banner still waits for Leaf to say who.
+  expect(showing(open, people, [{ ...penguins, look: "skin" }])).toBeNull();
 });
 
 test("the chances shown are what RATES makes of a pull with no guarantee near", () => {
@@ -337,7 +365,7 @@ function drawnAt(pool: string, now: number): string[] {
   const certain = { top: RATES.top.certainAt - 1, mid: 0, owed: false };
   for (let seed = 1; seed <= 300; seed++) {
     const state = { ...PULLS.create(ctxAt(now, seed)), counters: { grove: certain, banner: certain } };
-    const answer = PULLS.apply(state, { do: "pull", pool, n: 10, with: "leaf" }, ctxAt(now, seed));
+    const answer = PULLS.apply(state, { do: "pull", pool, n: 10, with: "leaf", era: eraAt(now) }, ctxAt(now, seed));
     if (isRefused(answer)) throw new Error(`${pool} refused at ${now}: ${answer.refused}`);
     for (const note of answer.notes) drawn.add(note.prize);
   }
@@ -354,4 +382,29 @@ test("the prize book lists what Leaf draws from each pool open, and counts that,
       }
     }
   }
+});
+
+test("a view of a new era draws the Grove's words again, and the page asks Leaf for one when a release is due", () => {
+  const night = Date.UTC(2026, 11, 8);
+  const view = PULLS.view(PULLS.create(ctxAt(night - 1)), ctxAt(night - 1));
+  const later = PULLS.view(PULLS.create(ctxAt(night - 1)), ctxAt(night));
+  expect(viewKey({ ...view, open: later.open })).not.toBe(viewKey({ ...later }));
+  expect(viewKey(view)).toBe(viewKey({ ...view }));
+  // By the page's clock a release is due: Leaf is asked, and only its answer says what is open.
+  expect(askAgain({ ...view, free: { waiting: 1, next: Infinity } }, night - 1)).toBe(false);
+  expect(askAgain({ ...view, free: { waiting: 1, next: Infinity } }, night)).toBe(true);
+});
+
+test("the clearing: the always-open pool's first three Treants on their stands, or a banner's own headliner the set draws", () => {
+  const night = Date.UTC(2026, 11, 8);
+  const view = PULLS.view(PULLS.create(ctxAt(night)), ctxAt(night));
+  // From 8 December the grove gives four Treants; three stand, and the prize book counts all four.
+  expect(prizeBook(view, GROVE).find(([rarity]) => rarity === "Treant")?.[1]).toHaveLength(4);
+  expect(clearing(view, null)).toHaveLength(3);
+  const book = prizeBook(view, GROVE);
+  expect(bookCount({ have: { "figure:seqwawa": 1, "figure:greg": 2, "look:baize": 1 } }, book)).toBe(
+    `Yours: 2 of ${book.flatMap(([, list]) => list).length}`,
+  );
+  const shown = showing({ open: [{ id: banner.id, until: banner.until }] }, WITH, BANNERS);
+  expect(clearing(view, shown)).toHaveLength(3);
 });

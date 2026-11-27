@@ -18,7 +18,7 @@ export {
   type Rarity,
   RARITY_IDS,
 } from "./content/catalog.ts";
-export { type Era, eraAt, isEra, LAST_ERA, LEGACY_ERA, type ReleaseId, RELEASES } from "./content/releases.ts";
+export { type Era, eraAt, eraOf, isEra, LAST_ERA, LEGACY_ERA, type ReleaseId, RELEASES } from "./content/releases.ts";
 export { type Banner, BANNERS, GROVE } from "./content/banners.ts";
 
 // What is in the game: plain tables.

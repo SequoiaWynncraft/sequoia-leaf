@@ -132,12 +132,12 @@ describe("the main way, whatever a member has pulled", () => {
   });
   test("a board holding one is not met at all: the regular waits there", () => {
     const met = boardWith(UNIT);
-    expect(boardMet(met)).toBeNull();
+    expect(boardMet(CAT, met)).toBeNull();
     for (let seed = 1; seed <= 40; seed++) {
       expect(opposition(CAT, seed, 2, 0, met)).toEqual(opposition(CAT, seed, 2, 0));
     }
     // The same board without the member is met, so it is the member that keeps it out.
-    expect(boardMet(boardWith("greg"))?.by).toBe(met.player);
+    expect(boardMet(CAT, boardWith("greg"))?.by).toBe(met.player);
   });
 });
 
@@ -205,7 +205,7 @@ describe("a run with the member's own figures", () => {
   });
   test("a board holding it is met, with its level", () => {
     const met = boardWith(UNIT);
-    const board = boardMet(met, true);
+    const board = boardMet(CAT, met, true);
     expect(board?.figures.map((p) => [p.kind, p.stars, p.level])).toEqual([
       [UNIT, 2, 3],
       ["crab7", 1, undefined],

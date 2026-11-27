@@ -270,21 +270,33 @@ function takings(t: Sitting, at: number): void {
 
 const due = (t: Sitting, now: number): boolean => t.stage.at !== "over" && t.stage.until <= now;
 
-/** Does the deadline a sitting stands at, at its own moment: in that moment's era, which every seat's run moves into. */
+/** A sitting moves into the era of a moment: the stage it lays out then, and every seat's run, draw from it. */
+function enter(t: Sitting, at: number): void {
+  t.era = eraAt(at);
+  for (const { run } of t.seats) run.era = t.era;
+}
+
+/**
+ * Does the deadline a sitting stands at, at its own moment. A stage draws in the era it began in,
+ * to its end: a carousel's last turns, and at the lock the regulars' planning, are in the era the
+ * members planned in. What the deadline lays out next (the room, the takings' stall, a carousel) is
+ * in the deadline's era.
+ */
 function step(t: Sitting): void {
   const { stage } = t;
-  if (stage.at !== "over") t.era = eraAt(stage.until);
-  for (const { run } of t.seats) run.era = t.era;
   switch (stage.at) {
     case "open":
       t.stage = { at: "over", ended: stage.until };
       return;
     case "carousel":
-      if (turnCarousel(t, stage)) layRoom(t, stage.until);
-      return;
+      if (!turnCarousel(t, stage)) return;
+      enter(t, stage.until);
+      return layRoom(t, stage.until);
     case "plan":
-      return lock(t, stage.until);
+      lock(t, stage.until);
+      return enter(t, stage.until);
     case "fight":
+      enter(t, stage.until);
       return takings(t, stage.until);
     case "over":
       return;

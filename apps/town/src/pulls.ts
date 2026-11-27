@@ -10,6 +10,7 @@ import type { Spend } from "@sequoia-leaf/kit/dom.ts";
 import {
   type Counters,
   forSeeds,
+  isOpen,
   type Prizes,
   prizesOf,
   type Pulled,
@@ -23,10 +24,11 @@ import {
   topChance,
 } from "@sequoia-leaf/pulls";
 import type { BannerPerson } from "@sequoia-leaf/pulls/wire.ts";
-import { GROVE } from "@sequoia-leaf/raid/content/banners.ts";
+import { type Banner, BANNERS, GROVE } from "@sequoia-leaf/raid/content/banners.ts";
 import { catalogOf } from "@sequoia-leaf/raid/content/catalog.ts";
-import { FIGURES, isFigureId } from "@sequoia-leaf/raid/content/figures.ts";
+import { type FigureId, FIGURES, isFigureId } from "@sequoia-leaf/raid/content/figures.ts";
 import { LOOK_KINDS, LOOKS } from "@sequoia-leaf/raid/content/looks.ts";
+import { eraAt } from "@sequoia-leaf/raid/content/releases.ts";
 import { thingOf } from "@sequoia-leaf/town/things.ts";
 
 /** The pool that is always open (the raid's catalogue names it), and what the page calls it. */
@@ -38,25 +40,46 @@ export const tierOf = (rarity: Rarity): Tier => RARITIES[rarity].tier;
 
 const seeds = (n: number): string => `${whole(n)} ${n === 1 ? "Seed" : "Seeds"}`;
 
-/** A banner that can be shown: open by Leaf's view, with somebody as its headliner. */
+/**
+ * A banner that can be shown: open by Leaf's view, with its headliner's name: a figure of the set's
+ * own by its name at once, one drawn from a member's skin once Leaf has said who (`person`).
+ */
 export interface Showing {
   readonly id: string;
   readonly until: number;
-  readonly person: { readonly id: string; readonly name: string };
+  readonly name: string;
+  readonly person: { readonly id: string; readonly name: string } | null;
+  readonly headliner: FigureId;
 }
 
-/** The banner to show, if one is open and has a person: the first such. */
-export function showing(view: Pick<PullsView, "open">, banners: readonly BannerPerson[]): Showing | null {
+/** The banner to show among the rows (`BANNERS`), if one is open by Leaf's view and its headliner is known: the first such. */
+export function showing(
+  view: Pick<PullsView, "open">,
+  people: readonly BannerPerson[],
+  rows: readonly Banner[],
+): Showing | null {
   for (const { id, until } of view.open) {
-    const person = banners.find((b) => b.id === id)?.headliner;
-    if (person) return { id, until, person };
+    const row = rows.find((b) => b.id === id);
+    const person = row?.look === "skin" ? (people.find((b) => b.id === id)?.headliner ?? null) : null;
+    const name = row && (row.look === "set" ? FIGURES[row.headliner].name : person?.name);
+    if (row && name) return { id, until, name, person, headliner: row.headliner };
   }
   return null;
 }
 
+/** A banner's headliner's name: the set's own figure's, or the member's as Leaf says it; null for one not known. */
+function headlinerName(banner: string, people: readonly BannerPerson[]): string | null {
+  const row = BANNERS.find((b) => b.id === banner);
+  if (row?.look === "set") return FIGURES[row.headliner].name;
+  return people.find((b) => b.id === banner)?.headliner?.name ?? null;
+}
+/** The figure of the set's own that a banner's headliner is, for its picture; null for one drawn from a member's skin. */
+export const setHeadliner = (banner: string): FigureId | null =>
+  BANNERS.find((b) => b.id === banner && b.look === "set")?.headliner ?? null;
+
 /** A pool's name: the always-open one's own, or its banner's headliner's. */
 export const poolName = (pool: string, banners: readonly BannerPerson[]): string =>
-  pool === GROVE ? EVERGREEN : (banners.find((b) => b.id === pool)?.headliner?.name ?? "A banner");
+  pool === GROVE ? EVERGREEN : (headlinerName(pool, banners) ?? "A banner");
 
 // ---------- a prize ----------
 
@@ -69,7 +92,7 @@ export function prizeName(prize: string, banners: readonly BannerPerson[]): stri
   if (kind === "figure") return isFigureId(id) ? FIGURES[id].name : id;
   if (kind === "thing") return thingOf(id)?.name ?? id;
   if (kind === "look") return LOOK_KINDS.flatMap((k) => LOOKS[k]).find((l) => l.id === id)?.name ?? id;
-  return banners.find((b) => b.id === id)?.headliner?.name ?? "The headliner";
+  return headlinerName(id, banners) ?? "The headliner";
 }
 
 /** What a reveal says of the prize a pull drew, or Seeds bought. */
@@ -224,8 +247,18 @@ export const takesCommand = (state: GroveState): boolean => state === "banner" |
 export const pullSpend = (pool: string, n: number): Spend => ({ on: `pull:${pool}:${n}`, price: n * RATES.leaf });
 
 /** The banner open now, for the Grove's card in town: whose it is and until when. */
-export const bannerLine = (b: Showing, zone?: string): string =>
-  `${b.person.name}'s banner is open until ${dayAndTime(b.until, zone)}.`;
+export const bannerLine = (b: Showing | null, zone?: string): string | null =>
+  b && `${b.name}'s banner is open until ${dayAndTime(b.until, zone)}.`;
+
+/**
+ * Whether to ask Leaf for the pulls again, by the page's clock: a free pull has fallen due, a banner
+ * is due to open or to end, or a release to open. What is open and what each pool gives is only
+ * ever what Leaf then says.
+ */
+export const askAgain = (v: PullsView, now: number): boolean =>
+  (v.free.waiting < RATES.free.most && now >= v.free.next) ||
+  eraAt(now) !== v.era ||
+  BANNERS.some(({ id }) => isOpen(id, now) !== v.open.some((b) => b.id === id));
 
 /** A time as the page writes it, in the player's own zone (or `zone`): "8 December, 01:00". */
 export function dayAndTime(at: number, zone?: string): string {
@@ -246,6 +279,7 @@ const REFUSED: Readonly<Record<string, string>> = {
   no_free: "No free pull is waiting.",
   not_enough_seeds: "Not enough Seeds.",
   owned: "You have this already.",
+  prizes_changed: "The prizes changed. Look again.",
 };
 export const refusedLine = (code: string): string => REFUSED[code] ?? "That could not be done just now.";
 
@@ -268,6 +302,27 @@ export interface Offer {
 
 /** What a pool gives, by rarity, in the era Leaf's view is of (`prizesOf`): never by the page's own clock. */
 export const poolPrizes = (view: Pick<PullsView, "era">, pool: string): Prizes => prizesOf(catalogOf(view), pool);
+/** What the Grove's words show of Leaf's view, as text, to draw them again when any of it changes: its era among it. */
+export const viewKey = (v: PullsView): string =>
+  JSON.stringify([v.era, v.counters, v.seeds, v.free, v.pulls, Object.keys(v.have).length]);
+
+/** The prize book's count: how many of the prizes it lists the player has. */
+export function bookCount(
+  view: Pick<PullsView, "have">,
+  book: readonly (readonly [Rarity, readonly string[]])[],
+): string {
+  const all = book.flatMap(([, list]) => list);
+  return `Yours: ${all.filter((prize) => view.have[prize] !== undefined).length} of ${all.length}`;
+}
+
+/**
+ * Who stands in the Grove's clearing, one a stand: on a banner whose headliner the set draws, that
+ * headliner; else the always-open pool's first three Treants in the era of Leaf's view. One past
+ * them (Seqwawa, from 8 December) is in the prize book, not the clearing.
+ */
+export const clearing = (view: Pick<PullsView, "era">, banner: Showing | null): readonly string[] =>
+  banner && banner.person === null ? poolPrizes(view, banner.id).Yggdrasil : poolPrizes(view, GROVE).Treant.slice(0, 3);
+
 /**
  * What the prize book lists for a pool, the rarest last: each rarity the pool can come up with
  * (`chances`), and what Leaf draws of it in the era of Leaf's view. What its count is of.

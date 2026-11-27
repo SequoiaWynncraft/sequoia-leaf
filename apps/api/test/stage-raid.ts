@@ -20,6 +20,7 @@ import { type PlayerId, utcWeekStart } from "@sequoia-leaf/core";
 import {
   boardMet,
   catalogAt,
+  catalogOf,
   depthSlot,
   ENDLESS,
   heldSlot,
@@ -116,7 +117,7 @@ function step(table: Table, op: Record<string, unknown>, made: number[], own: Ro
   // The party waiting in the room as another member's board, signed as the rules sign one Leaf hands over.
   if (typeof op.member === "string") {
     const met = { player: "20000000-0000-4000-8000-0000000000aa", name: op.member, data: run.foe, of: 1 };
-    run.foe = boardMet(met, false, run.endless ? ENDLESS.chairs : 0) ?? run.foe;
+    run.foe = boardMet(catalogOf(run), met, false, run.endless ? ENDLESS.chairs : 0) ?? run.foe;
   }
   if (isRuleId(op.rule) && run.stage.phase === "plan")
     run.stage.picks = [{ kind: "rule", options: [op.rule] }, ...run.stage.picks.filter((c) => c.kind !== "rule")];

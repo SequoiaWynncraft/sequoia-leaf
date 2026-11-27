@@ -6,11 +6,11 @@ import type { RaidCommand } from "./command.ts";
 import { catalogAt } from "./content/catalog.ts";
 import { ENDLESS } from "./content/endless.ts";
 import type { FigureId, Stars } from "./content/figures.ts";
-import { LEGACY_ERA } from "./content/releases.ts";
+import { eraOf, LEGACY_ERA } from "./content/releases.ts";
 import { ROOM_COUNT, ROOMS } from "./content/rooms.ts";
 import { depthSlot, paidFor, reached, weekAt } from "./depths.ts";
 import { foeOf, heldRoom, heldSlot, roomAt, sparAt } from "./endless.ts";
-import { opposition } from "./foe.ts";
+import { boardMet, opposition } from "./foe.ts";
 import { meets, RAID, type RaidNote, readCommand, type Table, TABLE_VERSION } from "./game.ts";
 import { payout } from "./outside.ts";
 import {
@@ -221,6 +221,22 @@ describe("rooms held in the Deep Woods", () => {
     const wilds = startRun(9, { era: LEGACY_ERA, endless: "wilds" });
     wilds.room = 17;
     expect(foeOf(wilds, 4, board(OTHER))).toEqual(regular);
+  });
+  test("a board is met only if each figure on it is open in the era of the run that meets it: else the regular stays", () => {
+    const run = startRun(9, { era: LEGACY_ERA, endless: "deep" });
+    run.room = 17;
+    const seqwawa: Met = {
+      ...board(OTHER),
+      data: { ...partyOf(run), figures: [{ kind: "seqwawa", stars: 1, seat: 3, items: [], fed: 0 }] },
+    };
+    expect(foeOf(run, 4, seqwawa).by).toBe(OTHER);
+    // A run of the base's era alone (made up: the expansion's first release opens with it) has no Seqwawa.
+    const before = { ...run, era: eraOf("base") };
+    expect(foeOf(before, 4, seqwawa)).toEqual(foeOf(before, 4));
+    expect([boardMet(catalogAt(eraOf("base")), seqwawa), boardMet(catalogAt(LEGACY_ERA), seqwawa)?.by]).toEqual([
+      null,
+      OTHER,
+    ]);
   });
   test("a held board may field its chairs, and no more", () => {
     const run = startRun(9, { era: LEGACY_ERA, endless: "deep" });

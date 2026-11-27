@@ -41,9 +41,8 @@ import {
 
 import { glyph, itemIcon, traitIcon } from "../art/icons.ts";
 import { paintLook } from "../art/place.ts";
-import { endedOf } from "../screen.ts";
 import { snd } from "../sounds.ts";
-import { ask, laidKey, S, type Slot } from "../state.ts";
+import { ask, pagesKey, S, type Slot } from "../state.ts";
 import { figPic, pic } from "./cards.ts";
 import { summary } from "./ended.ts";
 import { frontAway, frontBody } from "./front.ts";
@@ -425,7 +424,7 @@ export function renderPages(force = false): void {
   const id = pageUp();
   // While the front page is up, what it shows of the endless ways is read again every minute.
   frontShown(id === "front");
-  const key = `${id}:${S.runs}:${S.run?.room ?? 0}:${endedOf(S.screen) ? 1 : 0}:${laidKey()}`;
+  const key = pagesKey(id);
   if (!force && key === shownKey) return;
   shownKey = key;
   // While a page is opened over the table, the table behind it cannot be reached.

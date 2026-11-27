@@ -22,7 +22,7 @@ import { figureThing } from "@sequoia-leaf/town/things.ts";
 import { type CampArt, pictureOf } from "./campart.ts";
 import { buildStage, type Light, type Stage as Backdrop } from "./grovestage.ts";
 import type { makeGroveUi } from "./groveui.ts";
-import { GROVE, RARITY_NAMES, type Reveal, seedsOf, type showing, type Timeline } from "./pulls.ts";
+import { GROVE, RARITY_NAMES, type Reveal, seedsOf, setHeadliner, type showing, type Timeline } from "./pulls.ts";
 import type { Sprites } from "./sprites.ts";
 
 // ---------------------------------------------------------------- what a ceremony shows
@@ -256,8 +256,8 @@ export function makeGrovePicture(sprites: Sprites, art: CampArt, ui: ReturnType<
    */
   function picture(prize: string, beat: 0 | 1 = 0): HTMLCanvasElement {
     const [kind, id = ""] = prize.split(":");
-    if (kind === "headliner") return grove.person()?.body.frames[0]?.[0] ?? art.parcel.c;
-    return pictureOf(art, figureThing(id), 0, beat)?.c ?? art.parcel.c;
+    if (kind === "headliner" && !setHeadliner(id)) return grove.person()?.body.frames[0]?.[0] ?? art.parcel.c;
+    return pictureOf(art, figureThing(setHeadliner(id) ?? id), 0, beat)?.c ?? art.parcel.c;
   }
 
   /** A picture `k` art pixels to each of its own. */

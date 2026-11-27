@@ -102,7 +102,7 @@ export function foeOf(run: Pick<Run, "room" | "trail" | "wing" | "era"> & Way, s
     return { ...party, figures: seatOpen(party.figures, closed) };
   }
   const regular = regularAt(catalogOf(run), seed, run.room, run.trail, sparAt(run.room), closed);
-  const held = isHeld(run, run.room) && met ? boardMet(met, false, ENDLESS.chairs) : null;
+  const held = isHeld(run, run.room) && met ? boardMet(catalogOf(run), met, false, ENDLESS.chairs) : null;
   return held ?? regular;
 }
 

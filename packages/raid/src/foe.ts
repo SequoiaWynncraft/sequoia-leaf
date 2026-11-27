@@ -45,14 +45,16 @@ function asMet(p: Placed, levels: boolean): Placed {
 /**
  * Another member's board as Leaf hands it over (`Ctx.met`), as the party across the table: only one
  * a member could have fielded (a party of one to `MOST_FIELDED` of the stall's own figures, and
- * `chairs` more for a board of an endless run), signed with the member's name and id. A banner's
- * member stands only on a board met by a run with the member's own figures (`levels`). Null for
- * anything else.
+ * `chairs` more for a board of an endless run), every figure of it open in the era of the run that
+ * meets it (`cat`), signed with the member's name and id. A banner's member stands only on a board
+ * met by a run with the member's own figures (`levels`). Null for anything else: the regular stays.
  */
-export function boardMet(met: Met, levels = false, chairs = 0): Party | null {
+export function boardMet(cat: Catalog, met: Met, levels = false, chairs = 0): Party | null {
   const { data } = met;
   if (!isParty(data) || data.figures.length === 0 || data.figures.length > MOST_FIELDED + chairs) return null;
-  if (!data.figures.every((p) => isFigureId(p.kind) && (levels || !isMemberId(p.kind)))) return null;
+  const fits = (kind: string): boolean =>
+    isFigureId(kind) && cat.figures[kind] !== undefined && (levels || !isMemberId(kind));
+  if (!data.figures.every((p) => fits(p.kind))) return null;
   const board: Party = {
     who: met.name,
     by: met.player,
@@ -85,7 +87,7 @@ function sparring(
   levels: boolean,
 ): Party {
   const regular = regularAt(cat, seed, roomIndex, trailIndex);
-  const board = met === undefined ? null : boardMet(met, levels);
+  const board = met === undefined ? null : boardMet(cat, met, levels);
   if (board === null || met === undefined) return regular;
   return below({ rng: mix(seed, 900 + roomIndex) }, met.of + 1) < met.of ? board : regular;
 }

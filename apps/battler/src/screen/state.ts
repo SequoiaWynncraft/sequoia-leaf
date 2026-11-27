@@ -173,6 +173,13 @@ function take(view: TableView): void {
 export const tableNow = (): Table =>
   LIVE.seat?.table() ?? { run: table ? inSlot(table.state, S.slot) : null, runs: S.runs };
 
+/**
+ * What a page over the table shows, as text, to tell whether it must be drawn again: the page, the
+ * era Leaf's view is of (which the almanac's figures are of), the run and the runs laid out.
+ */
+export const pagesKey = (id: string | null): string =>
+  `${id}:${S.era}:${S.runs}:${S.run?.room ?? 0}:${endedOf(S.screen) ? 1 : 0}:${laidKey()}`;
+
 /** Where both runs laid out stand, as text: what their strips on the front page say. */
 export const laidKey = (): string =>
   [S.laid.run, S.laid.endless].map((r) => (r ? `${r.room}.${r.record.length}.${r.resolve}` : "-")).join(":");

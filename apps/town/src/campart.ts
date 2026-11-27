@@ -9,7 +9,7 @@ import { BARK, CREAM, EARTH, GOLD, GREEN, INK, PAPER, SKY, STONE, WATER } from "
 import { bitmap, ell, flipped, outlined, R } from "@sequoia-leaf/kit/pix.ts";
 import { type Body, type Dir, FOOT_X, FOOT_Y, FRAME_H, FRAME_W } from "@sequoia-leaf/kit/skin.ts";
 import { type Ctx, hash, makeCanvas, must, type Pt } from "@sequoia-leaf/kit/util.ts";
-import { everyShared, type FigureId } from "@sequoia-leaf/raid/content/catalog.ts";
+import { everySetDrawn, type FigureId } from "@sequoia-leaf/raid/content/catalog.ts";
 import type { PetId } from "@sequoia-leaf/town/camp.ts";
 import { figureThing, isMemberThing, THINGS } from "@sequoia-leaf/town/things.ts";
 
@@ -1518,7 +1518,7 @@ export function makeCampArt(s: Sprites): CampArt {
     "crab-drawing": one(rows(CRAB_DRAWING)),
   };
   for (const [id, t] of trophies) things[id] = one(t.whole);
-  for (const id of everyShared()) things[figureThing(id)] = character(id);
+  for (const id of everySetDrawn()) things[figureThing(id)] = character(id);
   // A banner's member is painted on the same pictures again when who they are comes, and their skin (`stand`).
   const members = new Map<string, (body: Body) => void>();
   for (const { id } of THINGS.filter((t) => isMemberThing(t.id))) {

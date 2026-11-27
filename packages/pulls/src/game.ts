@@ -32,7 +32,7 @@ import {
   prizeRarities,
   type Rarity,
 } from "@sequoia-leaf/raid/content/catalog.ts";
-import { type Era, eraAt } from "@sequoia-leaf/raid/content/releases.ts";
+import { type Era, eraAt, isEra } from "@sequoia-leaf/raid/content/releases.ts";
 
 export { type Banner, BANNERS } from "@sequoia-leaf/raid/content/banners.ts";
 export type { Rarity } from "@sequoia-leaf/raid/content/catalog.ts";
@@ -194,8 +194,8 @@ export type PullsView = Omit<Pulls, "rng"> & { open: { id: string; until: number
 // ---------- commands ----------
 
 export type PullsCommand =
-  /** `n` pulls from a pool, paid with Leaf or with free pulls. */
-  | { do: "pull"; pool: string; n: 1 | 10; with: "leaf" | "free" }
+  /** `n` pulls from a pool, paid with Leaf or with free pulls, from the prizes it was shown with in an era (`era`). */
+  | { do: "pull"; pool: string; n: 1 | 10; with: "leaf" | "free"; era: Era }
   /** A mid-tier prize the player does not have, for Seeds. */
   | { do: "exchange"; prize: string };
 
@@ -236,8 +236,8 @@ const isName = (v: unknown): v is string => typeof v === "string" && v.length > 
 export function readCommand(v: unknown): PullsCommand | null {
   if (!isRecord(v)) return null;
   if (v.do === "pull") {
-    return isName(v.pool) && (v.n === 1 || v.n === 10) && (v.with === "leaf" || v.with === "free")
-      ? { do: "pull", pool: v.pool, n: v.n, with: v.with }
+    return isName(v.pool) && (v.n === 1 || v.n === 10) && (v.with === "leaf" || v.with === "free") && isEra(v.era)
+      ? { do: "pull", pool: v.pool, n: v.n, with: v.with, era: v.era }
       : null;
   }
   if (v.do === "exchange") {
@@ -300,6 +300,9 @@ const copy = (s: Pulls): Pulls => ({
 
 function pull(state: Pulls, c: Extract<PullsCommand, { do: "pull" }>, ctx: Ctx): Answer {
   if (!isOpen(c.pool, ctx.now)) return no("closed");
+  // What the pool gives in the era Leaf's clock is in; a pull shown other prizes is not done, and nothing is paid.
+  const prizes = prizesOf(catalogAt(eraAt(ctx.now)), c.pool);
+  if (JSON.stringify(prizesOf(catalogAt(c.era), c.pool)) !== JSON.stringify(prizes)) return no("prizes_changed");
   if (c.with === "free" && state.free.waiting < c.n) return no("no_free");
   const s = copy(state);
   // Leaf's dice, stirred into the stream before anything is drawn.
@@ -307,8 +310,6 @@ function pull(state: Pulls, c: Extract<PullsCommand, { do: "pull" }>, ctx: Ctx):
   if (c.with === "free") s.free.waiting -= c.n;
   const grove = c.pool === GROVE;
   const counters = grove ? s.counters.grove : s.counters.banner;
-  // What the pool gives in the era Leaf's clock is in.
-  const prizes = prizesOf(catalogAt(eraAt(ctx.now)), c.pool);
   const spend = {
     amount: c.n * RATES.leaf,
     reason: `Pulls: ${c.n} in ${c.pool}`,

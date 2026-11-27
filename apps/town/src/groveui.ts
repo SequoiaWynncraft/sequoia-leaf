@@ -29,11 +29,14 @@ import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { tipAt } from "@sequoia-leaf/kit/tip.ts";
 import { type PullsView, RARITIES, type Rarity, RATES } from "@sequoia-leaf/pulls";
 import type { BannerPerson } from "@sequoia-leaf/pulls/wire.ts";
+import type { Era } from "@sequoia-leaf/raid/content/releases.ts";
 
 import { $, button, pic, slot } from "./hud.ts";
 import {
+  bookCount,
   cannotPull,
   chances,
+  clearing,
   dayAndTime,
   EVERGREEN,
   GROVE,
@@ -44,26 +47,27 @@ import {
   past,
   percent,
   pityLine,
-  poolPrizes,
   prizeBook,
   prizeName,
   pullSpend,
   rules,
   type Showing,
+  viewKey,
 } from "./pulls.ts";
 
 /** What the words and buttons ask of the scene behind them. */
 export interface GroveHost {
   view(): PullsView;
   banners(): readonly BannerPerson[];
-  /** The banner that is open and has a person, if any. */
+  /** The banner that is open and whose headliner is known, if any. */
   banner(): Showing | null;
   /** The pool on show, and showing another. */
   pool(): string;
   choose(pool: string): void;
   /** What the Grove is doing: only at the banner and at a ceremony's end do its pulls and exchanges take a press. */
   state(): GroveState;
-  pull(n: 1 | 10, paid: "leaf" | "free", button: HTMLElement): void;
+  /** Pulls from the pool on show, from the prizes it was shown with in an era (`era`). */
+  pull(n: 1 | 10, paid: "leaf" | "free", era: Era, button: HTMLElement): void;
   exchange(prize: string, button: HTMLElement): void;
   leave(): void;
   /** The ceremony is put away. */
@@ -100,7 +104,7 @@ function refused(b: HTMLElement, why: string): void {
 function poolChoices(open: Showing | null, host: GroveHost): Choices<string> {
   const pools = open
     ? [
-        { id: open.id, name: open.person.name },
+        { id: open.id, name: open.name },
         { id: GROVE, name: EVERGREEN },
       ]
     : [];
@@ -138,7 +142,8 @@ function history(host: GroveHost, body: HTMLElement): void {
  * and drawn again, free or paid, the button for the same count keeps the keyboard.
  */
 function pullButton(host: GroveHost, n: 1 | 10, confirm: (spend: Spend) => boolean): HTMLElement {
-  const waiting = host.view().free.waiting;
+  const { era, free: due } = host.view();
+  const waiting = due.waiting;
   const free = n === 1 && waiting > 0;
   const pool = host.pool();
   const spend = pullSpend(pool, n);
@@ -147,7 +152,7 @@ function pullButton(host: GroveHost, n: 1 | 10, confirm: (spend: Spend) => boole
         "leaf grove-pull",
         [el("span", "", { text: "Free pull" }), el("span", "k-sub", { text: `${waiting} waiting` })],
         (pressed) => {
-          host.pull(1, "free", pressed);
+          host.pull(1, "free", era, pressed);
         },
       )
     : button(
@@ -156,7 +161,7 @@ function pullButton(host: GroveHost, n: 1 | 10, confirm: (spend: Spend) => boole
         (pressed) => {
           sfx.tap();
           // Drawn for one pool, it never spends in another: a banner may have ended under the pointer.
-          if (host.pool() === pool && confirm(spend)) host.pull(n, "leaf", pressed);
+          if (host.pool() === pool && confirm(spend)) host.pull(n, "leaf", era, pressed);
         },
       );
   b.dataset.keep = `pull:${n}`;
@@ -171,7 +176,7 @@ export function makeGroveUi(host: GroveHost) {
   /** What the Grove holds while it shows one thing (`at`, by its state and pool): a pull waiting for its second press. */
   const showing = lasting.turns();
   /** What the Grove shows now, as `showing` names it. */
-  const seen = (): string => `${host.state()} ${host.pool()}`;
+  const seen = (): string => `${host.state()} ${host.pool()} ${host.view().era}`;
   const canvas = el("canvas");
   const pools = el("div", "grove-pools");
   const leaf = el("div", "k-plaque grove-leaf");
@@ -227,7 +232,7 @@ export function makeGroveUi(host: GroveHost) {
     leaf.replaceChildren(amount("leaf", whole(balance().leaf)));
 
     const c = b ? v.counters.banner : v.counters.grove;
-    const owed = b ? owedLine(c, b.person.name) : null;
+    const owed = b ? owedLine(c, b.name) : null;
     const bar = el("i");
     bar.style.setProperty("--v", `${(c.top / RATES.top.certainAt) * 100}%`);
     const next = nextFree(v.free);
@@ -351,13 +356,12 @@ export function makeGroveUi(host: GroveHost) {
     const shown = chances(b !== null);
     /** The prizes this pool can give, by rarity, in the era of Leaf's view. */
     const listed = prizeBook(v, b ? b.id : GROVE);
-    const all = listed.flatMap(([, list]) => list);
     body.append(
       el(
         "div",
         "k-row",
         {},
-        el("span", "k-grow", { text: `Yours: ${all.filter((prize) => v.have[prize]).length} of ${all.length}` }),
+        el("span", "k-grow", { text: bookCount(v, listed) }),
         el("button", "k-btn blue icon sm grove-rules", {
           type: "button",
           "aria-label": "Rules",
@@ -372,7 +376,7 @@ export function makeGroveUi(host: GroveHost) {
         }),
       ),
     );
-    if (ruled) for (const line of rules(b ? b.person.name : null)) body.append(el("div", "k-read", { text: line }));
+    if (ruled) for (const line of rules(b ? b.name : null)) body.append(el("div", "k-read", { text: line }));
     for (const [rarity, list] of listed.toReversed()) {
       body.append(
         el("div", "k-row", {}, plate(rarity), el("span", "k-dim", { text: percent(shown[rarity]) })),
@@ -458,19 +462,7 @@ export function makeGroveUi(host: GroveHost) {
   /** Everything the words show: drawn again only when any of it has changed. */
   const tick = when(() => {
     const v = host.view();
-    return JSON.stringify([
-      host.pool(),
-      host.banner(),
-      v.counters,
-      v.seeds,
-      v.free,
-      v.pulls,
-      Object.keys(v.have).length,
-      balance().leaf,
-      leafOpen(),
-      again,
-      atEnd(),
-    ]);
+    return JSON.stringify([host.pool(), host.banner(), viewKey(v), balance().leaf, leafOpen(), again, atEnd()]);
   }, render);
   return {
     root,
@@ -484,13 +476,13 @@ export function makeGroveUi(host: GroveHost) {
     closePanel,
     /**
      * The Grove is in `state` now: what cannot be used in it cannot be pressed or reached, and a
-     * pull waiting to be pressed again stops waiting when the state or the pool changes.
+     * pull waiting to be pressed again stops waiting when the state, the pool or the era changes.
      */
     at(state: GroveState): void {
       banner.inert = state !== "banner";
       panel.inert = state !== "banner";
       end.inert = state !== "end";
-      showing(`${state} ${host.pool()}`);
+      showing(`${state} ${host.pool()} ${host.view().era}`);
     },
     /** Says what Leaf refused, or nothing; the buttons are drawn again, none of them asking. */
     said(line: string | null): void {
@@ -500,12 +492,9 @@ export function makeGroveUi(host: GroveHost) {
     },
     panelOpen: (): boolean => book !== null,
     /** The name of the pool on show, as the picture writes it. */
-    poolName: (): string => onBanner()?.person.name ?? EVERGREEN,
-    /**
-     * Who stands in the always-open pool's clearing, one a stand: its first three Treants in the era
-     * of Leaf's view. One past them (Seqwawa, from 8 December) is in the prize book, not the clearing.
-     */
-    treants: (): readonly string[] => poolPrizes(host.view(), GROVE).Treant.slice(0, 3),
+    poolName: (): string => onBanner()?.name ?? EVERGREEN,
+    /** Who stands in the clearing of the pool on show (`clearing`). */
+    treants: (): readonly string[] => clearing(host.view(), onBanner()),
     /** The frame is `w` by `h` art pixels, `scale` CSS pixels to each, upright or not, `left` and `top` CSS pixels in from the window's corner. */
     fit(w: number, h: number, scale: number, tall: boolean, left: number, top: number): void {
       stage.style.cssText = `left:${left}px;top:${top}px;width:${w * scale}px;height:${h * scale}px;--g:${scale}px;--fx:${left}px;--fy:${top}px`;

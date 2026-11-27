@@ -5,7 +5,7 @@ import { RAID } from "@sequoia-leaf/raid";
 import { available, catalogAt, prizeOf } from "@sequoia-leaf/raid/content/catalog.ts";
 import { FIGURES } from "@sequoia-leaf/raid/content/figures.ts";
 import { isBoughtLook } from "@sequoia-leaf/raid/content/looks.ts";
-import { eraAt } from "@sequoia-leaf/raid/content/releases.ts";
+import { eraAt, eraOf } from "@sequoia-leaf/raid/content/releases.ts";
 import { TOWN } from "@sequoia-leaf/town";
 import { figureThing, isThing, memberThing } from "@sequoia-leaf/town/things.ts";
 
@@ -41,11 +41,13 @@ const ctx = (now = T0, guest = false, seed = 7): Ctx => ({
 });
 const fresh = (): Pulls => PULLS.create(ctx());
 const counters = (top = 0, mid = 0, owed = false): Counters => ({ top, mid, owed });
-const pull = (pool: string, n: 1 | 10 = 10, paid: "leaf" | "free" = "leaf"): PullsCommand => ({
+/** A pull, shown the prizes of the era at `at` (T0's, unless said). */
+const pull = (pool: string, n: 1 | 10 = 10, paid: "leaf" | "free" = "leaf", at = T0): PullsCommand => ({
   do: "pull",
   pool,
   n,
   with: paid,
+  era: eraAt(at),
 });
 const exchange = (prize: string): PullsCommand => ({ do: "exchange", prize });
 
@@ -104,6 +106,21 @@ describe("a figure made while a banner is open", () => {
     expect(treants("banner-1", opens - 1)).toEqual(three);
     // On the stall it is from the first.
     expect(available(CAT, { for: "stall", figures: { pool: "fair" }, tier: 5 })).toContain("seqwawa");
+  });
+});
+
+describe("a pull shown one list of prizes", () => {
+  it("is refused when the pool gives others by Leaf's clock, and nothing is paid; the same list in another era is pulled", () => {
+    const opens = Date.UTC(2026, 11, 8);
+    const s = fresh();
+    // Shown the grove a millisecond before Seqwawa joined it, and pulled as it did.
+    expect(refused(s, pull("grove", 10, "leaf", opens - 1), ctx(opens))).toBe("prizes_changed");
+    expect(refused({ ...s, free: { ...s.free, waiting: 1 } }, pull("grove", 1, "free", opens - 1), ctx(opens))).toBe(
+      "prizes_changed",
+    );
+    expect(refused(s, pull("grove", 10, "leaf", opens), ctx(opens))).toBeNull();
+    // The base alone gave the grove what it gives until 8 December: shown then, it is pulled now.
+    expect(refused(s, { do: "pull", pool: "grove", n: 10, with: "leaf", era: eraOf("base") }, ctx(T0))).toBeNull();
   });
 });
 
@@ -212,7 +229,7 @@ describe("a pull", () => {
     expect(refused(s, pull("banner-1"), ctx(Date.UTC(2026, 10, 22, 23, 59)))).toBe("closed");
     expect(refused(s, pull("banner-1"), ctx(Date.UTC(2026, 10, 23)))).toBeNull();
     expect(refused(s, pull("banner-1"), ctx(Date.UTC(2026, 11, 8)))).toBe("closed");
-    expect(refused(s, pull("grove"), ctx(Date.UTC(2030, 0, 1)))).toBeNull();
+    expect(refused(s, pull("grove", 10, "leaf", Date.UTC(2030, 0, 1)), ctx(Date.UTC(2030, 0, 1)))).toBeNull();
     expect(PULLS.view(s, ctx()).open).toEqual([{ id: "banner-1", until: Date.UTC(2026, 11, 8) }]);
     expect(PULLS.view(s, ctx(Date.UTC(2026, 11, 8))).open).toEqual([]);
     // A banner these rules do not know (one retired, or never) is closed.
