@@ -5,6 +5,7 @@
  * Anything else is a view these rules could not have made: null.
  */
 import { isEra } from "../content/releases.ts";
+import { MOST_ROOMS } from "../content/rooms.ts";
 import { isParty } from "../party.ts";
 import { fields, Nonsense, readRunView } from "../save.ts";
 import { readStage, readWho } from "./keep.ts";
@@ -25,7 +26,7 @@ function readSeat(v: unknown): SeatView {
     name: text(s.name, "a seat's name"),
     resolve: whole(s.resolve, -1000, 1000, "a seat's health"),
     level: whole(s.level, 1, 99, "a seat's level"),
-    streak: whole(s.streak, -999, 999, "a seat's streak"),
+    streak: whole(s.streak, -MOST_ROOMS, MOST_ROOMS, "a seat's streak"),
     place: s.place === null ? null : whole(s.place, 1, CHAIRS, "a place"),
     faces: s.faces === null ? null : chair(s.faces, "whom a seat faces"),
     board: one(s.board, isParty, "a seat's board"),
@@ -46,7 +47,7 @@ export function readSittingView(v: unknown): SittingView | null {
       era: one(r.era, isEra, "the era"),
       by: text(r.by, "who opened it"),
       stage: readStage(r.stage),
-      room: whole(r.room, 0, 999, "the room"),
+      room: whole(r.room, 0, MOST_ROOMS, "the room"),
       kind: one(r.kind, isKind, "the room's kind"),
       seats,
       you,

@@ -12,7 +12,7 @@ import { BOSS_IDS, isBossId, isFigureId, isStars } from "./content/figures.ts";
 import { FINISHED_IDS, isComponentId, isFinishedId, isItemId } from "./content/items.ts";
 import { isLookKind, lookOf, readLooks } from "./content/looks.ts";
 import { isEra } from "./content/releases.ts";
-import { ECONOMY, MAX_LEVEL, ROOM_COUNT, TRAIL_COUNT } from "./content/rooms.ts";
+import { ECONOMY, MAX_LEVEL, MOST_ROOMS, ROOM_COUNT, TRAIL_COUNT } from "./content/rooms.ts";
 import { isTraitId, TRAIT_IDS } from "./content/traits.ts";
 import { readApart, readWeek } from "./depths.ts";
 import type { Fed } from "./feed.ts";
@@ -26,8 +26,6 @@ import { type Slot, slotOf } from "./way.ts";
 const { record, whole, flag, list, one, each, items, setup, outcome, bad } = fields;
 const UINT = 0xffffffff;
 const MOST = 1_000_000;
-/** The furthest room a note may name: an endless run's go past the fifteenth. */
-const ROOMY = 9999;
 
 const isRoomKind = (v: unknown): v is "trouble" | "spar" | "boss" => v === "trouble" || v === "spar" || v === "boss";
 const text = (v: unknown, what: string): string => (typeof v === "string" && v.length <= 200 ? v : bad(what));
@@ -231,7 +229,7 @@ function runNote(n: Record<string, unknown>): Note {
     case "fight":
       return {
         t: "fight",
-        room: whole(n.room, 0, ROOMY, what),
+        room: whole(n.room, 0, MOST_ROOMS, what),
         seed: whole(n.seed, 0, UINT, what),
         setup: setup(n.setup, what),
         outcome: outcome(n.outcome, what),
@@ -240,7 +238,7 @@ function runNote(n: Record<string, unknown>): Note {
       const standing = list(n.standing, 2, what);
       return {
         t: "result",
-        room: whole(n.room, 0, ROOMY, what),
+        room: whole(n.room, 0, MOST_ROOMS, what),
         result: one(n.result, isResult, what),
         standing: [whole(standing[0], 0, 99, what), whole(standing[1], 0, 99, what)],
       };
@@ -252,7 +250,7 @@ function runNote(n: Record<string, unknown>): Note {
     case "room":
       return {
         t: "room",
-        room: whole(n.room, 0, ROOMY, what),
+        room: whole(n.room, 0, MOST_ROOMS, what),
         kind: one(n.kind, isRoomKind, what),
         who: text(n.who, what),
         title: text(n.title, what),

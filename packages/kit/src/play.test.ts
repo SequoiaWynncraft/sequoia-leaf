@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, jest, test } from "bun:test";
 
+import { rulesVersions } from "@sequoia-leaf/core/build/rules.ts";
+
 import { isRecord } from "./net.ts";
 import {
   type Answer,
@@ -156,6 +158,16 @@ describe("opening a game on Leaf", () => {
 
   test("loads the page again when Leaf's state will not read: its rules are newer than the page's", async () => {
     world = standin({ "GET /v1/game/play/raid": { status: 200, body: { rev: 3, now: "x", state: { v: 9 } } } });
+    expect(await openPlay("raid", COUNTER, { player: "p" })).toEqual({ trouble: "closed" });
+    expect(world.reloaded.count).toBe(1);
+  });
+
+  test("a state that will not read by the page's own rules loads the page again once, not round and round", async () => {
+    const own = rulesVersions().raid;
+    world = standin({
+      "GET /v1/game/play/raid": { status: 200, body: { rev: 3, now: "x", state: { v: 9 }, rules: own } },
+    });
+    expect(await openPlay("raid", COUNTER, { player: "p" })).toEqual({ trouble: "closed" });
     expect(await openPlay("raid", COUNTER, { player: "p" })).toEqual({ trouble: "closed" });
     expect(world.reloaded.count).toBe(1);
   });

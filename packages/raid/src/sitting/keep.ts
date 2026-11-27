@@ -10,6 +10,7 @@ import { newerThan } from "@sequoia-leaf/core";
 import { isFigureId } from "../content/figures.ts";
 import { isComponentId } from "../content/items.ts";
 import { isEra, LEGACY_ERA } from "../content/releases.ts";
+import { MOST_ROOMS } from "../content/rooms.ts";
 import { isTraitId, renamedTrait } from "../content/traits.ts";
 import { isParty } from "../party.ts";
 import { endingOf } from "../run.ts";
@@ -171,7 +172,7 @@ function read(v: unknown): Sitting {
     rng: whole(r.rng, 0, UINT, "the random stream"),
     era: r.v === 1 || r.v === 2 ? LEGACY_ERA : one(r.era, isEra, "the era"),
     by: text(r.by, 64, "who opened it"),
-    room: whole(r.room, 0, 999, "the room"),
+    room: whole(r.room, 0, MOST_ROOMS, "the room"),
     stage: readStage(r.stage),
     seats: list(r.seats, CHAIRS, "the seats").map((seat) => readSeat(seat, r.v === 1)),
     pairs,

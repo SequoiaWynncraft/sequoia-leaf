@@ -338,8 +338,9 @@ export async function openPlay<View, Command extends object, Note, Short = never
   }
   const opened = reader.view(first.body.state);
   if (opened === null) {
-    // Leaf's rules are newer than this page's.
-    outside.reload();
+    // Leaf's rules are newer than this page's, as far as it can tell: it loads again, as for other
+    // rules, and not round and round when what it is given still does not read.
+    loadFor(game, typeof first.body.rules === "string" ? first.body.rules : "unread");
     return { trouble: "closed" };
   }
   const opening = readBalances(first.body.purse);
