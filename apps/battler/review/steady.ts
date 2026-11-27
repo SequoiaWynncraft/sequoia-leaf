@@ -1,15 +1,16 @@
 /**
  * The steadiness check: `bun review/steady.ts [<out-dir>] [front | table] [desktop | phone | small |
- * narrow | mini]`. It walks the raid's front page and the screens it opens, and the table through
- * planning and a fight, at 1280x760, 390x844, 640x480, 900x600 and 360x640 (or the parts and sizes
- * named), as a tour against a play server of its own (`tour.ts`, on the tours' page with `?steady`,
- * which records what moves: `shifts.ts`), with Leaf's reads coming back late as over a real
- * connection; prints every shift with its score and the parts that moved, keeps them in
- * `<out-dir>/shifts.json` beside a picture of each moment, and fails on any shift at all: a part that
- * moved by itself, the bottom panel's frame changing size, or the stage fitted again (its zoom, or
- * where the board is) while the window stayed the same; and on the top bar's corner (help, settings,
- * the front page) not wholly in the window. The walk never scrolls but to bring a button into view,
- * so nothing it records is the member's own scrolling.
+ * narrow | mini | short | low | shortphone]`. It walks the raid's front page and the screens it opens,
+ * and the table through planning and a fight, at 1280x760, 390x844, 640x480, 900x600, 360x640 and the
+ * short windows 1366x420, 1280x480 and 390x600 (or the parts and sizes named), as a tour against a
+ * play server of its own (`tour.ts`, on the tours' page with `?steady`, which records what moves:
+ * `shifts.ts`), with Leaf's reads coming back late as over a real connection; prints every shift with
+ * its score and the parts that moved, keeps them in `<out-dir>/shifts.json` beside a picture of each
+ * moment, and fails on any shift at all: a part that moved by itself, the bottom panel's frame
+ * changing size, or the stage fitted again (its zoom, or where the board is) while the window stayed
+ * the same; and on the top bar's corner (help, settings, the front page) or either of the front
+ * page's Leave the table not wholly in the window. The walk never scrolls but to bring a button into
+ * view, so nothing it records is the member's own scrolling.
  *
  * The front page: the first paint, while Leaf's reads are out and once they are back, and drawn
  * again; each category and mode, the Wilds' two boards and a trail not open yet; the strip with no
@@ -48,8 +49,17 @@ const PARTS: readonly Part[] = ["front", "table"];
 const given = process.argv.slice(2);
 const only = PARTS.filter((p) => given.includes(p));
 const walked = only.length > 0 ? only : PARTS;
-/** The sizes named, if any: `desktop`, `phone`, `small`, `narrow`, `mini` (`SIZES`). */
-const SIZE_NAMES: ReadonlySet<string> = new Set(["desktop", "phone", "small", "narrow", "mini"]);
+/** The sizes named, if any (`SIZES`). */
+const SIZE_NAMES: ReadonlySet<string> = new Set([
+  "desktop",
+  "phone",
+  "small",
+  "narrow",
+  "mini",
+  "short",
+  "low",
+  "shortphone",
+]);
 const out = resolve(
   given.find((a) => !PARTS.some((p) => p === a) && !SIZE_NAMES.has(a)) ?? join(tmpdir(), "raid-steady"),
 );
@@ -89,7 +99,7 @@ const reload = (fake: Record<string, unknown> = {}): Step => [
 /** Asks Leaf something as another member: `path` is an expression, the table opened kept in the tab. */
 const asOther = (who: keyof typeof OTHERS, path: string, body: Record<string, unknown>): Step => [
   "eval",
-  `(async () => { const res = await fetch(${path}, { method: "POST", credentials: "omit", headers: { Authorization: "Bearer as-${who}", "Content-Type": "application/json" }, body: JSON.stringify(${JSON.stringify({ player: OTHERS[who], ...body })}) }); const b = await res.json().catch(() => null); if (!res.ok) return "${FAIL} ${who} asked " + ${path} + ": " + res.status; if (${path} === "/v1/game/sittings" && typeof b?.id !== "string") return "${FAIL} ${who} opened no table"; if (typeof b?.id === "string") sessionStorage.setItem("steady.table", b.id); return res.status; })()`,
+  `(async () => { try { const res = await fetch(${path}, { method: "POST", credentials: "omit", headers: { Authorization: "Bearer as-${who}", "Content-Type": "application/json" }, body: JSON.stringify(${JSON.stringify({ player: OTHERS[who], ...body })}) }); const b = await res.json().catch(() => null); if (!res.ok) return "${FAIL} ${who} asked " + ${path} + ": " + res.status; if (${path} === "/v1/game/sittings" && typeof b?.id !== "string") return "${FAIL} ${who} opened no table"; if (typeof b?.id === "string") sessionStorage.setItem("steady.table", b.id); return res.status; } catch (e) { return "${FAIL} ${who} could not ask: " + e; } })()`,
 ];
 const TABLE = "`/v1/game/sittings/${sessionStorage.getItem('steady.table')}`";
 /** The open tables' list as Leaf gives it, with `n` on it: twelve are more than the Versus card holds. */
@@ -468,6 +478,9 @@ const SIZES = [
   ["small", 640, 480],
   ["narrow", 900, 600],
   ["mini", 360, 640],
+  ["short", 1366, 420],
+  ["low", 1280, 480],
+  ["shortphone", 390, 600],
 ] as const;
 
 /** What one size's walk recorded: each moment's shifts, by name, in order. */

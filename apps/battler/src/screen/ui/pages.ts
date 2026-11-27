@@ -44,7 +44,7 @@ import { figPic, pic } from "./cards.ts";
 import { summary } from "./ended.ts";
 import { frontAway, frontBody } from "./front.ts";
 import { everyonesFigures, figuresHere, pulledLine, pulledTag, traitsHere, unshown } from "./own.ts";
-import { frontShown } from "./woods.ts";
+import { frontShown, takenLine } from "./woods.ts";
 
 export type PageId = "front" | "almanac" | "howto" | "looks" | "summary";
 
@@ -106,12 +106,20 @@ const close = (): HTMLElement =>
     icon("close"),
   );
 
-function panel(title: string, sign: HTMLElement | null, body: HTMLElement, withClose: boolean, cls = ""): HTMLElement {
+/** A page: its title bar (its sign, its title, anything of its own, and Close or the gear) over its body. */
+function panel(
+  title: string,
+  sign: HTMLElement | null,
+  body: HTMLElement,
+  withClose: boolean,
+  cls = "",
+  own: (HTMLElement | null)[] = [],
+): HTMLElement {
   return el(
     "section",
     `k-panel page k-rise ${cls}`.trim(),
     { role: "dialog", "aria-label": title },
-    el("header", "k-head", {}, sign, el("h1", "k-title", { text: title }), withClose ? close() : asks?.gear()),
+    el("header", "k-head", {}, sign, el("h1", "k-title", { text: title }), ...own, withClose ? close() : asks?.gear()),
     body,
   );
 }
@@ -401,16 +409,24 @@ function looks(): HTMLElement {
   return panel("Table looks", pic(glyph("brush")), body, true);
 }
 
-/** The front page in its panel, once the page has been told what it asks for. */
-const frontPage = (): HTMLElement | null =>
-  asks &&
-  panel(
-    "The Little Raid",
-    pic(glyph("swords")),
-    frontBody({ ...asks, open: showPage, redraw: () => renderPages(true) }),
-    false,
-    "front",
+/**
+ * The front page in its panel, once the page has been told what it asks for. Its title bar holds,
+ * besides the gear, the news of a room taken (`takenLine`) and Leave the table, which is always in
+ * the window however short it is (on a phone its picture alone); the foot has Leave the table too.
+ */
+const frontPage = (): HTMLElement | null => {
+  if (!asks) return null;
+  const leave = asks.leave;
+  const body = frontBody({ ...asks, open: showPage, redraw: () => renderPages(true) });
+  const out = el(
+    "button",
+    "k-btn wood sm",
+    { type: "button", id: "leave-top", "aria-label": "Leave the table", onclick: () => leave() },
+    icon("back"),
+    el("span", "wide-only", { text: "Leave the table" }),
   );
+  return panel("The Little Raid", pic(glyph("swords")), body, false, "front", [takenLine(), out]);
+};
 
 /** Shows whichever page is due, or none. */
 export function renderPages(force = false): void {
@@ -457,6 +473,9 @@ export function renderPages(force = false): void {
       .focus({ preventScroll: true });
 }
 
+/** What scrolls in a page: the front page's middle, between its title bar and its foot; any other page's body. */
+const scroller = (root: ParentNode): Element | null => root.querySelector(".menu-mid") ?? root.querySelector(".k-body");
+
 /**
  * Puts a page in the box. Drawn again, the same page keeps its body scrolled where it was, so that
  * a choice made, or the front page's minute's reading, does not carry the member back to its top;
@@ -465,13 +484,13 @@ export function renderPages(force = false): void {
  */
 function place(box: HTMLElement, id: PageId, node: HTMLElement): void {
   const same = box.dataset.page === id;
-  const top = same ? (box.querySelector(".k-body")?.scrollTop ?? 0) : 0;
+  const top = same ? (scroller(box)?.scrollTop ?? 0) : 0;
   const card = same ? box.querySelector("section.mode") : null;
   const list = { mode: card?.getAttribute("aria-label"), top: card?.querySelector(".mode-opts")?.scrollTop ?? 0 };
   box.hidden = false;
   box.dataset.page = id;
   box.replaceChildren(node);
-  const body = node.querySelector(".k-body");
+  const body = scroller(node);
   if (body) body.scrollTop = top;
   const again = node.querySelector("section.mode");
   const opts = again?.querySelector(".mode-opts");

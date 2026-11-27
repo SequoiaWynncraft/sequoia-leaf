@@ -21,7 +21,8 @@
  *   one down for `ms`, as a person does: the browser says it again every 33 ms until it comes up.
  *   Either takes the key's place last, for a keyboard other than a US one: `["key", "q", "KeyA"]` is
  *   AZERTY's Q;
- *   `["eval", "expr"]` prints an expression's value;
+ *   `["eval", "expr"]` prints an expression's value (one that throws, or a promise that rejects,
+ *   stops the run);
  * - `["media", "prefers-reduced-motion", "reduce"]` has the page see a media feature so (`""` for as
  *   the machine has it);
  * - `["shot", "name"]` saves a screenshot;
@@ -292,6 +293,14 @@ async function run(step: Step): Promise<void> {
     }
     case "eval": {
       const res = await send("Runtime.evaluate", { expression: step[1], awaitPromise: true, returnByValue: true });
+      // An expression that throws, or a promise that rejects, stops the run: a tour never goes on as if it had been done.
+      const threw = isRecord(res) && isRecord(res.exceptionDetails) ? res.exceptionDetails : null;
+      if (threw) {
+        const description = isRecord(threw.exception) ? threw.exception.description : null;
+        throw new Error(
+          `eval ${step[1].slice(0, 80)}: ${typeof description === "string" ? description : String(threw.text)}`,
+        );
+      }
       const value = isRecord(res) && isRecord(res.result) ? res.result.value : res;
       console.log(JSON.stringify(value));
       return;

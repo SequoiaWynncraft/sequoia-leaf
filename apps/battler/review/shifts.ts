@@ -180,12 +180,28 @@ const frames = (n: number): Promise<void> =>
     next(n);
   });
 
-/** The top bar's corner (help, settings, the front page) out of the window: not a move, but as bad. */
-const corner = (): Shift[] => {
-  const box = document.getElementById("corner")?.getBoundingClientRect();
-  const out = box && box.width > 0 && (box.right > innerWidth + 0.5 || box.left < -0.5);
-  return out ? [{ score: 1, by: "fit", input: false, parts: [`#corner ${boxText(boxOf(box))} in ${innerWidth}`] }] : [];
-};
+/**
+ * What must always be wholly in the window, when it is shown: the top bar's corner (help, settings,
+ * the front page) and the front page's two Leave the table. One out of it is not a move, but as bad.
+ */
+const ALWAYS_IN = ["corner", "leave-top", "leave"];
+const outOfWindow = (): Shift[] =>
+  ALWAYS_IN.flatMap((id) => {
+    const node = document.getElementById(id);
+    const box = node?.getBoundingClientRect();
+    if (!node || !box || box.width === 0 || getComputedStyle(node).visibility === "hidden") return [];
+    const out = box.left < -0.5 || box.top < -0.5 || box.right > innerWidth + 0.5 || box.bottom > innerHeight + 0.5;
+    return out
+      ? [
+          {
+            score: 1,
+            by: "fit",
+            input: false,
+            parts: [`#${id} ${boxText(boxOf(box))} in ${innerWidth}x${innerHeight}`],
+          },
+        ]
+      : [];
+  });
 
 /** Reads from Leaf answer late, or are answered here, as the tab's `sessionStorage` says (`shifts.slow`, `shifts.fake`). */
 function slowReads(): void {
@@ -291,7 +307,7 @@ export function recordShifts(): void {
 
   /**
    * The stage as fitted (its zoom and where the board is), the window it was fitted to, and when that
-   * last changed: from the page's load, so that the first window seen is a resize too, settling.
+   * last changed (the first size seen is only the baseline: a refit right after the page is up counts).
    */
   const stage = { fit: "", window: "", resized: Number.NEGATIVE_INFINITY };
   /** The stage fitted again while the window stayed as it was: the whole table moves. */
@@ -371,7 +387,7 @@ export function recordShifts(): void {
       await frames(3);
       // What the browser has seen and not yet delivered, through the same path: nothing is left for the next moment.
       heard(observer.takeRecords());
-      return JSON.stringify({ at, shifts: [...shifts.splice(0), ...corner()] });
+      return JSON.stringify({ at, shifts: [...shifts.splice(0), ...outOfWindow()] });
     },
     hold(on) {
       last.held = on;

@@ -1363,21 +1363,43 @@ body[data-rule] #says {
   flex: 1;
   overflow: hidden auto;
 }
+/*
+ * However short the window, the title bar and the foot (Leave the table among it) are in it: the
+ * strips, the categories, the card and the board scroll between them.
+ */
+.page > .menu:has(> .menu-mid) {
+  overflow: hidden;
+}
+.menu-mid {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden auto;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 3);
+}
+.menu-foot {
+  flex: none;
+}
 .runs {
   display: flex;
   flex-direction: column;
   gap: calc(var(--u) * 2);
 }
 /*
- * A room of the Deep Woods taken from the member since they last looked, said once at the top: hung
- * on the panel's roof beside its title, so that it moves nothing on the page when it comes in.
+ * The front page's title bar: its title (cut rather than wrapped, so the bar is one height), the news
+ * of a room of the Deep Woods taken from the member since they last looked, said once, which takes
+ * room from the title when it comes and moves nothing else, and Leave the table before the gear.
  */
-.taken {
-  position: absolute;
-  z-index: 2;
-  top: calc(var(--u) * 4);
-  right: calc(var(--u) * 26);
-  max-width: calc(100% - var(--u) * 200);
+.page.front .k-head .k-title {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.k-head .taken {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 55%;
   height: calc(var(--u) * 20);
   box-sizing: border-box;
   flex-direction: column;
@@ -1386,6 +1408,7 @@ body[data-rule] #says {
   gap: 0;
   padding-block: 0;
   overflow: hidden;
+  font: var(--f-small);
 }
 .taken > b {
   max-width: 100%;
@@ -1393,8 +1416,8 @@ body[data-rule] #says {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-.taken:has(> :nth-child(2)) {
-  font: var(--f-small);
+#leave-top {
+  flex: none;
 }
 .run {
   padding-block: var(--u);
@@ -1486,12 +1509,12 @@ body[data-rule] #says {
   flex: 1;
 }
 /*
- * Set out and Carry on stay in view while the card goes on below the panel's edge: held down to the
- * edge itself (past the body's padding), over the card's own padding, so nothing shows under them.
+ * Set out and Carry on stay in view while the card goes on below the middle's edge: held down to the
+ * edge itself, over the card's own padding, so nothing shows under them.
  */
 .mode-foot {
   position: sticky;
-  bottom: calc(var(--u) * -4);
+  bottom: 0;
   margin-bottom: calc(var(--u) * -3);
   padding-bottom: calc(var(--u) * 3);
   background: var(--k-mid);
@@ -1953,13 +1976,6 @@ body[data-rule] #says {
   #modal[data-page="front"] {
     align-items: start;
   }
-  /* A room taken is hung over the title itself, which has the roof to itself on a phone. */
-  .taken {
-    left: calc(var(--u) * 5);
-    right: calc(var(--u) * 24);
-    max-width: none;
-    font: var(--f-small);
-  }
   /* A board of one height whatever it lists: its rows scroll, the Wilds' tabs stay under them. */
   #modal[data-page="front"] .board {
     height: calc(var(--u) * 112);
@@ -1979,11 +1995,9 @@ body[data-rule] #says {
   .mode-head .stack > .other {
     display: none;
   }
+  /* The whole window, the middle scrolling in it between the title bar and the foot. */
   .page.front {
-    height: auto;
-  }
-  .page > .menu {
-    overflow: hidden auto;
+    height: calc(100dvh - var(--u) * 8);
   }
   .menu-cols {
     display: flex;
@@ -2050,8 +2064,9 @@ body[data-rule] #says {
   .mode-head {
     --fs: 0.5;
   }
-  .menu-foot > #leave {
-    flex-basis: 100%;
+  /* The foot two rows of two: Almanac and How to play, Table looks and Leave the table. */
+  .menu-foot > .k-btn {
+    flex: 1 1 40%;
   }
 }
 /* Asked for less motion: nothing bobs, pokes or flashes on its own; the figures still move as the fight goes. */

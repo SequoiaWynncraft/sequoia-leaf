@@ -498,10 +498,10 @@ card is up after each.
 `review/steady.ts` is the steadiness check, and fails on anything that moves by itself:
 
 ```sh
-bun review/steady.ts <out-dir>            # the front page and the table, at 1280x760, 390x844, 640x480, 900x600 and 360x640
+bun review/steady.ts <out-dir>            # the front page and the table, at 1280x760, 390x844, 640x480, 900x600, 360x640, 1366x420, 1280x480 and 390x600
 bun review/steady.ts <out-dir> front      # or one of the two
 bun review/steady.ts <out-dir> table
-bun review/steady.ts <out-dir> small narrow   # or some of the sizes (desktop, phone, small, narrow, mini)
+bun review/steady.ts <out-dir> small narrow   # or some of the sizes (desktop, phone, small, narrow, mini, short, low, shortphone)
 ```
 
 It walks the front page (its first paint while Leaf's reads are out, every category and mode, the
@@ -514,7 +514,8 @@ the stall and the board, a tip over the stall, the member's own figures), with t
 real connection (`review/shifts.ts`, on the tours' page with `?steady`). It fails on a part that
 moved while nothing was scrolled, on the panel along the bottom changing size, and on the table
 being fitted again (its zoom, or where the board sits) while the window stayed the same, and on the
-top bar's corner (help, settings, the front page) leaving the window; and prints
+top bar's corner (help, settings, the front page) or either of the front page's Leave the table
+leaving the window; and prints
 each shift with the parts that moved, beside a picture of each moment. It needs Chromium, which
 `bun run verify` does not have: run it by hand before a change to the front page or the table's
 panels lands.
