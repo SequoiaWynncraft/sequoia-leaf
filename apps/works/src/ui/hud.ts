@@ -9,7 +9,7 @@
  * a visit, only "Top yards" of the books, and in the node's place a strip that says whose yard it is.
  */
 
-import { type Goal, GOALS, isFilled, power, TICK_MS, tierName } from "@sequoia-leaf/factory";
+import { clearingReady, type Goal, GOALS, isFilled, power, TICK_MS, tierName, type Yard } from "@sequoia-leaf/factory";
 import { link } from "@sequoia-leaf/kit/card.ts";
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { outside } from "@sequoia-leaf/kit/net.ts";
@@ -78,13 +78,17 @@ function powerPlaque(): () => void {
  * What the box in the corner prints: the node in hand, or what comes next; orders ready to hand over;
  * a commission that may be taken (-1 for none); what it wants, and what comes after it.
  */
+/** How many things wait to be handed over in Orders: side orders filled, and a clearing with all it wants. */
+const readyCount = (w: Yard): number =>
+  w.board.filter((s) => isFilled(s.want, s.filled)).length + (clearingReady(w) ? 1 : 0);
+
 export const trackPrint = () => {
   const w = S.world;
   const take: Goal | -1 = takeable().find((g) => GOALS[g]?.kind === "commission") ?? -1;
   return {
     hand: w.hand,
     next: w.hand === -1 ? nextUp() : null,
-    ready: w.board.filter((s) => isFilled(s.want, s.filled)).length,
+    ready: readyCount(w),
     take,
     wants: w.hand === -1 ? [] : givenTo(w.hand),
     after: GOALS[w.queue[0] ?? -1]?.title ?? null,
@@ -115,7 +119,7 @@ export function foldedPrint(p: TrackPrint): {
 /** Pressed, the box in the corner opens Orders; with nothing in hand and no order ready, the tier's screen, where that is. */
 function openTracked(): void {
   const w = S.world;
-  const ready = w.board.some((s) => isFilled(s.want, s.filled));
+  const ready = readyCount(w) > 0;
   togglePanel(w.hand === -1 && !ready && tierOpen() ? "tier" : "orders");
 }
 
@@ -199,7 +203,7 @@ const saidLine = (is: Next["is"] | undefined, line: string): HTMLElement =>
  * which is open or nudged.
  */
 export const booksPrint = () => ({
-  ready: S.world.board.filter((s) => isFilled(s.want, s.filled)).length,
+  ready: readyCount(S.world),
   open: takeable().length,
   study: studiable().length,
   // The tier's screen is there once there is more than lessons, and research once the Study may be built.

@@ -7,6 +7,8 @@
 import {
   aim,
   ALL_ITEMS,
+  CLEARING,
+  clearingState,
   costOf,
   fellPrice,
   fellRefusal,
@@ -15,6 +17,7 @@ import {
   GIVES,
   type Goal,
   GOALS,
+  goodsText,
   held,
   highest,
   holderOf,
@@ -81,7 +84,7 @@ import type {
 } from "./cards.ts";
 import { openTools } from "./dock.ts";
 import { givenIn } from "./goal.ts";
-import type { GroundPrint, PlotPrint } from "./land.ts";
+import type { ClearingPrint, GroundPrint, PlotPrint } from "./land.ts";
 import { flowOf, numbersOf, saysNumbers } from "./numbers.ts";
 import { orderRef } from "./refs.ts";
 import type { WaysPrint } from "./splitter.ts";
@@ -274,6 +277,24 @@ function plotPrint(id: Plot): PlotPrint | null {
     ground: [...ground],
     short: Math.max(0, cost - coins()),
     visiting: S.visiting !== null,
+    clearing: state === "owned" || w.open.plots[id] !== 1 ? null : clearingPrint(id),
+  };
+}
+
+/** A plot's clearing, for its card: null for a plot Coins alone buy. */
+function clearingPrint(id: Plot): ClearingPrint | null {
+  const w = S.world;
+  const want = CLEARING[id];
+  const state = clearingState(w, id);
+  if (!want || state === "none") return null;
+  const filled = state === "clearing" ? w.clearing?.filled : undefined;
+  const other =
+    w.clearing && w.clearing.plot !== id ? w.land.plots.find((q) => q.plot === w.clearing?.plot) : undefined;
+  return {
+    state,
+    words: goodsText(want),
+    given: ALL_ITEMS.flatMap((k) => ((want[k] ?? 0) > 0 ? [[k, filled?.[k] ?? 0, want[k] ?? 0] as const] : [])),
+    other: other?.name ?? null,
   };
 }
 

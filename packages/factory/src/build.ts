@@ -17,6 +17,7 @@ import { join } from "./lines.ts";
 import { isBig, pieceOf } from "./sizes.ts";
 import {
   ALL_ITEMS,
+  CLEARING,
   FAST,
   FIXED,
   gradeOf,
@@ -416,6 +417,7 @@ export function plotRefusal(y: Yard, id: Plot, shown: number, coins: number): st
   const { state, why } = plotState(y, id);
   if (state === "owned") return "You already own that plot";
   if (state === "not yet") return why;
+  if (CLEARING[id] && !y.cleared.includes(id)) return `${plotOf(y, id)?.name ?? "That plot"} must be cleared first`;
   const now = plotPrice(y, id);
   if (shown !== now) return `The price has changed: it is now ${coinsText(now)}`;
   return coins < now ? "Not enough Coins" : null;

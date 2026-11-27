@@ -1,7 +1,8 @@
 /**
  * Goals and orders. The depot pays a hundredth of a thing's worth for everything it takes in
  * (`ARRIVAL`); goals and orders are where the rest is. Each thing taken in goes toward the node in
- * hand first, then toward the board's standing orders from the top; the folios a Study takes in go
+ * hand first, then toward the plot being cleared (`clearing.ts`), then toward the board's standing
+ * orders from the top; the folios a Study takes in go
  * toward the research being studied. A goal is finished the moment it has all it wants: what it
  * unlocks is unlocked, a node pays and brings the next into hand (the first in line after it that
  * may be taken, else the next by itself), and research known lets the next in the line begin. A standing order, once filled, waits on the board until it is handed over (`claim`).
@@ -18,6 +19,7 @@ import type { Land } from "./land.ts";
 import {
   ALL_ITEMS,
   ARRIVAL,
+  CLEARING,
   type Goal,
   GOALS,
   isNode,
@@ -34,6 +36,7 @@ import {
   type Open,
   partsOf,
   type Plot,
+  plotName,
   ready,
   type Recipe,
   STUDIES,
@@ -74,11 +77,13 @@ export function deliver(y: Yard, thing: number, n: number): void {
   }
 }
 
-/** Puts up to `n` of a thing toward the first that wants it, the node in hand and then the board, and says how many it took. */
+/** Puts up to `n` of a thing toward the first that wants it, the node in hand, the plot being cleared and then the board, and says how many it took. */
 function offer(y: Yard, thing: number, n: number): number {
   const g = y.hand;
   const used = g === -1 ? 0 : giveGoal(y, g, thing, n);
   if (used > 0) return used;
+  const cleared = giveClearing(y, thing, n);
+  if (cleared > 0) return cleared;
   for (let o = 0; o < y.board.length; o++) {
     const order = y.board[o];
     const wants = order ? (order.want[thing] ?? 0) - (order.filled[thing] ?? 0) : 0;
@@ -101,6 +106,24 @@ export function giveGoal(y: Yard, g: Goal, thing: number, n: number): number {
   got[thing] = (got[thing] ?? 0) + took;
   if (isFilled(want, got)) finish(y, g);
   return took;
+}
+
+/** Gives the plot being cleared up to `n` of a thing it still wants, and tells a screen once it has all it wants; says how many it took. */
+function giveClearing(y: Yard, thing: number, n: number): number {
+  const c = y.clearing;
+  const want = c ? CLEARING[c.plot] : null;
+  const need = c && want ? (want[thing] ?? 0) - (c.filled[thing] ?? 0) : 0;
+  if (!c || !want || need <= 0) return 0;
+  const took = Math.min(n, need);
+  c.filled[thing] = (c.filled[thing] ?? 0) + took;
+  if (isFilled(want, c.filled)) filledClearing(y, c.plot);
+  return took;
+}
+
+/** The plot being cleared has all it wants: it waits to be handed over (`handClearing`), and a screen is told. */
+function filledClearing(y: Yard, p: Plot): void {
+  const title = y.land.plots.find((q) => q.plot === p)?.name ?? "";
+  y.news.push({ kind: "clearing", plot: plotName(p), title, pay: 0 });
 }
 
 /** A standing order is filled: it waits on the board to be handed over (`claim`), and a screen is told. */

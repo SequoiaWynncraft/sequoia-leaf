@@ -40,6 +40,47 @@ export function buyLand(id: Plot, price: number): boolean {
   return true;
 }
 
+/** Takes on a plot's clearing: its goods go to it as the depot takes them in, after the project in hand. */
+export function clearLand(id: Plot): boolean {
+  const plot = S.world.land.plots.find((p) => p.plot === id);
+  const no = plot ? does({ do: "clearPlot", plot: id }) : "There is no such plot";
+  if (!plot || no !== null) {
+    yardSfx.no();
+    toolHooks.said(`${no}.`);
+    return false;
+  }
+  yardSfx.plan();
+  toolHooks.said(`Clearing ${plot.name}: its goods go to it as the depot takes them in.`);
+  return true;
+}
+
+/** Hands the plot being cleared over, once it has all it wants: it is cleared, and its card offers Buy. */
+export function handClearing(): boolean {
+  const w = S.world;
+  const name = w.land.plots.find((p) => p.plot === w.clearing?.plot)?.name ?? "";
+  const no = does({ do: "handClearing" });
+  if (no !== null) {
+    yardSfx.no();
+    toolHooks.said(`${no}.`);
+    return false;
+  }
+  yardSfx.handOver();
+  toolHooks.said(`${name} is cleared. Buy it from its card.`);
+  return true;
+}
+
+/** Stops the clearing being done: what was delivered to it is not given back. */
+export function stopClearing(): boolean {
+  const no = does({ do: "stopClearing" });
+  if (no !== null) {
+    yardSfx.no();
+    toolHooks.said(`${no}.`);
+    return false;
+  }
+  yardSfx.plan();
+  return true;
+}
+
 /** Each frame: leaves fly where the undergrowth is coming down, and a cleared plot is done with. */
 export function stepClearing(): void {
   const w = S.world;

@@ -30,6 +30,7 @@ export const SECOND: readonly PlotInfo<(typeof SECOND_IDS)[number]>[] = [
     col: 0,
     row: 2,
     price: 100_000,
+    clearing: { lantern: 600, pipe: 900 },
     why: "Salvage in the old diggings and a seep of tar. Enough to start on.",
     rows: [
       "................",
@@ -52,6 +53,7 @@ export const SECOND: readonly PlotInfo<(typeof SECOND_IDS)[number]>[] = [
     col: 0,
     row: -2,
     price: 160_000,
+    clearing: { clock: 450, pipe: 900 },
     why: "Old diggings along the whole ridge, full of salvage, and a little stone.",
     rows: [
       "................",
@@ -74,6 +76,7 @@ export const SECOND: readonly PlotInfo<(typeof SECOND_IDS)[number]>[] = [
     col: -2,
     row: 0,
     price: 170_000,
+    clearing: { oil: 1500, firework: 900 },
     why: "Tar, enough for a row of stills.",
     rows: [
       "......TT........",
@@ -96,6 +99,7 @@ export const SECOND: readonly PlotInfo<(typeof SECOND_IDS)[number]>[] = [
     col: -1,
     row: 2,
     price: 200_000,
+    clearing: { beacon: 225, kit: 450 },
     why: "Open, level ground with almost nothing on it.",
     rows: [
       "................",
@@ -118,6 +122,7 @@ export const SECOND: readonly PlotInfo<(typeof SECOND_IDS)[number]>[] = [
     col: 1,
     row: 2,
     price: 140_000,
+    clearing: { pipe: 900, spyglass: 600 },
     why: "The stream slows into a pool. Banks for waterwheels, still water, sand and clay.",
     rows: [
       ".......~~.......",
@@ -140,6 +145,7 @@ export const SECOND: readonly PlotInfo<(typeof SECOND_IDS)[number]>[] = [
     col: 1,
     row: -2,
     price: 130_000,
+    clearing: { pipe: 900, oil: 1500 },
     why: "The stream runs narrow past two beds of ore. A little resin.",
     rows: [
       ".....~~.........",
@@ -162,6 +168,7 @@ export const SECOND: readonly PlotInfo<(typeof SECOND_IDS)[number]>[] = [
     col: -1,
     row: -2,
     price: 110_000,
+    clearing: { oil: 1500, lantern: 600 },
     why: "Resin and deadfall under six old redwoods.",
     rows: [
       "................",
@@ -184,6 +191,7 @@ export const SECOND: readonly PlotInfo<(typeof SECOND_IDS)[number]>[] = [
     col: 2,
     row: 0,
     price: 150_000,
+    clearing: { spyglass: 600, firework: 900 },
     why: "Sand and clay, and open ground between them.",
     rows: [
       "................",
@@ -206,6 +214,7 @@ export const SECOND: readonly PlotInfo<(typeof SECOND_IDS)[number]>[] = [
     col: 2,
     row: -1,
     price: 150_000,
+    clearing: { clock: 450, crab: 225 },
     why: "More ore than anywhere nearer, and some stone.",
     rows: [
       "................",
@@ -228,6 +237,7 @@ export const SECOND: readonly PlotInfo<(typeof SECOND_IDS)[number]>[] = [
     col: 2,
     row: 1,
     price: 120_000,
+    clearing: { crab: 225, firework: 900 },
     why: "Pools of still water among the reeds, and clay.",
     rows: [
       "................",
@@ -250,6 +260,7 @@ export const SECOND: readonly PlotInfo<(typeof SECOND_IDS)[number]>[] = [
     col: -2,
     row: -1,
     price: 115_000,
+    clearing: { kit: 450, oil: 1500 },
     why: "Deadfall in deep drifts, and a little tar.",
     rows: [
       "........TT......",
@@ -272,6 +283,7 @@ export const SECOND: readonly PlotInfo<(typeof SECOND_IDS)[number]>[] = [
     col: -2,
     row: 1,
     price: 120_000,
+    clearing: { firework: 900, clock: 450 },
     why: "Clay in two big beds, and stone.",
     rows: [
       "................",
@@ -294,6 +306,7 @@ export const SECOND: readonly PlotInfo<(typeof SECOND_IDS)[number]>[] = [
     col: -2,
     row: -2,
     price: 180_000,
+    clearing: { lantern: 600, kit: 450 },
     why: "Tar under five redwoods, and some resin.",
     rows: [
       "................",
@@ -316,6 +329,7 @@ export const SECOND: readonly PlotInfo<(typeof SECOND_IDS)[number]>[] = [
     col: 2,
     row: -2,
     price: 190_000,
+    clearing: { clock: 450, beacon: 225 },
     why: "Stone down the whole slope, with ore and a little salvage in it.",
     rows: [
       "................",
@@ -338,6 +352,7 @@ export const SECOND: readonly PlotInfo<(typeof SECOND_IDS)[number]>[] = [
     col: -2,
     row: 2,
     price: 240_000,
+    clearing: { beacon: 150, orrery: 150, kit: 300 },
     why: "Open ground from edge to edge. Two redwoods stand in it.",
     rows: [
       "................",
@@ -360,6 +375,7 @@ export const SECOND: readonly PlotInfo<(typeof SECOND_IDS)[number]>[] = [
     col: 2,
     row: 2,
     price: 170_000,
+    clearing: { spyglass: 600, crab: 225 },
     why: "A lake, with sand on its shore.",
     rows: [
       "................",

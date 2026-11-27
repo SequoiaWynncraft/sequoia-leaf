@@ -7,7 +7,7 @@
 import { describe, expect, test } from "bun:test";
 
 import * as F from "../src/index.ts";
-import { buying, give, must, SAVES } from "./yards.ts";
+import { bought, buying, clearedFor, give, must, SAVES } from "./yards.ts";
 
 type Holds = Partial<Record<"d" | "s" | "o" | "c" | "a" | "r" | "v" | "t" | "q" | "~", number>>;
 /** SPEC-2's table of the 40 plots: id, column, row, ring, base price, what it holds (by letter), redwoods, clear tiles. */
@@ -82,8 +82,9 @@ function nine(): F.Yard {
   }
   return y;
 }
-/** Buys a plot with Coins enough, and gives what it cost. */
+/** Clears a plot and buys it with Coins enough, and gives what it cost. */
 function buy(y: F.Yard, id: F.PlotName): number {
+  clearedFor(y, id);
   const spent = F.buyPlot(y, F.plot(id), F.plotPrice(y, F.plot(id)), Infinity);
   if (!spent.ok) throw new Error(spent.why);
   return spent.cost;
@@ -246,14 +247,14 @@ describe("the price of land", () => {
 
   test("bought cheapest first, each the cheapest that touches the yard's land: section 4.3's table, and all 40 for 1,196,420,000", () => {
     const y = nine();
-    const bought: [string, number][] = [];
+    const paid: [string, number][] = [];
     for (;;) {
       const sale = F.OUTER_IDS.filter((id) => F.plotState(y, F.plot(id)).state === "for sale");
       if (sale.length === 0) break;
       const cheapest = sale.reduce((a, b) => (priceIn(y, b) < priceIn(y, a) ? b : a));
-      bought.push([info(cheapest).name, buy(y, cheapest)]);
+      paid.push([info(cheapest).name, buy(y, cheapest)]);
     }
-    expect(bought.slice(0, 12)).toEqual([
+    expect(paid.slice(0, 12)).toEqual([
       ["The Old Workings", 100_000],
       ["The Old Stand", 126_000],
       ["Fern Hollow", 152_000],
@@ -267,9 +268,9 @@ describe("the price of land", () => {
       ["The Black Bank", 686_000],
       ["The Mere", 789_000],
     ]);
-    expect(bought.length).toBe(40);
-    expect(bought.at(-1)?.[1]).toBe(278_854_000);
-    expect(bought.reduce((sum, [, coins]) => sum + coins, 0)).toBe(1_196_420_000);
+    expect(paid.length).toBe(40);
+    expect(paid.at(-1)?.[1]).toBe(278_854_000);
+    expect(paid.reduce((sum, [, coins]) => sum + coins, 0)).toBe(1_196_420_000);
   });
 
   test("the cheapest way to The Crater after The Old Workings, each plot bought touching the land before it, costs 3,326,000; Skyfall Edge as the second, third and fourth plot", () => {
@@ -306,6 +307,7 @@ describe("the price of land", () => {
 
   test("a plot is bought only at the price the player was shown: risen since, it is refused, says what it costs now, and nothing is taken", () => {
     const y = nine();
+    for (const id of ["workings", "stand"]) clearedFor(y, id);
     const till = y.till;
     expect(give(y, { do: "buyPlot", plot: "workings", price: 100_000 })).not.toHaveProperty("refused");
     // A second page still showed The Old Stand at 110,000.
@@ -324,7 +326,7 @@ describe("the price of land", () => {
     expect(priceIn(y, "meadow")).toBe(300);
     must(y, buying(y, "meadow"));
     expect(priceIn(y, "workings")).toBe(100_000);
-    must(y, buying(y, "workings"));
+    bought(y, "workings");
     expect([priceIn(y, "pond"), priceIn(y, "acre")]).toEqual([5000, 276_000]);
     expect(give(y, { do: "undo", entry: y.history.at(-1)?.id ?? "" })).toHaveProperty("refused");
     expect(y.plots).toContain(F.plot("workings"));

@@ -26,6 +26,7 @@ export const THIRD_SOUTH_WEST: readonly PlotInfo<(typeof THIRD_SOUTH_WEST_IDS)[n
     col: 0,
     row: 3,
     price: 220_000,
+    clearing: { spyglass: 1800, orrery: 675 },
     why: "Where the small pieces came down. A little star crystal, which comes out slowly.",
     rows: [
       "................",
@@ -48,6 +49,7 @@ export const THIRD_SOUTH_WEST: readonly PlotInfo<(typeof THIRD_SOUTH_WEST_IDS)[n
     col: -1,
     row: 3,
     price: 480_000,
+    clearing: { firework: 2700, clock: 1350 },
     why: "Open ground, and one redwood in the middle of it.",
     rows: [
       "................",
@@ -70,6 +72,7 @@ export const THIRD_SOUTH_WEST: readonly PlotInfo<(typeof THIRD_SOUTH_WEST_IDS)[n
     col: 1,
     row: 3,
     price: 340_000,
+    clearing: { spyglass: 1800, pipe: 2700 },
     why: "The stream turns east here. Sand on both banks, and a little star crystal.",
     rows: [
       ".......~~.......",
@@ -92,6 +95,7 @@ export const THIRD_SOUTH_WEST: readonly PlotInfo<(typeof THIRD_SOUTH_WEST_IDS)[n
     col: -2,
     row: 3,
     price: 420_000,
+    clearing: { orrery: 450, clock: 900, firework: 1800 },
     why: "Open ground, three redwoods, a little star crystal.",
     rows: [
       "................",
@@ -114,6 +118,7 @@ export const THIRD_SOUTH_WEST: readonly PlotInfo<(typeof THIRD_SOUTH_WEST_IDS)[n
     col: 2,
     row: 3,
     price: 360_000,
+    clearing: { pipe: 2700, firework: 2700 },
     why: "The stream spreads out into shallow water. Clay.",
     rows: [
       "................",
@@ -136,6 +141,7 @@ export const THIRD_SOUTH_WEST: readonly PlotInfo<(typeof THIRD_SOUTH_WEST_IDS)[n
     col: 3,
     row: 3,
     price: 800_000,
+    clearing: { spyglass: 1200, pipe: 1800, orrery: 450 },
     why: "The largest water there is.",
     rows: [
       "................",
@@ -158,6 +164,7 @@ export const THIRD_SOUTH_WEST: readonly PlotInfo<(typeof THIRD_SOUTH_WEST_IDS)[n
     col: -3,
     row: 3,
     price: 1_000_000,
+    clearing: { orrery: 675, spyglass: 1800 },
     why: "Star crystal in two beds, among five redwoods.",
     rows: [
       "................",
@@ -180,6 +187,7 @@ export const THIRD_SOUTH_WEST: readonly PlotInfo<(typeof THIRD_SOUTH_WEST_IDS)[n
     col: -3,
     row: 2,
     price: 520_000,
+    clearing: { clock: 1350, spyglass: 1800 },
     why: "Star crystal in two small beds, and stone.",
     rows: [
       "................",
@@ -202,6 +210,7 @@ export const THIRD_SOUTH_WEST: readonly PlotInfo<(typeof THIRD_SOUTH_WEST_IDS)[n
     col: -3,
     row: 1,
     price: 320_000,
+    clearing: { firework: 2700, clock: 1350 },
     why: "Clay, more than any yard has needed yet.",
     rows: [
       "................",
@@ -224,6 +233,7 @@ export const THIRD_SOUTH_WEST: readonly PlotInfo<(typeof THIRD_SOUTH_WEST_IDS)[n
     col: -3,
     row: 0,
     price: 500_000,
+    clearing: { orrery: 675, clock: 1350 },
     why: "Open ground. Two redwoods.",
     rows: [
       "................",
@@ -246,6 +256,7 @@ export const THIRD_SOUTH_WEST: readonly PlotInfo<(typeof THIRD_SOUTH_WEST_IDS)[n
     col: -3,
     row: -1,
     price: 320_000,
+    clearing: { firework: 2700, pipe: 2700 },
     why: "Deadfall everywhere, resin, four redwoods.",
     rows: [
       "................",
@@ -268,6 +279,7 @@ export const THIRD_SOUTH_WEST: readonly PlotInfo<(typeof THIRD_SOUTH_WEST_IDS)[n
     col: -3,
     row: -2,
     price: 460_000,
+    clearing: { firework: 2700, clock: 1350 },
     why: "An old burn: open ground, deadfall and a little tar. No redwoods.",
     rows: [
       "................",

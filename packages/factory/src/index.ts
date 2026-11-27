@@ -3,12 +3,14 @@
  * kind of work.
  */
 export * from "./build.ts";
+export * from "./clearing.ts";
 export { fromBase64, spanByte, spanOfByte, toBase64 } from "./bytes.ts";
 export { type KeptPiece } from "./cells.ts";
 export { check } from "./check.ts";
 export { blueprintCode, cleanCode, CODE_MOST, CODE_PREFIX, codePieces, codeRefusal, packedCode } from "./code.ts";
 export * from "./clock.ts";
-export { type Act, type ActOf, COMMANDS, LOCKED, REFUSED, type Turned, type Wired, writeAct } from "./commands.ts";
+export { type Act, type ActOf, COMMANDS, LOCKED, REFUSED, type Wired, writeAct } from "./commands.ts";
+export { type Turned } from "./did.ts";
 export { readLeg, readPiece } from "./fields.ts";
 export {
   blocked,

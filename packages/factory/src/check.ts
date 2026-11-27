@@ -4,7 +4,7 @@
  * clock, the power put by, the till and its counter, the goals (those done, in order, the node in
  * hand and those in line after it, the line of research, and what each goal not done has been
  * given) and the board (each order's wants, what came in, its pay, its words and when it began to
- * count), the plots owned and the redwoods felled, the depot's books (what awards and the standing are read from), what was seen at the
+ * count), the plots owned, cleared and being cleared (with what it has been given), and the redwoods felled, the depot's books (what awards and the standing are read from), what was seen at the
  * owner's last command, the pieces to hand, the blueprints, what Undo would undo (each entry's bytes:
  * its id is worked out from them), and every part of every piece, tile by
  * tile, numbered by the tables. Every tile it mixes in (a piece's, a redwood felled, a piece of a plan
@@ -112,9 +112,18 @@ function mixKept(y: Yard, mix: (v: number) => void): void {
   for (const { bytes } of y.history) mixBytes(bytes, mix);
 }
 
-/** Mixes in the plots owned, in the order they were bought, and each redwood felled by its first tile; making nothing. */
+/**
+ * Mixes in the plots owned, in the order they were bought; those cleared, in the order they were
+ * handed over, and the one being cleared with what it has been given, only where there are any; and
+ * each redwood felled by its first tile; making nothing.
+ */
 function mixLand(y: Yard, mix: (v: number) => void): void {
   for (let k = 0; k < y.plots.length; k++) mix((y.plots[k] ?? 0) + 32);
+  for (let k = 0; k < y.cleared.length; k++) mix(0x20000 + (y.cleared[k] ?? 0));
+  if (y.clearing) {
+    mix(0x30000 + y.clearing.plot);
+    mixTally(mix, y.clearing.filled);
+  }
   for (let t = 0; t < y.felled.length; t++)
     if (y.felled[t] === 1) {
       mix(0x10000);

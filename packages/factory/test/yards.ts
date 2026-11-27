@@ -44,6 +44,23 @@ export function buying(y: F.Yard, plot: string): Rec {
   const p = F.plotNamed(plot);
   return { do: "buyPlot", plot, price: p === null ? 0 : F.plotPrice(y, p) };
 }
+/**
+ * Clears a plot past the first ring by the commands a player gives, the goods it wants put straight
+ * into it as if delivered, so that it can be bought; nothing for a plot Coins alone buy, or one cleared.
+ */
+export function clearedFor(y: F.Yard, plot: string): void {
+  const p = F.plotNamed(plot);
+  const want = p === null ? null : F.CLEARING[p];
+  if (p === null || !want || y.cleared.includes(p)) return;
+  must(y, { do: "clearPlot", plot });
+  y.clearing?.filled.set(want);
+  must(y, { do: "handClearing" });
+}
+/** Clears a plot if it needs it, and buys it at its price now. */
+export function bought(y: F.Yard, plot: string): void {
+  clearedFor(y, plot);
+  must(y, buying(y, plot));
+}
 /** Gives a yard a command that must be done. */
 export function must(y: F.Yard, c: Rec): void {
   const did = give(y, c);

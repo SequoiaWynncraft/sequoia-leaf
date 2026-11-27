@@ -15,7 +15,7 @@ import { sfx } from "@sequoia-leaf/kit/sound.ts";
 
 import { TILE } from "../art/belts.ts";
 import type { Art } from "../art/index.ts";
-import { buyLand, takeInHand } from "../plots.ts";
+import { buyLand, clearLand, takeInHand } from "../plots.ts";
 import { yardSfx } from "../sound.ts";
 import { S, toolHooks, toPage } from "../state.ts";
 import { flipAt, hold, pickFrom, raiseAt, setTool, takeAway, turnAt, usable, wayAt } from "../tools.ts";
@@ -76,6 +76,7 @@ const HANDS: Hands = {
   raise: (x, y) => void raiseAt(x, y),
   way: (x, y, way) => void wayAt(x, y, way),
   buy: buyLand,
+  clear: clearLand,
   fell: fellAt,
   refuse: (why) => {
     yardSfx.no();

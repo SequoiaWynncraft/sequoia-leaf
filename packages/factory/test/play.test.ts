@@ -11,7 +11,7 @@ import { describe, expect, test } from "bun:test";
 import type { Ctx } from "@sequoia-leaf/core";
 
 import * as F from "../src/index.ts";
-import { boardFilled, Player } from "./player.ts";
+import { boardFilled, clearingFilled, Player } from "./player.ts";
 import { delivering, generated } from "./yards.ts";
 
 type Rec = Record<string, unknown>;
@@ -25,6 +25,7 @@ describe("random play", () => {
     ["a yard with tier 4 done", () => F.create({ seed: 14, tier: 5 })],
     ["a yard with tier 5's research done", () => F.create({ seed: 15, tier: 6 })],
     ["a delivering yard, its board filled", boardFilled],
+    ["a yard clearing a plot, all it wants delivered", clearingFilled],
     ["a generated yard", () => F.decode(F.encode(generated().y), generated().y.land) ?? F.create()],
   ];
   for (const [name, start] of starts)
@@ -103,6 +104,7 @@ describe("what a visitor is told", () => {
     ["a yard with tier 4 done", () => F.create({ seed: 24, tier: 5 }), true],
     ["a yard with tier 5's research done", () => F.create({ seed: 25, tier: 6 }), true],
     ["a delivering yard, its board filled", boardFilled, true],
+    ["a yard clearing a plot, all it wants delivered", clearingFilled, true],
     ["a generated yard", () => F.decode(F.encode(generated().y), generated().y.land) ?? F.create(), false],
   ];
   const told = new Set<string>();
@@ -122,13 +124,14 @@ describe("what a visitor is told", () => {
         // Time passes between batches; once in a while the owner is away past the time the yard runs unwatched.
         now += away && batch % 100 === 99 ? 9 * HOUR : player.int(3000);
         const clock = F.clockOf(y, now);
-        // Now and then a node put in the line after the one in hand and taken out again, and a
-        // machine tipped out, which play at random seldom finds a moment for.
+        // Now and then a node put in the line after the one in hand and taken out again, a machine
+        // tipped out, and a clearing handed over, which play at random seldom finds a moment for.
         const lined = F.NODES.find((n) => {
           const g = F.goalNamed(n.id);
           return batch % 20 === 0 && g !== null && F.queueRefusal(y, g) === null;
         });
         const tipped = batch % 20 === 10 ? [{ do: "tipOut", item: null, ...player.of(F.MILL, F.BENCH, F.CRATE) }] : [];
+        const handed = batch % 20 === 5 && y.clearing && F.handRefusal(y) === null ? [{ do: "handClearing" }] : [];
         // Each stamped as the owner's page stamps them: about Leaf's clock, now and then behind it or ahead.
         const commands = [
           ...Array.from({ length: 1 + player.int(6) }, () => player.command()),
@@ -139,6 +142,7 @@ describe("what a visitor is told", () => {
               ]
             : []),
           ...tipped,
+          ...handed,
         ].map((c) => Object.assign(c, { tick: Math.max(0, clock - 40 + player.int(90)) }));
         const batched = leafBatch(y, commands, now);
         done += batched.did.length;

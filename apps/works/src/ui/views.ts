@@ -27,8 +27,8 @@ import {
   NODE_COUNT,
   NONE,
   plotPrice,
-  plotState,
   power,
+  readyToBuy,
   type Yard,
 } from "@sequoia-leaf/factory";
 import { pick, shown as cardShown, thing } from "@sequoia-leaf/kit/card.ts";
@@ -212,14 +212,15 @@ const MAP = 3;
 const REACH = 14;
 
 /**
- * The plots for sale, each with its price as it is written, the middle of it on the map, and whether
- * it is in an odd column of plots: worked out when what stands changes, not each frame.
+ * The plots that can be bought now (for sale, and cleared where they need clearing), each with its
+ * price as it is written, the middle of it on the map, and whether it is in an odd column of plots:
+ * worked out when what stands changes, not each frame.
  */
 let sales: { yard: Yard; rev: number; plots: { price: string; x: number; y: number; odd: boolean }[] } | null = null;
 function forSale(y: Yard): readonly { price: string; x: number; y: number; odd: boolean }[] {
   if (sales?.yard === y && sales.rev === y.rev) return sales.plots;
   const plots = y.land.plots.flatMap((plot) =>
-    !y.plots.includes(plot.plot) && plotState(y, plot.plot).state === "for sale"
+    !y.plots.includes(plot.plot) && readyToBuy(y, plot.plot)
       ? [
           {
             price: whole(plotPrice(y, plot.plot)),

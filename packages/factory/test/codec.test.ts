@@ -392,6 +392,15 @@ function change(y: F.Yard, path: string): void {
   else throw new Error(`${path}: nothing to change`);
 }
 
+/** A plot being cleared, given something, and a plot cleared, added to a copy of a yard, and then whatever `more` adds. */
+const and =
+  (more: (c: F.Yard) => void = () => {}) =>
+  (c: F.Yard): void => {
+    c.clearing = { plot: F.plot("workings"), filled: F.countsOf({ pipe: 3 }) };
+    c.cleared = [F.plot("flats")];
+    more(c);
+  };
+
 /** The parts of a yard that change without the check changing, `add` having first added to a copy whatever it adds. */
 function unmixed(y: F.Yard, add: (copy: F.Yard) => void = () => {}): string[] {
   const copy = (): F.Yard => {
@@ -453,11 +462,25 @@ describe("the check", () => {
       y.blueprints.some((b) => b),
       y.history.length > 0,
     ]).toEqual([true, true, true, true, true]);
-    expect(unmixed(y)).toEqual([]);
-    expect(unmixed(y, (c) => Object.assign(c, { glow: 3 }))).toEqual(["glow"]);
-    expect(unmixed(y, (c) => Object.assign(c.holders, { heat: new Uint8Array(c.holders.tile.length) }))).toEqual([
-      "holders.heat",
-    ]);
-    expect(unmixed(y, (c) => (c.board = c.board.map((o) => ({ ...o, tip: 2 }))))).toEqual(["board.0.tip"]);
+    // And a plot being cleared, given something, and a plot cleared, as a yard past tier 4's commission has them (`and`).
+    expect(unmixed(y, and())).toEqual([]);
+    expect(
+      unmixed(
+        y,
+        and((c) => Object.assign(c, { glow: 3 })),
+      ),
+    ).toEqual(["glow"]);
+    expect(
+      unmixed(
+        y,
+        and((c) => Object.assign(c.holders, { heat: new Uint8Array(c.holders.tile.length) })),
+      ),
+    ).toEqual(["holders.heat"]);
+    expect(
+      unmixed(
+        y,
+        and((c) => (c.board = c.board.map((o) => ({ ...o, tip: 2 })))),
+      ),
+    ).toEqual(["board.0.tip"]);
   });
 });

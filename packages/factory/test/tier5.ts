@@ -5,7 +5,7 @@
 import * as F from "../src/index.ts";
 import { beforeReach, learn } from "./goals.ts";
 import { bareLand } from "./land.ts";
-import { buying, fillHand, must } from "./yards.ts";
+import { bought, clearedFor, fillHand, must } from "./yards.ts";
 
 /** A bare yard with tier 4 done (tunnels to 5 tiles) but nothing past version 10 (no reach research), and the research named known. */
 export function bare(research: readonly string[] = []): F.Yard {
@@ -47,7 +47,21 @@ function project(): F.Yard {
 export const TIER5: Readonly<Record<string, () => F.Yard>> = {
   "a plot of the second ring bought": () => {
     const y = beforeReach(F.create({ seed: 1, tier: 5 }));
-    for (const plot of ["meadow", "workings"]) must(y, buying(y, plot));
+    for (const plot of ["meadow", "workings"]) bought(y, plot);
+    y.history = [];
+    return y;
+  },
+  "a plot being cleared": () => {
+    const y = beforeReach(F.create({ seed: 1, tier: 5 }));
+    bought(y, "meadow");
+    must(y, { do: "clearPlot", plot: "workings" });
+    y.history = [];
+    return y;
+  },
+  "a plot cleared": () => {
+    const y = beforeReach(F.create({ seed: 1, tier: 5 }));
+    bought(y, "meadow");
+    clearedFor(y, "workings");
     y.history = [];
     return y;
   },

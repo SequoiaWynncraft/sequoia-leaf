@@ -237,9 +237,10 @@ describe("allocation", () => {
     const excused = new Set([
       // Worked out once after a change, by the first tick after it.
       "rewire",
-      // A goal finished, and a standing order filled.
+      // A goal finished, a standing order filled, and a plot's clearing given all it wants.
       "finish",
       "filledOrder",
+      "filledClearing",
     ]);
     const tick = reached("tick.ts", "step", excused);
     for (const f of ["orders.ts:deliver", "orders.ts:offer", "land.ts:toward", "yard.ts:put", "wire.ts:nextOf"])

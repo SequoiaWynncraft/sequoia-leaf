@@ -17,7 +17,7 @@ import { aPage, press } from "@sequoia-leaf/kit/standin.ts";
 
 import { clear, coinsAre, ctx, type FakeLeaf, isRecord, opened, useFakeLeaf } from "../../test/fake-leaf.ts";
 import { askSave, deleteKey, saveIn } from "../plans.ts";
-import { buyLand } from "../plots.ts";
+import { buyLand, clearLand } from "../plots.ts";
 import { handSession, S, toolHooks } from "../state.ts";
 import { cancel, hold, markEnd, markOver, markStart, setTool } from "../tools.ts";
 import { doNow } from "../yard.ts";
@@ -167,7 +167,7 @@ test("Buy on a plot's card, pressed once, asks again after the card follows what
   // Its card, drawn once on a page that holds nothing.
   const doc = { createElement: () => new Part(), createTextNode: () => new Part() };
   Object.defineProperty(globalThis, "document", { value: doc, configurable: true });
-  const card = plotCard(print, { buy: () => true, refuse: () => undefined });
+  const card = plotCard(print, { buy: () => true, clear: () => true, refuse: () => undefined });
   Reflect.deleteProperty(globalThis, "document");
   const [buy] = card.actions ?? [];
   const [inGround] = print.ground;
@@ -198,7 +198,7 @@ test("Buy drawn short buys nothing, even with the last Coin come in while it is 
   expect(print.short).toBeGreaterThan(0);
   const page = aPage();
   const refused: string[] = [];
-  const card = plotCard(print, { buy: buyLand, refuse: (why) => void refused.push(why) });
+  const card = plotCard(print, { buy: buyLand, clear: clearLand, refuse: (why) => void refused.push(why) });
   const [buy] = card.actions ?? [];
   if (!buy) throw new Error("a plot for sale with nothing to buy it");
   // The till pays out the last Coins before the press on the dim button ends.
@@ -208,7 +208,7 @@ test("Buy drawn short buys nothing, even with the last Coin come in while it is 
   // Drawn again with the Coins, its Buy asks to be pressed again.
   const again = printOf(plotRef(meadow));
   if (again?.card !== "plot") throw new Error("no plot card");
-  expect(plotCard(again, { buy: buyLand, refuse: () => undefined }).actions?.[0]?.ask).toEqual({
+  expect(plotCard(again, { buy: buyLand, clear: clearLand, refuse: () => undefined }).actions?.[0]?.ask).toEqual({
     again: AGAIN,
     price: print.price,
   });

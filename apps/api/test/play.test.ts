@@ -2023,13 +2023,14 @@ describe("an Undo in the Works", () => {
   });
 
   it("buys a plot only at the price the page showed: of two plots of the new land in one batch, the second, risen by the first, is refused and charges nothing", async () => {
-    // Alice's yard has done tier 4's commission and owns today's nine plots, as a staging step writes it
-    // over. She is given Coins enough for both plots.
+    // Alice's yard has done tier 4's commission, owns today's nine plots and has cleared The Old
+    // Workings and The Old Stand, as a staging step writes it over. She is given Coins enough for both plots.
     const w = createYard({ seed: 7, tier: 5 });
     for (const plot of ["meadow", "bank", "stream", "grove", "seam", "quarry", "hollow", "pond"] as const) {
       const read = readCommand({ tick: w.tick, do: "buyPlot", plot, price: plotPrice(w, plotOf(plot)) });
       if (!read || "refused" in playWorks(w, read)) throw new Error(`${plot} was not bought`);
     }
+    w.cleared.push(plotOf("workings"), plotOf("stand"));
     w.history = [];
     w.at = clock.now;
     await yardShown();

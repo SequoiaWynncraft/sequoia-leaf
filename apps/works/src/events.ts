@@ -160,6 +160,9 @@ export function onNews(news: readonly News[]): void {
       // A project pays nothing: no Coins fly for it.
       if (n.pay > 0) coinsFrom(toPage(s.door.x, s.door.y - 14), n.pay);
       tell({ town: "news", text: gift ? gift.line : `The Works filled "${n.title}".`, tone: "gold" });
+    } else if (n.kind === "clearing") {
+      yardSfx.ready();
+      feed(`${n.title}: everything for its clearing is delivered. Hand it over in Orders.`, "gold");
     } else if (n.kind === "filled") {
       yardSfx.ready();
       const order = w.board.find((o) => o.id === n.id);

@@ -367,6 +367,17 @@ export class Part extends EventTarget {
     add: (name: string): void => {
       if (!this.className.split(" ").includes(name)) this.className = `${this.className} ${name}`.trim();
     },
+    remove: (name: string): void => {
+      this.className = this.className
+        .split(" ")
+        .filter((c) => c !== "" && c !== name)
+        .join(" ");
+    },
+    toggle: (name: string, on = !this.className.split(" ").includes(name)): boolean => {
+      if (on) this.classList.add(name);
+      else this.classList.remove(name);
+      return on;
+    },
   };
   readonly #root: boolean;
   constructor(tag: string, root = false) {
@@ -379,6 +390,9 @@ export class Part extends EventTarget {
   }
   getAttribute(name: string): string | null {
     return this.attrs.get(name) ?? null;
+  }
+  hasAttribute(name: string): boolean {
+    return this.attrs.has(name);
   }
   appendChild<T>(kid: T): T {
     if (kid instanceof Part) {

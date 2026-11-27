@@ -26,6 +26,7 @@ export const THIRD_NORTH_EAST: readonly PlotInfo<(typeof THIRD_NORTH_EAST_IDS)[n
     col: -3,
     row: -3,
     price: 700_000,
+    clearing: { orrery: 675, pipe: 2700 },
     why: "Tar under nine redwoods.",
     rows: [
       ".....TT.......rr",
@@ -48,6 +49,7 @@ export const THIRD_NORTH_EAST: readonly PlotInfo<(typeof THIRD_NORTH_EAST_IDS)[n
     col: -2,
     row: -3,
     price: 380_000,
+    clearing: { pipe: 1800, firework: 1800, clock: 900 },
     why: "Two seeps of tar, and deadfall.",
     rows: [
       "................",
@@ -70,6 +72,7 @@ export const THIRD_NORTH_EAST: readonly PlotInfo<(typeof THIRD_NORTH_EAST_IDS)[n
     col: -1,
     row: -3,
     price: 320_000,
+    clearing: { clock: 900, spyglass: 1200, pipe: 1800 },
     why: "Four redwoods in a row across it. Deadfall, and some tar.",
     rows: [
       "................",
@@ -92,6 +95,7 @@ export const THIRD_NORTH_EAST: readonly PlotInfo<(typeof THIRD_NORTH_EAST_IDS)[n
     col: 0,
     row: -3,
     price: 460_000,
+    clearing: { clock: 1350, orrery: 675 },
     why: "Old diggings full of salvage, and stone.",
     rows: [
       "................",
@@ -114,6 +118,7 @@ export const THIRD_NORTH_EAST: readonly PlotInfo<(typeof THIRD_NORTH_EAST_IDS)[n
     col: 1,
     row: -3,
     price: 340_000,
+    clearing: { pipe: 2700, spyglass: 1800 },
     why: "Where the stream rises. Ore, and a little star crystal.",
     rows: [
       "................",
@@ -136,6 +141,7 @@ export const THIRD_NORTH_EAST: readonly PlotInfo<(typeof THIRD_NORTH_EAST_IDS)[n
     col: 2,
     row: -3,
     price: 480_000,
+    clearing: { spyglass: 1800, clock: 1350 },
     why: "A small cold lake, stone, and a little star crystal.",
     rows: [
       "................",
@@ -158,6 +164,7 @@ export const THIRD_NORTH_EAST: readonly PlotInfo<(typeof THIRD_NORTH_EAST_IDS)[n
     col: 3,
     row: -3,
     price: 1_200_000,
+    clearing: { orrery: 900, spyglass: 1200 },
     why: "Where the star came down. More star crystal than anywhere else.",
     rows: [
       "................",
@@ -180,6 +187,7 @@ export const THIRD_NORTH_EAST: readonly PlotInfo<(typeof THIRD_NORTH_EAST_IDS)[n
     col: 3,
     row: -2,
     price: 600_000,
+    clearing: { clock: 1350, orrery: 675 },
     why: "Stone in two beds, and a little star crystal.",
     rows: [
       "................",
@@ -202,6 +210,7 @@ export const THIRD_NORTH_EAST: readonly PlotInfo<(typeof THIRD_NORTH_EAST_IDS)[n
     col: 3,
     row: -1,
     price: 400_000,
+    clearing: { pipe: 2700, clock: 1350 },
     why: "Ore in three beds, and salvage.",
     rows: [
       "................",
@@ -224,6 +233,7 @@ export const THIRD_NORTH_EAST: readonly PlotInfo<(typeof THIRD_NORTH_EAST_IDS)[n
     col: 3,
     row: 0,
     price: 560_000,
+    clearing: { spyglass: 1800, firework: 2700 },
     why: "Flat, open ground with sand along its far edge. Nothing in the way.",
     rows: [
       "................",
@@ -246,6 +256,7 @@ export const THIRD_NORTH_EAST: readonly PlotInfo<(typeof THIRD_NORTH_EAST_IDS)[n
     col: 3,
     row: 1,
     price: 340_000,
+    clearing: { firework: 2700, pipe: 2700 },
     why: "Clay, and two pools.",
     rows: [
       "................",
@@ -268,6 +279,7 @@ export const THIRD_NORTH_EAST: readonly PlotInfo<(typeof THIRD_NORTH_EAST_IDS)[n
     col: 3,
     row: 2,
     price: 420_000,
+    clearing: { spyglass: 1800, orrery: 675 },
     why: "Sand in great drifts, and a little star crystal.",
     rows: [
       "................",

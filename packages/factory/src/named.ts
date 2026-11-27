@@ -1,7 +1,7 @@
 /**
  * What a kept yard names, wherever it names it: the goals it has done, holds, has in line or has
  * given anything; the things it counts, by name, and holds, carries, makes or is told to make, by
- * number; the kinds of its pieces; its plots; and the most tiles any of its tunnels passes under. Its
+ * number; the kinds of its pieces; its plots, those it cleared and the one it is clearing; and the most tiles any of its tunnels passes under. Its
  * pieces, its blueprints and plans of the whole yard, and what Undo would put back all count.
  *
  * One rule reads it: a yard naming anything this Leaf does not know, or a tunnel longer than this
@@ -66,15 +66,17 @@ function recordNames(raw: Rec, goals: Set<string>, things: Set<string>, plots: S
   const seen = isRec(raw.seen) ? raw.seen : {};
   const away = isRec(raw.away) ? raw.away : {};
   const orders = list(raw.board).filter(isRec);
+  const clearing = isRec(raw.clearing) ? raw.clearing : {};
   const counted = [
     raw.depot,
     seen.depot,
     away.made,
     ...Object.values(got),
     ...orders.flatMap((o) => [o.want, o.filled]),
+    clearing.filled,
   ];
   for (const c of counted) for (const name of countNames(c)) things.add(name);
-  for (const id of list(raw.plots)) if (typeof id === "string") plots.add(id);
+  for (const id of [...list(raw.plots), ...list(raw.cleared), clearing.plot]) if (typeof id === "string") plots.add(id);
 }
 
 /** The things a kept piece holds, carries, makes or is told to make, by number. */

@@ -139,9 +139,17 @@
     "at": "TBD",
     "title": "The Works: 40 more plots",
     "lines": [
-      "40 new plots of land are for sale, in two rings round the yard, to every yard that has finished tier 4. The first costs 100,000 Coins, and each plot you buy raises the price of the rest by 15%."
+      "40 new plots of land are for sale, in two rings round the yard, to every yard that has finished tier 4. Each is cleared with goods, then bought with Coins.",
+      "The first plot costs 100,000 Coins, and each plot you buy raises the price of the rest by 15%."
     ],
     "more": [
+      {
+        "head": "Clearing",
+        "points": [
+          "Press Clear it on a plot's card, then deliver the goods it asks for to the depot. You clear one plot at a time.",
+          "Hand the clearing over in Orders. Then the plot's card offers Buy."
+        ]
+      },
       {
         "head": "New",
         "points": ["Two new projects, A survey of the outer woods and Stakes and string, pay 35,000 Coins toward one."]

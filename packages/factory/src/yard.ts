@@ -97,7 +97,9 @@ export interface Standing {
 export type News =
   | { readonly kind: "done"; readonly goal: string; readonly title: string; readonly pay: number }
   | { readonly kind: "filled"; readonly id: number; readonly title: string; readonly pay: number }
-  | { readonly kind: "standing"; readonly id: number; readonly title: string; readonly pay: number };
+  | { readonly kind: "standing"; readonly id: number; readonly title: string; readonly pay: number }
+  /** A plot being cleared has all it wants: it waits to be handed over (`handClearing`). */
+  | { readonly kind: "clearing"; readonly plot: string; readonly title: string; readonly pay: number };
 
 /** A time the yard worked on while its owner was away: for how long, the Coins its till gained, and what its depot took in. */
 export interface Away {
@@ -236,6 +238,12 @@ export interface Yard {
   /** Plots owned, in the order they were bought. */
   plots: Plot[];
   /**
+   * The plot being cleared, one at a time, and what has been delivered to it; the plots cleared, in
+   * the order they were handed over, for good (`clearing.ts`).
+   */
+  clearing: { readonly plot: Plot; readonly filled: Counts } | null;
+  cleared: Plot[];
+  /**
    * 1 for each of the land's redwoods the yard has felled (`fell`), by its place in the land's
    * `trees`. Every rule asks whether one stands on a tile through `redwoodAt`, never the land alone.
    */
@@ -338,6 +346,8 @@ export function emptyYard(land: Land, tier = 0): Yard {
     away: null,
     seen: { tick: 0, till: 0, depot: counts() },
     plots: [plot("yard")],
+    clearing: null,
+    cleared: [],
     felled: new Uint8Array(land.trees.length),
     spare: Uint8Array.from(STARTING),
     blueprints: Array.from({ length: BLUEPRINTS_MOST }, () => null),

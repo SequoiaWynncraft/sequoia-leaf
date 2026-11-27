@@ -10,7 +10,7 @@
 import { ITEM, type ItemName, ITEMS, type Wants } from "./content/items.ts";
 import { BLUEPRINT, BUFFER, GRADES, TICKS } from "./content/machines.ts";
 import { NODES, START, type Tool, TOOLS, type Unlocks } from "./content/nodes.ts";
-import { PLOT_IDS, type PlotName } from "./content/plots.ts";
+import { PLOT_IDS, type PlotName, PLOTS } from "./content/plots.ts";
 import { RECIPES } from "./content/recipes.ts";
 import { RESEARCH } from "./content/research.ts";
 import type { KindDef, KindInfo } from "./kinds/kind.ts";
@@ -238,6 +238,12 @@ export function countsOf(w: Wants): Float64Array {
   }
   return out;
 }
+
+/** What clearing each plot wants delivered before it is bought (`PlotInfo.clearing`), by its number; null for a plot Coins alone buy. */
+export const CLEARING: readonly (Float64Array | null)[] = PLOT_IDS.map((id) => {
+  const wants = PLOTS.find((p) => p.id === id)?.clearing;
+  return wants ? countsOf(wants) : null;
+});
 
 // ---------- recipes ----------
 

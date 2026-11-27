@@ -14,6 +14,7 @@ import {
   build,
   buyPlot,
   check,
+  CLEARING,
   CRATE,
   create,
   deliver,
@@ -246,10 +247,20 @@ describe("what is worked out from the yard and kept", () => {
     const y = create({ seed: 3, tier: 5 });
     const sale = (): Plot[] => y.land.plots.flatMap((p) => (plotState(y, p.plot).state === "for sale" ? [p.plot] : []));
     const signed = (): Plot[] => layout(y).signs.map((s) => s.plot.plot);
-    // Bought as the page buys, by a command, so that the yard counts the change and its layout is worked out again.
+    // Bought as the page buys, by commands, so that the yard counts the change and its layout is
+    // worked out again: a plot past the first ring cleared first, its goods put straight in.
+    const give = (c: Record<string, unknown>): void => {
+      const read = readCommand({ tick: y.tick, ...c });
+      if (!read || "refused" in play(y, read)) throw new Error(`${String(c.do)} was refused`);
+    };
     const buy = (p: Plot): void => {
-      const c = readCommand({ tick: y.tick, do: "buyPlot", plot: plotName(p), price: plotPrice(y, p) });
-      if (!c || "refused" in play(y, c)) throw new Error("not bought");
+      const want = CLEARING[p];
+      if (want) {
+        give({ do: "clearPlot", plot: plotName(p) });
+        y.clearing?.filled.set(want);
+        give({ do: "handClearing" });
+      }
+      give({ do: "buyPlot", plot: plotName(p), price: plotPrice(y, p) });
     };
     buy(plot("meadow"));
     buy(plot("workings"));

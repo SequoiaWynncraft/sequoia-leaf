@@ -22,6 +22,7 @@
  *
  * A letter of a thing the tables do not have yet is clear ground until they do (`land.ts`).
  */
+import type { Wants } from "./items.ts";
 import { FIRST } from "./rings/first.ts";
 import { SECOND, SECOND_IDS } from "./rings/second.ts";
 import { THIRD_NORTH_EAST, THIRD_NORTH_EAST_IDS } from "./rings/third-north-east.ts";
@@ -59,6 +60,11 @@ export interface PlotInfo<Id extends string = PlotName> {
   readonly row: number;
   /** Coins to open it: its base price, from which a plot that rises rises (`RISE`). The yard itself is free. */
   readonly price: number;
+  /**
+   * Goods delivered to the depot to clear it before it is bought (`clearing.ts`): every plot past the
+   * first ring has one, of 2 or 3 goods the yard already makes, sized in line-hours by its ring.
+   */
+  readonly clearing?: Wants;
   /** Why anyone would want it. */
   readonly why: string;
   readonly rows: readonly string[];

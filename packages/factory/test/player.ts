@@ -5,7 +5,7 @@ import { expect } from "bun:test";
 
 import * as F from "../src/index.ts";
 import { rng } from "./random.ts";
-import { buying, delivering } from "./yards.ts";
+import { buying, delivering, must } from "./yards.ts";
 
 type Rec = Record<string, unknown>;
 
@@ -45,10 +45,17 @@ export class Player {
     const y1 = Math.max(...near.map((p) => p.y + p.h));
     return { x: x0 + this.int(x1 - x0), y: y0 + this.int(y1 - y0) };
   }
+  /** The tiles whose piece's kind `has` takes, in the land's order: one pass, as large as the land is. */
+  tilesWith(has: (kind: number) => boolean): number[] {
+    const out: number[] = [];
+    const kinds = this.y.kind;
+    for (let i = 0; i < kinds.length; i++) if (has(kinds[i] ?? F.NONE)) out.push(i);
+    return out;
+  }
   /** A tile: usually one with something on it, now and then anywhere, once in a while off the map. */
   spot(): { x: number; y: number } {
     const { w, h } = this.y.land;
-    const standing = [...this.y.kind.keys()].filter((i) => this.y.kind[i] !== F.NONE);
+    const standing = this.tilesWith((k) => k !== F.NONE);
     const i = this.r() < 0.65 ? this.pick(standing) : undefined;
     if (i !== undefined) return { x: i % w, y: Math.floor(i / w) };
     return this.r() < 0.05 ? { x: w + this.int(3), y: this.int(h) } : this.anywhere();
@@ -71,7 +78,7 @@ export class Player {
   /** A tile with one of some kinds of piece on it, if there is one; else any spot. */
   of(...kinds: readonly F.Kind[]): { x: number; y: number } {
     const { w } = this.y.land;
-    const tiles = [...this.y.kind.keys()].filter((i) => kinds.some((k) => this.y.kind[i] === k));
+    const tiles = this.tilesWith((kind) => kinds.some((k) => k === kind));
     const i = this.r() < 0.8 ? this.pick(tiles) : undefined;
     return i === undefined ? this.spot() : { x: i % w, y: Math.floor(i / w) };
   }
@@ -201,9 +208,15 @@ export class Player {
         }
         return { do: "way", way, open: r < 0.55, ...this.of(F.SPLITTER) };
       }
-      case 17:
-        // A plot it owns or may buy, one not for sale yet, or one there is none of.
-        return buying(y, this.pick([...this.plotsNear(), "seam", "moon"]) ?? "moon");
+      case 17: {
+        // A plot it owns or may buy, one not for sale yet, or one there is none of: bought, or its
+        // clearing taken on; or the clearing handed over, or now and then stopped.
+        const plot = this.pick([...this.plotsNear(), "seam", "moon"]) ?? "moon";
+        const r = this.r();
+        if (r < 0.7) return buying(y, plot);
+        if (r < 0.85) return { do: "clearPlot", plot };
+        return { do: r < 0.98 ? "handClearing" : "stopClearing" };
+      }
       case 18:
         return { do: "take", node: this.pick([...F.NODES.map((n) => n.id), "nap"]) };
       case 19: {
@@ -290,6 +303,20 @@ export class Player {
 }
 
 /** The delivering yard with every order on its board filled, so handing over is done as well as refused. */
+/** A yard past tier 4's commission that owns today's nine plots and is clearing The Old Workings, all it wants delivered. */
+export function clearingFilled(): F.Yard {
+  const y = F.create({ seed: 16, tier: 5 });
+  for (let more = true; more;) {
+    const p = y.land.plots.find((q) => q.ring === 1 && F.plotState(y, q.plot).state === "for sale");
+    more = p !== undefined;
+    if (p) must(y, buying(y, F.plotName(p.plot)));
+  }
+  must(y, { do: "clearPlot", plot: "workings" });
+  y.clearing?.filled.set(F.CLEARING[F.plot("workings")] ?? F.counts());
+  y.history = [];
+  return y;
+}
+
 export function boardFilled(): F.Yard {
   const y = delivering(5);
   for (const o of y.board) for (const n of F.ALL_ITEMS) o.filled[n] = o.want[n] ?? 0;
