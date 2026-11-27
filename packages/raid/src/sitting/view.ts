@@ -4,6 +4,7 @@
  * pick drawn and not yet offered, and of another seat's board only what it locked last.
  */
 import { isPredicted, plan } from "../command.ts";
+import type { BoonId } from "../content/boons.ts";
 import { catalogOf } from "../content/catalog.ts";
 import type { Era } from "../content/releases.ts";
 import type { RoomKind } from "../content/rooms.ts";
@@ -18,8 +19,9 @@ import { facing, kindOf, marked, nameOf, notNow, notPlanning, type Sitting, type
 
 /**
  * A seat's table as it stands now, as anyone at a live table may scout it, as in TFT: its board and
- * bench (each figure with what it holds), its rack, its acorns, its level and XP. Never its stall,
- * its picks or anything drawn and not yet shown.
+ * bench (each figure with what it holds), its rack, its acorns, its level and XP, and the boons it has
+ * taken (they change its figures' numbers). Never its stall, its picks or anything drawn and not yet
+ * shown.
  */
 export interface SeatTable {
   board: (Piece | null)[];
@@ -29,6 +31,8 @@ export interface SeatTable {
   acorns: number;
   level: number;
   xp: number;
+  /** The boons it has taken, which its figures' numbers count. */
+  boons: BoonId[];
 }
 
 /** A seat as anyone at the sitting sees it. */
@@ -66,13 +70,14 @@ export interface SittingView {
 }
 
 /** A run's table, as a seat shows it to be scouted. */
-const tableOf = (run: Pick<RunView, "board" | "bench" | "rack" | "acorns" | "level" | "xp">): SeatTable => ({
+const tableOf = (run: Pick<RunView, "board" | "bench" | "rack" | "acorns" | "level" | "xp" | "boons">): SeatTable => ({
   board: run.board,
   bench: run.bench,
   rack: run.rack,
   acorns: run.acorns,
   level: run.level,
   xp: run.xp,
+  boons: run.boons,
 });
 
 /** The viewer's copy with their run as it is after something they did: their own row, level and table, read from it as Leaf's are. */

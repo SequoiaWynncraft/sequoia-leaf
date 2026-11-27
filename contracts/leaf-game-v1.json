@@ -3794,7 +3794,8 @@
               "rack": {},
               "acorns": 2,
               "level": 1,
-              "xp": 0
+              "xp": 0,
+              "boons": []
             }
           },
           {
@@ -3853,7 +3854,8 @@
               "rack": {},
               "acorns": 2,
               "level": 1,
-              "xp": 0
+              "xp": 0,
+              "boons": []
             }
           },
           {
@@ -3911,7 +3913,8 @@
               "rack": {},
               "acorns": 2,
               "level": 1,
-              "xp": 0
+              "xp": 0,
+              "boons": []
             }
           },
           {
@@ -3969,7 +3972,8 @@
               "rack": {},
               "acorns": 2,
               "level": 1,
-              "xp": 0
+              "xp": 0,
+              "boons": []
             }
           },
           {
@@ -4027,7 +4031,8 @@
               "rack": {},
               "acorns": 2,
               "level": 1,
-              "xp": 0
+              "xp": 0,
+              "boons": []
             }
           },
           {
@@ -4085,7 +4090,8 @@
               "rack": {},
               "acorns": 2,
               "level": 1,
-              "xp": 0
+              "xp": 0,
+              "boons": []
             }
           },
           {
@@ -4143,7 +4149,8 @@
               "rack": {},
               "acorns": 2,
               "level": 1,
-              "xp": 0
+              "xp": 0,
+              "boons": []
             }
           },
           {
@@ -4201,7 +4208,8 @@
               "rack": {},
               "acorns": 2,
               "level": 1,
-              "xp": 0
+              "xp": 0,
+              "boons": []
             }
           }
         ],

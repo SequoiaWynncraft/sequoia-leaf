@@ -361,6 +361,7 @@ function scouted(): { t: Sitting; now: number } {
   them.rack = { thorn: 2, plume: 1 };
   them.acorns = 17;
   them.level = 4;
+  them.boons = ["formation"];
   return { t, now };
 }
 
@@ -375,8 +376,10 @@ describe("scouting at the live seat", () => {
     // Leaf sent it: the page shows the seat's table as it came, and invents nothing.
     expect(them.table.board[9]).toMatchObject({ kind: "moth", items: ["bark"] });
     expect(them.table.rack).toEqual({ thorn: 2, plume: 1 });
-    const { board, bench, rack, acorns, level, xp } = shown;
-    expect({ board, bench, rack, acorns, level, xp }).toEqual(them.table);
+    const { board, bench, rack, acorns, level, xp, boons } = shown;
+    expect({ board, bench, rack, acorns, level, xp, boons }).toEqual(them.table);
+    // Their boons come too, so their figures' cards show the numbers those boons give.
+    expect(boons).toEqual(["formation"]);
     // The member's own stall stays theirs; nobody stands across.
     expect(shown.stall).toEqual(line.view.run?.stall ?? []);
     expect([shown.resolve, shown.foe.figures.length]).toEqual([them.resolve, 0]);

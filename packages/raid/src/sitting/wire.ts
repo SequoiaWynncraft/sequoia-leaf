@@ -4,6 +4,7 @@
  * each board as a party, each fight as a setup, and the viewer's run as a page is shown a run.
  * Anything else is a view these rules could not have made: null.
  */
+import { BOON_IDS, isBoonId } from "../content/boons.ts";
 import { isEra } from "../content/releases.ts";
 import { ECONOMY, MOST_ROOMS } from "../content/rooms.ts";
 import { SEATS } from "../hex.ts";
@@ -20,7 +21,7 @@ const chair = (v: unknown, what: string): number => whole(v, 0, CHAIRS - 1, what
 const text = (v: unknown, what: string): string =>
   typeof v === "string" && v.length > 0 && v.length <= 80 ? v : bad(what);
 
-/** A seat's table as it stands now: its board and bench, its rack, acorns, level and XP. */
+/** A seat's table as it stands now: its board and bench, its rack, acorns, level and XP, and its boons. */
 function readTable(v: unknown): SeatTable {
   const t = record(v, "a seat's table");
   return {
@@ -30,6 +31,7 @@ function readTable(v: unknown): SeatTable {
     acorns: whole(t.acorns, 0, 1_000_000, "a seat's acorns"),
     level: whole(t.level, 1, 99, "a seat's level"),
     xp: whole(t.xp, 0, 1_000_000, "a seat's XP"),
+    boons: list(t.boons, BOON_IDS.length, "a seat's boons").map((b) => one(b, isBoonId, "a seat's boons")),
   };
 }
 

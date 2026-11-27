@@ -43,15 +43,15 @@ export const scoutable = (view: Pick<SittingView, "stage">): boolean =>
 
 /**
  * A player's table as the shared table shows it while the member scouts it, as Leaf has it now: their
- * board and bench (each figure with what it holds), rack (how many of each kind), acorns, level, XP
- * and health, on the
+ * board and bench (each figure with what it holds), rack (how many of each kind), acorns, level, XP,
+ * boons and health, on the
  * member's own run otherwise (their stall stays theirs, as in TFT), with nobody across and nothing to
  * pick.
  */
 export function scoutedRun(view: SittingView, seat: number): RunView | null {
   const them = view.seats[seat];
   if (!view.run || !them) return null;
-  const { board, bench, rack, acorns, level, xp } = structuredClone(them.table);
+  const { board, bench, rack, acorns, level, xp, boons } = structuredClone(them.table);
   return {
     ...view.run,
     board,
@@ -63,7 +63,8 @@ export function scoutedRun(view: SittingView, seat: number): RunView | null {
     resolve: them.resolve,
     streak: them.streak,
     stage: { phase: "plan", picks: [] },
-    boons: [],
+    // Their boons, so their figures' cards show the numbers those boons give.
+    boons,
     foe: { ...view.run.foe, who: "", title: "", figures: [] },
     last: null,
   };
