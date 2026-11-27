@@ -58,7 +58,8 @@ guard({
     body.style.cssText = "margin:0;background:#1d1b24";
     root.style.visibility = "";
   },
-  refetch: (url) => fetch(url, { cache: "reload", credentials: "same-origin" }),
+  // Bounded: a request that stalls through the swap gives up after 5 s, and the page reloads anyway.
+  refetch: (url) => fetch(url, { cache: "reload", credentials: "same-origin", signal: AbortSignal.timeout(5_000) }),
   reload: () => {
     location.reload();
   },
