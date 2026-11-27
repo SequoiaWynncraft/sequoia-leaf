@@ -86,9 +86,11 @@ import {
 import { pieces as richPieces } from "../rich.ts";
 import { doNow, S } from "../state.ts";
 import { chairsSaid } from "./endless.ts";
+import { feedActions } from "./feedtarget.ts";
 import { figuresHere, levelOnCard, oddsStats } from "./own.ts";
 import { figureRef, itemRef, pieceRef, traitRef } from "./refs.ts";
 import { itemsOf, wantedBy } from "./suits.ts";
+import { fedLine, sortWord } from "./words.ts";
 
 export * from "./refs.ts";
 
@@ -148,7 +150,7 @@ const starsOf = (flags: readonly string[]): Stars => (flags.includes("3") ? 3 : 
 
 export interface FigureExtras {
   items?: readonly ItemId[];
-  /** How many times Greg has eaten. */
+  /** What Greg has gained from eating, in percent of his health. */
   fed?: number;
   /** Its level, in a run with the member's own figures or among the figures they have pulled. */
   level?: number;
@@ -226,8 +228,7 @@ export function figureDesc(kind: UnitKind, stars: Stars, extras: FigureExtras = 
       ...(spec.mana[1] > 0 ? { note: `mana ${spec.mana[1]}` } : {}),
       body: rich(abilityShort(kind, stars)),
     });
-  if (kind === "greg" && (extras.fed ?? 0) > 0)
-    blocks.push({ body: `Has eaten ${extras.fed} times: +${(extras.fed ?? 0) * 3}% health.` });
+  if (kind === "greg" && (extras.fed ?? 0) > 0) blocks.push({ body: fedLine(extras.fed ?? 0) });
   if (extras.lore) {
     if (spec.ability) blocks.push({ body: abilityText(kind, stars) });
     blocks.push({ body: el("i", "k-dim quip", { text: spec.quip }) });
@@ -251,9 +252,12 @@ export function figureDesc(kind: UnitKind, stars: Stars, extras: FigureExtras = 
       el("span", "k-row tight", {}, lv.tag, pic(starsPic(stars)), figure ? acorns(figure.tier) : null),
       extras.whose ? el("span", "k-dim", { text: extras.whose }) : null,
     ),
-    chips: [chip(kin, "Kin"), chip(calling, "Calling"), ...more.map((t) => chip(t, "Also")), drawChip(draw)].filter(
-      (c): c is Chip => c !== null,
-    ),
+    chips: [
+      chip(kin, "Origin"),
+      chip(calling, "Class"),
+      ...more.map((t) => chip(t, sortWord(t))),
+      drawChip(draw),
+    ].filter((c): c is Chip => c !== null),
     stats: statsOf(kind, stars, extras, lv.level),
     blocks,
     rows: held.rows,
@@ -270,6 +274,7 @@ export function figureDesc(kind: UnitKind, stars: Stars, extras: FigureExtras = 
                 if (spot) doNow({ do: "sell", from: spot });
               },
             },
+            ...feedActions(run, piece),
           ]
         : [],
   };
@@ -345,7 +350,7 @@ export function traitDesc(id: TraitId, run: RunView | null, lore = false): Descr
       "span",
       "k-row tight",
       {},
-      el("span", "k-label", { text: spec.sort === "kin" ? "Kin" : spec.sort === "calling" ? "Calling" : "Own" }),
+      el("span", "k-label", { text: sortWord(id) }),
       state ? el("b", "", { text: `${count}/${state.next}` }) : null,
     ),
     blocks,
@@ -390,7 +395,7 @@ export function itemDesc(id: ItemId, run: RunView | null, itemAt = -1, lore = fa
       brief: itemBrief(id),
       tag: "An emblem",
       blocks,
-      chips: [{ label: "Kin", text: TRAITS[kin].name, icon: traitIcon(kin), ref: traitRef(kin) }],
+      chips: [{ label: "Origin", text: TRAITS[kin].name, icon: traitIcon(kin), ref: traitRef(kin) }],
     };
   }
   return {

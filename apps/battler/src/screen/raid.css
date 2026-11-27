@@ -800,6 +800,51 @@ body.selling #sellhint {
 body.sell-hot #sellhint {
   background: #b0483ae0;
 }
+/* With a Greg to feed, the stall is two targets side by side: selling, and feeding him. */
+#sellhint > span {
+  display: grid;
+  grid-auto-flow: column;
+  place-items: center;
+  place-content: center;
+  gap: calc(var(--u) * 3);
+}
+#sellhint .feed.full {
+  opacity: 0.7;
+}
+#sellhint.two {
+  grid-template-columns: 1fr 1fr;
+  grid-auto-flow: row;
+  place-content: stretch;
+  place-items: stretch;
+  gap: 0;
+}
+/* The words low in each half, clear of the figure held up over the pointer, each line whole. */
+#sellhint.two > span {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-content: flex-end;
+  align-items: center;
+  column-gap: calc(var(--u) * 2);
+  height: 100%;
+  padding: 0 calc(var(--u) * 2) calc(var(--u) * 8);
+  box-sizing: border-box;
+  font: var(--f-name);
+  white-space: nowrap;
+  text-align: center;
+}
+#sellhint.two .feed {
+  box-shadow: inset calc(var(--u) * 1) 0 0 #fff3cf40;
+}
+body.sell-hot #sellhint.two {
+  background: #1a0f1ed9;
+}
+body.sell-hot:not(.feed-hot) #sellhint.two .sell {
+  background: #b0483ae0;
+}
+body.feed-hot #sellhint .feed {
+  background: #3b7340e0;
+}
 body.dragging,
 body.dragging * {
   cursor: grabbing !important;

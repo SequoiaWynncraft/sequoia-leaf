@@ -10,7 +10,7 @@ import { type FigureId, FIGURES, type Stars } from "./content/figures.ts";
 import type { ItemId } from "./content/items.ts";
 import { worth } from "./content/rooms.ts";
 import { traitNumber } from "./content/traits.ts";
-import { type Done, notPlanning, pieceAt, refusal, type RunView, type Spot } from "./run.ts";
+import { type Done, notPlanning, pieceAt, refusal, type Refused, type RunView, type Spot } from "./run.ts";
 
 /** What feeding Greg did, for a screen to show. */
 export interface Fed {
@@ -30,11 +30,12 @@ export interface Fed {
 }
 
 /**
- * Greg (at `to`) eats the figure on the bench at `from`. Turned down outside planning, from anywhere
- * but the bench, for nobody there, for anyone but a Greg eating, for a Greg being eaten, and when
- * Greg has gained all he can.
+ * What Greg (at `to`) would gain from eating the figure on the bench at `from`, in percent of his
+ * health, without doing it: the number a screen shows before the figure is let go. Turned down as
+ * feeding is: outside planning, from anywhere but the bench, for nobody there, for anyone but a Greg
+ * eating, for a Greg being eaten, and when Greg has gained all he can.
  */
-export function feed(run: RunView, from: Spot, to: Spot): Done {
+export function mealFor(run: RunView, from: Spot, to: Spot): { ok: true; gained: number } | Refused {
   const stop = notPlanning(run);
   if (stop) return refusal(stop);
   const meal = pieceAt(run, from);
@@ -46,23 +47,32 @@ export function feed(run: RunView, from: Spot, to: Spot): Done {
   if (meal.kind === "greg") return refusal("greg_on_greg");
   const most = traitNumber("greg", "most", 1);
   if (greg.fed >= most) return refusal("greg_full");
-  const gained = Math.min(
-    most - greg.fed,
-    worth(FIGURES[meal.kind].tier, meal.stars) * traitNumber("greg", "grows", 1),
-  );
-  greg.fed += gained;
-  run.items.push(...meal.items);
+  return {
+    ok: true,
+    gained: Math.min(most - greg.fed, worth(FIGURES[meal.kind].tier, meal.stars) * traitNumber("greg", "grows", 1)),
+  };
+}
+
+/** Greg (at `to`) eats the figure on the bench at `from`, when `mealFor` says he may. */
+export function feed(run: RunView, from: Spot, to: Spot): Done {
+  const meal = mealFor(run, from, to);
+  if (!meal.ok) return meal;
+  const eaten = pieceAt(run, from);
+  const greg = pieceAt(run, to);
+  if (!eaten || !greg) return refusal("nobody_there");
+  greg.fed += meal.gained;
+  run.items.push(...eaten.items);
   run.bench[from.at] = null;
   const ate: Fed = {
     t: "fed",
     piece: greg.id,
     fed: greg.fed,
-    gained,
-    ate: meal.id,
-    kind: meal.kind,
-    stars: meal.stars,
+    gained: meal.gained,
+    ate: eaten.id,
+    kind: eaten.kind,
+    stars: eaten.stars,
     from,
-    items: meal.items.slice(),
+    items: eaten.items.slice(),
   };
   return { ok: true, notes: [ate] };
 }

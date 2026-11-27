@@ -16,6 +16,7 @@ import {
   headliner,
   HISTORY,
   PRIZES,
+  prizesAt,
   PULLS,
   type Pulls,
   type PullsCommand,
@@ -60,7 +61,7 @@ function refused(state: Pulls, c: PullsCommand, at = ctx()): string | null {
 }
 /** The tiers drawn from the same counters with each of `n` streams. */
 const tiers = (c: Counters, n: number) =>
-  new Set(Array.from({ length: n }, (_, seed) => RARITIES[draw({ ...c }, null, { rng: seed }).rarity].tier));
+  new Set(Array.from({ length: n }, (_, seed) => RARITIES[draw({ ...c }, null, { rng: seed }, T0).rarity].tier));
 
 /** The figures of one of the raid's prices, as prizes. */
 const priced = (price: number): string[] =>
@@ -71,11 +72,39 @@ function known(prize: string): boolean {
   return kind === "thing" ? isThing(id) : kind === "look" && isBoughtLook(id);
 }
 
+/** The top-tier prizes the grove gives at a moment, over many streams. */
+function treants(now: number): Set<string> {
+  const seen = new Set<string>();
+  for (let seed = 0; seed < 400; seed++) seen.add(draw(counters(79), null, { rng: seed }, now).prize);
+  return seen;
+}
+
+describe("a figure made while a banner is open", () => {
+  it("joins the pools when the next banner opens: Seqwawa is no prize during banner-1, and is one from 8 December", () => {
+    const opens = Date.UTC(2026, 11, 8);
+    expect(treants(T0).has("figure:seqwawa")).toBe(false);
+    expect(treants(opens - 1).has("figure:seqwawa")).toBe(false);
+    expect(treants(opens).has("figure:seqwawa")).toBe(true);
+    // Lost on the 50/50, banner-1 pays out of the three it opened with.
+    const lost = new Set<string>();
+    for (let seed = 0; seed < 400; seed++) {
+      const d = draw(counters(79), headliner("banner-1"), { rng: seed }, T0);
+      if (d.rarity === "Treant") lost.add(d.prize);
+    }
+    expect([...lost].toSorted()).toEqual(["figure:greg", "figure:hearthcat", "figure:whitefox"]);
+  });
+});
+
 describe("the prizes", () => {
   it("are the raid's figures, each in one rarity by its price there, and a banner's headliner", () => {
     const all = Object.values(PRIZES).flat();
-    expect(all.toSorted()).toEqual([...FIGURE_IDS.map((id) => `figure:${id}`), "headliner:banner-1"].toSorted());
-    expect([PRIZES.Leafkin, PRIZES.Sapling, PRIZES.Sprite, PRIZES.Treant]).toEqual([
+    expect(all.toSorted()).toEqual(
+      [
+        ...FIGURE_IDS.map((id) => `figure:${id}`).filter((p) => p !== "figure:seqwawa"),
+        "headliner:banner-1",
+      ].toSorted(),
+    );
+    expect([PRIZES.Leafkin, PRIZES.Sapling, PRIZES.Sprite, prizesAt("Treant", Infinity)]).toEqual([
       priced(1),
       priced(2),
       priced(3),
@@ -84,7 +113,7 @@ describe("the prizes", () => {
     expect([...PRIZES.Dryad, ...PRIZES.Druid].toSorted()).toEqual(priced(4).toSorted());
     expect(PRIZES.Dryad).toEqual(["figure:badger", "figure:fogowl", "figure:heron"]);
     expect(PRIZES.Druid).toEqual(["figure:crab40", "figure:apothecary"]);
-    expect(Object.values(PRIZES).map((list) => list.length)).toEqual([7, 7, 6, 3, 2, 4, 1]);
+    expect(Object.values(PRIZES).map((list) => list.length)).toEqual([7, 7, 6, 3, 2, 3, 1]);
     expect(PRIZES.Yggdrasil).toEqual(["headliner:banner-1"]);
     // The town has a thing to send for each figure, and for each banner's headliner.
     expect(FIGURE_IDS.filter((id) => !isThing(figureThing(id)))).toEqual([]);
@@ -97,6 +126,7 @@ describe("the prizes", () => {
         .filter((prize) => MEMBER_IDS.some((id) => prize === `figure:${id}`)),
     ).toEqual([]);
     expect(rarityOf("figure:greg")).toBe("Treant");
+    expect(rarityOf("figure:seqwawa")).toBe("Treant");
     expect(rarityOf("figure:nobody")).toBeUndefined();
     expect(rarityOf("headliner:banner-0")).toBe("Yggdrasil");
   });
@@ -139,7 +169,7 @@ describe("a pull", () => {
     for (let seed = 0; seed < 200; seed++) {
       const c = counters(79);
       const s = { rng: seed };
-      const first = draw(c, headliner("banner-1"), s);
+      const first = draw(c, headliner("banner-1"), s, T0);
       if (first.fifty === "won") {
         expect(first).toMatchObject({ prize: "headliner:banner-1", rarity: "Yggdrasil" });
         expect(c.owed).toBe(false);
@@ -151,7 +181,7 @@ describe("a pull", () => {
       seen.lost += 1;
       // The banner after it: its next top-tier prize is its own headliner, and nothing is owed after it.
       c.top = 79;
-      expect(draw(c, headliner("banner-2"), s)).toEqual({
+      expect(draw(c, headliner("banner-2"), s, T0)).toEqual({
         prize: "headliner:banner-2",
         rarity: "Yggdrasil",
         top: 80,
@@ -163,7 +193,7 @@ describe("a pull", () => {
     expect(seen.lost).toBeGreaterThan(70);
     // The grove has no headliner and no 50/50.
     const grove = counters(79);
-    expect(draw(grove, null, { rng: 1 })).toMatchObject({ rarity: "Treant", top: 80 });
+    expect(draw(grove, null, { rng: 1 }, T0)).toMatchObject({ rarity: "Treant", top: 80 });
     expect(grove).toEqual(counters());
   });
 
@@ -414,16 +444,19 @@ describe("a million pulls", () => {
       let fillers = 0;
       let mostFillers = 0;
       for (let i = 0; i < N; i++) {
-        const { prize, rarity, top } = draw(c, headline, s);
+        const { prize, rarity, top } = draw(c, headline, s, T0);
         got[rarity] += 1;
         drawn.add(prize);
         longest = Math.max(longest, top);
         fillers = RARITIES[rarity].tier === "filler" ? fillers + 1 : 0;
         mostFillers = Math.max(mostFillers, fillers);
       }
-      // Every figure comes, and nothing else but the banner's headliner.
+      // Every figure banner-1 opened with comes, and nothing else but the banner's headliner.
       expect([...drawn].toSorted()).toEqual(
-        [...FIGURE_IDS.map((id) => `figure:${id}`), ...(headline === null ? [] : [headline])].toSorted(),
+        [
+          ...FIGURE_IDS.map((id) => `figure:${id}`).filter((p) => p !== "figure:seqwawa"),
+          ...(headline === null ? [] : [headline]),
+        ].toSorted(),
       );
       // Few rounds ever reach the 80th pull: the chance on each pull from the 66th is high.
       expect(longest).toBeLessThanOrEqual(RATES.top.certainAt);

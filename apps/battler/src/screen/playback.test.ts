@@ -53,6 +53,8 @@ const SETUPS: readonly FightSetup[] = [
   setupOf(FIGURE_IDS.slice(0, 8), FIGURE_IDS.slice(8, 16), 1),
   setupOf(FIGURE_IDS.slice(16, 24), FIGURE_IDS.slice(0, 8), 2, 2),
   setupOf([...FIGURE_IDS.slice(24), "banner-1", "glorp", "worm", "fogowl"], FIGURE_IDS.slice(8, 16), 3, 2),
+  // Groot at five, falling and rising in true forms, and Seqwawa standing them back up.
+  setupOf(["worm", "moth", "rock", "greg", "whitefox", "seqwawa"], FIGURE_IDS.slice(18, 26), 5, 2),
   setupOf(
     FIGURE_IDS.slice(8, 16),
     TROUBLE_IDS.filter((k) => k !== "oldbramble" && k !== "hoardmagpie"),

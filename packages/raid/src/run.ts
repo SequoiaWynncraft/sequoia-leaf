@@ -241,7 +241,7 @@ export const REFUSALS = {
   top_level: "There is no level above this one.",
   no_such_item: "There is no such item.",
   hands_full: "It is holding all it can.",
-  already_kin: "It is of that kin already.",
+  already_kin: "It is of that origin already.",
   two_components: "It takes two components.",
   board_empty: "Put somebody on the board first.",
   too_many_fielded: "There are more on the board than you can field.",

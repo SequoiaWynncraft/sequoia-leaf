@@ -250,6 +250,17 @@ function merge(note: Extract<Note, { t: "merged" }>, delay: number): void {
   });
 }
 
+/** Greg eats a figure: it hops into him and is gone, and as it lands he plumps up, gulping. */
+export function gulp(ate: number, greg: number): void {
+  const p = pawns.get(ate);
+  const g = pawns.get(greg);
+  if (!p) return;
+  live(p, { e: "spoken", to: "merge" });
+  live(p, { e: "last hop" });
+  hop(p, g ? { x: g.x, y: g.y - 4 } : { x: p.x, y: p.y - 12 }, 0.3, 14, aloft(p));
+  if (g) later(0.3, () => (g.popAt = V.t));
+}
+
 /** A figure sold: it hops off to the stall, its acorns fly to the purse, and what it held flies back to the rack as it was. */
 function soldAway(note: Extract<RaidNote, { t: "sold" }>): void {
   const p = pawns.get(note.piece);

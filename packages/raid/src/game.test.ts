@@ -621,7 +621,7 @@ describe("an emblem handed to a figure of its kin already", () => {
     const command: RaidCommand = { do: "give", item: 0, to: spot };
     expect(predict(RAID.view(state, ctx()), command)).toEqual({ refused: "already_kin" });
     expect(RAID.apply(state, command, ctx())).toEqual({ refused: "already_kin" });
-    expect(refusalText("already_kin")).toBe("It is of that kin already.");
+    expect(refusalText("already_kin")).toBe("It is of that origin already.");
   });
 });
 

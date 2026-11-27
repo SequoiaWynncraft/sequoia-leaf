@@ -154,25 +154,29 @@ GLLLLLLLG
 .GLLLLLG.
 ..GGGGG..
 
-# Stand-ins until the page draws the expansion.
+# Groot: the four raids' colours (the Moth's purple, the Worm's moss, the Rock's strata, the
+# Anomaly's dark), tied by a gold stud at four points.
 trait groot
-..yfffy..
-.ff...ff.
-yf.....fy
-f.......f
-yf.....fy
-.ff...ff.
-..yfffy..
-.........
+...yYy...
+.vv.y.GG.
+vv.....GG
+v.......G
+Yy.....yY
+X.......r
+XX.....rr
+.XX.y.rr.
+...yYy...
 
+# Rooted: roots going down from a sprout, in Moss's greens.
 trait rooted
-...BBB...
-..BnnnB..
-..BnnnB..
-..BBBBB..
-.N.NBN.N.
-N..N.N..N
-..N...N..
+...lLl...
+....l....
+...dGd...
+...dGd...
+..dGGGd..
+.dG.G.Gd.
+dG..G..Gd
+G...G...G
 .........
 
 # ---------- items ----------

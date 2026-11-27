@@ -101,7 +101,7 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
   },
   moth: (f, u, n) => {
     const t = aim(f, u);
-    // Wings Open, its true form: the dust covers the hexes two away as well.
+    // Real Moth, its true form: the dust covers the hexes two away as well.
     const reach = u.form === "true" ? formNumber("moth", "reach") : 1;
     if (!t || !crowd(f, u, foesOn(f, u.side, spread(t.cell, reach)).length)) return false;
     const damage = powered(u, n("damage"));
@@ -126,7 +126,7 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
     u.target = t.id;
     const bite = powered(u, n("damage"));
     hurt(f, t, bite, "physical", "ability", u);
-    // The Whole Worm, its true form: every other enemy touching where it comes up is bitten too.
+    // Real Worm, its true form: every other enemy touching where it comes up is bitten too.
     if (u.form === "true")
       for (const o of foesWithin(f, u.side, u.cell, 1)) if (o !== t) hurt(f, o, bite, "physical", "ability", u);
     return true;
@@ -398,7 +398,7 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
     if (near.length === 0 || !crowd(f, u, near.length)) return false;
     say(f, u, spread(to, 2), ids(near), 0);
     leap(f, u, to, "ability");
-    // Greg, Unnamed, his true form: first every enemy within 3 hexes is pulled 1 hex nearer him.
+    // Real Greg, his true form: first every enemy within 3 hexes is pulled 1 hex nearer him.
     const pulls = u.form === "true" ? formNumber("greg", "pull") : 0;
     for (const o of foesByDistance(f, u.side, to)) if (distance(to, o.cell) <= pulls) pull(f, u, o);
     const caught = pulls > 0 ? foesWithin(f, u.side, to, 2) : near;
@@ -411,7 +411,7 @@ export const CASTS: Partial<Record<UnitKind, Cast>> = {
   whitefox: (f, u, n) => {
     if (splash(f, u, 2, powered(u, n("damage")), "magic", () => {}) < 0) return false;
     for (const o of alliesOf(f, u.side)) haste(f, o, powered(u, n("haste")), n("lasts"), u);
-    // Orphion, Alight, its true form: the party gets a share of its health back.
+    // Real Orphion, its true form: the party gets a share of its health back.
     if (u.form === "true")
       for (const o of alliesOf(f, u.side)) heal(f, o, (o.maxHp * formNumber("whitefox", "heal")) / 100, "ability", u);
     return true;

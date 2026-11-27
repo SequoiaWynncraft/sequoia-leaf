@@ -219,7 +219,7 @@ export function getUp(f: Fight, u: Unit, hp: number, why: RiseWhy, form: Form = 
 /** Stands a figure in its true form: more attack and ability power, and the Rock its own attack. */
 function standTrue(u: Unit): void {
   if (u.kind === "rock") {
-    // The Rock, Standing, attacks: its form's numbers, grown and held as a figure's own are.
+    // Real Rock attacks: its form's numbers, grown and held as a figure's own are.
     let attack = 0;
     let speed = 0;
     for (const item of u.items) {

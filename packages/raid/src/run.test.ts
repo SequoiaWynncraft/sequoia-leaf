@@ -510,7 +510,7 @@ describe("items", () => {
     expect(giveItem(run, 0, { on: "board", at: 3 })).toEqual({
       ok: false,
       code: "already_kin",
-      why: "It is of that kin already.",
+      why: "It is of that origin already.",
     });
     expect(finch.items).toEqual([]);
     expect(run.items).toEqual(["feathercharm", "crabcharm"]);
@@ -998,7 +998,7 @@ describe("who is waiting", () => {
     expect(ROOMS[0]?.plans.map((p) => p.name)).toContain(a.title);
     expect(isParty(a)).toBe(true);
     const boss = opposition(77, 14, 0);
-    expect(boss.title).toBe("The Crab Nobody Counted");
+    expect(boss.title).toBe("Zero");
     expect(boss.figures[0]?.kind).toBe("bigcrab");
   });
   test("harder trails bring more of it, and stronger", () => {

@@ -27,6 +27,8 @@ import { drawHeld, type HeldAt, heldAt, heldRow, heldTop } from "./held.ts";
 import { DIM, shineOf } from "./light.ts";
 import { arrivalOf, handing, watchersOf } from "./logic.ts";
 import { aloft, FOOT, type Pawn, pawns, spotOfPawn } from "./pawns.ts";
+import { drawRisings } from "./rising.ts";
+import { drawRoots } from "./roots.ts";
 import { facing } from "./screen.ts";
 import { snd } from "./sounds.ts";
 import { drawSeals } from "./spells.ts";
@@ -341,6 +343,8 @@ function drawTable(g: Ctx): void {
   }
   drawFxUnder(g);
   drawFightMarks(g);
+  drawRoots(g);
+  drawRisings(g);
   drawSeals(g);
   const list: Standing[] = [];
   if (fighting) drawFight(g, list);

@@ -176,20 +176,30 @@ function seal(g: Ctx, s: Spell, c: number): void {
   g.globalAlpha = 1;
 }
 
-/** The table goes dark all round a seal while it hangs, a row at a time, and is as it was the moment it lands. */
-function hush(g: Ctx, s: Spell, c: number): void {
-  const x = Math.round(V.bx + s.spot.x);
-  const y = Math.round(V.by + s.spot.y) - FOOT;
+/**
+ * The table dark all round a pool of light lying on it, `rx` and `ry` round the screen point `x`,
+ * `y`, the dark `k` of the way in (0 none, 1 as dark as a big moment goes). Drawn under everyone
+ * standing on it, so nobody is darkened.
+ */
+export function dimRound(g: Ctx, x: number, y: number, rx: number, ry: number, k: number): void {
+  if (k <= 0) return;
   g.fillStyle = INK;
-  g.globalAlpha = HUSH * clamp((c - s.hung.at) / FALLS, 0, 1);
-  g.fillRect(0, 0, V.w, y - SEAL.ry);
-  g.fillRect(0, y + SEAL.ry + 1, V.w, V.h);
-  for (let dy = -SEAL.ry; dy <= SEAL.ry; dy++) {
-    const half = Math.round(SEAL.rx * Math.sqrt(1 - (dy / SEAL.ry) ** 2));
+  g.globalAlpha = HUSH * clamp(k, 0, 1);
+  g.fillRect(0, 0, V.w, y - ry);
+  g.fillRect(0, y + ry + 1, V.w, V.h);
+  for (let dy = -ry; dy <= ry; dy++) {
+    const half = Math.round(rx * Math.sqrt(1 - (dy / ry) ** 2));
     g.fillRect(0, y + dy, x - half, 1);
     g.fillRect(x + half + 1, y + dy, V.w, 1);
   }
   g.globalAlpha = 1;
+}
+
+/** The table goes dark all round a seal while it hangs, a row at a time, and is as it was the moment it lands. */
+function hush(g: Ctx, s: Spell, c: number): void {
+  const x = Math.round(V.bx + s.spot.x);
+  const y = Math.round(V.by + s.spot.y) - FOOT;
+  dimRound(g, x, y, SEAL.rx, SEAL.ry, (c - s.hung.at) / FALLS);
 }
 
 /** The seals, on the ground under everyone standing on it, and the dark round the first of them. */

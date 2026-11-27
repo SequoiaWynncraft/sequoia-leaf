@@ -249,7 +249,7 @@ export {
   xpToNext,
 } from "./run.ts";
 export { forgeItems } from "./rack.ts";
-export { type Fed, feed } from "./feed.ts";
+export { type Fed, feed, mealFor } from "./feed.ts";
 export { boardMet, boardSlot, opposition } from "./foe.ts";
 
 // The endless runs: the Wilds and the Deep Woods.

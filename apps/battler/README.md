@@ -27,8 +27,8 @@ kit's card: "The table needs the guild's server."
   a bench of nine hollows along the near edge, two lantern posts, moss and ferns at the rim, the
   clearing and the far trunks behind, and dusk over all of it with the lanterns' light cut out. In
   a sparring room the regular who brought the party sits across the table, one of the battler's
-  own figures drawn twice the size (Greg, the Hearth Cat, a Barrow Gnome, Crab #7, Orphion
-  or a Moth), with a plate beside it that reads "Greg brought Mist Fangs", its name in the kit's
+  own figures drawn twice the size (Greg, Vesta, Hodge, Nipper, Orphion
+  or Moth), with a plate beside it that reads "Greg brought Mist Fangs", its name in the kit's
   leaf green with the acorn; two other regulars watch from logs where the window is wide enough.
 - **The figures.** Every one of the twenty-eight, the forest's trouble and bosses, and the few that
   are only ever summoned, each as its own small picture with a base the colour of what it costs and
@@ -36,7 +36,11 @@ kit's card: "The table needs the guild's server."
   pose of their own to use an ability, and tip over.
 - **Planning.** A figure may be dragged (mouse or finger) from the stall to the bench or the board,
   about the board and bench, onto another to change places, and onto the stall to sell it; the
-  stall says what it would pay. Everything may be done by tapping instead: tap a figure, then tap
+  stall says what it would pay. With a Greg in the party, a figure carried from the bench finds the
+  stall split in two: "Sell for +2" and beside it "Feed Greg +6%" (what that figure would add, said
+  before it is let go; "Greg is full", and no target, at 40%). Let go there, it hops into Greg, he
+  gulps and his number rises over him, and what it held flies to the rack (`ui/feedtarget.ts`); a
+  bench figure's card has the same button beside Sell, for the keyboard and a finger. Everything may be done by tapping instead: tap a figure, then tap
   where it goes; tap an offer to buy it. Hexes light for
   where a held figure may go, and a column of pips beside the front line shows how many may be
   fielded. Two fingers on the stall at once are two taps, and an offer let go over the offer it was
@@ -48,7 +52,7 @@ kit's card: "The table needs the guild's server."
   a trait's roster) opens its own card in the same place, with a back arrow. Cards say things in a
   few words, in the reading face, numbers in bold gold, heals and shields in green, and physical,
   magic and true damage each in a colour of its own. A figure's card has its picture, name, stars and price, what kind of fighter it is and where
-  it stands ("Tank · front row · draws fire"), its kin and calling as chips with the party's count,
+  it stands ("Tank · front row · draws fire"), its origin and class as chips with the party's count,
   a chip after them when its draw is not 0 ("Draws fire", "Draws fire ×2", "Slips notice", with a
   tip saying enemies pick it as if it stood a hex nearer or further), its numbers
   (green where an item, a trait or a boon raises one, coral where something lowers it), its
@@ -80,8 +84,8 @@ kit's card: "The table needs the guild's server."
   fill, with what they will pay next room. Experience is a bar under the level. Rustle (free once a
   room), hold the stall, level up, set out.
 - **Items.** Components, finished items and emblems sit on a rack. An emblem (what a charm boon
-  gives) is drawn as its kin's sign; its card says its name, that its holder is of that kin too,
-  and the kin as a chip, and a figure holding one has that kin among its chips and lights with it.
+  gives) is drawn as its origin's sign; its card says its name, that its holder is of that origin
+  too, and the origin as a chip, and a figure holding one has it among its chips and lights with it.
   Every figure shows what it holds as a row of up to three small pictures under its base (under its
   health bar in a fight), on both sides of the table, following it about and falling with it: a
   finished item or an emblem has a gold edge, a loose component the plain dark one, each on a small
@@ -117,7 +121,16 @@ kit's card: "The table needs the guild's server."
   ability goes off (each in a way of its own, with light gathering in), and sets off on a leap so
   that it comes down as its damage does. Each ability leaves its own mark and has its own sound.
   Figures squash and stretch as they hop, walk, land and are hit, take a sore edge when hit, and
-  tumble off their base and go in a puff of their own when they fall. A hard hit, an ability that
+  tumble off their base and go in a puff of their own when they fall. A Groot figure that will get
+  back up lies where it fell instead, and its true form rises in five beats on the fight's clock
+  (`risetime.ts`, `rising.ts`): it lies a moment, the table dims to its hex, its raid's ring draws
+  round it a gold stud at a time while friends lean away, it stands in its new shape as the ring
+  snaps shut with a bump and a low horn, and the ring stays faint under it until it falls again
+  (`rings.ts`: eggshell for the Worm, strata for the Rock, a missing ring of static for Greg, a gold
+  halo for Orphion, torn cloth for the Moth); it still stands if the fight ends first. Seqwawa never
+  moves: its sprout shakes, roots run out along the hexes to every friend, wait coiled at the
+  fallen one's hex, flash as it goes off and stand that one back up, and stay faint under those
+  hexes for the fight (`roots.ts`). A hard hit, an ability that
   hits two or more and a fall hold the fight's clock a moment, and the big moments bump the board
   on the stump; both less at 2x, almost not at 4x, and no bump for a player whose system asks for
   less motion. The lower panel is the tally meanwhile: "You" on the left and the other

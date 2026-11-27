@@ -48,7 +48,7 @@ test("what a reveal says of a prize: its name, whether it is new, and the Seeds 
   const again = revealOf({ t: "pull", prize: "figure:crab7", rarity: "Leafkin", have: 3 }, WITH);
   expect([again.have, again.owned, again.seeds]).toEqual(["You have 3", true, "+1 Seed"]);
   const bought = revealOf({ t: "exchange", prize: "figure:heron", rarity: "Dryad", have: 1 }, WITH);
-  expect([bought.name, bought.seeds]).toEqual(["Reed Heron", null]);
+  expect([bought.name, bought.seeds]).toEqual(["Reed", null]);
   const person = revealOf(
     { t: "pull", prize: headliner(banner.id), rarity: "Yggdrasil", have: 1, fifty: "owed" },
     WITH,
@@ -98,7 +98,12 @@ test("the chances shown are what RATES makes of a pull with no guarantee near", 
     const n = 300_000;
     const stream = { rng: 20_261_122 };
     for (let i = 0; i < n; i++) {
-      const { rarity } = draw({ top: 0, mid: 0, owed: false }, inBanner ? headliner(banner.id) : null, stream);
+      const { rarity } = draw(
+        { top: 0, mid: 0, owed: false },
+        inBanner ? headliner(banner.id) : null,
+        stream,
+        banner.from,
+      );
       drawn[rarity] = (drawn[rarity] ?? 0) + 1;
     }
     for (const r of RARITY_NAMES) expect(Math.abs((drawn[r] ?? 0) / n - shown[r])).toBeLessThan(0.004);
@@ -140,7 +145,7 @@ test("the rules' numbers are what a million seeded pulls in a banner do", () => 
     const at = c.top + 1;
     const certainMid = c.mid + 1 >= midEvery;
     const owed = c.owed;
-    const { rarity } = draw(c, headliner(banner.id), stream);
+    const { rarity } = draw(c, headliner(banner.id), stream, banner.from);
     const top = rarity === "Treant" || rarity === "Yggdrasil";
     const [n = 0, won = 0] = tries.get(at) ?? [];
     tries.set(at, [n + 1, won + (top ? 1 : 0)]);
@@ -173,7 +178,7 @@ test("the rules' numbers are what a million seeded pulls in a banner do", () => 
   expect(Math.abs(share(rampFrom + 1) - (first + rise))).toBeLessThan(0.015);
   // So few pulls get that far that it is drawn on its own.
   for (let i = 0; i < 1000; i++)
-    expect(draw({ top: certainAt - 1, mid: 0, owed: false }, null, stream).rarity).toBe("Treant");
+    expect(draw({ top: certainAt - 1, mid: 0, owed: false }, null, stream, banner.from).rarity).toBe("Treant");
   expect(tries.has(certainAt + 1)).toBe(false);
   expect(Math.abs(fifties.won / fifties.free - fifty)).toBeLessThan(0.02);
   expect(fifties.owedWon).toBe(fifties.owed);

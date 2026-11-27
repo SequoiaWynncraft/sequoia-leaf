@@ -344,6 +344,12 @@ export const MARKS: Readonly<Record<MarkId, (m: At) => void>> = {
     for (const c of m.hit) pop(art("snip"), c.x, c.y - 10, "stick", 0.3);
     burst(m.from.x, m.from.y - 10, 8, [CRAB, CREAM], { speed: 30, ttl: 0.3 });
   },
+  // Seqwawa's roots flash under everyone it reached (`roots.ts` draws the roots): leaves come up off each.
+  roots: (m) => {
+    for (const c of m.hit)
+      burst(c.x, c.y - 2, 5, [GREEN[4], "#c9ef9a"], { speed: 22, toward: UP, spread: 1.2, ttl: 0.45 });
+    burst(m.from.x, m.from.y - 22, 8, [GOLD[1], GOLD[2]], { speed: 18, ttl: 0.5 });
+  },
 };
 
 /** The puff a fallen figure goes in, at its feet. */

@@ -2,7 +2,7 @@ import { pick, type Stream, weighted } from "@sequoia-leaf/core";
 
 /**
  * Sparring partners. A sparring room is fought against the party one of the regulars at the table
- * brought (`REGULARS`: Greg, the Hearth Cat and the rest, never a member), or against the board
+ * brought (`REGULARS`: Greg, Vesta and the rest, never a member), or against the board
  * another member fought it with (`opposition`). This makes a regular's up from a seed: a regular, a
  * taste for one kin and one calling, and a party about as good as a member's would be by that room,
  * made only of what a member at its level could have found at the stall. What comes out is a plain

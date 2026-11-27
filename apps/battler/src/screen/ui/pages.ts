@@ -281,7 +281,7 @@ const HOW: readonly (readonly [() => HTMLCanvasElement, string])[] = [
   [() => glyph("up"), "3 of the same figure become 1 with 2 stars. 3 of those become 1 with 3 stars."],
   [
     () => glyph("book"),
-    "Figures that share a kin or a calling switch a trait on. The chips say how far along each is.",
+    "Figures that share an origin or a class switch a trait on. The chips say how far along each is.",
   ],
   [
     () => glyph("swords"),

@@ -22,7 +22,7 @@ import {
   wingEnd,
   wingOf,
 } from "@sequoia-leaf/raid";
-import { regularOf } from "@sequoia-leaf/raid/content/rooms.ts";
+import { nowCalled, regularOf } from "@sequoia-leaf/raid/content/rooms.ts";
 
 /** A rule as one line: its name, then what it does. */
 export const ruleSaid = (rule: RuleId): string => `${RULES[rule].name}: ${RULES[rule].text}`;
@@ -58,13 +58,17 @@ export function shiftedLine(notes: readonly RaidNote[], run: Pick<RunView, "boar
 
 // ---------- picking a run back up ----------
 
-/** Whose party a room was against, as a sentence goes on with it: a regular's, a member's, the forest's by its plan. */
+/**
+ * Whose party a room was against, as a sentence goes on with it: a regular's and a boss's by the
+ * name they go by now (a party kept under an old one too), a member's, the forest's by its plan.
+ */
 function whose(party: Party): string {
-  if (regularOf(party)) return `${party.who}'s party`;
+  const regular = regularOf(party);
+  if (regular) return `${regular.name}'s party`;
   if (party.by !== undefined) return `${party.who}'s board`;
   // A boss is a name; the forest's other plans are said as words.
   const boss = party.figures.some((p) => isBossId(p.kind));
-  return boss ? party.title : party.title.charAt(0).toLowerCase() + party.title.slice(1);
+  return boss ? nowCalled(party.title) : party.title.charAt(0).toLowerCase() + party.title.slice(1);
 }
 const HOW: Readonly<Record<FightResult, string>> = { win: "won against", loss: "lost to", draw: "a draw with" };
 

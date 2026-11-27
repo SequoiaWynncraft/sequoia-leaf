@@ -26,7 +26,7 @@ export interface Lead extends Cue {
 }
 
 /** How many steps the second copy runs ahead: the longest lead-in there is. */
-export const LOOK = 16;
+export const LOOK = 24;
 
 export interface Playback {
   /** The fight as shown, and the same fight a few steps further on. */

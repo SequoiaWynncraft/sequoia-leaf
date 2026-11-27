@@ -17,7 +17,7 @@ import { type Did, type Measure, measureOf, MEASURES, partsOf, type Party, type 
 import { regularOf } from "@sequoia-leaf/raid/content/rooms.ts";
 
 import { FV } from "../board.ts";
-import { acrossName, opening } from "../logic.ts";
+import { acrossName } from "../logic.ts";
 import { snd } from "../sounds.ts";
 import { pic } from "./cards.ts";
 import { headOf } from "./heads.ts";
@@ -55,7 +55,7 @@ const PARTS: Readonly<Record<Measure, readonly string[]>> = {
 
 /** The other party's name as a heading: a regular's in the town's green after the acorn, anyone else's in coral. */
 export const partyName = (party: Pick<Party, "who" | "by">): HTMLElement =>
-  regularOf(party) ? folkName(opening(party.who), "k-pix") : el("b", "k-coral", { text: acrossName(party) });
+  regularOf(party) ? folkName(acrossName(party), "k-pix") : el("b", "k-coral", { text: acrossName(party) });
 
 interface Row {
   el: HTMLElement;

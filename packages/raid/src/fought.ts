@@ -5,7 +5,7 @@
  */
 import { type BoonId, isBoonId } from "./content/boons.ts";
 import { ENDLESS_WAYS, type EndlessWay } from "./content/endless.ts";
-import { regularOf, type RoomKind } from "./content/rooms.ts";
+import { nowCalled, regularOf, type RoomKind } from "./content/rooms.ts";
 import { isTraitId, type TraitId } from "./content/traits.ts";
 import { roomAt } from "./endless.ts";
 import type { FightResult, FightSummary } from "./fight/types.ts";
@@ -62,7 +62,7 @@ function acrossOf(room: number, foe: Party): string {
   if (foe.by !== undefined) return `member:${foe.by}`;
   const regular = regularOf(foe);
   if (regular) return `regular:${regular.kind}`;
-  return `plan:${roomAt(room)?.plans.findIndex((plan) => plan.name === foe.title) ?? -1}`;
+  return `plan:${roomAt(room)?.plans.findIndex((plan) => plan.name === nowCalled(foe.title)) ?? -1}`;
 }
 
 const sideOf = (party: Party, boons: readonly BoonId[]): FoughtSide => ({

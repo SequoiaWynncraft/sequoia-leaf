@@ -27,29 +27,20 @@ import { ownOf } from "./livery.ts";
 import { ATTACK_SHOT, type Look, LOOKS, puffOf, VOICES } from "./looks.ts";
 import { arcOf, type At, MARKS, puff, type Shot } from "./marks.ts";
 import { type Actor, actorFor, TUMBLE } from "./motion.ts";
-import { bumpFor, type Cue, holdFor, type Lead, type Weight } from "./playback.ts";
+import type { Cue, Lead } from "./playback.ts";
+import { fallsToRise, isRising, risesUp, stepRisings } from "./rising.ts";
+import { reachOut, rootsUp, stepRoots } from "./roots.ts";
 import { snd } from "./sounds.ts";
 import { hang, stepSpells } from "./spells.ts";
+import { bump, weigh } from "./weight.ts";
 
 /** The kinds of damage, coloured as the cards colour their words: coral, rose, cream. */
 const DAMAGE_COL = { physical: "#e67967", magic: "#d88ad0", true: CREAM } as const;
 const UP = -Math.PI / 2;
 
 const actor = (id: number): Actor | undefined => FV.actors[id];
-const tallOf = (a: Actor): number => framesOf(a.unit.kind).tall;
+const tallOf = (a: Actor): number => framesOf(a.unit.kind, false, a.form).tall;
 const chestOf = (a: Actor): Pt => ({ x: a.x, y: a.y - Math.round(tallOf(a) / 2) });
-
-/** Holds the clock a moment for a blow of weight (or for some seconds at 1x). */
-function weigh(w: Weight | number): void {
-  if (FV.pb) holdFor(FV.pb, w, FV.speed);
-}
-/** Whether the player has asked their system for less motion. */
-const lessMotion = (): boolean => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-/** Bumps the board under a big moment, unless a bigger bump is still going. */
-function bump(strength: number): void {
-  const px = bumpFor(strength, FV.speed, lessMotion());
-  if (px > 0 && (px >= FV.bump.px || clockNow() - FV.bump.at > 5)) FV.bump = { at: clockNow(), px };
-}
 
 /** How many of an ability's hits have landed this step, by whose it is: two or more is weight. */
 const landed = { at: -1, by: new Map<number, number>() };
@@ -122,6 +113,11 @@ function atOf(ev: Extract<FightEvent, { t: "cast" }>): At | null {
 
 // ---------- lead-ins ----------
 
+/** Lead-ins of an ability's own, besides its body's and what it throws: Seqwawa's roots running out. */
+const OWN_LEADS: Partial<Record<UnitKind, (l: Lead, ev: Extract<FightEvent, { t: "cast" }>) => void>> = {
+  seqwawa: reachOut,
+};
+
 /** Winding up for an ability: the body as its look says, light gathering in, a lunge or what it throws ahead. */
 function windUp(l: Lead, ev: Extract<FightEvent, { t: "cast" }>): void {
   const a = actor(ev.id);
@@ -136,6 +132,7 @@ function windUp(l: Lead, ev: Extract<FightEvent, { t: "cast" }>): void {
   if (look.body === "dig") burst(a.x, a.y, 6, [EARTH[1], EARTH[2]], { speed: 20, toward: UP, spread: 2, ttl: 0.4 });
   if (look.lunge && t) blowAt(a, t, l.at - 4, l.at, look.lunge, look.lunge >= 6 ? 4 : 0);
   if (look.ahead) throwAhead(l, ev, a, look.ahead);
+  OWN_LEADS[ev.kind]?.(l, ev);
 }
 
 /** Thrown during the wind-up, at whoever it is for (or the hex it is for), landing as the ability goes off. */
@@ -263,17 +260,9 @@ const ON: On = {
     if (big || a.unit.stars === 3) bump(big ? 2 : 1);
     burst(a.x, a.y, 5, ["#cbb894", CREAM], { speed: 22, ttl: 0.3, toward: UP, spread: 2.6 });
     snd.fall(big);
+    fallsToRise(ev, at);
   },
-  rise: (ev, at) => {
-    const a = actor(ev.id);
-    if (!a) return;
-    a.fallAt = Infinity;
-    a.gone = false;
-    a.hopAt = at;
-    say(a.x, a.y - tallOf(a) - 6, "Second Wind!", GOLD[2], { ttl: 1.4 });
-    motes(a.x, a.y - 6, 10, [GOLD[2], CREAM]);
-    snd.rise();
-  },
+  rise: (ev, at) => rise(ev, at),
   summon: (ev, at) => summon(ev, at),
   trait: (ev, at) => trait(ev, at),
   item: (ev, at) => {
@@ -321,6 +310,22 @@ function markAt(a: Actor, t: Actor): () => void {
       shiny: t.unit.items.length > 0,
     });
   };
+}
+
+/** Back up: a true form rising (`rising.ts`), the fallen one Seqwawa's roots stand up (`roots.ts`), or a Second Wind. */
+function rise(ev: Events["rise"], at: number): void {
+  const a = actor(ev.id);
+  if (!a) return;
+  a.form = ev.form;
+  if (ev.why === "groot") return risesUp(ev, at);
+  a.fallAt = Infinity;
+  a.gone = false;
+  a.rising = false;
+  a.hopAt = at;
+  if (ev.why === "seqwawa") return rootsUp(ev, at);
+  say(a.x, a.y - tallOf(a) - 6, "Second Wind!", GOLD[2], { ttl: 1.4 });
+  motes(a.x, a.y - 6, 10, [GOLD[2], CREAM]);
+  snd.rise();
 }
 
 function hit(ev: Events["hit"], at: number): void {
@@ -510,6 +515,8 @@ function on<K extends keyof Events>(t: K, ev: Events[K], at: number): void {
 /** Things thrown follow whoever they are thrown at, and land; a fallen figure, its tumble over, goes in a puff. */
 export function stepShown(c: number): void {
   stepSpells(c);
+  stepRisings(c);
+  stepRoots(c);
   FV.shots = FV.shots.filter((s) => {
     const t = actor(s.target);
     if (t && t.unit.alive) s.to = chestOf(t);
@@ -519,7 +526,7 @@ export function stepShown(c: number): void {
     return false;
   });
   for (const a of FV.actors) {
-    if (!a || a.gone || c < a.fallAt + TUMBLE) continue;
+    if (!a || a.gone || isRising(a) || c < a.fallAt + TUMBLE) continue;
     a.gone = true;
     const big = isBossId(a.unit.kind) || (isFigureId(a.unit.kind) && FIGURES[a.unit.kind].tier === 5);
     puff(a.x + a.tumble * 6, a.y, puffOf(a.unit.kind), big);

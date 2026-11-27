@@ -32,14 +32,14 @@ import {
   traitsNow,
   traitsOf,
 } from "@sequoia-leaf/raid";
-import { regularOf } from "@sequoia-leaf/raid/content/rooms.ts";
+import { nowCalled, regularOf } from "@sequoia-leaf/raid/content/rooms.ts";
 
 import { boonIcon, glyph, itemIcon, traitIcon } from "../art/icons.ts";
 import { rimTop, stumpOf } from "../art/table.ts";
 import { fightEvents, fightUnits } from "../fightview.ts";
 import type { Speed } from "../keep.ts";
 import { light } from "../light.ts";
-import { canBuy, opening, savings, TraitWatch } from "../logic.ts";
+import { acrossName, canBuy, savings, TraitWatch } from "../logic.ts";
 import { facing, shownCounts } from "../screen.ts";
 import { artPx, place, V } from "../stage.ts";
 import { busy, S } from "../state.ts";
@@ -481,11 +481,11 @@ function renderFoe(run: RunView): void {
   foe.hidden = S.screen.at === "front" || S.screen.at === "over" || S.screen.at === "after";
   if (regularOf(run.foe)) {
     foe.replaceChildren(
-      el("div", "brought", {}, folkName(opening(run.foe.who), "k-pix"), el("span", "", { text: run.foe.title })),
+      el("div", "brought", {}, folkName(acrossName(run.foe), "k-pix"), el("span", "", { text: run.foe.title })),
     );
   } else {
     foe.replaceChildren(el("b", "k-name", { text: run.foe.who }));
-    if (run.foe.title) foe.append(el("span", "k-dim", { text: run.foe.title }));
+    if (run.foe.title) foe.append(el("span", "k-dim", { text: nowCalled(run.foe.title) }));
   }
   placeFoe();
 }

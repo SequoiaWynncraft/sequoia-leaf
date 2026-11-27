@@ -238,7 +238,7 @@ function counting(notes: readonly RaidNote[], play: Playback): void {
   const won = result?.t === "result" && result.result === "win";
   const ended = endedIn(notes);
   if (ended && endingOf(ended.run) === "won")
-    tell({ town: "news", text: "A little raid cleared: The Crab Nobody Counted has been counted.", tone: "gold" });
+    tell({ town: "news", text: "A little raid cleared: Zero has been counted.", tone: "gold" });
   else if (won && play.boss)
     tell({
       town: "news",

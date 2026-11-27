@@ -21,20 +21,20 @@ export const TRUE_FORM_IDS = ["worm", "moth", "rock", "greg", "whitefox"] as con
 export type TrueFormId = (typeof TRUE_FORM_IDS)[number];
 
 export const TRUE_FORMS: Readonly<Record<TrueFormId, TrueForm>> = {
-  worm: { name: "The Whole Worm", text: "Under And Up also hits every enemy touching where it comes up.", n: {} },
-  moth: { name: "Moth, Wings Open", text: "Wing Dust covers the hexes {reach} away as well.", n: { reach: 2 } },
+  worm: { name: "Real Worm", text: "Under And Up also hits every enemy touching where it comes up.", n: {} },
+  moth: { name: "Real Moth", text: "Wing Dust covers the hexes {reach} away as well.", n: { reach: 2 } },
   rock: {
-    name: "The Rock, Standing",
+    name: "Real Rock",
     text: "It has {attack} attack and attacks {speed} times a second.",
     n: { attack: 60, speed: 0.6 },
   },
   greg: {
-    name: "Greg, Unnamed",
+    name: "Real Greg",
     text: "Greg Sits Down first pulls every enemy within {pull} hexes 1 hex nearer.",
     n: { pull: 3 },
   },
   whitefox: {
-    name: "Orphion, Alight",
+    name: "Real Orphion",
     text: "Antlers Ring also gives the party {heal}% of its health back.",
     n: { heal: 8 },
   },

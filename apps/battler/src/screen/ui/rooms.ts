@@ -20,10 +20,10 @@ import {
   roomAt,
   type RunView,
 } from "@sequoia-leaf/raid";
-import { regularOf } from "@sequoia-leaf/raid/content/rooms.ts";
+import { nowCalled, regularOf } from "@sequoia-leaf/raid/content/rooms.ts";
 
 import { roomIcon } from "../art/icons.ts";
-import { opening } from "../logic.ts";
+import { acrossName } from "../logic.ts";
 import { S } from "../state.ts";
 import { pic } from "./cards.ts";
 import { ruleLine } from "./wilds.ts";
@@ -109,12 +109,12 @@ export const chairsTag = (run: RunView): HTMLElement =>
 
 /** Who is across the table in the room the run is in: a regular, the forest, or a member's board (in the Deep Woods, the one who holds the room). */
 function across(run: RunView): string {
-  if (regularOf(run.foe)) return `${opening(run.foe.who)} ${run.foe.title}.`;
+  if (regularOf(run.foe)) return `${acrossName(run.foe)} ${run.foe.title}.`;
   if (isHeld(run, run.room))
     return run.foe.by === member()?.id
       ? "Held by you: your board at this room."
       : `Held by ${run.foe.who}: ${run.foe.title}.`;
-  return `${run.foe.who}${run.foe.title ? `: ${run.foe.title}` : ""}.`;
+  return `${run.foe.who}${run.foe.title ? `: ${nowCalled(run.foe.title)}` : ""}.`;
 }
 
 /** What a room not yet fought gives, by its kind; in an endless run, the chair a boss past the fifteenth room adds. */
