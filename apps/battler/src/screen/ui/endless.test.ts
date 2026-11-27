@@ -6,11 +6,11 @@ import { askToBeMet, chairsSaid, readDepthBoard, takenNews } from "./endless.ts"
 
 const WEEK = Date.parse("2026-11-23T00:00:00Z");
 /** A room of the Deep Woods (from 0) taken from the member, as their events give it. */
-const taken = (id: number, room: number, by: string, at = "2026-11-26T12:00:00Z"): unknown => ({
+const taken = (id: number, room: number, by: string, at = "2026-11-26T12:00:00Z", lane = "deep"): unknown => ({
   id,
   type: "held_taken",
   created_at: at,
-  data: { game: "raid", slot: `deep:${room}`, by: { id: `id-${by}`, username: by } },
+  data: { game: "raid", slot: `${lane}:${room}`, by: { id: `id-${by}`, username: by } },
 });
 const other = (id: number): unknown => ({ id, type: "leaf_earned", created_at: "2026-11-26T12:00:00Z", data: {} });
 
@@ -31,6 +31,18 @@ describe("the line saying a room was taken", () => {
     expect(takenNews({ events: [other(8)] }, WEEK, once.newest)).toEqual({ newest: 8, lines: [] });
     expect(takenNews({ events: [taken(9, 30, "Moss")] }, WEEK, 8).lines).toEqual([
       "Room 31 was taken from you by Moss.",
+    ]);
+  });
+
+  test("a room held with the member's own figures is said apart from the same room held with everyone's", () => {
+    const at = "2026-11-26T12:00:00Z";
+    const body = {
+      events: [taken(4, 25, "Fernwick", at, "deep.own"), taken(5, 25, "Moss"), taken(6, 21, "Quill", at, "deep.own")],
+    };
+    expect(takenNews(body, WEEK, 0).lines).toEqual([
+      "Room 26 was taken from you by Moss.",
+      "Room 22, your figures, was taken from you by Quill.",
+      "Room 26, your figures, was taken from you by Fernwick.",
     ]);
   });
 
@@ -65,12 +77,20 @@ describe("an endless board from Leaf", () => {
 
 describe("the Deep Woods' card", () => {
   test("says the member's board and name can be met there until they have set out there", () => {
-    const almanac = newAlmanac();
-    expect(askToBeMet(almanac, null)).toBe(true);
-    expect(askToBeMet(almanac, startRun(1, { era: LEGACY_ERA, way: wayOn({ id: "wilds" }) }))).toBe(true);
-    expect(askToBeMet(almanac, startRun(1, { era: LEGACY_ERA, way: wayOn({ id: "deep" }) }))).toBe(false);
-    almanac.deepest.deep = 3;
-    expect(askToBeMet(almanac, null)).toBe(false);
+    const { deepest } = newAlmanac();
+    expect(askToBeMet(deepest, null)).toBe(true);
+    expect(askToBeMet(deepest, startRun(1, { era: LEGACY_ERA, way: wayOn({ id: "wilds" }) }))).toBe(true);
+    expect(askToBeMet(deepest, startRun(1, { era: LEGACY_ERA, way: wayOn({ id: "deep" }) }))).toBe(false);
+    deepest.deep = 3;
+    expect(askToBeMet(deepest, null)).toBe(false);
+  });
+  test("with the member's own figures, until they have set out there with them", () => {
+    const { deepest } = newAlmanac();
+    const fair = startRun(1, { era: LEGACY_ERA, way: wayOn({ id: "deep" }) });
+    const own = startRun(1, { era: LEGACY_ERA, way: wayOn({ id: "deep" }, { greg: 1 }) });
+    expect(askToBeMet(deepest, fair, true)).toBe(true);
+    expect(askToBeMet(deepest, own, true)).toBe(false);
+    expect(askToBeMet(deepest, own, false)).toBe(true);
   });
 });
 

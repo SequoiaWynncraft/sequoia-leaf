@@ -73,9 +73,10 @@ export interface Handle {
   start(seed: number, trail?: number, own?: boolean): Promise<string>;
   /**
    * Sets out on an endless run one way, and sits down to it: where the play server stages it, in a
-   * room (counting from 0) with every room before it won, at the top level and with acorns.
+   * room (counting from 0) with every room before it won, at the top level and with acorns. With
+   * `own`, with the figures pulled.
    */
-  endless(way: EndlessWay, room?: number, acorns?: number): Promise<string>;
+  endless(way: EndlessWay, room?: number, acorns?: number, own?: boolean): Promise<string>;
   /**
    * Has the play server put the other members on the endless boards (`{ woods: true }`), have one
    * hold a room of the Deep Woods (`{ hold: { room, by } }`), or take one from the member
@@ -304,10 +305,10 @@ export function openHandle(): void {
       if (staging.length === 0) await startOn(onTrail(trail, own ? S.roster : null));
       return settle();
     },
-    async endless(way, room = 0, acorns = 60) {
+    async endless(way, room = 0, acorns = 60, own = false) {
       playSlot("endless");
-      const staging = await staged({ venture: { way, seed: 5, room, acorns } });
-      if (staging.length === 0) await startOn(wayOn({ id: way }));
+      const staging = await staged({ venture: { way, seed: 5, room, acorns, own } });
+      if (staging.length === 0) await startOn(wayOn({ id: way }, own ? S.roster : null));
       return settle();
     },
     async woods(...ops) {

@@ -18,7 +18,7 @@ import { ENDLESS, type EndlessWay, ROOM_COUNT, TRAILS } from "@sequoia-leaf/raid
 import { snd } from "../sounds.ts";
 import { S } from "../state.ts";
 import { askToBeMet, type DepthBoard, readDepthBoard, type Span, SPAN_NAMES, takenNews } from "./endless.ts";
-import type { At, Mode } from "./modes.ts";
+import { type At, boardKey, type Mode } from "./modes.ts";
 import { unshown } from "./own.ts";
 
 /** How often something on the front page is read from Leaf again: at most, when it is drawn, and every time while it stays up. */
@@ -33,18 +33,28 @@ export function readNow(what: string, read: () => Promise<void>, again = false):
 }
 
 /**
- * The endless boards as Leaf last gave them, by way and span (`wilds:ever`); the Wilds' board chosen;
- * the rooms held; the lines of rooms taken; and what the front page last showed of them, to read it
- * again while it stays up: the endless way chosen, and how to draw the page again.
+ * The endless boards as Leaf last gave them, by pool, way and span (`boardKey`); the Wilds' board
+ * chosen; the rooms held, with everyone's figures and with the member's own; the lines of rooms
+ * taken; and what the front page last showed of them, to read it again while it stays up: the
+ * endless way chosen, whose figures, and how to draw the page again.
  */
 const woods: {
   boards: Map<string, DepthBoard>;
   span: Span;
-  held: number[];
+  held: { fair: number[]; own: number[] };
   taken: string[];
   way: EndlessWay | null;
+  own: boolean;
   redraw: () => void;
-} = { boards: new Map(), span: "ever", held: [], taken: [], way: null, redraw: () => undefined };
+} = {
+  boards: new Map(),
+  span: "ever",
+  held: { fair: [], own: [] },
+  taken: [],
+  way: null,
+  own: false,
+  redraw: () => undefined,
+};
 /** What the front page is read against, of the endless ways. */
 export const woodsAt = (): Pick<At, "depths" | "span"> => ({ depths: woods.boards, span: woods.span });
 /** The front page has been left: a room taken has been said. */
@@ -76,41 +86,47 @@ export async function readTaken(player: string, redraw: () => void): Promise<voi
   woods.taken = [...woods.taken, ...fresh];
   redraw();
 }
-async function readBoard(way: EndlessWay, span: Span, redraw: () => void): Promise<void> {
-  const answer = await fetchLeaf(`/v1/game/raid/depths/${way}/${span}`);
+/** What Leaf is asked for the member's own figures' boards and rooms, after the route. */
+const poolQuery = (own: boolean): string => (own ? "?pool=own" : "");
+async function readBoard(own: boolean, way: EndlessWay, span: Span, redraw: () => void): Promise<void> {
+  const answer = await fetchLeaf(`/v1/game/raid/depths/${way}/${span}${poolQuery(own)}`);
   const board = answer.status === 200 ? readDepthBoard(answer.body) : null;
-  if (!board || same(board, woods.boards.get(`${way}:${span}`))) return;
-  woods.boards.set(`${way}:${span}`, board);
+  const key = boardKey(own, way, span);
+  if (!board || same(board, woods.boards.get(key))) return;
+  woods.boards.set(key, board);
   redraw();
 }
-async function readHeld(redraw: () => void): Promise<void> {
-  const answer = await fetchLeaf("/v1/game/raid/held");
+async function readHeld(own: boolean, redraw: () => void): Promise<void> {
+  const answer = await fetchLeaf(`/v1/game/raid/held${poolQuery(own)}`);
   const listed = isRecord(answer.body) && Array.isArray(answer.body.rooms) ? answer.body.rooms : null;
   const rooms = (listed ?? []).filter((r): r is number => typeof r === "number");
-  if (answer.status !== 200 || !listed || same(rooms, woods.held)) return;
-  woods.held = rooms;
+  const pool = own ? "own" : "fair";
+  if (answer.status !== 200 || !listed || same(rooms, woods.held[pool])) return;
+  woods.held[pool] = rooms;
   redraw();
 }
 
 /**
  * Reads what the front page shows of the endless ways: for a member (a guest has no news of their
- * own, and holds nothing), the news of a room taken and the rooms held; and the chosen way's board.
- * `again` reads them however lately they were read: the minute has come round.
+ * own, and holds nothing), the news of a room taken and the rooms held with the figures chosen; and
+ * the chosen way's board of those figures. `again` reads them however lately they were read: the
+ * minute has come round.
  */
 function readAll(again: boolean): void {
-  const { way, redraw } = woods;
+  const { way, own, redraw } = woods;
   const player = isGuest() ? null : (member()?.id ?? null);
   if (player !== null) {
     readNow("taken", () => readTaken(player, redraw), again);
-    readNow("held", () => readHeld(redraw), again);
+    readNow(own ? "held.own" : "held", () => readHeld(own, redraw), again);
   }
   if (!way) return;
   const span: Span = way === "deep" ? "week" : woods.span;
-  readNow(`${way}:${span}`, () => readBoard(way, span, redraw), again);
+  readNow(boardKey(own, way, span), () => readBoard(own, way, span, redraw), again);
 }
 /** Reads what the front page shows of the endless ways, as it is drawn, and keeps what it shows to read it again while it stays up. */
 export function readWoods(mode: Mode, at: At, redraw: () => void): void {
   woods.way = wayOf(mode, at);
+  woods.own = at.own;
   woods.redraw = redraw;
   readAll(false);
 }
@@ -183,8 +199,9 @@ export function woodsOpts(mode: Mode, at: At): HTMLElement[] {
   const way = wayOf(mode, at);
   if (!way) return [];
   const deep = way === "deep";
-  const held = woods.held.length > 0 ? `Rooms you hold this week: ${woods.held.join(", ")}.` : "";
-  const met = askToBeMet(at.almanac, at.endless)
+  const rooms = woods.held[at.own ? "own" : "fair"];
+  const held = rooms.length > 0 ? `Rooms you hold this week: ${rooms.join(", ")}.` : "";
+  const met = askToBeMet(at.own ? at.apart.deepest : at.almanac.deepest, at.endless, at.own)
     ? el("p", "k-read k-gold", { text: "Your board and your name can be met by other members in the Deep Woods." })
     : null;
   return [

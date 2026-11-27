@@ -66,6 +66,8 @@ export const S: {
   runs: number;
   /** This week's deepest rooms won in each endless way, as Leaf has them. */
   week: TableView["week"];
+  /** The deepest rooms won with the member's own figures, ever and this week, as Leaf keeps them apart. */
+  apart: TableView["apart"];
   /** The figures the member has pulled, with their levels. */
   roster: Roster;
   /** The era Leaf's clock is in, as Leaf said it: what the page reads the catalogue by (`catalogOf`). */
@@ -82,6 +84,7 @@ export const S: {
   trail: 0,
   runs: 0,
   week: { at: 0, deepest: { wilds: 0, deep: 0 } },
+  apart: { deepest: { wilds: 0, deep: 0 }, week: { at: 0, deepest: { wilds: 0, deep: 0 } } },
   roster: {},
   era: LEGACY_ERA,
   prefs: newPrefs(),
@@ -159,7 +162,7 @@ export const busy = (): boolean => hold.held(true);
 
 /** What the page shows, as text, to tell whether Leaf's answer changed it. */
 const picture = (): string =>
-  JSON.stringify([S.run, S.laid, S.almanac, S.looks, S.trail, S.runs, S.week, S.roster, S.era]);
+  JSON.stringify([S.run, S.laid, S.almanac, S.looks, S.trail, S.runs, S.week, S.apart, S.roster, S.era]);
 
 /** The run in a slot of Leaf's table. */
 const inSlot = (view: TableView, slot: Slot): RunView | null => view.held[slot];
@@ -171,6 +174,7 @@ function take(view: TableView): void {
   S.trail = view.trail;
   S.runs = view.begun[S.slot];
   S.week = view.week;
+  S.apart = view.apart;
   S.roster = view.roster;
   S.era = view.era;
   S.laid = { run: view.held.main, endless: view.held.endless };

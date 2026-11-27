@@ -13,6 +13,7 @@ import { whole } from "@sequoia-leaf/core";
 import type { Board as Standings } from "@sequoia-leaf/kit/person.ts";
 import {
   type Almanac,
+  type Apart,
   type Course,
   COURSES,
   ENDLESS,
@@ -27,6 +28,7 @@ import {
   unfought,
   type Way,
   wayOn,
+  wayWords,
   type Week,
 } from "@sequoia-leaf/raid";
 
@@ -47,7 +49,9 @@ export interface At {
   readonly endless: RunView | null;
   /** This week's deepest rooms won in each endless way, as Leaf keeps them. */
   readonly week: Week;
-  /** The endless boards as Leaf last gave them (`GET /v1/game/raid/depths/{way}/{span}`), by way and span: `wilds:ever`. */
+  /** The deepest rooms won with the member's own figures, ever and this week, kept apart. */
+  readonly apart: Apart;
+  /** The endless boards as Leaf last gave them (`GET /v1/game/raid/depths/{way}/{span}`, `?pool=own` for the member's own figures), by pool, way and span: `wilds:ever`, `own.wilds:ever`. */
   readonly depths: ReadonlyMap<string, DepthBoard>;
   /** Which of the Wilds' boards is chosen. */
   readonly span: Span;
@@ -82,9 +86,11 @@ export interface BoardRow {
   /** The member's own row: lit. */
   readonly you: boolean;
 }
-/** A board: titled with what it ranks; the member's own row, when it is not among the rows. */
+/** A board: titled with what it ranks, and whose figures it counts where that can be chosen; the member's own row, when it is not among the rows. */
 export interface Board {
   readonly title: string;
+  /** Whose figures an endless board counts: "All figures" or "Your figures" (`wayWords`). */
+  readonly figures?: string;
   readonly rows: readonly BoardRow[];
   readonly you: BoardRow | null;
 }
@@ -172,7 +178,13 @@ function otherWay(at: At, way: EndlessWay): { closed: string | null; ends: strin
     ? { closed: `Your raid in ${name} has not fought a room yet.`, ends: null }
     : { closed: null, ends: `A new raid ends your raid in ${name}.` };
 }
-/** An endless way as a mode: its words, setting out on it, its run, and its board (the Wilds' of the span chosen). */
+/** Where an endless board is kept on the page, by whose figures, way and span: `wilds:ever`, `own.deep:week`. */
+export const boardKey = (own: boolean, way: EndlessWay, span: Span): string => `${own ? "own." : ""}${way}:${span}`;
+/**
+ * An endless way as a mode: its words, setting out on it (with the figures chosen), its run, and its
+ * board: the Wilds' of the span chosen, of the figures chosen (with the member's own, their row from
+ * what is kept apart).
+ */
 const endlessMode = (id: ModeId, way: EndlessWay, text: string, title: string): Mode => ({
   id,
   category: "endless",
@@ -183,8 +195,10 @@ const endlessMode = (id: ModeId, way: EndlessWay, text: string, title: string): 
   run: (at) => endlessOn(at, way),
   board: (at) => {
     const span: Span = way === "deep" ? "week" : at.span;
-    const own = span === "week" ? at.week.deepest[way] : at.almanac.deepest[way];
-    return depthBoard(title, at.depths.get(`${way}:${span}`) ?? null, own);
+    const kept = at.own ? at.apart : { deepest: at.almanac.deepest, week: at.week };
+    const own = span === "week" ? kept.week.deepest[way] : kept.deepest[way];
+    const figures = wayWords(wayFor({ id: way }, at.own)).figures;
+    return { ...depthBoard(title, at.depths.get(boardKey(at.own, way, span)) ?? null, own), figures };
   },
   ends: (at) => otherWay(at, way).ends,
 });

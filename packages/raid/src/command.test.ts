@@ -131,14 +131,13 @@ describe("setting out and aiming, off the wire", () => {
     expect(read({ do: "start", course: "trail", trail: 1 })).toEqual({ do: "start", trail: 1 });
     expect(read({ do: "start", course: "trail", trail: 1, own: true })).toEqual({ do: "start", trail: 1, own: true });
     expect(read({ do: "start", course: "deep", trail: 2 })).toEqual({ do: "start", course: "deep" });
+    expect(read({ do: "start", course: "wilds", own: true })).toEqual({ do: "start", course: "wilds", own: true });
     // As pages before courses sent them.
     expect(read({ do: "start", trail: 1, own: true })).toEqual({ do: "start", trail: 1, own: true });
     expect(read({ do: "endless", way: "wilds" })).toEqual({ do: "start", course: "wilds" });
     expect(read({ do: "buy", offer: 1, endless: true })).toEqual({ do: "buy", offer: 1, slot: "endless" });
     expect(read({ do: "buy", offer: 1, slot: "main", endless: true })).toEqual({ do: "buy", offer: 1 });
     for (const bad of [
-      // Nobody sets out on an endless run with their own figures yet.
-      { do: "start", course: "wilds", own: true },
       { do: "start", course: "versus" },
       { do: "start", course: "trail" },
       { do: "endless", way: "trail", trail: 0 },

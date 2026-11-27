@@ -100,7 +100,7 @@ export const COURSES: { readonly [K in CourseId]: CourseSpec } = {
     binds: "wing",
     across: "regular",
     paysThrough: ROOM_COUNT,
-    pools: ["fair"],
+    pools: ["fair", "own"],
     name: "The Wilds",
   },
   deep: {
@@ -108,7 +108,7 @@ export const COURSES: { readonly [K in CourseId]: CourseSpec } = {
     binds: "none",
     across: { held: { from: ENDLESS.heldFrom } },
     paysThrough: ROOM_COUNT,
-    pools: ["fair"],
+    pools: ["fair", "own"],
     name: "The Deep Woods",
   },
 };

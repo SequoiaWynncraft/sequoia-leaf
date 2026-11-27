@@ -35,7 +35,7 @@ import {
   THE_TRAILS,
   trailClosed,
 } from "./modes.ts";
-import { setsOutOwn, unshown, wayPrefix, waysOf } from "./own.ts";
+import { choosesFigures, setsOutOwn, unshown, wayPrefix, waysOf } from "./own.ts";
 import { readNow, readWoods, spanTabs, takenLine, woodsAt, woodsAway, woodsOpts } from "./woods.ts";
 
 /** What the front page asks of the rest of the page. */
@@ -92,6 +92,7 @@ const atNow = (): At => ({
   own: setsOutOwn(),
   standings: guild.board,
   week: S.week,
+  apart: S.apart,
   ...woodsAt(),
   tables: tablesRecord(),
 });
@@ -135,7 +136,7 @@ function strip(go: FrontAsks, run: RunView): HTMLElement {
   const slot = slotOf(run.way);
   const where =
     lastRoom(run) === Infinity
-      ? endlessWhere(run)
+      ? `${wayPrefix(run)}${endlessWhere(run)}`
       : `${wayPrefix(run)}Room ${run.room + 1} of ${ROOM_COUNT}. Health ${run.resolve}.`;
   return el(
     "div",
@@ -318,7 +319,7 @@ function card(go: FrontAsks, mode: Mode, at: At, shown: readonly Mode[]): HTMLEl
         ]
       : mode.tables
         ? tablesBody(go.redraw)
-        : woodsOpts(mode, at);
+        : [...woodsOpts(mode, at), ...waysOf(keep, go.redraw, true)];
   return el(
     "section",
     "k-card mode",
@@ -364,15 +365,18 @@ const boardRow = (r: BoardRow): HTMLElement =>
   );
 
 /**
- * A board: its title (and under it, `tabs`, the boards to choose between), its rows (the member's own
- * lit), and the member's own under them when it is below them; one with nobody on it says so.
+ * A board: whose figures it counts, to a member who can choose them; its title (and under it,
+ * `tabs`, the boards to choose between), its rows (the member's own lit), and the member's own
+ * under them when it is below them; one with nobody on it says so.
  */
 export function boardOf(board: Board, tabs: HTMLElement | null = null): HTMLElement {
   const { top, under } = listed(board, BOARD_MOST);
+  const figures = board.figures !== undefined && choosesFigures() ? board.figures : null;
   return el(
     "section",
     "k-card board",
-    { "aria-label": board.title },
+    { "aria-label": figures ? `${board.title}, ${figures.toLowerCase()}` : board.title },
+    figures ? el("div", "k-label", { text: figures }) : null,
     el("h2", "k-title", { text: board.title }),
     tabs,
     ...top.map(boardRow),
