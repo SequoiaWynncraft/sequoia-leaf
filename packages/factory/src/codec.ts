@@ -14,10 +14,15 @@
  * price for the grade it was kept at; one of the pieces to hand goes back to hand. What a machine is
  * told to make, and the way a splitter puts first, are kept only where the yard may set them.
  *
+ * Every tile a yard keeps (its pieces, the redwoods it felled, a plan of the whole yard) is a tile of
+ * the land it says it was kept on (`land`, `keptland.ts`), and is read onto the tile as far from the
+ * yard plot's corner on the land it is read on: more land round the yard moves nothing. One kept
+ * before yards said (version 8 and before) was kept on the guild's first land, three plots by three.
+ *
  * A yard kept by the Works' first design (version 3, its pieces a list) is brought over as far as is
- * cheap (`fromFirst`): it is a new yard at the tier its story had reached. One kept by version 7
- * reads as this version's with every redwood standing (`UNFELLED`); one kept by version 6 too, but
- * for the grades it did not keep (`UNGRADED`).
+ * cheap (`fromFirst`): it is a new yard at the tier its story had reached. One kept by version 8
+ * reads as this version's (`UNPLACED`); one kept by version 7 too, with every redwood standing
+ * (`UNFELLED`); one kept by version 6 too, but for the grades it did not keep (`UNGRADED`).
  */
 import { build, isDir, plotState, refusal } from "./build.ts";
 import { fromBase64, Reader, toBase64, Writer } from "./bytes.ts";
@@ -25,6 +30,7 @@ import { keptOnto, type KeptPiece, packCells, unpackCells } from "./cells.ts";
 import { here } from "./clock.ts";
 import { NODES } from "./content/nodes.ts";
 import { historyOf, stampOf } from "./history.ts";
+import { FIRST_LAND, type KeptLand, keptLandOf, piecesOn, readKeptLand, tileOn } from "./keptland.ts";
 import { LAND, type Land } from "./land.ts";
 import { counting, fillBoard, giveGoal, ORDER_WAITS, queue, study } from "./orders.ts";
 import { keptOf, packPieces, packWays, type Piece, piecesOf, placed, unpackWays } from "./pieces.ts";
@@ -68,8 +74,15 @@ import {
   type Yard,
 } from "./yard.ts";
 
-/** 8: whole numbers, grades (a splitter's, a joiner's and a sorter's too), goals, research and redwoods felled. */
-export const VERSION = 8;
+/** 9: the land a yard was kept on, so that its tiles stay where they are as the land grows. */
+export const VERSION = 9;
+/**
+ * The version before a yard said the land it was kept on: whole numbers, grades (a splitter's, a
+ * joiner's and a sorter's too), goals, research and redwoods felled, on the guild's first land. It
+ * still reads. A Leaf that knows no later one refuses a yard this one keeps, rather than read its
+ * tiles on a land they are not of.
+ */
+const UNPLACED = 8;
 /**
  * The version before redwoods could be felled. It still reads, with every redwood standing. A Leaf
  * that knows no later one refuses a yard this one keeps, rather than read it with its felled
@@ -228,6 +241,7 @@ export function encode(y: Yard, keep: Keep = {}): string {
   const away = keep.away === undefined ? y.away : keep.away;
   return JSON.stringify({
     v: VERSION,
+    land: keptLandOf(y.land),
     ...(y.seed === null || keep.seed === false ? {} : { seed: y.seed }),
     tick: y.tick,
     charge: y.charge,
@@ -374,7 +388,9 @@ function fromFirst(raw: Rec, land: Land): Yard | null {
     else y.till += (land.plots.find((q) => q.plot === p)?.price ?? 0) * MILLI;
   }
   const cells: unknown[] = Array.isArray(raw.cells) ? raw.cells : [];
-  const pieces = cells.map(firstPiece).filter((o) => o !== null);
+  // Its tiles were the guild's first land's.
+  const kept = cells.map(firstPiece).filter((o) => o !== null);
+  const pieces = piecesOn(FIRST_LAND, land, kept);
   // A project of its tier that opens a kind it had standing is done, so that what it had still
   // stands (its boilers, its tunnels, its waterwheels); the commission and research are still to do.
   const had = new Set(pieces.map((o) => o.kind));
@@ -427,39 +443,54 @@ function firstPiece(v: unknown): KeptPiece | null {
   };
 }
 
-/** A yard read back from text, on the guild's land unless another is given; nothing if the text is not a yard. */
-export function decode(text: string | null | undefined, land: Land = LAND): Yard | null {
-  if (!text) return null;
-  let raw: unknown;
+/** The versions this one reads as its own. */
+const READS: ReadonlySet<unknown> = new Set([VERSION, UNPLACED, UNFELLED, UNGRADED]);
+
+/** Text as JSON, or nothing for text that is none. */
+function parsed(text: string): unknown {
   try {
-    raw = JSON.parse(text);
+    return JSON.parse(text);
   } catch {
     return null;
   }
-  if (isRec(raw) && raw.v === FIRST && Array.isArray(raw.cells)) return fromFirst(raw, land);
-  if (!isRec(raw) || typeof raw.cells !== "string") return null;
-  if (raw.v !== VERSION && raw.v !== UNFELLED && raw.v !== UNGRADED) return null;
+}
+
+/** A yard read back from text, on the guild's land unless another is given; nothing if the text is not a yard. */
+export function decode(text: string | null | undefined, land: Land = LAND): Yard | null {
+  const raw = text ? parsed(text) : null;
+  if (!isRec(raw)) return null;
+  if (raw.v === FIRST && Array.isArray(raw.cells)) return fromFirst(raw, land);
+  if (typeof raw.cells !== "string" || !READS.has(raw.v)) return null;
+  const on = readKeptLand(raw.land);
   const bytes = fromBase64(raw.cells);
-  const pieces = bytes && unpackCells(bytes, land.w * land.h);
-  if (!pieces) return null;
+  const pieces = on && bytes && unpackCells(bytes, on.w * on.h);
+  if (!on || !pieces) return null;
   const prints: unknown[] = Array.isArray(raw.blueprints) ? raw.blueprints : [];
-  return vouch(raw, pieces, prints.map(keptBlueprint), land);
+  return vouch(raw, piecesOn(on, land, pieces), prints.map(keptBlueprint), land, on);
 }
 
 /**
  * A kept blueprint read back as it was kept: its pieces, each of a real kind and way, or nothing; a
- * plan of the whole yard's on the tiles they were kept on. Whether the yard may set it down now is
+ * plan of the whole yard's on the tiles as far from the yard plot's corner as they were kept on (`shift`
+ * takes them there). Whether the yard may set it down now is
  * the rules' to say when it does. A splitter, joiner or sorter kept in it with no grade by a version
  * that gave them none (`ungraded`) is at the highest grade of the belts and tunnels it is kept with.
  */
-function blueprint(print: KeptBlueprint | undefined, ungraded: boolean): Print | null {
+function blueprint(
+  print: KeptBlueprint | undefined,
+  ungraded: boolean,
+  shift: readonly [number, number],
+): Print | null {
   const v = print?.pieces;
   if (!v) return null;
+  // A plan of the whole yard's tiles are the land's it was kept on; a blueprint's, from the corner of its box.
+  const [sx, sy] = print.whole ? shift : [0, 0];
   const line = (): number =>
     Math.max(1, ...v.flatMap((p) => (p.kind === BELT || p.kind === TUNNEL ? [p.grade ?? 1] : [])));
   const pieces: Piece[] = [];
-  for (const { kind: k, x, y: z, dir: d, span, recipe, open: lets, tint, ways, grade: kept } of v) {
+  for (const { kind: k, x: kx, y: ky, dir: d, span, recipe, open: lets, tint, ways, grade: kept } of v) {
     const grade = regraded(k, kept, ungraded, line);
+    const [x, z] = [kx + sx, ky + sy];
     if (!isKind(k) || k === DEPOT || !isDir(d)) return null;
     if (whole(x, 255) === null || whole(z, 255) === null || whole(span, 255) === null) return null;
     pieces.push({
@@ -521,13 +552,13 @@ function keptAway(v: unknown): Away | null {
 }
 
 /**
- * Fells each redwood kept as felled, by a tile of it, on a plot the yard owns; anything else kept is
- * let go. No more are read than the land has redwoods, as many as a yard ever keeps.
+ * Fells each redwood kept as felled, by a tile of it on the land the yard was kept on (`on`), on a
+ * plot the yard owns; anything else kept is let go. No more are read than the land has redwoods, as many as a yard ever keeps.
  */
-function felledOnto(y: Yard, kept: unknown): void {
+function felledOnto(y: Yard, kept: unknown, on: KeptLand): void {
   const { land } = y;
   for (const v of Array.isArray(kept) ? kept.slice(0, land.trees.length) : []) {
-    const i = whole(v, land.w * land.h - 1) ?? -1;
+    const i = tileOn(on, land, whole(v, on.w * on.h - 1) ?? -1);
     const t = land.tree[i] ?? -1;
     const plot = land.plots[land.plot[i] ?? NONE];
     if (t >= 0 && plot && y.plots.includes(plot.plot)) y.felled[t] = 1;
@@ -535,7 +566,8 @@ function felledOnto(y: Yard, kept: unknown): void {
 }
 
 /**
- * A yard from a kept record: its numbers as JSON gives them, its pieces, and its blueprints' pieces.
+ * A yard from a kept record: its numbers as JSON gives them, its pieces (on tiles of `land`), and its
+ * blueprints' pieces, which, with the redwoods it felled, are on tiles of the land it was kept on (`on`).
  * Every field's shape is checked, and every piece built again through the rules; what depends on
  * today's tuning is clamped or carried, and what cannot stand is paid back.
  */
@@ -544,6 +576,7 @@ export function vouch(
   pieces: readonly KeptPiece[],
   prints: readonly KeptBlueprint[],
   land: Land,
+  on: KeptLand,
 ): Yard | null {
   const seed = "seed" in raw ? whole(raw.seed, 0xffffffff) : null;
   const charge = whole(raw.charge, 1e9);
@@ -620,7 +653,8 @@ export function vouch(
   // still first, as play drops it when another comes first (`begin`).
   const studied = y.line[0] !== undefined && y.line[0] === goalNamed(line[0]) ? y.line[0] : undefined;
   const ungraded = raw.v === UNGRADED;
-  y.blueprints = Array.from({ length: BLUEPRINTS_MOST }, (_, k) => blueprint(prints[k], ungraded));
+  const shift = [land.origin[0] - on.x, land.origin[1] - on.y] as const;
+  y.blueprints = Array.from({ length: BLUEPRINTS_MOST }, (_, k) => blueprint(prints[k], ungraded, shift));
 
   // Plots in the order they were bought, each that the land has.
   for (const name of raw.plots) {
@@ -629,7 +663,7 @@ export function vouch(
   }
 
   // The redwoods it felled, before its pieces stand where they stood.
-  felledOnto(y, raw.felled);
+  felledOnto(y, raw.felled, on);
   y.till += stand(y, pieces, studied, ungraded);
 
   fillBoard(y);

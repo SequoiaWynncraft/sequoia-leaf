@@ -32,7 +32,7 @@ function reach(allowed: (g: F.Goal) => boolean = () => true): F.Goal[] {
 function makeableFor(g: F.Goal): F.Item[] {
   const tier = F.GOALS[g]?.tier ?? 0;
   const open = F.openOf(reach((h) => h !== g && (F.GOALS[h]?.tier ?? 0) <= tier));
-  const forSale = F.LAND.plots.map((p) => p.plot).filter((p) => ((open.plots >> p) & 1) === 1);
+  const forSale = F.LAND.plots.map((p) => p.plot).filter((p) => open.plots[p] === 1);
   return F.makeableOn(F.LAND, open, forSale);
 }
 

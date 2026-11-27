@@ -3,8 +3,8 @@
  * redwoods stand, which plot each tile is on. A land is read-only and shared by every yard on it.
  * The guild's land is put together from the plots table; any other size can be made with `landOf`.
  */
-import { PLOT_H, PLOT_W, type PlotInfo, PLOTS } from "./content/plots.ts";
-import { item, NONE, type Plot, plot, type Tile } from "./tables.ts";
+import { PLOT_H, PLOT_IDS, PLOT_W, type PlotInfo, PLOTS } from "./content/plots.ts";
+import { isPlotOf, item, NONE, type Plot, plot, type Tile } from "./tables.ts";
 
 /** A plot as it lies on a land: its number, its corner and size in tiles, and its price. */
 export interface Plotted {
@@ -37,6 +37,11 @@ export interface Land {
   readonly plots: readonly Plotted[];
   /** The middle tile of the depot, which is three tiles square. */
   readonly depot: readonly [number, number];
+  /**
+   * The north-west corner of the yard plot, where the depot is: what a yard keeps its tiles measured
+   * from, so that more land round it moves nothing kept (`codec.ts`). (0, 0) on a land with no yard plot.
+   */
+  readonly origin: readonly [number, number];
   /** For each tile, a bit for each way (east, south, west, north) that leads off the map. */
   readonly edge: Uint8Array;
   /** How far along the arrays one tile east, south, west and north is. */
@@ -44,7 +49,7 @@ export interface Land {
 }
 
 /** The parts a land is made from, with `trunk` 1 on each tile a redwood grows on; the rest is worked out. */
-export type LandParts = Omit<Land, "edge" | "step" | "tree" | "trees"> & { readonly trunk: Uint8Array };
+export type LandParts = Omit<Land, "edge" | "step" | "tree" | "trees" | "origin"> & { readonly trunk: Uint8Array };
 
 export function landOf(parts: LandParts): Land {
   const { trunk, ...rest } = parts;
@@ -53,7 +58,9 @@ export function landOf(parts: LandParts): Land {
   for (let y = 0; y < h; y++)
     for (let x = 0; x < w; x++)
       edge[y * w + x] = (x === w - 1 ? 1 : 0) | (y === h - 1 ? 2 : 0) | (x === 0 ? 4 : 0) | (y === 0 ? 8 : 0);
-  return { ...rest, ...redwoods(w, h, trunk, parts.plot), edge, step: [1, w, -1, -w] };
+  const yard = parts.plots.find((p) => p.plot === plot("yard"));
+  const origin = [yard?.x ?? 0, yard?.y ?? 0] as const;
+  return { ...rest, ...redwoods(w, h, trunk, parts.plot), edge, step: [1, w, -1, -w], origin };
 }
 
 /**
@@ -85,18 +92,27 @@ const LETTER: Readonly<Record<string, string>> = {
   r: "resin",
 };
 
-/** Puts a map together from plots drawn as rows of letters. */
-export function landFrom(infos: readonly PlotInfo[]): Land {
-  const w = (Math.max(...infos.map((p) => p.col)) + 1) * PLOT_W;
-  const h = (Math.max(...infos.map((p) => p.row)) + 1) * PLOT_H;
+/**
+ * Puts a map together from plots drawn as rows of letters, each placed from the yard plot: as large
+ * as the plots reach every way. Each plot's number is its place in `ids`: the guild's plots table,
+ * or a longer one a test adds plots to.
+ */
+export function landFrom(infos: readonly PlotInfo<string>[], ids: readonly string[] = PLOT_IDS): Land {
+  const col0 = Math.min(...infos.map((p) => p.col));
+  const row0 = Math.min(...infos.map((p) => p.row));
+  const w = (Math.max(...infos.map((p) => p.col)) - col0 + 1) * PLOT_W;
+  const h = (Math.max(...infos.map((p) => p.row)) - row0 + 1) * PLOT_H;
+  const isPlot = isPlotOf(ids);
   const deposit = new Uint8Array(w * h).fill(NONE);
   const water = new Uint8Array(w * h);
   const trunk = new Uint8Array(w * h);
   const plotAt = new Uint8Array(w * h).fill(NONE);
   const depots: [number, number][] = [];
   const plots = infos.map((p, n): Plotted => {
-    const x0 = p.col * PLOT_W;
-    const y0 = p.row * PLOT_H;
+    const x0 = (p.col - col0) * PLOT_W;
+    const y0 = (p.row - row0) * PLOT_H;
+    const number = ids.indexOf(p.id);
+    if (!isPlot(number)) throw new Error(`no plot ${p.id} in the plots table`);
     for (let y = 0; y < PLOT_H; y++)
       for (let x = 0; x < PLOT_W; x++) {
         const i = (y0 + y) * w + x0 + x;
@@ -116,7 +132,7 @@ export function landFrom(infos: readonly PlotInfo[]): Land {
         if (letter === "T") trunk[i] = 1;
         if (letter === "D") depots.push([x0 + x, y0 + y]);
       }
-    return { plot: plot(p.id), name: p.name, why: p.why, price: p.price, x: x0, y: y0, w: PLOT_W, h: PLOT_H };
+    return { plot: number, name: p.name, why: p.why, price: p.price, x: x0, y: y0, w: PLOT_W, h: PLOT_H };
   });
   // The depot is the nine tiles marked D; its middle is the fifth of them, reading across and down.
   const depot = depots[4] ?? [Math.floor(w / 2), Math.floor(h / 2)];

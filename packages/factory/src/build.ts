@@ -471,7 +471,7 @@ export function plotState(y: Yard, id: Plot): { state: "owned" | "for sale" | "n
   const plot = plotOf(y, id);
   if (!plot) return { state: "not yet", why: "There is no such plot" };
   if (y.plots.includes(id)) return { state: "owned", why: null };
-  if (((y.open.plots >> id) & 1) === 0) return { state: "not yet", why: `${plot.name} is not for sale yet` };
+  if (y.open.plots[id] !== 1) return { state: "not yet", why: `${plot.name} is not for sale yet` };
   const reached = y.land.plots.some((p) => y.plots.includes(p.plot) && touching(p, plot));
   if (!reached) return { state: "not yet", why: `${plot.name} does not touch the yard's land yet` };
   return { state: "for sale", why: null };

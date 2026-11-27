@@ -150,10 +150,10 @@ describe("a redwood felled, kept", () => {
     expect(back && F.redwoodAt(back, TILES[0] ?? -1)).toBe(true);
   });
 
-  test("is kept as version 8, so a Leaf that knows only version 7 refuses it rather than plant it back", () => {
+  test("is kept by a version after 7, so a Leaf that knows only version 7 refuses it rather than plant it back", () => {
     const y = meadow();
     must(y, { do: "fell", ...TREE });
-    expect(JSON.parse(F.encode(y)).v).toBe(8);
+    expect(JSON.parse(F.encode(y)).v).toBeGreaterThan(7);
     // A version-7 yard, kept before redwoods could be felled, still reads with every redwood standing.
     const seven = { ...JSON.parse(F.encode(meadow())), v: 7 };
     const back = F.decode(JSON.stringify(seven), y.land);
