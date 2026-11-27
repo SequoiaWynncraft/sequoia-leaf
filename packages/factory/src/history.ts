@@ -81,6 +81,7 @@ import { REASON } from "./reasons.ts";
 import { legPiece } from "./route.ts";
 import { OWN, pieceOf, piecesTiles, tilesAt } from "./sizes.ts";
 import { FIXED, gradeOf, isKind, keptKind, type Kind, NONE, SHUTS, SPANS } from "./tables.ts";
+import { ground } from "./tiles.ts";
 import {
   changed,
   type Entry,
@@ -586,10 +587,28 @@ export function undoRefusal(y: Yard, id: string, coins: number): string | null {
   if (top.id !== id) return UNDO_SAYS.notLast;
   const u = readEntry(top.bytes, y.kind.length);
   if (!u || u.flags & TOO_BIG) return UNDO_SAYS.tooBig;
-  if (sumOf(y, u.tiles) !== u.sum) return UNDO_SAYS.changed;
+  if (sumOf(y, u.tiles) !== u.sum || !fitsBack(y, u)) return UNDO_SAYS.changed;
   // What the command gave back is taken: the Coins it moved to the player, past what there is to spend.
   const short = u.coins - coins;
   return short > 0 ? `Not enough Coins: ${short} short` : null;
+}
+
+/**
+ * Whether every piece an entry stands again fits where it stood, by the rule a piece is built by: each
+ * tile it covers the yard's own ground, not water nor a redwood, and empty or one of the entry's own,
+ * which Undo clears first. A piece of one tile is on one of the entry's own by how entries are made.
+ */
+function fitsBack(y: Yard, u: Undoing): boolean {
+  const stays = new Set(u.was.flatMap((s, k) => (((u.masks[k] ?? 0) & UP) === 0 ? [s.tile] : [])));
+  const clears = new Set(u.tiles.filter((i) => !stays.has(i)));
+  const { w, h } = y.land;
+  return u.was.every((s) => {
+    if (stays.has(s.tile)) return true;
+    const tiles = tilesAt(s.kind, s.tile % w, Math.floor(s.tile / w), s.dir, w, h);
+    return tiles.every(
+      (t) => t >= 0 && ground(y, t % w, Math.floor(t / w)) === null && (y.kind[t] === NONE || clears.has(t)),
+    );
+  });
 }
 
 /** Takes away the piece on a tile, as the spade takes it: what it held goes, and one of the pieces to hand goes back to hand. */

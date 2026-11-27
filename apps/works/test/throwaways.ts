@@ -111,6 +111,7 @@ export const PAGE_CHUTE = page("chute", 18);
  */
 export const PLAY_BIG = `import * as F from "./packages/factory/src/index.ts";
 import { act } from "./packages/factory/src/commands.ts";
+import { after } from "./packages/factory/src/history.ts";
 import { bareLand } from "./packages/factory/test/land.ts";
 
 const kindOf = (name) => {
@@ -267,6 +268,19 @@ out.undoTurn =
   covers(chuteRead, CHUTE, 20, 13, 21, 15, 20, 14) &&
   F.check(chuteRead) === F.check(chuting);
 
+// An entry as a command that took a sifter up from its own tile alone would leave (its other tiles
+// none of the entry's): Undo would stand it over what covers those now, a belt or the depot. It refuses.
+const standsOver = (x, z, onto) => {
+  const y = fresh();
+  const own = tile(y, x, z);
+  if (onto) F.build(y, F.BELT, onto[0], onto[1], 0, Infinity);
+  const was = new Map([[own, { tile: own, kind: SIFTER, dir: 0, span: 0, free: false, kept: {} }]]);
+  after(y, { do: "remove", x, y: z }, { tiles: [own], was, made: [(y.made[own] + 255) & 255], back: null }, [], "s1");
+  const did = act(y, { do: "undo", entry: "s1" }, Infinity, "s2");
+  return "refused" in did && y.kind[own] === F.NONE;
+};
+out.undoFits = standsOver(20, 10, [21, 11]) && standsOver(24, 9, null);
+
 // Kept: a yard whose only kind past 15 is in a plan of the whole yard, in a blueprint, or in what Undo
 // would undo is kept as version 10; one with none as 9, as before there could be one.
 const planOnly = F.create({ land, tier: 5, seed: 1 });
@@ -369,5 +383,6 @@ export const PLAYED_BIG = Object.fromEntries(
     "forgeRemoved",
     "undoTurn",
     "keptWide",
+    "undoFits",
   ].map((k) => [k, true]),
 );
