@@ -49,15 +49,22 @@ describe("the card that picks a run of the Wilds back up", () => {
       rule: "You pick the rule for rooms 6 to 10 next.",
       last: "Last room: won against Greg's party.",
     });
-    expect(backLines(runAt(22, party("Nipper", "brought Ember Slingers"), "draw"), 22)).toMatchObject({
+    expect(backLines(runAt(22, party("Crab #7", "brought Ember Slingers"), "draw"), 22)).toMatchObject({
       rule: "No rule in these rooms. You pick one after the boss in room 25.",
-      last: "Last room: a draw with Nipper's party.",
+      last: "Last room: a draw with Crab #7's party.",
     });
     // A party kept under a regular's old signature, or a boss's old title, reads as it is called now.
     expect(backLines(runAt(22, party("a Barrow Gnome", "brought Moss Fangs")), 22).last).toBe(
       "Last room: lost to Hodge's party.",
     );
     expect(backLines(runAt(5, party("The forest", "Old Bramble", true)), 0).last).toBe("Last room: lost to Snag.");
+    // The crabs' names of release 1's first days read as their numbers.
+    expect(backLines(runAt(22, party("Nipper", "brought Ember Slingers")), 22).last).toBe(
+      "Last room: lost to Crab #7's party.",
+    );
+    expect(backLines(runAt(5, party("The forest", "Zero", true)), 0).last).toBe(
+      "Last room: lost to The Crab Nobody Counted.",
+    );
   });
   test("names the forest's party by its plan: a boss by its name, the rest as words", () => {
     expect(backLines(runAt(8, party("The forest", "Gnats in the brambles")), 0).last).toBe(
@@ -80,7 +87,7 @@ describe("the rule's words", () => {
     expect(ruleTitle(5)).toBe("A rule for rooms 6 to 10");
     expect(ruleTitle(35)).toBe("A rule for rooms 36 to 40");
     expect(bossOfWing(5)).toEqual({ room: 10, name: "Swipe", kind: "hoardmagpie" });
-    expect(bossOfWing(10)).toEqual({ room: 15, name: "Zero", kind: "bigcrab" });
+    expect(bossOfWing(10)).toEqual({ room: 15, name: "The Crab Nobody Counted", kind: "bigcrab" });
   });
   test("figures moved off closed hexes are named in one line", () => {
     const run = startRun(3, { era: LEGACY_ERA, endless: "wilds" });

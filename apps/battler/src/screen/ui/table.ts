@@ -484,7 +484,7 @@ function renderFoe(run: RunView): void {
       el("div", "brought", {}, folkName(acrossName(run.foe), "k-pix"), el("span", "", { text: run.foe.title })),
     );
   } else {
-    foe.replaceChildren(el("b", "k-name", { text: run.foe.who }));
+    foe.replaceChildren(el("b", "k-name", { text: acrossName(run.foe) }));
     if (run.foe.title) foe.append(el("span", "k-dim", { text: nowCalled(run.foe.title) }));
   }
   placeFoe();

@@ -282,7 +282,7 @@ export const ROOMS: readonly RoomSpec[] = [
   ),
   spar(3, 7, 62, 5),
   boss(3, {
-    name: "Zero",
+    name: "The Crab Nobody Counted",
     party: [
       ["bigcrab", 1, 3, 0],
       ["crab", 3, 1, 0],
@@ -356,7 +356,7 @@ export const REGULARS = [
   { name: "Greg", kind: "greg" },
   { name: "Vesta", kind: "hearthcat" },
   { name: "Hodge", kind: "barrowgnome" },
-  { name: "Nipper", kind: "crab7" },
+  { name: "Crab #7", kind: "crab7" },
   { name: "Orphion", kind: "whitefox" },
   { name: "Moth", kind: "moth" },
 ] as const satisfies readonly { name: string; kind: FigureId }[];
@@ -365,17 +365,23 @@ export const REGULARS = [
 export const HANDLES: readonly string[] = REGULARS.map((r) => r.name);
 
 /**
- * What a stored party may still be signed or titled with from before the figures had names of their
- * own (November 2026), and what that one is called now: three bosses' rooms and four regulars.
+ * What a stored party may still be signed or titled with, and what that one is called now: from
+ * before the figures had names of their own (November 2026), two bosses' rooms and three regulars;
+ * and the crabs' names of release 1 (27 November 2026), since the crabs went back to their numbers.
  */
 const RENAMED: Readonly<Record<string, string>> = {
   "Old Bramble": "Snag",
   "The Magpie With The Hoard": "Swipe",
-  "The Crab Nobody Counted": "Zero",
   "the Hearth Cat": "Vesta",
   "a Barrow Gnome": "Hodge",
-  "Crab #7": "Nipper",
   "a Moth": "Moth",
+  Nipper: "Crab #7",
+  Skip: "Crab #12",
+  Fuss: "Crab #23",
+  Barge: "Crab #40",
+  Miscount: "Crab #??",
+  "Big Miscount": "Big Crab #??",
+  Zero: "The Crab Nobody Counted",
 };
 /** A party's name or title as it reads now: an old one (`RENAMED`) as it is called today, anything else as it is. */
 export const nowCalled = (name: string): string => RENAMED[name] ?? name;

@@ -27,7 +27,7 @@ kit's card: "The table needs the guild's server."
   a bench of nine hollows along the near edge, two lantern posts, moss and ferns at the rim, the
   clearing and the far trunks behind, and dusk over all of it with the lanterns' light cut out. In
   a sparring room the regular who brought the party sits across the table, one of the battler's
-  own figures drawn twice the size (Greg, Vesta, Hodge, Nipper, Orphion
+  own figures drawn twice the size (Greg, Vesta, Hodge, Crab #7, Orphion
   or Moth), with a plate beside it that reads "Greg brought Mist Fangs", its name in the kit's
   leaf green with the acorn; two other regulars watch from logs where the window is wide enough.
 - **The figures.** Every one of the twenty-eight, the forest's trouble and bosses, and the few that

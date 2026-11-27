@@ -140,7 +140,7 @@ describe("the roster", () => {
     const forSale: readonly string[] = FIGURE_IDS;
     for (const id of TROUBLE_IDS) expect(forSale).not.toContain(id);
     expect(BOSS_IDS).toContain("bigcrab");
-    expect(specOf("bigcrab").name).toBe("Zero");
+    expect(specOf("bigcrab").name).toBe("The Crab Nobody Counted");
   });
 });
 

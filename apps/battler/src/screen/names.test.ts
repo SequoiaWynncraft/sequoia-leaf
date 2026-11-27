@@ -13,44 +13,44 @@ import { HANDLES, nowCalled, regularOf } from "@sequoia-leaf/raid/content/rooms.
 import { acrossName } from "./logic.ts";
 import { fedLine, sortWord } from "./ui/words.ts";
 
-/** The names list (`RAID-NAMES.md`, section 1), for everyone in the game today. Ids never change. */
+/** The names list (`RAID-NAMES.md`, section 1), for everyone in the game today, the crabs by their numbers. Ids never change. */
 const NAMES: Readonly<Record<string, string>> = {
   emberkit: "Flint",
   mossmote: "Velvet",
   moth: "Moth",
   worm: "Worm",
   finch: "Twig",
-  crab7: "Nipper",
+  crab7: "Crab #7",
   barrowgnome: "Hodge",
   kettle: "Brew",
   slug: "Mosey",
   glorp: "Glorp",
   chickaree: "Chuck",
   jay: "Huff",
-  crab12: "Skip",
+  crab12: "Crab #12",
   lanterngnome: "Wick",
   leafling: "Bud",
   cindernewt: "Toast",
   drizzlefrog: "Drizzle",
   rock: "Rock",
   bushgnome: "Shrub",
-  crab23: "Fuss",
+  crab23: "Crab #23",
   badger: "Grudge",
   fogowl: "Eaves",
   heron: "Reed",
-  crab40: "Barge",
+  crab40: "Crab #40",
   apothecary: "Dose",
   greg: "Greg",
   whitefox: "Orphion",
   hearthcat: "Vesta",
   seqwawa: "Seqwawa",
   glorplet: "Glorplet",
-  uncounted: "Miscount",
-  biguncounted: "Big Miscount",
+  uncounted: "Crab #??",
+  biguncounted: "Big Crab #??",
   sprout: "Runner",
   oldbramble: "Snag",
   hoardmagpie: "Swipe",
-  bigcrab: "Zero",
+  bigcrab: "The Crab Nobody Counted",
 };
 
 /** What they were called before, none of which a player reads any more. */
@@ -58,7 +58,6 @@ const OLD = [
   "Emberkit",
   "Mossmote",
   "Twig Finch",
-  "Crab #",
   "Barrow Gnome",
   "Kettle",
   "Chickaree",
@@ -81,8 +80,12 @@ const OLD = [
   "Bramble Runner",
   "Old Bramble",
   "Magpie With The Hoard",
-  "Crab Nobody Counted",
   "Hold The Line",
+  // The crabs' names of release 1's first days: they have their numbers back.
+  "Nipper",
+  "Fuss",
+  "Barge",
+  "Miscount",
 ];
 
 const ROOT = join(import.meta.dir, "..", "..", "..", "..");
@@ -149,13 +152,37 @@ describe("the names", () => {
   });
 
   test("the regulars sign with the new names, no article, and parties stored under the old ones still read", () => {
-    expect(HANDLES).toEqual(["Greg", "Vesta", "Hodge", "Nipper", "Orphion", "Moth"]);
+    expect(HANDLES).toEqual(["Greg", "Vesta", "Hodge", "Crab #7", "Orphion", "Moth"]);
     expect(regularOf({ who: "the Hearth Cat" })?.kind).toBe("hearthcat");
     expect(regularOf({ who: "Crab #7" })?.kind).toBe("crab7");
     expect(acrossName({ who: "a Barrow Gnome" })).toBe("Hodge");
-    expect(nowCalled("The Crab Nobody Counted")).toBe("Zero");
+    expect(nowCalled("The Crab Nobody Counted")).toBe("The Crab Nobody Counted");
     // A member who happens to be called by an old name is still a member.
     expect(regularOf({ who: "the Hearth Cat", by: "10000000-0000-0000-0000-000000000002" })).toBeNull();
+  });
+
+  test("the crabs go by their numbers, and what was stored under their release 1 names reads as the numbers", () => {
+    const crabs = ["crab7", "crab12", "crab23", "crab40", "uncounted", "biguncounted", "bigcrab"] as const;
+    const numbers = [
+      "Crab #7",
+      "Crab #12",
+      "Crab #23",
+      "Crab #40",
+      "Crab #??",
+      "Big Crab #??",
+      "The Crab Nobody Counted",
+    ];
+    expect(crabs.map((id) => specOf(id).name)).toEqual(numbers);
+    // Stored since release 1: a regular's signature, a sitting's crab across the table, a boss's title.
+    const stored = ["Nipper", "Skip", "Fuss", "Barge", "Miscount", "Big Miscount", "Zero"];
+    expect(stored.map(nowCalled)).toEqual(numbers);
+    expect(regularOf({ who: "Nipper" })?.kind).toBe("crab7");
+    expect(acrossName({ who: "Nipper" })).toBe("Crab #7");
+    expect(acrossName({ who: "Skip" })).toBe("Crab #12");
+    // Stored before it: as they are.
+    expect(numbers.map(nowCalled)).toEqual(numbers);
+    // A member called Skip is still Skip.
+    expect(acrossName({ who: "Skip", by: "10000000-0000-0000-0000-000000000002" })).toBe("Skip");
   });
 
   test("a crab's number is the tag on its shell, said in its lore line", () => {
