@@ -477,24 +477,38 @@ export function renderPages(force = false): void {
 const scroller = (root: ParentNode): Element | null => root.querySelector(".menu-mid") ?? root.querySelector(".k-body");
 
 /**
+ * Each box in a page that scrolls (`.k-scroll`), by what it is: its class and the label of the part
+ * of the page it is in (a mode's card, a board), the first of each.
+ */
+function scrolling(root: ParentNode): Map<string, Element> {
+  const boxes = new Map<string, Element>();
+  for (const box of root.querySelectorAll(".k-scroll")) {
+    const key = `${box.closest("[aria-label]")?.getAttribute("aria-label") ?? ""}|${box.className}`;
+    if (!boxes.has(key)) boxes.set(key, box);
+  }
+  return boxes;
+}
+
+/**
  * Puts a page in the box. Drawn again, the same page keeps its body scrolled where it was, so that
  * a choice made, or the front page's minute's reading, does not carry the member back to its top;
- * and the list in a mode's card (the Versus card's open tables, read again) its place in it too,
- * while the same mode is shown.
+ * and every box in it that scrolls (a mode's list, a board's rows) its place too, while the same
+ * one is shown (`scrolling`).
  */
 function place(box: HTMLElement, id: PageId, node: HTMLElement): void {
   const same = box.dataset.page === id;
   const top = same ? (scroller(box)?.scrollTop ?? 0) : 0;
-  const card = same ? box.querySelector("section.mode") : null;
-  const list = { mode: card?.getAttribute("aria-label"), top: card?.querySelector(".mode-opts")?.scrollTop ?? 0 };
+  const kept = same ? [...scrolling(box)].map(([key, was]) => [key, was.scrollTop] as const) : [];
   box.hidden = false;
   box.dataset.page = id;
   box.replaceChildren(node);
   const body = scroller(node);
   if (body) body.scrollTop = top;
-  const again = node.querySelector("section.mode");
-  const opts = again?.querySelector(".mode-opts");
-  if (opts && list.mode && again?.getAttribute("aria-label") === list.mode) opts.scrollTop = list.top;
+  const boxes = scrolling(node);
+  for (const [key, at] of kept) {
+    const again = boxes.get(key);
+    if (again && again !== body) again.scrollTop = at;
+  }
 }
 
 /**
