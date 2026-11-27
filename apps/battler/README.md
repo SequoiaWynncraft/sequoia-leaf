@@ -158,6 +158,8 @@ kit's card: "The table needs the guild's server."
   the agreement). The Wilds' board is the deepest room won, ever or this week (two tabs); the Deep
   Woods' is this week's. When a room of the Deep Woods has been taken from the member since they
   last looked, the front page says so once, at the top: "Room 22 was taken from you by Birchwood."
+  While the front page is up, the news, the rooms held and the board are read again every minute,
+  and the page drawn again (the keyboard and the scroll where they were) only when one changed.
   At the table an endless run past room 15 has its room before the track's pips ("Room 23"; on a
   phone the number), the level's plaque says its chairs ("Chairs: 10") once a boss past room 15 has
   given one, a held room's card says who holds it, and a room the forest grows in says by how much
@@ -233,7 +235,8 @@ for a guest, or while Leaf's spending is off (`leafOpen()`), the button is close
 
 The browser keeps only the member's view settings (`raid.prefs.v1`, `src/screen/keep.ts`): the
 speed fights are watched at and the first-time nudges already given; and the newest of the member's
-events already looked at for a room taken (`raid.taken.v1`, `ui/woods.ts`), so it is said once.
+events already looked at for a room taken (`raid.taken.v1:<Leaf id>`, `ui/woods.ts`), so it is said
+to them once, and another member on the same browser has their own.
 
 The table keeps two runs, the run in hand and the endless run, and the page plays one at a time
 (`S.slot`): every command for a run goes to that one (`endless: true` for the endless run). A

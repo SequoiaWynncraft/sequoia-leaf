@@ -49,6 +49,7 @@ import { figPic, pic } from "./cards.ts";
 import { summary } from "./ended.ts";
 import { frontAway, frontBody } from "./front.ts";
 import { figuresHere, pulledLine, pulledTag, unshown } from "./own.ts";
+import { frontShown } from "./woods.ts";
 
 export type PageId = "front" | "almanac" | "howto" | "looks" | "summary";
 
@@ -421,6 +422,8 @@ export function renderPages(force = false): void {
   const box = document.getElementById("modal");
   if (!box) return;
   const id = pageUp();
+  // While the front page is up, what it shows of the endless ways is read again every minute.
+  frontShown(id === "front");
   const key = `${id}:${S.runs}:${S.run?.room ?? 0}:${endedOf(S.screen) ? 1 : 0}:${laidKey()}`;
   if (!force && key === shownKey) return;
   shownKey = key;
@@ -452,13 +455,24 @@ export function renderPages(force = false): void {
   // Drawn again (a tab, a look tried on), the page keeps the keyboard where it was.
   const before = controlKeys(box);
   const was = before.find(([b]) => b === document.activeElement)?.[1];
-  box.hidden = false;
-  box.dataset.page = id;
-  box.replaceChildren(node);
+  place(box, id, node);
   if (was !== undefined)
     controlKeys(box)
       .find(([, k]) => k === was)?.[0]
       .focus({ preventScroll: true });
+}
+
+/**
+ * Puts a page in the box. Drawn again, the same page keeps its body scrolled where it was, so that
+ * a choice made, or the front page's minute's reading, does not carry the member back to its top.
+ */
+function place(box: HTMLElement, id: PageId, node: HTMLElement): void {
+  const top = box.dataset.page === id ? (box.querySelector(".k-body")?.scrollTop ?? 0) : 0;
+  box.hidden = false;
+  box.dataset.page = id;
+  box.replaceChildren(node);
+  const body = node.querySelector(".k-body");
+  if (body) body.scrollTop = top;
 }
 
 /**
