@@ -1,0 +1,437 @@
+/* A live table (`live/`): where its parts go, and how the table round them makes room. How they look is the kit's. */
+
+/* ---------- at the table: what goes, and what makes room ---------- */
+
+#live-clock,
+#live-players,
+#live-ring,
+#live-say {
+  display: none;
+}
+body[data-live] #live-clock {
+  display: grid;
+}
+body[data-live] #live-players {
+  display: flex;
+}
+body[data-live] #live-ring:not([hidden]) {
+  display: block;
+}
+/* The players' list takes the foe's plate's place, and the clock sets out: Set out is not a button here. */
+body[data-live] #foe,
+body[data-live] #setout {
+  display: none;
+}
+body[data-live] #plan {
+  grid-template-areas:
+    "rustle stall acorns levelup"
+    "hold stall level levelup";
+}
+/* The rack sits beside the players' list. */
+body[data-live] #rack {
+  right: calc(var(--edge) + var(--u) * 104);
+}
+/* Out, or in a carousel, the stall waits. */
+body:is([data-live="out"], [data-live="over"], [data-live="carousel"]) #plan {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* ---------- the clock ---------- */
+
+/* Beside the health, of one width whatever it says, so nothing moves as the stages go by. */
+#live-clock {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "label secs"
+    "vs vs";
+  align-items: baseline;
+  column-gap: calc(var(--u) * 3);
+  padding: var(--u) calc(var(--u) * 4);
+  margin-left: auto;
+  width: calc(var(--u) * 92);
+  box-sizing: border-box;
+  font: var(--f-ui);
+}
+/* Of one width at any health, so that the clock beside it stays where it is. */
+body[data-live] #resolve {
+  margin-left: 0;
+  min-width: calc(var(--u) * 42);
+  box-sizing: border-box;
+  justify-content: center;
+}
+#live-clock .label,
+#live-clock .vs {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+#live-clock .label {
+  grid-area: label;
+}
+#live-clock .secs {
+  grid-area: secs;
+  min-width: 2ch;
+  text-align: right;
+  font: var(--f-name);
+  color: var(--k-gold);
+}
+#live-clock.short .secs {
+  color: var(--k-coral, #e67967);
+}
+#live-clock .vs {
+  grid-area: vs;
+  min-height: 1lh;
+  font: var(--f-small);
+}
+
+/* ---------- the players down the right side ---------- */
+
+#live-players {
+  position: fixed;
+  z-index: 5;
+  right: var(--edge);
+  top: calc(var(--top) + var(--k-hang) + var(--u) * 24);
+  width: calc(var(--u) * 100);
+  box-sizing: border-box;
+  flex-direction: column;
+  gap: var(--u);
+  padding: calc(var(--u) * 3);
+}
+.player {
+  position: relative;
+  display: grid;
+  grid-template-columns: calc(var(--u) * 12) minmax(0, 1fr) calc(var(--u) * 12);
+  grid-template-areas:
+    "face name n"
+    "face hp n";
+  align-items: center;
+  column-gap: calc(var(--u) * 2);
+  row-gap: calc(var(--u) / 2);
+  padding: var(--u) calc(var(--u) * 2);
+  border: 0;
+  background: none;
+  text-align: left;
+  font: var(--f-small);
+  color: inherit;
+  cursor: pointer;
+}
+.player:hover,
+.player:focus-visible {
+  background: #ffffff14;
+}
+.player.lit {
+  background: #ffc2471f;
+  box-shadow: inset 0 0 0 var(--u) var(--k-gold);
+}
+.player .face {
+  grid-area: face;
+  display: grid;
+  place-items: center;
+  width: calc(var(--u) * 12);
+  height: calc(var(--u) * 12);
+}
+.player .face.member {
+  border-radius: 50%;
+  background: var(--k-deep);
+  font: var(--f-ui);
+  color: var(--k-gold);
+}
+.player .name {
+  grid-area: name;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.player .name.folk {
+  color: var(--k-leaf);
+}
+.player .hp {
+  grid-area: hp;
+  height: calc(var(--u) * 5);
+}
+.player .n {
+  grid-area: n;
+  text-align: right;
+  font: var(--f-ui);
+}
+.player.out {
+  opacity: 0.5;
+}
+.player.out .hp {
+  visibility: hidden;
+}
+.player.open {
+  box-shadow: inset 0 0 0 var(--u) var(--k-cream);
+}
+/* Let in to the carousel, and not taken one yet. */
+.player.choosing {
+  outline: var(--u) dashed var(--k-gold);
+  outline-offset: calc(var(--u) * -1);
+}
+.player .vs,
+.player .took {
+  position: absolute;
+  top: 50%;
+  translate: 0 -50%;
+  left: calc(var(--u) * -14);
+}
+.player .took {
+  left: calc(var(--u) * -26);
+}
+
+/* ---------- a player's board ---------- */
+
+#live-scout {
+  position: fixed;
+  z-index: 6;
+  right: calc(var(--edge) + var(--u) * 104);
+  top: calc(var(--top) + var(--k-hang) + var(--u) * 24);
+  width: calc(var(--u) * 150);
+  padding: calc(var(--u) * 3);
+  --fs: 1;
+}
+#live-scout h2 {
+  margin: 0;
+  font: var(--f-ui);
+}
+.scout-board {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 1);
+  margin-top: calc(var(--u) * 2);
+}
+.scout-board .hexrow {
+  display: flex;
+  gap: var(--u);
+}
+.scout-board .hexrow.odd {
+  padding-left: calc(var(--u) * 10);
+}
+.scout-board .hex {
+  display: grid;
+  place-items: end center;
+  width: calc(var(--u) * 19);
+  height: calc(var(--u) * 19);
+  background: var(--k-deep);
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+}
+.scout-board .who {
+  display: grid;
+  justify-items: center;
+}
+.scout-board .held {
+  display: flex;
+  height: calc(var(--u) * 5);
+}
+.scout-board .held canvas {
+  width: calc(var(--u) * 5);
+  height: calc(var(--u) * 5);
+}
+
+/* ---------- the carousel ---------- */
+
+#live-ring {
+  position: fixed;
+  z-index: 6;
+  width: 0;
+  height: 0;
+}
+#live-ring .ring-offer {
+  position: absolute;
+  left: calc(cos(var(--a)) * var(--rx));
+  top: calc(sin(var(--a)) * var(--ry));
+  translate: -50% -50%;
+  display: grid;
+  place-items: center;
+  width: calc(var(--u) * 32);
+  height: calc(var(--u) * 32);
+  padding: 0;
+  border: 0;
+  background: none;
+  --fs: 1.5;
+}
+#live-ring button.ring-offer {
+  cursor: default;
+}
+#live-ring.mine button.ring-offer {
+  cursor: pointer;
+  animation: bob 1s steps(2) infinite;
+}
+#live-ring.mine button.ring-offer:hover,
+#live-ring.mine button.ring-offer:focus-visible {
+  filter: brightness(1.25);
+}
+#live-ring .ring-offer .holds {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  padding: calc(var(--u) / 2);
+  background: var(--k-ink);
+  box-shadow: 0 0 0 var(--u) var(--k-gold);
+}
+#live-ring .ring-offer.gone {
+  visibility: hidden;
+}
+
+/* ---------- the papers: going out, and the end ---------- */
+
+#live-paper {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  display: grid;
+  place-items: center;
+  padding: calc(var(--u) * 4);
+  box-sizing: border-box;
+  background: #1a0f1ea6;
+}
+#live-paper[hidden] {
+  display: none;
+}
+.live-paper {
+  width: min(100%, calc(var(--u) * 190));
+}
+.live-paper .places .board-row,
+.live-seats .board-row,
+.live-list .board-row {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 3);
+  padding: var(--u) calc(var(--u) * 2);
+}
+.live-paper .place,
+.live-seats .place {
+  min-width: calc(var(--u) * 12);
+}
+
+/* ---------- a phone held upright ---------- */
+
+@media (max-aspect-ratio: 4/5), (max-width: 620px) {
+  body[data-live] #plan {
+    grid-template-areas:
+      "stall stall stall stall"
+      "acorns acorns level hold"
+      "rustle rustle levelup levelup";
+  }
+  body[data-live] #rack {
+    right: var(--edge);
+  }
+  /* The front page's card in the flow of a phone: of one height whichever way is chosen, a long list scrolling in it. */
+  #modal[data-page="front"] .mode-head {
+    min-height: calc(var(--u) * 46);
+  }
+  #modal[data-page="front"] .mode-opts {
+    flex: 0 0 calc(var(--u) * 140);
+    overflow: hidden auto;
+  }
+  #modal[data-page="front"] .board {
+    min-height: calc(var(--u) * 88);
+    box-sizing: border-box;
+  }
+  /* The clock leads the row of chips: the stage over its seconds. Its second line is the strip under them. */
+  #live-clock {
+    position: fixed;
+    top: calc(var(--top) + var(--u) * 70);
+    left: var(--edge);
+    width: calc(var(--u) * 30);
+    height: calc(var(--u) * 26);
+    margin: 0;
+    padding: var(--u);
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "label"
+      "secs";
+    justify-items: center;
+    align-content: center;
+    font: var(--f-small);
+  }
+  #live-clock .vs {
+    display: none;
+  }
+  #live-clock .secs {
+    text-align: center;
+  }
+  body[data-live] #live-say:not([hidden]) {
+    display: block;
+  }
+  #live-say {
+    position: fixed;
+    z-index: 5;
+    left: 50%;
+    translate: -50% -50%;
+    max-width: calc(100vw - var(--u) * 8);
+    margin: 0;
+    padding: calc(var(--u) / 2) calc(var(--u) * 3);
+    font: var(--f-small);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /* The players: a row of small health chips over the board, after the clock. */
+  #live-players {
+    top: calc(var(--top) + var(--u) * 70);
+    left: calc(var(--edge) + var(--u) * 31);
+    right: var(--edge);
+    width: auto;
+    height: calc(var(--u) * 26);
+    flex-direction: row;
+    gap: calc(var(--u) / 2);
+    padding: var(--u);
+  }
+  .player {
+    flex: 1 1 0;
+    min-width: 0;
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "face"
+      "n"
+      "hp";
+    justify-items: center;
+    row-gap: 0;
+    padding: calc(var(--u) / 2);
+    min-height: 0;
+  }
+  .player .face {
+    width: calc(var(--u) * 9);
+    height: calc(var(--u) * 9);
+  }
+  .player .n {
+    font: var(--f-ui);
+    line-height: 1;
+  }
+  .player .hp {
+    height: calc(var(--u) * 4);
+  }
+  .player .name {
+    display: none;
+  }
+  .player .vs,
+  .player .took {
+    top: calc(var(--u) * -3);
+    left: auto;
+    right: calc(var(--u) * -2);
+    translate: none;
+  }
+  /* Who took what is the ring's to show on a phone: a chip has room for its number only. */
+  .player .took {
+    display: none;
+  }
+  #live-ring .ring-offer {
+    --fs: 1;
+    width: calc(var(--u) * 22);
+    height: calc(var(--u) * 22);
+  }
+
+  .player .hp {
+    width: 100%;
+  }
+  #live-scout {
+    top: auto;
+    bottom: var(--bottom);
+    left: var(--edge);
+    right: var(--edge);
+    width: auto;
+    z-index: 30;
+  }
+}

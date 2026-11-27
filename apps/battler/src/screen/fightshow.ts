@@ -476,7 +476,7 @@ function trait(ev: Events["trait"], at: number): void {
       ttl: 1,
     });
   }
-  if (ev.side === 0) {
+  if (ev.side === FV.ours) {
     FV.woke?.(ev.trait);
     snd.trait(ev.step);
   }

@@ -14,6 +14,7 @@ import { type EndlessWay, ROOM_COUNT, type RunView, TRAILS, unfought } from "@se
 
 import { type Glyph, glyph, roomIcon } from "../art/icons.ts";
 import { paintLook } from "../art/place.ts";
+import { liveStrip, tablesBody, tablesFoot, tablesRecord } from "../live/tables.ts";
 import { snd } from "../sounds.ts";
 import { ask, S, type Slot } from "../state.ts";
 import { figPic, pic } from "./cards.ts";
@@ -89,6 +90,7 @@ const atNow = (): At => ({
   standings: guild.board,
   week: S.week,
   ...woodsAt(),
+  tables: tablesRecord(),
 });
 /** The slot of the table a run is in. */
 const slotOf = (run: RunView): Slot => (run.endless ? "endless" : "main");
@@ -314,7 +316,9 @@ function card(go: FrontAsks, mode: Mode, at: At, shown: readonly Mode[]): HTMLEl
           ...trailsOf(go, at),
           ...waysOf(keep, go.redraw),
         ]
-      : woodsOpts(mode, at);
+      : mode.tables
+        ? tablesBody(go.redraw)
+        : woodsOpts(mode, at);
   return el(
     "section",
     "k-card mode",
@@ -342,7 +346,7 @@ function card(go: FrontAsks, mode: Mode, at: At, shown: readonly Mode[]): HTMLEl
       ),
     ),
     el("div", "mode-opts k-scroll", {}, ...options),
-    footOfCard(go, mode, at),
+    mode.tables ? tablesFoot() : footOfCard(go, mode, at),
   );
 }
 
@@ -413,12 +417,15 @@ export function frontBody(go: FrontAsks): HTMLElement {
   const mode = shown.find((m) => m.id === kept.mode) ?? THE_TRAILS;
   readWoods(mode, at, go.redraw);
   const runs = laidOut(at);
+  const live = liveStrip();
   return el(
     "div",
     "k-body menu",
     {},
     takenLine(),
-    runs.length > 0 ? el("div", "runs", {}, ...runs.map((r) => strip(go, r.mode, r.run))) : null,
+    runs.length > 0 || live
+      ? el("div", "runs", {}, ...runs.map((r) => strip(go, r.mode, r.run)), live)
+      : null,
     el(
       "div",
       "menu-cols",

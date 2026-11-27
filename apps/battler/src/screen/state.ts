@@ -83,6 +83,19 @@ export const S: {
 /** What a command did: its notes, or the sentence it was turned down with. */
 export type Did = { ok: true; notes: RaidNote[] } | { ok: false; why: string };
 
+/**
+ * The member at a live table (`live/seat.ts`), while they are at it: the run the table shows, what
+ * the screen sits down to, and where their commands go instead of Leaf's solo table. The front page
+ * is the solo table's, so stepping back to it lets the seat go (the live table is kept).
+ */
+export interface Seated {
+  run(): RunView | null;
+  table(): Table;
+  doNow(command: RaidCommand): Did | null;
+  ask(command: RaidCommand, waiting: Element | null): Promise<Did | null>;
+}
+export const LIVE: { seat: Seated | null } = { seat: null };
+
 type NotesHeard = (notes: readonly RaidNote[]) => void;
 const noteHearers: NotesHeard[] = [];
 const changeHearers: (() => void)[] = [];
@@ -120,8 +133,8 @@ const STEADY: ReadonlySet<RaidCommand["do"]> = new Set(["trail", "look", "buyLoo
  * else there (other offers, other cards). Nothing is queued: the table shows it is busy (`busy`),
  * and the member hears that it was not done.
  */
-const hold = makeHold();
-function heldOff(command: RaidCommand): boolean {
+export const hold = makeHold();
+export function heldOff(command: RaidCommand): boolean {
   if (!hold.held(STEADY.has(command.do))) return false;
   for (const fn of heldHearers) fn();
   return true;
@@ -145,11 +158,12 @@ function take(view: TableView): void {
   S.roster = view.roster;
   S.laid = { run: view.run, endless: view.endless };
   // A run that has ended stays on the table, for its last page, while the screen shows it.
-  S.run = inSlot(view, S.slot) ?? endedOf(S.screen)?.run ?? null;
+  S.run = LIVE.seat ? LIVE.seat.run() : (inSlot(view, S.slot) ?? endedOf(S.screen)?.run ?? null);
 }
 
-/** Leaf's run in the slot the table plays, as the page has it, and its number: what the screen sits down to. */
-export const tableNow = (): Table => ({ run: table ? inSlot(table.state, S.slot) : null, runs: S.runs });
+/** Leaf's run in the slot the table plays (or the live seat's), as the page has it, and its number: what the screen sits down to. */
+export const tableNow = (): Table =>
+  LIVE.seat?.table() ?? { run: table ? inSlot(table.state, S.slot) : null, runs: S.runs };
 
 /** Where both runs laid out stand, as text: what their strips on the front page say. */
 export const laidKey = (): string =>
@@ -181,8 +195,10 @@ export function go(event: Event): void {
       const before = S.screen;
       S.screen = step(before, ev);
       if (S.screen === before) continue;
+      if (S.screen.at === "front") LIVE.seat = null;
       if (table) take(table.state);
-      if (S.screen.at === "after" && before.at === "fight") void settleRoom();
+      // At a live table the clock settles the room.
+      if (S.screen.at === "after" && before.at === "fight" && !LIVE.seat) void settleRoom();
       for (const fn of screenHearers) fn(before, S.screen);
     }
   } finally {
@@ -248,6 +264,7 @@ async function sent(play: Play<TableView, RaidCommand, RaidNote>, command: RaidC
  * and for one held off while Leaf answers (nothing is done or sent).
  */
 export function doNow(asked: RaidCommand): Did | null {
+  if (LIVE.seat) return LIVE.seat.doNow(asked);
   const play = table;
   const command = aimed(asked);
   if (!play || heldOff(command)) return null;
@@ -272,6 +289,7 @@ export function doNow(asked: RaidCommand): Did | null {
  * Null, with nothing asked, for one held off while Leaf answers another.
  */
 export async function ask(asked: RaidCommand, waiting: Element | null = null): Promise<Did | null> {
+  if (LIVE.seat) return LIVE.seat.ask(asked, waiting);
   const play = table;
   const command = aimed(asked);
   if (!play || heldOff(command)) return null;

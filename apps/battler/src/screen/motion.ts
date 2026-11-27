@@ -9,6 +9,7 @@
 import { type Move, moveAt } from "@sequoia-leaf/figures/move.ts";
 import type { Unit } from "@sequoia-leaf/raid";
 
+import { FV } from "./board.ts";
 import type { Pt } from "./geometry.ts";
 import type { Body } from "./looks.ts";
 
@@ -63,7 +64,7 @@ export function actorFor(unit: Unit, at: Pt, bornAt: number): Actor {
     x: at.x,
     y: at.y,
     move: null,
-    left: unit.side === 1,
+    left: unit.side !== FV.ours,
     bornAt,
     blow: null,
     hurtAt: -99,

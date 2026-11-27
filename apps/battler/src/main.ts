@@ -39,6 +39,8 @@ import {
 } from "./screen/flow.ts";
 import { stepFx } from "./screen/fx.ts";
 import { openHand, unpick } from "./screen/hand.ts";
+import { openLive } from "./screen/live/seat.ts";
+import { openTables } from "./screen/live/tables.ts";
 import { hearNotes, stepPawns, syncPawns } from "./screen/pawns.ts";
 import { drawOver, drawScene, stepScene, wordsScene } from "./screen/scene.ts";
 import { startSettings } from "./screen/settings.ts";
@@ -50,7 +52,7 @@ import { onCarry, placeSheet, registerFought } from "./screen/ui/fightsheet.ts";
 import { openLight } from "./screen/ui/lit.ts";
 import { renderNudge, stepNudge } from "./screen/ui/nudge.ts";
 import { meetMember } from "./screen/ui/own.ts";
-import { openPages, pagesClick, renderPages, showPage } from "./screen/ui/pages.ts";
+import { openPages, pageOver, pagesClick, pageUp, renderPages, showPage } from "./screen/ui/pages.ts";
 import { renderPicks } from "./screen/ui/picks.ts";
 import { buildTable, placeFoe, renderTable, stepTable, toast, wakeChip } from "./screen/ui/table.ts";
 
@@ -64,6 +66,12 @@ const NEEDS_LEAF = "The table needs the guild's server.";
 function closing(): void {
   here(null);
   unpick();
+}
+
+/** Whether the front page is up, and drawing it again if it is: for the live tables. */
+const frontUp = (): boolean => pageUp() === "front";
+function redrawFront(): void {
+  if (frontUp()) renderPages(true);
 }
 
 /** Sets out from the front page, which goes once Leaf has laid the run out: on a trail, or on an endless run. */
@@ -155,6 +163,10 @@ async function boot(): Promise<void> {
     gear: () => menu.gear(),
   });
   document.getElementById("modal")?.addEventListener("click", pagesClick);
+  // The live tables: the member's own, if they sit at one, and the Versus card's.
+  const tables = scope();
+  openLive(tables, { closePages: () => pageOver() && showPage(null), redrawFront, frontUp });
+  openTables(tables, { id: where.me.id, name: where.me.name }, redrawFront);
 
   // What the rules say happened is acted out by the figures, then the interface is drawn again.
   onNotes((notes) => {

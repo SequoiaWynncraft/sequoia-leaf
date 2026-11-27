@@ -12,12 +12,14 @@ import {
   guildBoard,
   laidOut as runsLaidOut,
   listed,
+  LIVE_TABLES,
   type Mode,
   MODES,
   records,
   shownCategories,
   shownModes,
   THE_DEEP_WOODS,
+  tablesBoard,
   THE_TRAILS,
   THE_WILDS,
 } from "./modes.ts";
@@ -55,15 +57,15 @@ function walked(): Almanac {
 }
 
 describe("the mode table", () => {
-  test("a mode whose Set out is not wired is not shown: today the trails, the Wilds and the Deep Woods are", () => {
+  test("every mode is shown: the trails, the Wilds and the Deep Woods, and the live tables with no Set out of their own", () => {
     expect(MODES.map((m) => m.id)).toEqual(["trails", "endless", "deep", "live"]);
-    expect(shownModes(MODES).map((m) => m.name)).toEqual(["The trails", "The Wilds", "The Deep Woods"]);
+    expect(shownModes(MODES).map((m) => m.name)).toEqual(["The trails", "The Wilds", "The Deep Woods", "Live tables"]);
   });
 
   test("a category with nothing shown is not shown", () => {
-    expect(shownCategories(MODES).map((c) => c.id)).toEqual(["normal", "endless"]);
+    expect(shownCategories(MODES).map((c) => c.id)).toEqual(["normal", "endless", "versus"]);
     const wired: Mode[] = MODES.filter((m) => m.category !== "endless");
-    expect(shownCategories(wired).map((c) => c.id)).toEqual(["normal"]);
+    expect(shownCategories(wired).map((c) => c.id)).toEqual(["normal", "versus"]);
   });
 
   test("Set out sends the trail chosen, with the member's own figures when they are chosen", () => {
@@ -104,12 +106,6 @@ describe("the button a mode shows", () => {
       line: ENDS_THE_RUN,
     });
     expect(footOf(THE_TRAILS, at({ run: laidOut(true), trail: 2 }))).toMatchObject({ anew: true, off: true });
-  });
-
-  test("a mode not wired has no run, and its board ranks nobody yet", () => {
-    const live = MODES.find((m) => m.id === "live");
-    expect(live?.run(at({ run: laidOut(true) }))).toBeNull();
-    expect(live?.board(at())).toEqual({ title: "Tables won", rows: [], you: null });
   });
 });
 
@@ -251,5 +247,26 @@ describe("the trails' board", () => {
       value: "1",
       you: true,
     });
+  });
+});
+
+describe("the live tables (Versus)", () => {
+  test("are in Versus, shown with no Set out of their own, and set out on nothing of the solo table's", () => {
+    expect(LIVE_TABLES.category).toBe("versus");
+    expect(LIVE_TABLES.setOut).toBeNull();
+    expect(shownModes([LIVE_TABLES])).toEqual([LIVE_TABLES]);
+    expect(LIVE_TABLES.run(at({ run: laidOut(true) }))).toBeNull();
+  });
+
+  test("their board is the member's record: played, won, in the first four; dashes until Leaf has said", () => {
+    expect(LIVE_TABLES.board(at())).toEqual(tablesBoard(null));
+    expect(tablesBoard(null).rows.map((r) => [r.name, r.value])).toEqual([
+      ["Played", "-"],
+      ["Won", "-"],
+      ["In the first four", "-"],
+    ]);
+    const record = LIVE_TABLES.board(at({ tables: { played: 1204, won: 3, four: 41 } }));
+    expect(record.title).toBe("Your tables");
+    expect(record.rows.map((r) => r.value)).toEqual(["1,204", "3", "41"]);
   });
 });

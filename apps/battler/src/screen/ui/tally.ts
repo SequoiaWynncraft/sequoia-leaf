@@ -16,6 +16,7 @@ import { tip } from "@sequoia-leaf/kit/tip.ts";
 import { type Did, type Measure, measureOf, MEASURES, partsOf, type Party, type Unit } from "@sequoia-leaf/raid";
 import { regularOf } from "@sequoia-leaf/raid/content/rooms.ts";
 
+import { FV } from "../board.ts";
 import { acrossName, opening } from "../logic.ts";
 import { snd } from "../sounds.ts";
 import { pic } from "./cards.ts";
@@ -69,8 +70,8 @@ export interface TallyView {
   /** The tabs and the switch, which a layout may put elsewhere. */
   readonly tabs: HTMLElement;
   readonly switcher: HTMLElement;
-  /** Shows what everyone in a fight did; `units` says who each one is. */
-  show(units: readonly Unit[], rows: readonly Did[]): void;
+  /** Shows what everyone in a fight did; `units` says who each one is, and `ours` which side is the member's ("You"; the fight on the table's, unless said). */
+  show(units: readonly Unit[], rows: readonly Did[], ours?: Side): void;
   /** Names the party across the table. */
   across(party: Pick<Party, "who" | "by">): void;
   redraw(): void;
@@ -214,8 +215,8 @@ export function tallyView(refOf: (id: number) => string, cls = ""): TallyView {
     el: root,
     tabs,
     switcher,
-    show(u, d) {
-      units = u;
+    show(u, d, ours = FV.ours) {
+      units = u.map((x) => ({ ...x, side: x.side === ours ? 0 : 1 }));
       did = d;
       redraw();
     },

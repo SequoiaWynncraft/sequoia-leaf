@@ -20,7 +20,7 @@ import { seatCell } from "@sequoia-leaf/raid/hex.ts";
 
 import { stanceOf } from "./acting.ts";
 import { hexMark } from "./art/table.ts";
-import { clockNow, feetAt, FV } from "./board.ts";
+import { clockNow, feetAt, FV, shownCell } from "./board.ts";
 import { begin, show, stepShown } from "./fightshow.ts";
 import { burst, pace } from "./fx.ts";
 import { cellXY, HEX_H, HEX_W, type Pt } from "./geometry.ts";
@@ -31,6 +31,7 @@ import { leadOf } from "./looks.ts";
 import { drawShot } from "./marks.ts";
 import { type Actor, actorFor, poseOf } from "./motion.ts";
 import { advance, openPlayback, playOut } from "./playback.ts";
+import { OWN } from "./sides.ts";
 import { snd } from "./sounds.ts";
 import { drawSpells } from "./spells.ts";
 import { type Standing, V } from "./stage.ts";
@@ -91,6 +92,7 @@ export function startFight(setup: FightSetup, speed: Speed, bases: BaseLook, don
   FV.bump = { at: -99, px: 0 };
   FV.done = done;
   FV.seen = [];
+  FV.ours = OWN.side(setup);
   // Everyone starts where they were seated; what the opening did to them is acted out in the run-in.
   FV.actors = pb.fight.units.map((u) =>
     actorFor(u, u.summoned ? feetAt(u.cell) : feetAt(seatCell(u.side, u.seat)), u.summoned ? Infinity : -Infinity),
@@ -281,8 +283,8 @@ function drawBars(g: Ctx, a: Actor, x: number, y: number): void {
   R(g, left - 1, top - 1, w + 2, u.manaFull > 0 ? 5 : 4, INK);
   R(g, left, top, w, 2, "#3d2050");
   const hp = Math.round(clamp(a.hpShown / u.maxHp, 0, 1) * w);
-  R(g, left, top, hp, 2, u.side === 0 ? GREEN[4] : "#e67967");
-  R(g, left, top, hp, 1, u.side === 0 ? "#c9ef9a" : "#f4a08c");
+  R(g, left, top, hp, 2, u.side === FV.ours ? GREEN[4] : "#e67967");
+  R(g, left, top, hp, 1, u.side === FV.ours ? "#c9ef9a" : "#f4a08c");
   if (u.shield > 0) R(g, left, top, Math.max(1, Math.round(clamp(u.shield / u.maxHp, 0, 1) * w)), 1, CREAM);
   if (u.manaFull > 0) {
     R(g, left, top + 3, w, 1, "#211228");
@@ -307,7 +309,7 @@ function standing(g: Ctx, a: Actor, c: number, tick: number): Standing | null {
   const hidden = u.alive && u.hiddenUntil > tick;
   const sunk = a.move?.under === true && Math.abs(moveAt(a.move, c).k - 0.5) < 0.35;
   // While the halves are still apart, the far party stands back with its half.
-  const back = u.side === 1 ? Math.round(V.gap) : 0;
+  const back = u.side === FV.ours ? 0 : Math.round(V.gap);
   const shine = shineOf(u.kind, u.items, a.x, V.t);
   const x = Math.round(V.bx + a.x + p.dx);
   const ground = Math.round(V.by + a.y + p.dy - back);
@@ -328,7 +330,7 @@ function standing(g: Ctx, a: Actor, c: number, tick: number): Standing | null {
       }
       g.globalAlpha = p.alpha * (shine.dim ? DIM : 1);
       // The member's figures stand on the bases they chose; the forest's, and what is summoned, on plain ones.
-      drawStanding(g, u.kind, x, y, u.side === 0 ? FV.bases : "plain", {
+      drawStanding(g, u.kind, x, y, u.side === FV.ours ? FV.bases : "plain", {
         hover: hover + p.rise,
         pose: p.cast ? "cast" : "idle",
         beat: beatAt(V.t, a.phase),
@@ -367,7 +369,7 @@ export function drawFight(g: Ctx, list: Standing[]): void {
   for (const fl of FV.flashes) {
     const k = (c - fl.t0) / 10;
     if (k < 0) continue;
-    const at = cellXY(fl.cell);
+    const at = cellXY(shownCell(fl.cell));
     g.globalAlpha = clamp(1 - k, 0, 1) * 0.75;
     g.drawImage(markOf(fl.col), V.bx + at.x - HEX_W / 2, V.by + at.y - HEX_H / 2);
   }
@@ -405,7 +407,7 @@ export function fightHeldUnder(x: number, y: number): HeldAt | null {
   for (const a of FV.actors) {
     const u = a?.unit;
     if (!a || !u?.alive || clockNow() < a.bornAt || u.hiddenUntil > f.tick) continue;
-    const back = u.side === 1 ? Math.round(V.gap) : 0;
+    const back = u.side === FV.ours ? 0 : Math.round(V.gap);
     const hit = heldAt(heldRow(u.items, a.x, heldTop(a.y - back, true)), x, y);
     if (hit) return hit;
   }

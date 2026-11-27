@@ -8,6 +8,7 @@ import type { BaseLook } from "@sequoia-leaf/figures/sprites.ts";
 import { GREEN } from "@sequoia-leaf/kit/palette.ts";
 import type { Fight, FightEvent, TraitId } from "@sequoia-leaf/raid";
 import { FIGURES, isFigureId, type UnitKind } from "@sequoia-leaf/raid/content/figures.ts";
+import { mirror, type Side } from "@sequoia-leaf/raid/hex.ts";
 
 import { TRAIT_COLOUR } from "./art/pal.ts";
 import { cellXY, type Pt } from "./geometry.ts";
@@ -52,6 +53,8 @@ export const FV: {
   seen: FightEvent[];
   /** Told when one of the member's traits switches on as a fight starts, to light its chip. */
   woke: ((trait: TraitId) => void) | null;
+  /** The member's own side (`sides.ts`): drawn on the near half, the board turned round when it is the second. */
+  ours: Side;
 } = {
   pb: null,
   actors: [],
@@ -67,6 +70,7 @@ export const FV: {
   done: null,
   seen: [],
   woke: null,
+  ours: 0,
 };
 
 /** The fight being shown, if one is. */
@@ -74,10 +78,13 @@ export const fightNow = (): Fight | null => FV.pb?.fight ?? null;
 /** The fight's clock as shown, in steps. */
 export const clockNow = (): number => FV.pb?.clock ?? 0;
 
+/** The hex a fight cell is drawn at: the cell itself, or with the member on the second side, the board turned round. */
+export const shownCell = (cell: number): number => (FV.ours === 0 ? cell : mirror(cell));
+
 /** How far below the middle of its hex a figure's feet are (the same as while planning). */
 export const FOOT = 3;
 export const feetAt = (cell: number): Pt => {
-  const p = cellXY(cell);
+  const p = cellXY(shownCell(cell));
   return { x: p.x, y: p.y + FOOT };
 };
 /** The colour an ability is drawn in: its owner's kin, or moss green for the forest's own. */
