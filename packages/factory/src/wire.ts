@@ -20,6 +20,7 @@ import { deliver, giveGoal } from "./orders.ts";
 import { carried, makes, MINUTE } from "./planner.ts";
 import { litAt, litOf } from "./power.ts";
 import { lit as litBig, outsOf, OWN, pieceOf, roomRound, takesAt } from "./sizes.ts";
+import { smogged, smogPace } from "./smog.ts";
 import {
   ALL_ITEMS,
   ALL_KINDS,
@@ -41,12 +42,16 @@ import {
   ITEM_COUNT,
   ITEM_INFO,
   type Kind,
+  KIND_INFO,
   locked,
   makesThing,
+  MIX_OF,
   NONE,
   PACE,
   RECIPE,
   recipesFor,
+  SINKS,
+  SMOG_OF,
   SPAN_MOST,
   SPANS,
   TIMES_MOST,
@@ -378,12 +383,14 @@ export function rewire(y: Yard): Wire {
   }
   const taken = new Uint8Array(n);
   for (let i = 0; i < n; i++) if (kind[i] !== NONE) taken[i] = sidesTaken(y, i);
+  const byPlot = workByPlot(y, work);
   const wire: Wire = {
     order: handingOrder(y),
     taken,
     carry: Int32Array.from(carry),
     mouths: Int32Array.from(carry.filter((i) => tunnelOf(y, i) >= 0)),
-    work: Int32Array.from(work),
+    ...byPlot,
+    standing: standingOn(y),
     burners: Int32Array.from(burners),
     recipes: ALL_KINDS.map((k) => recipesFor(y.open, k)),
     steady,
@@ -395,6 +402,35 @@ export function rewire(y: Yard): Wire {
   y.demand = demand;
   y.supply = steady + burningNow(y, burners);
   return wire;
+}
+
+/**
+ * The pieces that work, in plot order and each plot's in the order found (`Wire.work`), with where
+ * each plot's part begins and its plot (`smog.ts`).
+ */
+function workByPlot(y: Yard, found: readonly number[]): Pick<Wire, "work" | "workFrom" | "workPlot"> {
+  const plotOf = (i: number): number => y.land.plot[i] ?? NONE;
+  const work = found.toSorted((a, b) => plotOf(a) - plotOf(b));
+  const from: number[] = [];
+  const plots: number[] = [];
+  work.forEach((i, c) => {
+    if (c === 0 || plotOf(i) !== plotOf(work[c - 1] ?? -1)) {
+      from.push(c);
+      plots.push(plotOf(i));
+    }
+  });
+  from.push(work.length);
+  return { work: Int32Array.from(work), workFrom: Int32Array.from(from), workPlot: Int32Array.from(plots) };
+}
+
+/** The redwoods standing on each plot of the yard's land. */
+function standingOn(y: Yard): Uint8Array {
+  const out = new Uint8Array(y.land.plots.length);
+  y.land.trees.forEach((tiles, t) => {
+    const p = y.land.plot[tiles[0] ?? 0] ?? NONE;
+    if (y.felled[t] !== 1 && p !== NONE) out[p] = (out[p] ?? 0) + 1;
+  });
+  return out;
 }
 
 /** The power what burns gives as it stands, in halves: each burning now, as its kind says (`KindDef.burns`). */
@@ -502,6 +538,10 @@ export const KIT: Kit = {
   SPAN_MOST,
   WORK_OF,
   FIXED,
+  SINKS,
+  KIND_INFO,
+  MIX_OF,
+  SMOG_OF,
   TINTED,
   GRADED,
   isItem,
@@ -535,6 +575,8 @@ export const KIT: Kit = {
   tunnelRow,
   insTo,
   unpackWays,
+  smogged,
+  smogPace,
   mostHeld,
   // The tiles about a piece.
   DX,

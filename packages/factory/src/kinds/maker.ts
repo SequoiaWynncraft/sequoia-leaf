@@ -240,11 +240,11 @@ function words(k: Kit, y: Yard, i: number, state: string): Words {
   const held = waitsOn(k, y, i, r);
   if (held) return outWords(k, y, i, state, held.n, held.also);
   const making = asItem(k, h.making[r] ?? k.NONE);
-  if (making !== null) return { line: `Making ${many(k, making)}${slow(k, y)}.` };
+  if (making !== null) return { line: `Making ${many(k, making)}${slow(k, y, i)}.` };
   const rec = aim(k, y, i);
   if (!rec)
     return { line: h.count[r] === 0 ? "Waiting for items." : `Holds ${holding(k, y, r)}. No recipe combines these.` };
-  if (state === "working") return { line: `Making ${many(k, rec.out)}${slow(k, y)}.` };
+  if (state === "working") return { line: `Making ${many(k, rec.out)}${slow(k, y, i)}.` };
   const missing = rec.from.filter((n, p) => k.held(h, r, n) < (rec.need[p] ?? 1));
   const full = rec.from.find((n) => fullOf(k, y, i, n));
   if (state === "starved" && full !== undefined)

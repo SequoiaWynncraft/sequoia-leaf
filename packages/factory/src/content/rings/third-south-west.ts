@@ -49,7 +49,7 @@ export const THIRD_SOUTH_WEST: readonly PlotInfo<(typeof THIRD_SOUTH_WEST_IDS)[n
     col: -1,
     row: 3,
     price: 480_000,
-    clearing: { firework: 2700, clock: 1350 },
+    clearing: { lights: 1350, firework: 2700 },
     why: "Open ground, and one redwood in the middle of it.",
     rows: [
       "................",
@@ -72,7 +72,7 @@ export const THIRD_SOUTH_WEST: readonly PlotInfo<(typeof THIRD_SOUTH_WEST_IDS)[n
     col: 1,
     row: 3,
     price: 340_000,
-    clearing: { spyglass: 1800, pipe: 2700 },
+    clearing: { telegraph: 675, pipe: 2700 },
     why: "The stream turns east here. Sand on both banks, and a little star crystal.",
     rows: [
       ".......~~.......",
@@ -141,7 +141,7 @@ export const THIRD_SOUTH_WEST: readonly PlotInfo<(typeof THIRD_SOUTH_WEST_IDS)[n
     col: 3,
     row: 3,
     price: 800_000,
-    clearing: { spyglass: 1200, pipe: 1800, orrery: 450 },
+    clearing: { bulb: 1800, pipe: 1800, orrery: 450 },
     why: "The largest water there is.",
     rows: [
       "................",
@@ -210,7 +210,7 @@ export const THIRD_SOUTH_WEST: readonly PlotInfo<(typeof THIRD_SOUTH_WEST_IDS)[n
     col: -3,
     row: 1,
     price: 320_000,
-    clearing: { firework: 2700, clock: 1350 },
+    clearing: { gravel: 4500, clock: 1350 },
     why: "Clay, more than any yard has needed yet.",
     rows: [
       "................",

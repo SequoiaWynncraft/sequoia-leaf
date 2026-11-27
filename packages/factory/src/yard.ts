@@ -61,6 +61,8 @@ export interface Holders {
   last: Uint8Array;
   /** The work done on the next piece, in half-ticks (`tick.ts`). */
   work: Uint16Array;
+  /** For a piece that breaks one thing into several, its place in its mix: what it gives next (`kinds/mix.ts`). */
+  mix: Uint8Array;
   /** 1 while a machine has looked at what it holds and found nothing it can start on. */
   idle: Uint8Array;
   /** 1 while a crate lets things out. */
@@ -124,6 +126,15 @@ export interface Wire {
   /** Tunnels' way-in mouths, which carry things under the ground too. */
   readonly mouths: Int32Array;
   readonly work: Int32Array;
+  /**
+   * The pieces that work are listed by plot (`work`): where each plot's part of the list begins, the
+   * part's plot (a place in the land's `plots`), and the list's length after the last part, so the tick
+   * passes over a plot's whole part on a tick its smog loses (`smog.ts`).
+   */
+  readonly workFrom: Int32Array;
+  readonly workPlot: Int32Array;
+  /** The redwoods standing on each plot, by its place in the land's `plots`: what clears its smog. */
+  readonly standing: Uint8Array;
   readonly burners: Int32Array;
   /** For each tile, the sides it takes things in from, a bit each (`sidesTaken`). */
   readonly taken: Uint8Array;
@@ -256,6 +267,11 @@ export interface Yard {
    */
   begun: number;
   /**
+   * Smog on each plot, by its place in the land's `plots` (`smog.ts`): its level, 0 to `SMOG.most`,
+   * and what was made on it since it was last counted.
+   */
+  readonly smog: { readonly level: Uint16Array; readonly made: Uint16Array };
+  /**
    * 1 for each of the land's redwoods the yard has felled (`fell`), by its place in the land's
    * `trees`. Every rule asks whether one stands on a tile through `redwoodAt`, never the land alone.
    */
@@ -304,6 +320,7 @@ const holders = (cap: number): Holders => ({
   making: new Uint8Array(cap),
   last: new Uint8Array(cap),
   work: new Uint16Array(cap),
+  mix: new Uint8Array(cap),
   idle: new Uint8Array(cap),
   open: new Uint8Array(cap),
   fuel: new Uint8Array(cap),
@@ -317,6 +334,15 @@ const tunnels = (cap: number): Tunnels => ({
   under: new Uint8Array(cap * SPAN_MOST),
   along: new Uint8Array(cap * SPAN_MOST),
 });
+
+/**
+ * Room in a yard's side tables, still empty, for so many holders and tunnels: a yard read back takes
+ * the room its pieces need, where rows added one by one would leave a third more as they grow by half.
+ */
+export function reserve(y: Yard, holderRows: number, tunnelRows: number): void {
+  if (y.holders.size === 0) y.holders = holders(Math.max(16, holderRows));
+  if (y.tunnels.size === 0) y.tunnels = tunnels(Math.max(8, tunnelRows));
+}
 
 /** A yard with nothing on it but the depot, and the starting pieces to hand; every goal below `tier` done, for trying later parts. */
 export function emptyYard(land: Land, tier = 0): Yard {
@@ -361,6 +387,7 @@ export function emptyYard(land: Land, tier = 0): Yard {
     clearing: null,
     cleared: [],
     begun: 0,
+    smog: { level: new Uint16Array(land.plots.length), made: new Uint16Array(land.plots.length) },
     felled: new Uint8Array(land.trees.length),
     spare: Uint8Array.from(STARTING),
     blueprints: Array.from({ length: BLUEPRINTS_MOST }, () => null),
@@ -471,6 +498,7 @@ export function holderRow(y: Yard, tile: number): number {
       "making",
       "last",
       "work",
+      "mix",
       "idle",
       "open",
       "fuel",
@@ -490,6 +518,7 @@ export function holderRow(y: Yard, tile: number): number {
   h.making[r] = NONE;
   h.last[r] = NONE;
   h.work[r] = 0;
+  h.mix[r] = 0;
   h.idle[r] = 0;
   h.open[r] = 1;
   h.fuel[r] = 0;
@@ -533,6 +562,7 @@ export function dropRow(y: Yard, tile: number): void {
         "making",
         "last",
         "work",
+        "mix",
         "idle",
         "open",
         "fuel",

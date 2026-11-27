@@ -62,7 +62,9 @@ describe("whole numbers", () => {
     const running = F.decode(F.encode(generated().y), generated().y.land);
     if (!running) throw new Error("no yard");
     for (let k = 0; k < 2000; k++) F.step(running);
-    expect(running.open.reach).toBe(Math.max(F.START.reach ?? 0, ...F.GOALS.map((g) => g.unlocks.reach ?? 0)));
+    // The most any goal it has done gives: the long works past its tier give more.
+    const reach = Math.max(F.START.reach ?? 0, ...running.done.map((g) => F.GOALS[g]?.unlocks.reach ?? 0));
+    expect([running.open.reach, reach > (F.START.reach ?? 0)]).toEqual([reach, true]);
     for (const y of [delivering(), running, shortYard]) {
       expect(numbers(JSON.parse(F.encode(y)), "", []).filter(([, v]) => !Number.isInteger(v))).toEqual([]);
       expect(numbers(y, "", []).filter(([, v]) => !Number.isInteger(v))).toEqual([]);

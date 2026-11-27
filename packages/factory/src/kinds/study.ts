@@ -76,7 +76,7 @@ function words(k: Kit, y: Yard, i: number, state: string): Words {
   const holds = (y.holders.count[r] ?? 0) > 0 ? `Holds ${holding(k, y, r)}. ` : "";
   if (g === undefined) return { line: `${holds}Nothing is being studied.` };
   const name = k.GOALS[g]?.title ?? "";
-  if (state === "working") return { line: `Studying ${name}${slow(k, y)}.` };
+  if (state === "working") return { line: `Studying ${name}${slow(k, y, i)}.` };
   const missing = still(k, y, g);
   return { line: `${holds}Waiting for ${list(k, missing)} for ${name}.`, missing };
 }

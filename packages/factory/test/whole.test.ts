@@ -169,7 +169,8 @@ describe("saving the whole yard", () => {
       why: "There is nothing here to save",
     });
     must(y, { do: "build", kind: "mill", ...near(-3, -3), dir: 0 });
-    expect(give(y, { do: "saveYard", slot: F.BLUEPRINTS_MOST - 1 })).not.toHaveProperty("refused");
+    expect(give(y, { do: "saveYard", slot: y.open.blueprints - 1 })).not.toHaveProperty("refused");
+    expect(give(y, { do: "saveYard", slot: y.open.blueprints })).toHaveProperty("refused");
     expect(F.readCommand({ tick: 0, do: "saveYard", slot: F.BLUEPRINTS_MOST })).toBeNull();
   });
 });

@@ -8,6 +8,7 @@ import type * as Land from "../land.ts";
 import type * as Orders from "../orders.ts";
 import type * as Planner from "../planner.ts";
 import type * as Power from "../power.ts";
+import type * as Smog from "../smog.ts";
 import type * as Tables from "../tables.ts";
 import type * as Tiles from "../tiles.ts";
 import type * as Wire from "../wire.ts";
@@ -34,6 +35,10 @@ export interface Kit {
   readonly SPAN_MOST: typeof Tables.SPAN_MOST;
   readonly WORK_OF: typeof Tables.WORK_OF;
   readonly FIXED: typeof Tables.FIXED;
+  readonly SINKS: typeof Tables.SINKS;
+  readonly KIND_INFO: typeof Tables.KIND_INFO;
+  readonly MIX_OF: typeof Tables.MIX_OF;
+  readonly SMOG_OF: typeof Tables.SMOG_OF;
   readonly TINTED: typeof Tables.TINTED;
   readonly GRADED: typeof Tables.GRADED;
   readonly isItem: typeof Tables.isItem;
@@ -68,6 +73,10 @@ export interface Kit {
   readonly tunnelRow: typeof Yards.tunnelRow;
   readonly insTo: typeof Yards.insTo;
   readonly unpackWays: typeof Tiles.unpackWays;
+  /** Adds smog to the plot of the tile `i`, as a piece there finishes a thing (`smog.ts`). */
+  readonly smogged: typeof Smog.smogged;
+  /** The share of ticks the piece on a tile works at, as the smog on its plot lets it. */
+  readonly smogPace: typeof Smog.smogPace;
   /** How many of a thing the piece on a tile may hold, as its kind says (`Hooks.most`). */
   readonly mostHeld: (y: Yard, i: number, n: number) => number;
 

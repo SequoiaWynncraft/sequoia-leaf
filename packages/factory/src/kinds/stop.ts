@@ -2,7 +2,7 @@
 import { kind } from "./kind.ts";
 import { everySide } from "./line.ts";
 import { as } from "./say.ts";
-import { always, anything, sell } from "./sink.ts";
+import { always, sell, sold } from "./sink.ts";
 
 export const stop = kind({
   name: "stop",
@@ -11,13 +11,14 @@ export const stop = kind({
     cost: 150,
     draw: 0,
     gives: 0,
-    what: "Takes items in from any side. Each counts as having reached the depot.",
+    what: "Takes items in from any side, but slag. Each counts as having reached the depot.",
   },
   most: "stops",
   owns: ["stops"],
+  sinks: true,
   rules: {
     sides: everySide,
-    wants: anything,
+    wants: sold,
     room: always,
     give: sell,
     condition: () => as("giving"),

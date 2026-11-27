@@ -1,3 +1,4 @@
+import { SMOG } from "./content/smog.ts";
 /**
  * Moving the yard on by one tick. Ten ticks are a second.
  *
@@ -40,6 +41,7 @@ import { carryOn } from "./kinds/line.ts";
 import { RULES } from "./kinds/list.ts";
 import { work as make } from "./kinds/maker.ts";
 import { passUnder } from "./kinds/under.ts";
+import { countSmog, stepOf, worksOn } from "./smog.ts";
 import { BURNS, CARRIES, ITEM_COUNT, NONE, PACE, SPAN_MOST, TIMES_MOST } from "./tables.ts";
 import { KIT, rewire, roomAt } from "./wire.ts";
 import { holderOf, take, tunnelOf, type Wire, type Yard } from "./yard.ts";
@@ -62,6 +64,7 @@ export function step(y: Yard): void {
   carryUnder(y, wire);
   if (works) working(y, wire);
   handOn(y, wire, waiting);
+  if (y.tick % SMOG.every === 0) countSmog(y, wire);
 }
 
 /**
@@ -123,21 +126,27 @@ function carryUnder(y: Yard, wire: Wire): void {
 
 /**
  * Every piece that works does its work, at its own grade's pace: but one holding as many finished
- * things as it may (one, or for a machine that stands in for several, one for each: `Holders.more`).
+ * things as it may (one, or for a machine that stands in for several, one for each: `Holders.more`),
+ * and every piece of a plot whose smog loses this tick (`smog.ts`), passed over by its plot's part of
+ * the list.
  */
 function working(y: Yard, wire: Wire): void {
   const { kind, grade } = y;
   const h = y.holders;
-  const workers = wire.work;
-  for (let c = 0; c < workers.length; c++) {
-    const i = workers[c] ?? 0;
-    const r = holderOf(y, i);
-    const k = kind[i] ?? NONE;
-    if (h.out[r] !== NONE && (h.more[r] ?? 0) + 1 >= (TIMES_MOST[k] ?? 1)) continue;
-    const work = WORK[k];
-    const speed = PACE[grade[i] ?? 0] ?? 0;
-    if (work === make) make(KIT, y, i, r, speed, wire);
-    else if (work) work(KIT, y, i, r, speed, wire);
+  const { work: workers, workFrom, workPlot } = wire;
+  const level = y.smog.level;
+  for (let part = 0; part < workPlot.length; part++) {
+    if (!worksOn(stepOf(level[workPlot[part] ?? 0] ?? 0), y.tick)) continue;
+    for (let c = workFrom[part] ?? 0; c < (workFrom[part + 1] ?? 0); c++) {
+      const i = workers[c] ?? 0;
+      const r = holderOf(y, i);
+      const k = kind[i] ?? NONE;
+      if (h.out[r] !== NONE && (h.more[r] ?? 0) + 1 >= (TIMES_MOST[k] ?? 1)) continue;
+      const work = WORK[k];
+      const speed = PACE[grade[i] ?? 0] ?? 0;
+      if (work === make) make(KIT, y, i, r, speed, wire);
+      else if (work) work(KIT, y, i, r, speed, wire);
+    }
   }
 }
 

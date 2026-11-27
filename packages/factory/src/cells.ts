@@ -40,12 +40,14 @@ import { KIT } from "./wire.ts";
 import { held, holderOf, type Holders, tunnelOf, type Yard } from "./yard.ts";
 
 /** The parts a piece's bytes may say follow, a bit each: any other is a newer Leaf's. */
-export const PARTS = 0x1fffe;
+export const PARTS = 0x3fffe;
 /** The parts kept since a kind could pass 15 and a piece hold a by-product, after all the others. */
 const HIGH = 0x4000;
 const ALSO = 0x8000;
 /** The part kept since a machine could hold more than one finished thing (an assembler). */
 const MORE = 0x10000;
+/** A piece that breaks one thing into several: its place in its mix (`kinds/mix.ts`), kept since tier 5. */
+const MIX = 0x20000;
 /** The most kinds of thing, and of one thing, a piece's bytes may say it holds: past these the bytes are no yard's. */
 const KINDS_MOST = 255;
 const MANY_MOST = 1_000_000;
@@ -62,6 +64,7 @@ export interface KeptPiece {
   readonly out?: number;
   readonly also?: number;
   readonly more?: number;
+  readonly mix?: number;
   readonly work?: number;
   readonly making?: number;
   readonly turn?: number;
@@ -101,11 +104,13 @@ function heldBy(h: Holders, r: number): Partial<Building> {
   const [out, work, making, fuel] = [h.out[r] ?? NONE, h.work[r] ?? 0, h.making[r] ?? NONE, h.fuel[r] ?? 0];
   const also = h.also[r] ?? NONE;
   const more = h.more[r] ?? 0;
+  const mix = h.mix[r] ?? 0;
   return {
     ...(kinds.length > 0 ? { held: kinds.map((n): [number, number] => [n, held(h, r, n)]) } : {}),
     ...(out === NONE ? {} : { out }),
     ...(also === NONE ? {} : { also }),
     ...(more === 0 ? {} : { more }),
+    ...(mix === 0 ? {} : { mix }),
     ...(work === 0 ? {} : { work }),
     ...(making === NONE ? {} : { making }),
     ...(fuel === 0 ? {} : { fuel }),
@@ -180,6 +185,7 @@ function partsOf(p: KeptPiece): number {
     [HIGH, p.kind > 15 ? true : undefined],
     [ALSO, p.also],
     [MORE, p.more],
+    [MIX, p.mix],
   ];
   return has.reduce((f, [bit, v]) => (v === undefined || v === false ? f : f | bit), 0);
 }
@@ -229,6 +235,7 @@ function writeKept(o: Writer, p: KeptPiece): void {
   if (f & HIGH) o.byte(p.kind >> 4);
   if (p.also !== undefined) o.byte(p.also);
   if (p.more !== undefined) o.byte(p.more);
+  if (p.mix !== undefined) o.byte(p.mix);
 }
 
 /** Pieces as kept (in tile order, none twice) as bytes: `unpackCells` reads back the same. */
@@ -286,10 +293,11 @@ function readParts(r: Reader, p: Building, f: number): boolean {
   return true;
 }
 
-/** Reads what a piece holds ready beside its finished thing, as `f` says follows: a by-product, and more of the thing. */
+/** Reads what a piece holds ready beside its finished thing, as `f` says follows: a by-product, more of the thing, and its place in a mix. */
 function readHeldOut(r: Reader, p: Building, f: number): void {
   if (f & ALSO) p.also = r.byte();
   if (f & MORE) p.more = r.byte();
+  if (f & MIX) p.mix = r.byte();
 }
 
 /** Reads a kind's bits past four onto a piece, as only a kind past 15 has; false for none, which no Leaf keeps. Past 15 they make a kind past 255, which no Leaf here has. */

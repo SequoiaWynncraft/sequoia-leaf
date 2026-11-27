@@ -135,4 +135,50 @@ export const ASKS: Partial<Record<ItemName, readonly Ask[]>> = {
     { from: "The scholars", line: "The scholars want the sky on a table, where they can reach it." },
     { from: "Glorp", line: "Glorp would like the moon. Glorp has been told it comes in a smaller size." },
   ],
+  // Tier 5. None for slag: the town does not buy it.
+  salvage: [
+    {
+      from: "Greg",
+      line: "Greg has heard the old workings are full of lumps somebody threw away. Greg cannot understand it.",
+    },
+    { from: "The gnomes", line: "The gnomes want salvage to take apart. They have a hammer and an afternoon." },
+  ],
+  copper: [
+    { from: "Greg", line: "Greg has found a lump that is green on the outside. Greg is very pleased with it." },
+    { from: "The market stalls", line: "A stall is selling copper pans. It has sold one, to itself." },
+  ],
+  gravel: [
+    { from: "The gnomes", line: "The gnomes are laying a path to their wall. The wall is waist high now." },
+    { from: "The cats", line: "The cats will not say what the gravel is for either." },
+  ],
+  wire: [
+    { from: "Tindra", line: "Tindra is stringing beads. Wire holds better than string, and the beads have opinions." },
+    { from: "The crab pond", line: "The crabs want a fence they can see through. They like to know who is coming." },
+  ],
+  coil: [
+    {
+      from: "Pipwick",
+      line: "Pipwick wound a coil by hand. It took a day. Pipwick would like the rest made some other way.",
+    },
+    { from: "The scholars", line: "The scholars have found that a coil hums. They want enough for a chord." },
+  ],
+  bulb: [
+    { from: "Moth", line: "Moth has seen a bulb. Moth has not been the same since." },
+    { from: "The gate", line: "The gate lamp is out again. A bulb does not need filling." },
+  ],
+  spark: [
+    { from: "The scholars", line: "The scholars' new questions do not fit in brass. They crackle." },
+    { from: "Pipwick", line: "Pipwick is writing down everything the wire says. The wire says a lot." },
+  ],
+  telegraph: [
+    { from: "The gate", line: "The lookouts want a telegraph to the far camp. Shouting has not carried." },
+    { from: "Crab #7", line: "Crab #7 would like to send word that it will not be at roll call." },
+  ],
+  lights: [
+    {
+      from: "The market stalls",
+      line: "The stalls want a string of lights each, so people can see what they are buying.",
+    },
+    { from: "Moth", line: "Moth would like a string of lights of its own. Moth has friends coming." },
+  ],
 };

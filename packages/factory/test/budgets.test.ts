@@ -111,8 +111,8 @@ describe("memory", () => {
     y.away = null;
   }, 60_000);
 
-  // 1.1 MB since pieces of more than one tile: every tile keeps a byte of the piece it is part of, and every holder one of a by-product.
-  test("at worst, a yard of nothing but crates, as many as the guild's land holds with every plot of it owned, holds under 1.1 MB", () => {
+  // 1.5 MB since tier 5: every holder keeps a count of each of 40 things, not 30, on the land of seven plots by seven.
+  test("at worst, a yard of nothing but crates, as many as the guild's land holds with every plot of it owned, holds under 1.5 MB", () => {
     const y = F.create({ tier: 4, seed: 1 });
     const guild = y.land;
     for (const p of guild.plots) if (!y.plots.includes(p.plot)) y.plots.push(p.plot);
@@ -126,7 +126,7 @@ describe("memory", () => {
     F.rewire(y);
     expect(y.kind.filter((k) => k === F.CRATE).length).toBe(room);
     expect(room).toBeGreaterThan(8000);
-    expect(F.bytesHeld(y)).toBeLessThan(1.1 * 1024 * 1024);
+    expect(F.bytesHeld(y)).toBeLessThan(1.5 * 1024 * 1024);
     console.log(`held, ${room} crates: ${kb(F.bytesHeld(y))}`);
   }, 60_000);
 });

@@ -33,7 +33,7 @@ function words(k: Kit, y: Yard, i: number, state: string): Words {
   const out = asItem(k, y.holders.out[k.holderOf(y, i)] ?? k.NONE);
   if (out !== null) return outWords(k, y, i, state, out);
   const what = asItem(k, y.land.deposit[i] ?? k.NONE);
-  return { line: `Gathering ${what === null ? "nothing" : many(k, what)}${slow(k, y)}.` };
+  return { line: `Gathering ${what === null ? "nothing" : many(k, what)}${slow(k, y, i)}.` };
 }
 
 /** What it adds a minute: its deposit's thing, made. */

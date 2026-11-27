@@ -23,8 +23,9 @@ function hoursOf(want: Float64Array): number {
 
 /** What is open once each tier is done, the first ring's first. */
 const OPENS = [1, 2, 3, 4, 5].map((t) => F.create({ seed: 1, tier: t + 1 }).open);
-/** The tier a good is first made in: the first whose end lets a yard make it. */
-const tierOf = (n: F.Item): number => OPENS.findIndex((o) => F.locked(o, { make: n }) === null) + 1;
+const EVERY_PLOT = F.LAND.plots.map((p) => p.plot);
+/** The tier a good is first made in: the first whose end lets a yard that owned all the land make it, all the way down. */
+const tierOf = (n: F.Item): number => OPENS.findIndex((o) => F.makeableOn(F.LAND, o, EVERY_PLOT).includes(n)) + 1;
 /** The line-hours each ring's clearings are sized to. */
 const HOURS: Readonly<Record<number, number>> = { 2: 0.5, 3: 1.5 };
 
@@ -77,19 +78,32 @@ describe("the clearings table", () => {
     }
   });
 
-  test("the second ring asks for goods of tiers 3 and 4, the third of tier 4; the depot takes each, and the first ring makes them all", () => {
+  test("the second ring asks for goods of tiers 3 and 4, the third of tiers 4 and 5; the depot takes each, and the first ring and The Old Workings make them all", () => {
     const first = F.LAND.plots.filter((p) => p.ring <= 1).map((p) => p.plot);
-    const makes = new Set(F.makeableOn(F.LAND, OPENS[4] ?? F.create({ tier: 6 }).open, first));
+    const makes = new Set(F.makeableOn(F.LAND, OPENS[4] ?? F.create({ tier: 6 }).open, [...first, WORKINGS]));
     const depot = F.create({ seed: 1, tier: 5 });
     const at = F.at(depot, depot.land.depot[0], depot.land.depot[1]);
     for (const p of F.LAND.plots.filter((q) => q.ring >= 2)) {
       const name = F.plotName(p.plot);
-      const tiers = p.ring === 2 ? [3, 4] : [4];
+      const tiers = p.ring === 2 ? [3, 4] : [4, 5];
       for (const k of goods(p.plot)) {
         const good = F.itemName(k);
         expect([name, good, tiers.includes(tierOf(k))]).toEqual([name, good, true]);
         expect([name, good, F.wants(depot, at, k), makes.has(k)]).toEqual([name, good, true, true]);
       }
+    }
+  });
+
+  test("no yard waits on what it cannot make yet: The Old Workings, each plot touching it and each plot with salvage ask for no good of tier 5", () => {
+    const old = F.LAND.plots.find((p) => p.plot === WORKINGS);
+    if (!old) throw new Error("no Old Workings");
+    const salvage = F.item("salvage");
+    const asked = F.LAND.plots.filter((p) => p.ring >= 2 && goods(p.plot).some((k) => tierOf(k) === 5));
+    expect(asked.length).toBeGreaterThan(0);
+    for (const p of asked) {
+      const name = F.plotName(p.plot);
+      const salvaged = F.LAND.deposit.some((d, i) => d === salvage && F.LAND.plot[i] === F.LAND.plots.indexOf(p));
+      expect([name, p.plot === WORKINGS || F.touching(p, old), salvaged]).toEqual([name, false, false]);
     }
   });
 

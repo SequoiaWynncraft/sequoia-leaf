@@ -29,6 +29,8 @@ export interface KindInfo {
   readonly draw: number;
   readonly gives: number;
   readonly what: string;
+  /** Smog it adds to the plot it stands on for each thing it finishes (`smog.ts`): none if not said. */
+  readonly smog?: number;
 }
 
 /** The words for how a piece stands (`status`): its sentence, and what the sentence names. */
@@ -155,6 +157,8 @@ export interface KindDef<N extends string = string> {
   readonly tint?: "line" | "alone";
   /** How many ways out it has, ahead, left and right, for one that hands by ways; else it hands to one tile, `next`. */
   readonly ways?: 3;
+  /** Whether what reaches it has reached the depot: the depot, a cart stop (`sink.ts`). */
+  readonly sinks?: true;
   /** Whether it is the depot: land, never built, turned, moved, taken up or kept. */
   readonly fixed?: true;
   /** Whether it cannot be turned once it stands. */

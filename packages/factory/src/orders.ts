@@ -301,14 +301,14 @@ export function makeableOn(land: Land, open: Open, plots: readonly Plot[]): Item
 /** Everything the yard could make as it stands. */
 export const makeable = (y: Yard): Item[] => makeableOn(y.land, y.open, y.plots);
 
-/** What the board may ask for: things the yard could make that the nodes done or in hand have given it a reason to make. */
+/** What the board may ask for: things the yard could make that the nodes done or in hand have given it a reason to make, and that the town buys. */
 export function askable(y: Yard): Item[] {
   const met = new Uint8Array(ITEM_COUNT);
   for (const g of y.hand === -1 ? y.done : [...y.done, y.hand]) {
     const want = isNode(g) ? GOALS[g]?.want : undefined;
     for (const k of ALL_ITEMS) if ((want?.[k] ?? 0) > 0) for (const part of partsOf(k)) met[part] = 1;
   }
-  return makeable(y).filter((k) => met[k] === 1);
+  return makeable(y).filter((k) => met[k] === 1 && ITEM_INFO[k]?.unsold !== true);
 }
 
 /** A run of numbers from 0 up to 1 that is the same every time for the same seed. */

@@ -54,10 +54,15 @@ export function holding(k: Kit, y: Yard, r: number): string {
   return parts.length ? `${parts.join(", ")} and ${last}` : last || "nothing";
 }
 
-/** ", at 75% of its pace: the yard is short of power", or nothing while it has power enough. */
-export function slow(k: Kit, y: Yard): string {
+/**
+ * ", at 75% of its pace: the yard is short of power" for the piece on its own tile `i`, then ", at 50%
+ * of its pace: smog on this plot" (`smog.ts`); nothing while it has power enough and clean air.
+ */
+export function slow(k: Kit, y: Yard, i: number): string {
   const share = k.pace(y);
-  return share < 1 ? `, at ${Math.floor(share * 100)}% of its pace: the yard is short of power` : "";
+  const smog = k.smogPace(y, i);
+  const power = share < 1 ? `, at ${Math.floor(share * 100)}% of its pace: the yard is short of power` : "";
+  return smog < 1 ? `${power}, at ${Math.floor(smog * 100)}% of its pace: smog on this plot` : power;
 }
 
 /**
@@ -95,8 +100,20 @@ function takenAhead(k: Kit, y: Yard, i: number, n: Item, also = false): "yes" | 
 export const stuckAs = (k: Kit, y: Yard, i: number, n: Item, also = false): number =>
   takenAhead(k, y, i, n, also) === "yes" ? as("waiting") : as("blocked", true);
 
+/** The sink a thing held ready would go into and that never takes it, as named: "the depot", "the cart stop"; or nothing. */
+function refusingSink(k: Kit, y: Yard, i: number, n: Item, also: boolean): string | null {
+  if (k.ITEM_INFO[n]?.unsold !== true) return null;
+  for (const { to } of sendings(k, y, i, n, also)) {
+    const kind = to < 0 ? k.NONE : (y.kind[to] ?? k.NONE);
+    if (k.SINKS[kind] === 1) return `the ${(k.KIND_INFO[kind]?.name ?? "").toLowerCase()}`;
+  }
+  return null;
+}
+
 /** Why a thing held ready (with `also`, a by-product) has nowhere to go, in words: what stands ahead never takes it, or nothing does. */
 export function nowhere(k: Kit, y: Yard, i: number, n: Item, also = false): string {
+  const sink = refusingSink(k, y, i, n, also);
+  if (sink !== null) return `${k.ITEM_INFO[n]?.name ?? ""} has nowhere to go: ${sink} does not take it.`;
   if (takenAhead(k, y, i, n, also) === "never") return `The piece it points at does not take ${many(k, n)}.`;
   // Only a splitter has ways to shut, or to take things in by.
   const shut = y.shut[i] ?? 0;
@@ -140,7 +157,7 @@ export function rateOf(k: Kit, y: Yard, i: number, recipe: Recipe | null): Machi
   const kind = i < 0 ? k.NONE : (y.kind[i] ?? k.NONE);
   const grade = y.grade[i] ?? 0;
   const lit = kind !== k.NONE && k.litAt(y, i);
-  const share = lit ? k.pace(y) : 0;
+  const share = lit ? k.pace(y) * k.smogPace(y, i) : 0;
   const own = k.isKind(kind) && (k.WORK_OF[kind] ?? 0) > 0;
   const nominal = own
     ? k.makes(kind, grade, null)

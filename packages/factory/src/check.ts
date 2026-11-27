@@ -27,7 +27,7 @@ import { fromCorner, tileFromCorner } from "./keptland.ts";
 import type { Land } from "./land.ts";
 import { counting } from "./orders.ts";
 import { waysOn } from "./pieces.ts";
-import { ITEM_COUNT, NODE_COUNT, NONE, SPAN_MOST } from "./tables.ts";
+import { BLUEPRINTS_BEFORE, ITEM_COUNT, NODE_COUNT, NONE, SPAN_MOST } from "./tables.ts";
 import { type Counts, holderOf, type Holders, PIECE_BYTES, tunnelOf, type Tunnels, type Yard } from "./yard.ts";
 
 /** The kinds a kind's first four bits name: what every yard's check was taken over before kinds went past them. */
@@ -98,7 +98,13 @@ function mixPlan(land: Land, b: Uint8Array, mix: (v: number) => void): void {
  * whole yard, then what Undo would undo, how many entries and each one's bytes (its id among them).
  */
 function mixKept(y: Yard, mix: (v: number) => void): void {
-  for (const b of y.blueprints) {
+  for (let s = 0; s < y.blueprints.length; s++) {
+    const b = y.blueprints[s] ?? null;
+    // A place past those every yard had (`BLUEPRINTS_BEFORE`) is mixed in, by its number, only where it holds something.
+    if (s >= BLUEPRINTS_BEFORE) {
+      if (b === null) continue;
+      mix(0x40000 | s);
+    }
     if (b === null) mix(-1);
     else if (b.whole) {
       mix(-2);
@@ -116,6 +122,17 @@ function mixKept(y: Yard, mix: (v: number) => void): void {
 function mixText(mix: (v: number) => void, text: string): void {
   mix(text.length);
   for (let k = 0; k < text.length; k++) mix(text.charCodeAt(k));
+}
+
+/** Mixes in the smog on each plot that has any, by the plot's place in the land's list: a yard with none mixes in nothing. */
+function mixSmog(y: Yard, mix: (v: number) => void): void {
+  const { level, made } = y.smog;
+  for (let p = 0; p < level.length; p++) {
+    if ((level[p] ?? 0) === 0 && (made[p] ?? 0) === 0) continue;
+    mix(0x40000 | p);
+    mix(level[p] ?? 0);
+    mix(made[p] ?? 0);
+  }
 }
 
 /**
@@ -240,6 +257,7 @@ export function check(y: Yard): number {
   mixNum(mix, y.seen.till);
   mixTally(mix, y.seen.depot);
   mixLand(y, mix);
+  mixSmog(y, mix);
   mixSpare(y.spare, mix);
   mixKept(y, mix);
   mixTally(mix, y.depot);
@@ -270,6 +288,8 @@ function mixHolder(hs: Yard["holders"], r: number, mix: (n: number) => void): vo
   if (hs.also[r] !== NONE) mix(0x10000 | (hs.also[r] ?? 0));
   // So are more finished things waiting behind the first (`Holders.more`): only an assembler holds any.
   if ((hs.more[r] ?? 0) > 0) mix(0x20000 | (hs.more[r] ?? 0));
+  // A piece that breaks one thing into several: its place in its mix, where it is not at the first.
+  if ((hs.mix[r] ?? 0) !== 0) mix(0x50000 | (hs.mix[r] ?? 0));
   mix(heldWord(hs, r));
   mix(hs.work[r] ?? 0);
   for (let n = 0; n < ITEM_COUNT; n++) {
