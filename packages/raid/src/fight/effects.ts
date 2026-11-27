@@ -11,6 +11,7 @@ import { formNumber, hasTrueForm } from "../content/graid.ts";
 import { type ItemId, itemStats } from "../content/items.ts";
 import { type TraitId, traitNumber } from "../content/traits.ts";
 import { COLS, groupsTouching, HOME_ROWS, within } from "../hex.ts";
+import { UP_THE_TREE_KINDS, upTheTree } from "./casts/up-the-tree.ts";
 import {
   brace,
   emit,
@@ -161,6 +162,8 @@ const TRAITS: Readonly<Record<TraitId, Hooks>> = {
       }
     },
   },
+  // Up the tree as the fight opens, then down with a shield and mana (`upTheTree`).
+  canopy: { seated: upTheTree },
   gnome: {
     on: each((u, v) => {
       u.maxHp = Math.round(u.maxHp * (1 + v("health") / 100));
@@ -236,6 +239,8 @@ const TRAITS: Readonly<Record<TraitId, Hooks>> = {
     }),
   },
   // Takes no chair (`chairsUsed`); nothing in the fight.
+  // A component every few fights it fights: on the run, after a room (`ROOM_HOOKS`).
+  crafter: {},
   stowaway: {},
 };
 
@@ -393,6 +398,7 @@ const shell: Hooks["seated"] = (f, { members, v }) => {
 };
 
 const KINDS: Readonly<Partial<Record<UnitKind, Hooks>>> = {
+  ...UP_THE_TREE_KINDS,
   crab: { seated: shell },
   bigcrab: {
     seated: shell,

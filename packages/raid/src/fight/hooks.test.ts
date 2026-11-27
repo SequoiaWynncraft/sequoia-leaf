@@ -123,10 +123,12 @@ describe("struck", () => {
 });
 
 describe("the order a moment asks in", () => {
-  test("is the plain one, but for a fall and for sitting down", () => {
+  test("is the plain one, but for a fall, for sitting down, and for a blow an ability armed against", () => {
     const plain = ["trait", "item", "boon", "kind"];
     const differ = Object.entries(ORDER).filter(([, order]) => order.join() !== plain.join());
     expect(Object.fromEntries(differ)).toEqual({
+      // What an ability armed (a Firewall) is asked last.
+      struck: ["trait", "item", "boon", "kind", "ability"],
       seated: ["kind", "trait", "item", "boon"],
       falls: ["boon", "trait", "item", "kind"],
     });

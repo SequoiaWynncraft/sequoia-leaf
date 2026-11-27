@@ -59,12 +59,13 @@ const mean = (tier: 1 | 2 | 3 | 4 | 5, cat = CAT): number => {
 };
 
 describe("the roster", () => {
-  test("is twenty-nine figures in five tiers, 7, 7, 6, 5, 4; with Groot Night, 8, 7, 8, 6, 5, and with Penguin Month 9, 8, 9, 8, 5; each banner's headliner while open", () => {
+  test("is twenty-nine figures in five tiers, 7, 7, 6, 5, 4; with Groot Night, 8, 7, 8, 6, 5; with Penguin Month 9, 8, 9, 8, 5; with Up The Tree 10, 9, 10, 9, 6; each banner's headliner while open", () => {
     expect(TIERS.map((tier) => figuresOfTier(tier).length)).toEqual([7, 7, 6, 5, 4]);
-    expect(FIGURE_IDS.length).toBe(40);
+    expect(FIGURE_IDS.length).toBe(46);
     expect(TIERS.map((tier) => figuresOfTier(tier, catalogAt(eraOf("groot-night"))).length)).toEqual([8, 7, 8, 6, 6]);
     expect(TIERS.map((tier) => figuresOfTier(tier, catalogAt(eraOf("penguin-month"))).length)).toEqual([9, 8, 9, 8, 6]);
-    expect(TIERS.map((tier) => figuresOfTier(tier, EVERY).length)).toEqual([9, 8, 9, 8, 5]);
+    expect(TIERS.map((tier) => figuresOfTier(tier, catalogAt(eraOf("up-the-tree"))).length)).toEqual([10, 9, 10, 9, 7]);
+    expect(TIERS.map((tier) => figuresOfTier(tier, EVERY).length)).toEqual([10, 9, 10, 9, 6]);
   });
   test("everyone has a name of their own; the Commodore's four grooters are one figure", () => {
     const specs = new Set(EVERYONE.map((kind) => specOf(EVERY, kind)));
@@ -76,7 +77,8 @@ describe("the roster", () => {
     // Graid is the five named after the guild's raids, a kin as a third trait for four of them.
     // Crab has six from Groot Night; Grooter three and the Commodore, with no two-acorn figure, so
     // that its cracking is not on in the first rooms. Gnome six from Penguin Month, with steps at 3 and 5.
-    const many: Readonly<Partial<Record<string, number>>> = { crab: 6, grooter: 3, gnome: 6 };
+    // Up The Tree: Canopy five, Leetanns among them; Feather five with Unc.
+    const many: Readonly<Partial<Record<string, number>>> = { crab: 6, grooter: 3, gnome: 6, canopy: 5, feather: 5 };
     for (const kin of KINS.filter((k) => k !== "graid")) {
       const members = FIGURE_IDS.filter((id) => figureIn(EVERY, id).kin === kin);
       expect([kin, members.length]).toEqual([kin, many[kin] ?? 4]);
@@ -93,8 +95,9 @@ describe("the roster", () => {
     for (const calling of CALLINGS) {
       const members = FIGURE_IDS.filter((id) => traitsOf(EVERY, id).includes(calling));
       expect(members.length).toBeGreaterThanOrEqual(4);
-      // Bulwark has eight with Clutch and Dibs, Slinger seven with Larp.
-      expect(members.length).toBeLessThanOrEqual(calling === "bulwark" ? 8 : 7);
+      // Bulwark has nine with Clutch, Dibs and Flop; Slinger nine with Larp, Ace and Unc (its third step is six); Fang seven with Leetanns.
+      const most: Readonly<Partial<Record<string, number>>> = { bulwark: 9, slinger: 9, fang: 7 };
+      expect(members.length).toBeLessThanOrEqual(most[calling] ?? 7);
       expect(new Set(members.map((id) => figureIn(EVERY, id).tier)).size).toBeGreaterThanOrEqual(3);
       // Fang's top step is reachable again: Munch is the sixth, since Orphion left it for Sage.
       expect(members.length).toBeGreaterThanOrEqual(traitIn(EVERY, calling).steps.at(-1) ?? 0);
@@ -105,6 +108,7 @@ describe("the roster", () => {
       "drizzlefrog",
       "crab31",
       "pomp",
+      "vi",
     ]);
   });
   test("only the dearest carry a third trait, and the Graid figures, three Chorus and Larp's Huddle; nobody more than three", () => {
@@ -172,8 +176,8 @@ describe("the roster", () => {
 });
 
 describe("traits", () => {
-  test("there are ten kins and seven callings: Grooter and Chorus from Groot Night, Huddle from Penguin Month", () => {
-    expect(KINS.length).toBe(10);
+  test("there are eleven kins and seven callings: Grooter and Chorus from Groot Night, Huddle from Penguin Month, Canopy from Up The Tree", () => {
+    expect(KINS.length).toBe(11);
     expect(CALLINGS.length).toBe(7);
     expect(CAT.ids.traits).not.toContain("grooter");
     expect(CAT.ids.traits).not.toContain("chorus");
@@ -319,7 +323,7 @@ describe("items", () => {
 describe("boons", () => {
   test("there are about twenty, with a charm for every kin, each giving the emblem of its own id", () => {
     expect(BOON_IDS.length).toBeGreaterThanOrEqual(16);
-    expect(BOON_IDS.length).toBeLessThanOrEqual(25);
+    expect(BOON_IDS.length).toBeLessThanOrEqual(26);
     // Every emblem but those the Knife makes, which no charm gives.
     const charmed = EMBLEM_IDS.flatMap((id) => (isBoonId(id) && itemIn(EVERY, id).made === undefined ? [id] : []));
     expect(charmed.length).toBe(EMBLEM_IDS.filter((id) => itemIn(EVERY, id).made === undefined).length);

@@ -27,7 +27,7 @@ import type { Swing } from "@sequoia-leaf/figures/tools.ts";
 import { CREAM, GOLD, GREEN, INK, PAPER } from "@sequoia-leaf/kit/palette.ts";
 import { R } from "@sequoia-leaf/kit/pix.ts";
 import { clamp, type Ctx } from "@sequoia-leaf/kit/util.ts";
-import { type Fight, type FightEvent, type Tool, TOOLS } from "@sequoia-leaf/raid";
+import { type Fight, type FightEvent, GEAR, type Gear } from "@sequoia-leaf/raid";
 
 import { handAt } from "./acting.ts";
 import { clockNow, feetAt, fightNow, FOOT, FV } from "./board.ts";
@@ -47,7 +47,7 @@ interface Aim {
   readonly fight: Fight;
   readonly by: number;
   readonly how: "drum" | "swing";
-  readonly tool: Tool | null;
+  readonly tool: Gear | null;
   /** The hexes it is for and who stands on them, as the cast says. */
   readonly cells: readonly number[];
   readonly to: readonly number[];
@@ -86,13 +86,13 @@ export function aimAhead(l: Lead, ev: Extract<FightEvent, { t: "cast" }>): void 
   });
 }
 
-/** The tool a Leetanns has in hand at the clock `c`, as an index of `TOOLS`: the one it swings now, else the next after its last. */
+/** The tool a Leetanns has in hand at the clock `c`, as an index of `GEAR`: the one it swings now, else the next after its last. */
 export function toolNow(a: Actor, c: number): number {
   const now = aims.find((x) => x.by === a.unit.id && x.fight === fightNow() && x.tool && c < x.at + AIMED.swing.after);
-  if (now?.tool) return TOOLS.indexOf(now.tool);
+  if (now?.tool) return GEAR.indexOf(now.tool);
   if (swung.fight !== fightNow()) return 0;
   const last = swung.by.get(a.unit.id);
-  return last === undefined ? 0 : (last + 1) % TOOLS.length;
+  return last === undefined ? 0 : (last + 1) % GEAR.length;
 }
 
 /**
@@ -142,7 +142,7 @@ export function pecked(by: number): void {
 }
 
 /** The chip a tool leaves of what it gathered: wood, stone, a drop, a stalk. */
-const GATHERED: Readonly<Record<Tool, Gathered>> = {
+const GATHERED: Readonly<Record<Gear, Gathered>> = {
   axe: "wood",
   pickaxe: "stone",
   rod: "drop",
@@ -180,7 +180,7 @@ function drumOn(aim: Aim, c: number): void {
 function swingOn(aim: Aim, c: number): void {
   if (!aim.tool || aim.pecked || c < aim.at) return;
   aim.pecked = true;
-  swung.by.set(aim.by, TOOLS.indexOf(aim.tool));
+  swung.by.set(aim.by, GEAR.indexOf(aim.tool));
   const p = feetAt(aim.tool === "scythe" ? (FV.actors[aim.by]?.unit.cell ?? -1) : (aim.cells[0] ?? -1));
   leave(GATHERED[aim.tool], p);
 }

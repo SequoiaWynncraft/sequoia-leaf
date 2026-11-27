@@ -132,9 +132,10 @@ describe("a new player's table", () => {
     expect(RAID.create(ctx(1)).rng).not.toBe(RAID.create(ctx(2)).rng);
     expect(RAID.create(ctx(1))).toEqual(RAID.create(ctx(1)));
   });
-  test("waits for the player however long they are away", () => {
+  test("waits for the player however long they are away, but for the era Leaf's clock is in", () => {
     const state = started();
-    expect(RAID.advance(state, { ...ctx(), now: ctx().now + 30 * 86_400_000 })).toEqual(state);
+    const later = ctx().now + 30 * 86_400_000;
+    expect(RAID.advance(state, { ...ctx(), now: later })).toEqual({ ...state, era: eraAt(later) });
   });
 });
 

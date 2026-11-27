@@ -135,7 +135,7 @@ describe("the room a run is in", () => {
   test("sets up its fight with what it sets and the rules named, and a fight under none with neither", () => {
     for (const rule of RULE_IDS) {
       const run = wildsAt(6, rule);
-      run.board[COLS * 2 + 3] = { id: 900, kind: "rock", stars: 1, items: [], fed: 0 };
+      run.board[COLS * 2 + 3] = { id: 900, kind: "rock", stars: 1, items: [], fed: 0, fights: 0 };
       const begun = beginFight(run);
       if (!begun.ok) throw new Error(begun.why);
       expect(rulesOf(begun.setup)).toEqual(roomOf(run).rules);
@@ -144,7 +144,7 @@ describe("the room a run is in", () => {
       expect(JSON.stringify(begun.setup)).not.toContain("null");
     }
     const plain = wildsAt(6, null);
-    plain.board[COLS * 2 + 3] = { id: 900, kind: "rock", stars: 1, items: [], fed: 0 };
+    plain.board[COLS * 2 + 3] = { id: 900, kind: "rock", stars: 1, items: [], fed: 0, fights: 0 };
     const begun = beginFight(plain);
     if (!begun.ok) throw new Error(begun.why);
     expect(Object.keys(begun.setup).toSorted()).toEqual(["era", "seed", "sides"]);

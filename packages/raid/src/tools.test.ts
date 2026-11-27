@@ -8,7 +8,7 @@ import { COMPONENT_IDS, type ItemId, sortOf } from "./content/items.ts";
 import { LEGACY_ERA } from "./content/releases.ts";
 import { ROOMS } from "./content/rooms.ts";
 import { meltValue, type RackItem, TOOL_IDS } from "./content/tools.ts";
-import { RAID } from "./game.ts";
+import { RAID, TABLE_VERSION } from "./game.ts";
 import { forgeItems, melt, useTongs, useWhetstone } from "./rack.ts";
 import { countOn, rackOf, rackSize } from "./racks.ts";
 import { roomPicks } from "./rewards.ts";
@@ -306,7 +306,7 @@ function keptAtNine(): { text: string; listed: string[] } {
 }
 
 describe("a deep Wilds run kept at table version 9", () => {
-  test("reads, plays a room, and is stored again as table version 10, its rack as counts", () => {
+  test("reads, plays a room, and is stored again as the table version now, its rack as counts", () => {
     const { text, listed } = keptAtNine();
     expect(new Set(listed).size).toBe(18);
     const table = RAID.decode(text);
@@ -323,7 +323,7 @@ describe("a deep Wilds run kept at table version 9", () => {
     expect(run.room === room + 1 || run.stage.phase === "over").toBe(true);
     const again = RAID.encode(table);
     const kept = JSON.parse(again);
-    expect(kept.v).toBe(10);
+    expect(kept.v).toBe(TABLE_VERSION);
     expect(kept.held.endless.items).toBeUndefined();
     expect(Object.values(kept.held.endless.rack).reduce((n: number, c) => n + Number(c), 0)).toBe(rackSize(run.rack));
     expect(RAID.decode(again)?.held.endless?.rack).toEqual(run.rack);

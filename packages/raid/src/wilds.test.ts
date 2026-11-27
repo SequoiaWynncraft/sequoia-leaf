@@ -46,7 +46,7 @@ function strong(run: Run, room: number): Run {
   run.board = run.board.map(() => null);
   best.forEach((kind, i) => {
     const stars: Stars = 3;
-    run.board[i < 5 ? i + 1 : 14 + i] = { id: 100 + i, kind, stars, items: [], fed: 0 };
+    run.board[i < 5 ? i + 1 : 14 + i] = { id: 100 + i, kind, stars, items: [], fed: 0, fights: 0 };
   });
   run.nextId = 200;
   run.level = 8;
@@ -316,11 +316,11 @@ describe("closed hexes", () => {
   test("nothing is moved or dropped onto one, and the page is told so", () => {
     const run = ruled(11, "narrow");
     const slot = run.bench.indexOf(null);
-    run.bench[slot] = { id: 300, kind: "finch", stars: 1, items: [], fed: 0 };
+    run.bench[slot] = { id: 300, kind: "finch", stars: 1, items: [], fed: 0, fights: 0 };
     run.board[1] = null;
     run.level = 1;
     run.board = run.board.map(() => null);
-    run.board[3] = { id: 301, kind: "rock", stars: 1, items: [], fed: 0 };
+    run.board[3] = { id: 301, kind: "rock", stars: 1, items: [], fed: 0, fights: 0 };
     run.level = 2;
     const onto = (seat: number) =>
       ({ do: "move", from: { on: "bench", at: slot }, to: { on: "board", at: seat } }) as const;
@@ -382,9 +382,9 @@ describe("moving off a hex that closes", () => {
     const run = wilds(4, WILDS.first);
     fought(run);
     run.board = run.board.map(() => null);
-    run.board[0] = { id: 400, kind: "rock", stars: 1, items: [], fed: 0 };
-    run.board[3] = { id: 401, kind: "badger", stars: 1, items: [], fed: 0 };
-    run.board[1] = { id: 402, kind: "finch", stars: 1, items: [], fed: 0 };
+    run.board[0] = { id: 400, kind: "rock", stars: 1, items: [], fed: 0, fights: 0 };
+    run.board[3] = { id: 401, kind: "badger", stars: 1, items: [], fed: 0, fights: 0 };
+    run.board[1] = { id: 402, kind: "finch", stars: 1, items: [], fed: 0, fights: 0 };
     run.stage = { phase: "plan", picks: [{ kind: "rule", options: ["narrow", "fog"] }] };
     const notes = pickRule(run, "narrow");
     expect(run.board[0]).toBeNull();
@@ -405,7 +405,8 @@ describe("moving off a hex that closes", () => {
     const run = wilds(6, WILDS.first);
     fought(run);
     run.board = run.board.map(() => null);
-    for (let col = 0; col < 7; col++) run.board[col] = { id: 500 + col, kind: "rock", stars: 1, items: [], fed: 0 };
+    for (let col = 0; col < 7; col++)
+      run.board[col] = { id: 500 + col, kind: "rock", stars: 1, items: [], fed: 0, fights: 0 };
     run.stage = { phase: "plan", picks: [{ kind: "rule", options: ["long"] }] };
     const notes = pickRule(run, "long");
     expect(notes.filter((n) => n.t === "shifted")).toHaveLength(7);
@@ -422,7 +423,9 @@ describe("moving off a hex that closes", () => {
       expect(stumped.board.flatMap((p, s) => (p && stumps.includes(s) ? [s] : []))).toEqual([]);
       stumped.stage = { phase: "plan", picks: [] };
       stumped.board = stumped.board.map((_, s) =>
-        s < 9 && !stumps.includes(s) ? { id: 600 + n * 30 + s, kind: "rock", stars: 1, items: [], fed: 0 } : null,
+        s < 9 && !stumps.includes(s)
+          ? { id: 600 + n * 30 + s, kind: "rock", stars: 1, items: [], fed: 0, fights: 0 }
+          : null,
       );
       stumped.level = 9;
       const begun = beginFight(stumped);

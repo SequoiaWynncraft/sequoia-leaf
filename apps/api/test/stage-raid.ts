@@ -113,7 +113,7 @@ function step(table: Table, op: Record<string, unknown>, made: number[], own: Ro
     if (slot >= 0) {
       const stars = op.give.stars === 3 ? 3 : op.give.stars === 2 ? 2 : 1;
       const id = run.nextId++;
-      run.bench[slot] = { id, kind: op.give.kind, stars, items: [], fed: 0 };
+      run.bench[slot] = { id, kind: op.give.kind, stars, items: [], fed: 0, fights: 0 };
       made.push(id);
     }
   }

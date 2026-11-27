@@ -210,6 +210,7 @@ const BOON_LIKES: Record<BoonId, number> = {
   huddlecharm: 3,
   graidcharm: 3,
   sneakcharm: 3,
+  canopycharm: 3,
 };
 function likesBoon(run: RunView, habit: Habit, boon: BoonId): number {
   let score = BOON_LIKES[boon];
@@ -294,7 +295,7 @@ function wants(run: RunView, habit: Habit, kind: FigureId, before: number): numb
   const twins = own.filter((p) => p.kind === kind && p.stars === 1).length;
   const better = own.some((p) => p.kind === kind && p.stars > 1);
   if (twins >= 2) return 6 + figureIn(catalogOf(run), kind).tier * habit.chases;
-  const guest: Piece = { id: -1, kind, stars: 1, items: [], fed: 0 };
+  const guest: Piece = { id: -1, kind, stars: 1, items: [], fed: 0, fights: 0 };
   const after = partyScore(catalogOf(run), habit, bestParty(catalogOf(run), habit, [...own, guest], cap));
   return after - before + (twins === 1 ? 0.7 * habit.chases : 0) + (better ? 0.4 * habit.chases : 0);
 }

@@ -59,6 +59,7 @@ const piece = (run: Run, kind: FigureId, items: ItemId[] = []): Piece => ({
   stars: 1,
   items,
   fed: 0,
+  fights: 0,
 });
 
 describe("every recipe gives the same thing, however the two meet", () => {

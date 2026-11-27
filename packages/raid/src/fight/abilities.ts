@@ -15,6 +15,7 @@ import { cone, distance, line, neighbours } from "../hex.ts";
 import { around, type Cast, ids, say, spread } from "./cast.ts";
 import { GROOT_NIGHT_CASTS } from "./casts/groot-night.ts";
 import { PENGUIN_MONTH_CASTS } from "./casts/penguin-month.ts";
+import { UP_THE_TREE_CASTS } from "./casts/up-the-tree.ts";
 import {
   alliesOf,
   brace,
@@ -73,6 +74,7 @@ function splash(
 export const CASTS: Partial<Record<UnitKind, Cast>> = {
   ...GROOT_NIGHT_CASTS,
   ...PENGUIN_MONTH_CASTS,
+  ...UP_THE_TREE_CASTS,
   // ---------- one acorn ----------
   emberkit: (f, u, n) => {
     const t = aim(f, u);

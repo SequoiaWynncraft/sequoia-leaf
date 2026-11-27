@@ -19,6 +19,8 @@ const UINT = 0xffffffff;
 
 const GAME = "little-raid-table";
 /**
+ * 11: each figure of a run keeps the fights it has fought on the board (`Piece.fights`, Crafter's
+ * count); one of an older version has fought none.
  * 10: a run keeps its rack as how many of each kind (`Run.rack`), where it kept a list of what lay on
  * it (`items`); the rack and the picks may hold tools (`content/tools.ts`), and a Whetstone may have
  * turned an emblem into another charm's. 9: each run's record keeps its last rooms (`KEPT_ROOMS`), as
@@ -39,8 +41,8 @@ const GAME = "little-raid-table";
  * of versions 1 to 4 has Greg's meals at 3% each, and one of versions 1 to 3 has no rules, so a run
  * of the Wilds past room 5 picks one at its next boss.
  */
-export const TABLE_VERSION = 10;
-const READS = [1, 2, 3, 4, 5, 6, 7, 8, 9, TABLE_VERSION] as const;
+export const TABLE_VERSION = 11;
+const READS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, TABLE_VERSION] as const;
 
 export const encodeTable = (state: Table): string =>
   JSON.stringify({

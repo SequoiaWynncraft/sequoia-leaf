@@ -1,6 +1,6 @@
 /**
  * Who is on the stump: the carved figures a member can buy at the stall, the forest's trouble and
- * its three bosses, and the few that only ever turn up by being summoned. Words and numbers only;
+ * its three bosses (`trouble.ts`), and the few that only ever turn up by being summoned (`summons.ts`). Words and numbers only;
  * what an ability does on the board is in `fight/abilities.ts`, keyed by the same name as its owner
  * here.
  *
@@ -22,6 +22,7 @@ import { MEMBER_IDS, type MemberId, MEMBERS } from "./members.ts";
 import { opened } from "./patch.ts";
 import { isSummonId, type SummonId, SUMMONS } from "./summons.ts";
 import type { CallingId, KinId, TraitId } from "./traits.ts";
+import { isTroubleId, TROUBLE, type TroubleId } from "./trouble.ts";
 
 /** What health and attack are multiplied by at one, two and three stars. */
 export const STAR = [1, 1.8, 3.24] as const;
@@ -63,6 +64,7 @@ export interface UnitSpec {
 }
 
 export { GROOTER_IDS, type GrooterId, isGrooterId, isSummonId, SUMMON_IDS, type SummonId, SUMMONS } from "./summons.ts";
+export { BOSS_IDS, type BossId, isBossId, isTroubleId, TROUBLE, TROUBLE_IDS, type TroubleId } from "./trouble.ts";
 
 export const TIERS = [1, 2, 3, 4, 5] as const;
 export type Tier = (typeof TIERS)[number];
@@ -79,6 +81,7 @@ export interface FigureSpec extends UnitSpec {
 /** Groot Night's and Penguin Month's, each in the order its release brought them. */
 const NIGHT_IDS = ["peep", "crab31", "munch", "clutch", "crab8"] as const;
 const PENGUIN_IDS = ["dibs", "jet", "larp", "flurry", "pomp", "yule"] as const;
+const TREE_IDS = ["vi", "flop", "bhlue", "ace", "unc", "leetanns"] as const;
 export const FIGURE_IDS = [
   "emberkit",
   "mossmote",
@@ -111,6 +114,7 @@ export const FIGURE_IDS = [
   "seqwawa",
   ...NIGHT_IDS,
   ...PENGUIN_IDS,
+  ...TREE_IDS,
 ] as const;
 /** A figure a member can field: one of everyone's, or a banner's member (`members.ts`). */
 export type FigureId = (typeof FIGURE_IDS)[number] | MemberId;
@@ -746,251 +750,13 @@ export const BASE_FIGURES: Readonly<Partial<Record<FigureId, FigureSpec>>> = {
   },
 };
 
-// ---------- the forest's trouble, and its bosses ----------
-
-export const TROUBLE_IDS = [
-  "gnat",
-  "bramble",
-  "wasp",
-  "puddle",
-  "toadstool",
-  "gust",
-  "magpie",
-  "mud",
-  "crab",
-  "oldbramble",
-  "hoardmagpie",
-  "bigcrab",
-] as const;
-export type TroubleId = (typeof TROUBLE_IDS)[number];
-export const BOSS_IDS = ["oldbramble", "hoardmagpie", "bigcrab"] as const satisfies readonly TroubleId[];
-export type BossId = (typeof BOSS_IDS)[number];
-
-export const TROUBLE: Record<TroubleId, UnitSpec> = {
-  gnat: {
-    name: "Gnat",
-    hp: 110,
-    attack: 14,
-    speed: 1,
-    range: 1,
-    armour: 0,
-    ward: 0,
-    mana: [0, 0],
-    ability: null,
-    quip: "There are always more.",
-  },
-  bramble: {
-    name: "Bramble",
-    hp: 300,
-    attack: 20,
-    speed: 0.6,
-    range: 1,
-    armour: 30,
-    ward: 10,
-    mana: [0, 0],
-    ability: {
-      name: "Thorny",
-      shape: "always",
-      text: "Whoever attacks it up close takes {thorns} damage.",
-      n: { thorns: [10, 18, 32] },
-      short: "Enemies hitting it up close take {thorns}.",
-    },
-    quip: "It was here first.",
-  },
-  wasp: {
-    name: "Wasp",
-    hp: 150,
-    attack: 30,
-    speed: 1,
-    range: 1,
-    armour: 5,
-    ward: 5,
-    mana: [0, 50],
-    ability: {
-      name: "Sting",
-      shape: "bolt",
-      text: "Stings its target: {damage} damage that no armour stops.",
-      n: { damage: [50, 90, 160] },
-      short: "{damage} true to target.",
-    },
-    quip: "All sting, no patience.",
-  },
-  puddle: {
-    name: "Puddle",
-    hp: 480,
-    attack: 18,
-    speed: 0.6,
-    range: 1,
-    armour: 20,
-    ward: 40,
-    mana: [20, 70],
-    ability: {
-      name: "Splash",
-      shape: "ring",
-      text: "Splashes every enemy touching it: {damage} magic damage, and they are {slow}% slower for {lasts} seconds.",
-      n: { damage: [40, 70, 125], slow: [30, 35, 40], lasts: [3, 3, 3] },
-      short: "{damage} magic to adjacent enemies. Slows {slow}% for {lasts}s.",
-    },
-    quip: "Deeper than it looks.",
-  },
-  toadstool: {
-    name: "Toadstool",
-    hp: 260,
-    attack: 24,
-    speed: 0.6,
-    range: 3,
-    armour: 10,
-    ward: 20,
-    mana: [0, 0],
-    ability: {
-      name: "Spores",
-      shape: "always",
-      text: "When it falls it puffs spores: {damage} magic damage to every enemy within two hexes.",
-      n: { damage: [70, 120, 215] },
-      short: "On falling, {damage} magic within 2 hexes.",
-    },
-    quip: "Do not sit on it.",
-  },
-  gust: {
-    name: "Gust",
-    hp: 240,
-    attack: 22,
-    speed: 0.8,
-    range: 3,
-    armour: 10,
-    ward: 20,
-    mana: [20, 70],
-    ability: {
-      name: "Whoosh",
-      shape: "bolt",
-      text: "Blows its target back {push} hexes: {damage} magic damage, and it is {slow}% slower for {lasts} seconds. Unless it is a Rock.",
-      n: { push: [2, 2, 3], damage: [50, 90, 160], slow: [30, 30, 30], lasts: [2, 2, 2] },
-      short: "Knocks target back {push} hexes, {damage} magic. Slows {slow}% for {lasts}s.",
-    },
-    quip: "Rearranges things.",
-  },
-  magpie: {
-    name: "Magpie",
-    hp: 300,
-    attack: 34,
-    speed: 0.85,
-    range: 1,
-    armour: 15,
-    ward: 15,
-    mana: [0, 60],
-    ability: {
-      name: "Peck",
-      shape: "bolt",
-      text: "Flies to your back row when the fight starts. Pecks its target for {damage} physical damage, and 50% more if the target holds an item.",
-      n: { damage: [90, 160, 285] },
-      short: "Starts in your back row. {damage} physical, +50% vs item holders.",
-    },
-    quip: "Likes shiny things. You are shiny.",
-  },
-  mud: {
-    name: "Mud",
-    hp: 700,
-    attack: 30,
-    speed: 0.5,
-    range: 1,
-    armour: 40,
-    ward: 20,
-    mana: [30, 90],
-    ability: {
-      name: "Squelch",
-      shape: "ring",
-      text: "Squelches: {damage} magic damage to every enemy touching it, and they are stuck for {stun} second.",
-      n: { damage: [60, 105, 190], stun: [1, 1, 1.5] },
-      short: "{damage} magic to adjacent enemies. Stuns {stun}s.",
-    },
-    quip: "A great deal of mud.",
-  },
-  crab: {
-    name: "Counted Crab",
-    hp: 380,
-    attack: 30,
-    speed: 0.65,
-    range: 1,
-    armour: 35,
-    ward: 20,
-    mana: [0, 0],
-    ability: {
-      name: "Shell",
-      shape: "always",
-      text: "Starts the fight inside its shell: a shield of {shell} that lasts until it is broken.",
-      n: { shell: [120, 215, 390] },
-      short: "Shield {shell} until broken.",
-    },
-    quip: "Present at roll call.",
-  },
-  oldbramble: {
-    name: "Snag",
-    hp: 1500,
-    attack: 52,
-    speed: 0.6,
-    range: 1,
-    armour: 40,
-    ward: 20,
-    mana: [40, 90],
-    steady: true,
-    ability: {
-      name: "Runners",
-      shape: "summon",
-      text: "Whoever attacks it up close takes {thorns} damage. A Runner sprouts beside the nearest enemy, at most {most} at a time.",
-      n: { thorns: [12, 21, 38], most: [3, 3, 4] },
-      short: "Enemies hitting it up close take {thorns}. Sprouts runners by enemies, {most} at most.",
-    },
-    quip: "It was here first. It will be here last.",
-  },
-  hoardmagpie: {
-    name: "Swipe",
-    hp: 1950,
-    attack: 72,
-    speed: 0.9,
-    range: 1,
-    armour: 30,
-    ward: 30,
-    mana: [20, 80],
-    steady: true,
-    ability: {
-      name: "Mine Now",
-      shape: "leap",
-      text: "Swoops on whoever is holding the most shiny things: {damage} physical damage, and they are stunned for {stun} seconds.",
-      n: { damage: [230, 400, 720], stun: [1.5, 1.5, 2] },
-      short: "Leaps to whoever holds most items. {damage} physical, stuns {stun}s.",
-    },
-    quip: "Everything in the hoard was yours once.",
-  },
-  bigcrab: {
-    name: "The Crab Nobody Counted",
-    hp: 5400,
-    attack: 130,
-    speed: 0.7,
-    range: 1,
-    armour: 60,
-    ward: 40,
-    mana: [40, 90],
-    steady: true,
-    ability: {
-      name: "Crabbier",
-      shape: "cone",
-      text: "Starts inside a shell worth {shell}. Gets crabbier: +{attack}% attack for the rest of the fight, and a pinch of {damage} physical damage across a cone two hexes deep. At half health it calls the roll: {crabs} more crabs nobody counted turn up.",
-      n: { shell: [800, 1440, 2600], attack: [15, 15, 15], damage: [320, 560, 1000], crabs: [2, 2, 3] },
-      short: "+{attack}% attack, {damage} physical in a cone. Shield {shell}; {crabs} more crabs at half health.",
-    },
-    quip: "Every roll call, one crab is unaccounted for. Here it is.",
-  },
-};
-
 // ---------- everyone ----------
 
 export type UnitKind = FigureId | SummonId | TroubleId;
 const EVERY_FIGURE: ReadonlySet<string> = new Set([...FIGURE_IDS, ...MEMBER_IDS]);
 /** Whether stored data names a figure: one any release has, open or not (`everyFigure`). */
 export const isFigureId = (v: unknown): v is FigureId => typeof v === "string" && EVERY_FIGURE.has(v);
-export const isTroubleId = (v: unknown): v is TroubleId => typeof v === "string" && Object.hasOwn(TROUBLE, v);
 export const isUnitKind = (v: unknown): v is UnitKind => isFigureId(v) || isSummonId(v) || isTroubleId(v);
-export const isBossId = (v: unknown): v is BossId => BOSS_IDS.some((b) => b === v);
 export const isStars = (v: unknown): v is Stars => v === 1 || v === 2 || v === 3;
 
 /** A figure as a catalogue has it. */

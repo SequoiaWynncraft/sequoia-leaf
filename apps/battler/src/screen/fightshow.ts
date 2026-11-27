@@ -25,11 +25,10 @@ import { TRAIT_COLOUR } from "./art/pal.ts";
 import { clockNow, colourOf, face, feetAt, fightNow, FV, travel } from "./board.ts";
 import { bubbleSays, hangBubble, stepBubbles } from "./bubble.ts";
 import { hangCall, stepCalls } from "./call.ts";
-import { droppedDown } from "./canopy.ts";
 import { showMark } from "./fightmarks.ts";
 import { burst, gather, motes, ring, say } from "./fx.ts";
 import type { Pt } from "./geometry.ts";
-import { cracked, pooled } from "./litter.ts";
+import { pooled } from "./litter.ts";
 import { ownOf } from "./livery.ts";
 import { ATTACK_SHOT, type Look, LOOKS, puffOf, VOICES } from "./looks.ts";
 import { arcOf, type At, dealing, MARKS, puff, type Shot } from "./marks.ts";
@@ -40,7 +39,8 @@ import { reachOut, rootsUp, stepRoots } from "./roots.ts";
 import { cutTo, hangShell, stepShells } from "./shell.ts";
 import { snd } from "./sounds.ts";
 import { hang, stepSpells } from "./spells.ts";
-import { blocked, wallDown, wallUp } from "./walls.ts";
+import { hides, statusOff, treeStatus } from "./statuses.ts";
+import { blocked } from "./walls.ts";
 import { bump, weigh } from "./weight.ts";
 
 /** The kinds of damage, coloured as the cards colour their words: coral, rose, cream. */
@@ -487,33 +487,6 @@ function status(ev: Events["status"], at: number): void {
   else if (ev.status === "braced") ring(a.x, a.y, 11, STONE[3], 0.35);
   else treeStatus(a, ev, at);
 }
-/** Statuses Up The Tree brings, and Grooter's crack: a wall goes up; armour halved, chips of stone come off it. */
-function treeStatus(a: Actor, ev: Events["status"], at: number): void {
-  if (ev.status === "cracked") cracked(a, ev.amount);
-  else if (ev.status === "firewall") wallUp(ev.id, ev.by, at);
-  else if (ev.status === "sundered") burst(a.x, a.y - 8, 6, [STONE[2], STONE[3], CREAM], { speed: 30, ttl: 0.35 });
-}
-
-/** A status stops: a shield breaks, a wall goes, one hidden comes back (down from the tree, up off its back, or out of the ground). */
-function statusOff(a: Actor, ev: Events["status"], at: number): void {
-  if (ev.status === "shield") burst(a.x, a.y - 9, 8, [WATER[3], CREAM], { speed: 34, ttl: 0.35 });
-  else if (ev.status === "firewall") wallDown(ev.id);
-  else if (ev.status !== "hidden") return;
-  else if (droppedDown(a, at) || LOOKS[a.unit.kind]?.hides === "pose") a.hopAt = at;
-  else {
-    burst(a.x, a.y, 10, [EARTH[1], EARTH[2], EARTH[0]], { speed: 34, ttl: 0.45, toward: UP, spread: 2 });
-    a.hopAt = at;
-    snd.dig();
-  }
-}
-
-/** Goes where nothing reaches it: to ground, unless it is up the tree as the fight opens or lies there as its own pose (Flop). */
-function hides(a: Actor, at: number): void {
-  if (at < 0 || LOOKS[a.unit.kind]?.hides === "pose") return;
-  burst(a.x, a.y, 10, [EARTH[1], EARTH[2], EARTH[0]], { speed: 30, ttl: 0.45, toward: UP, spread: 2 });
-  snd.dig();
-}
-
 function trait(cat: Catalog, ev: Events["trait"], at: number): void {
   const col = TRAIT_COLOUR[ev.trait];
   ev.ids.forEach((id, i) => {

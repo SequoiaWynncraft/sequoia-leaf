@@ -19,7 +19,7 @@ function planning(): { run: RunView; tank: number; ranged: number; sneak: number
   choose(run, 0);
   const put = (slot: number, kind: FigureId): number => {
     const id = run.nextId++;
-    run.bench[slot] = { id, kind, stars: 1, items: [], fed: 0 };
+    run.bench[slot] = { id, kind, stars: 1, items: [], fed: 0, fights: 0 };
     return id;
   };
   return { run, tank: put(0, "glorp"), ranged: put(1, "finch"), sneak: put(2, "worm") };

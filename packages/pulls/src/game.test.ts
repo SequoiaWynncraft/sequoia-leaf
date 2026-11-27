@@ -154,6 +154,7 @@ describe("the prizes", () => {
       ["banner-1", "banner-1"],
       ["groot-night", "commodore"],
       ["penguin-month", "yule"],
+      ["up-the-tree", "leetanns"],
     ]);
     expect(every.filter((prize) => BANNERS.some((b) => prize === `figure:${b.headliner}`))).toEqual([]);
     expect(rarityOf("figure:greg")).toBe("Treant");
@@ -250,7 +251,11 @@ describe("a pull", () => {
     const penguins = { id: "penguin-month", until: Date.UTC(2027, 0, 5) };
     expect(PULLS.view(s, ctx(Date.UTC(2026, 11, 22) - 1)).open).toEqual([night]);
     expect(PULLS.view(s, ctx(Date.UTC(2026, 11, 22))).open).toEqual([penguins]);
-    expect(PULLS.view(s, ctx(Date.UTC(2027, 0, 5))).open).toEqual([]);
+    // Up The Tree as Penguin Month closes, until 19 January; then nothing.
+    const tree = { id: "up-the-tree", until: Date.UTC(2027, 0, 19) };
+    expect(PULLS.view(s, ctx(Date.UTC(2027, 0, 5) - 1)).open).toEqual([penguins]);
+    expect(PULLS.view(s, ctx(Date.UTC(2027, 0, 5))).open).toEqual([tree]);
+    expect(PULLS.view(s, ctx(Date.UTC(2027, 0, 19))).open).toEqual([]);
     expect(refused(s, pull("groot-night", 10, "leaf", Date.UTC(2026, 11, 8) - 1), ctx(Date.UTC(2026, 11, 8) - 1))).toBe(
       "closed",
     );
@@ -545,6 +550,32 @@ describe("a million pulls", () => {
 /** The share of some prizes among what was drawn. */
 const share = (seen: Map<string, number>, of: readonly string[]): number =>
   of.reduce((n, prize) => n + (seen.get(prize) ?? 0), 0) / [...seen.values()].reduce((a, b) => a + b, 0);
+
+describe("Up The Tree's featured figures", () => {
+  const opens = Date.UTC(2027, 0, 5);
+  const cat = catalogAt(eraAt(opens));
+  const tree = prizesOf(cat, "up-the-tree");
+  const featured = featuredOf(cat, "up-the-tree").map((f) => f.prize);
+  it("are its five, one a rarity, from its opening, and Leetanns its top prize", () => {
+    expect(featuredOf(cat, "up-the-tree").map((f) => [f.id, f.rarity])).toEqual([
+      ["unc", "Treant"],
+      ["ace", "Dryad"],
+      ["bhlue", "Sprite"],
+      ["flop", "Sapling"],
+      ["vi", "Leafkin"],
+    ]);
+    expect(tree.Yggdrasil).toEqual(["headliner:up-the-tree"]);
+    expect(featuredOf(catalogAt(eraAt(opens - 1)), "up-the-tree")).toEqual([]);
+  });
+  it("are half of a pull's prizes of their rarity", () => {
+    const seen = new Map<string, number>();
+    for (let seed = 0; seed < 40_000; seed++) {
+      const d = draw(counters(0, 0, true), tree, { rng: seed }, featured);
+      if (d.rarity === "Leafkin") seen.set(d.prize, (seen.get(d.prize) ?? 0) + 1);
+    }
+    expect(share(seen, ["figure:vi"])).toBeCloseTo(0.5, 1);
+  });
+});
 
 describe("a banner's featured figures", () => {
   const opens = Date.UTC(2026, 11, 8);

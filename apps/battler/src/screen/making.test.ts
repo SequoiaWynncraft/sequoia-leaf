@@ -34,7 +34,14 @@ function planning(
   const run = startRun(5, { era: LEGACY_ERA });
   choose(run, 0);
   run.board.fill(null);
-  const piece = ([kind, items]: [FigureId, ItemId[]]): Piece => ({ id: run.nextId++, kind, stars: 1, items, fed: 0 });
+  const piece = ([kind, items]: [FigureId, ItemId[]]): Piece => ({
+    id: run.nextId++,
+    kind,
+    stars: 1,
+    items,
+    fed: 0,
+    fights: 0,
+  });
   figures.forEach((f, seat) => (run.board[seat] = piece(f)));
   benched.forEach((f, slot) => (run.bench[slot] = piece(f)));
   run.rack = rackOf(rack);

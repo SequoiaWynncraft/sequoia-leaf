@@ -66,7 +66,7 @@ function sitIds(tables: Tables, cat: Catalog): SitIds {
   return ids;
 }
 /** For each place a hook comes from but a figure's own, its hooks on a side that have a `sits`. */
-const SITTERS: Readonly<Record<Exclude<From, "kind">, (f: Fight, side: Side, party: Party) => Sitter[]>> = {
+const SITTERS: Readonly<Record<Exclude<From, "kind" | "ability">, (f: Fight, side: Side, party: Party) => Sitter[]>> = {
   trait: (f, side) =>
     sitIds(f.hooks.tables, f.cat).traits.flatMap((trait): Sitter[] => {
       const sits = f.hooks.tables.traits[trait].sits;
@@ -94,7 +94,9 @@ const SITTERS: Readonly<Record<Exclude<From, "kind">, (f: Fight, side: Side, par
  * (`sits`, in its order), summed before anything is rounded.
  */
 export function growing(f: Fight, side: Side, party: Party): (p: Placed) => Stats {
-  const sitters = ORDER.sits.map((from) => (from === "kind" ? from : SITTERS[from](f, side, party)));
+  const sitters = ORDER.sits.map((from) =>
+    from === "kind" ? from : from === "ability" ? [] : SITTERS[from](f, side, party),
+  );
   return (p) => {
     const sum: Stats = { attack: 0, speed: 0, power: 0, armour: 0, ward: 0, health: 0 };
     const add = (more: Partial<ItemStats> | null): void => {

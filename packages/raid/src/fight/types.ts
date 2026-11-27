@@ -17,8 +17,17 @@ import type { Hooked } from "./hooks.ts";
 export type DamageKind = "physical" | "magic" | "true";
 /** Where damage came from. Only attacks and abilities fill mana and set off the things that answer a hit. */
 export type DamageSource = "attack" | "ability" | "burn" | "thorns" | "item" | "dusk";
-export type HealSource = "ability" | "regrow" | "burrow" | "item" | "leech";
-export type StatusId = "burn" | "stun" | "slow" | "shield" | "taunt" | "hidden" | "haste" | "braced" | "cracked";
+export type HealSource = "ability" | "regrow" | "burrow" | "item" | "leech" | "card";
+export type StatusId =
+  "burn" | "stun" | "slow" | "shield" | "taunt" | "hidden" | "haste" | "braced" | "cracked" | "firewall" | "sundered";
+/** The suits of Ace's cards, in the order its attacks deal them: each picks its own target. */
+export const SUITS = ["spades", "hearts", "diamonds", "clubs"] as const;
+export type Suit = (typeof SUITS)[number];
+/** Leetanns' tools, its gear, in the order it swings them. */
+export const GEAR = ["axe", "pickaxe", "rod", "scythe"] as const;
+export type Gear = (typeof GEAR)[number];
+/** How a figure's attacks are made: plainly, or (Ace) as cards whose suits pick their targets. */
+export type Deals = "plain" | "aces";
 /** How a fight went, for the party at the table (side 0). */
 export type FightResult = "win" | "loss" | "draw";
 /** Why somebody changed hex without walking: a Sneak's opening leap, an ability, knocked back, dashing, or pulled. */
@@ -182,6 +191,17 @@ export interface Unit {
   gifts: { at: number; n: number }[];
   /** The Commodore: the grooter he called last (`GROOTER_IDS`), -1 before his first. */
   calledLast: number;
+  /** How its attacks are made (Ace's are aces). */
+  deals: Deals;
+  /** Leetanns: which of its tools it swings next (`TOOLS`). */
+  turn: number;
+  /** Firewall: on until this step; and the enemy whose ability it blocked, and at which step, so that the rest of what lands that step is blocked too. */
+  walledUntil: number;
+  wallBy: number;
+  wallAt: number;
+  /** Its armour halved (a pickaxe) until this step, and the armour taken, to give back. */
+  sunderedUntil: number;
+  sundered: number;
 
   // From items.
   pierce: number;
@@ -205,6 +225,8 @@ export interface Unit {
   taken: number;
   healed: number;
   casts: number;
+  /** The step it last used its ability; -1 before it has. */
+  castAt: number;
 }
 
 /** Hexes marked by somebody's ability for a while: enemies of `side` standing in them are slowed, or hurt every second. */
@@ -289,7 +311,17 @@ export type FightEvent =
   /** Attacks up close; the hit follows at once. */
   | { t: "swing"; id: number; target: number }
   /** Something flies from one hex to another and lands in `ticks`: an attack from range, or part of an ability. */
-  | { t: "shot"; id: number; target: number; from: number; to: number; ticks: number; what: "attack" | "ability" }
+  | {
+      t: "shot";
+      id: number;
+      target: number;
+      from: number;
+      to: number;
+      ticks: number;
+      what: "attack" | "ability";
+      /** One of Ace's cards: its suit. */
+      card?: Suit;
+    }
   /**
    * Damage lands. `amount` is what the target lost, shield and health together; `soaked` is the
    * part its shield took; `before` is what the hit was before armour, ward and bracing.
@@ -309,6 +341,10 @@ export type FightEvent =
       hp: number;
       shield: number;
     }
+  /** An enemy's ability is undone on it by a Firewall: what `by` landed on it this step lands not at all. */
+  | { t: "block"; id: number; by: number }
+  /** Mana taken off it. */
+  | { t: "drain"; id: number; by: number; amount: number }
   /** An attack slips past. */
   | { t: "slip"; id: number; by: number }
   /**
@@ -327,6 +363,8 @@ export type FightEvent =
       ticks: number;
       pulses?: number;
       every?: number;
+      /** Leetanns': the tool it swings. */
+      tool?: Gear;
     }
   | { t: "heal"; id: number; by: number; amount: number; source: HealSource; hp: number }
   /** A shield goes up, or is added to; `shield` is what it now holds. `ticks` of 0 lasts until it is broken. */

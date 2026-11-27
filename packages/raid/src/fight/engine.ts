@@ -16,6 +16,7 @@ import { FIGHT, levelBoost } from "../content/rooms.ts";
 import { distance, seatCell, type Side, stepToward } from "../hex.ts";
 import { type Party, type Placed, traitSteps } from "../party.ts";
 import { cast } from "./abilities.ts";
+import { dealCard } from "./casts/up-the-tree.ts";
 import {
   drawOf,
   emit,
@@ -36,7 +37,17 @@ import { drawnFoe, fly, foesByDraw, onTarget } from "./mind.ts";
 import { slowNow } from "./moves.ts";
 import { attackReach, boardFor, ruleSeated, wildsOf } from "./rules.ts";
 import { growing, seatedAll, type Stats, switchOn } from "./seating.ts";
-import type { Fight, FightEvent, FightResult, FightSetup, FightSummary, Pending, StatusId, Unit } from "./types.ts";
+import type {
+  DamageKind,
+  Fight,
+  FightEvent,
+  FightResult,
+  FightSetup,
+  FightSummary,
+  Pending,
+  StatusId,
+  Unit,
+} from "./types.ts";
 
 // ---------- sitting down ----------
 
@@ -143,8 +154,10 @@ export function speedNow(f: Fight, u: Unit): number {
 interface Blow {
   readonly attack: number;
   readonly crit: number;
+  /** What kind of damage it is: physical, but for an ace of diamonds, which meets no armour. */
+  readonly kind: DamageKind;
 }
-const blowOf = (u: Unit): Blow => ({ attack: u.attack, crit: u.crit });
+const blowOf = (u: Unit): Blow => ({ attack: u.attack, crit: u.crit, kind: "physical" });
 
 /**
  * An attack arrives, as strong as it was made (`blow`). Whether it slips and whether it lands hard
@@ -178,7 +191,7 @@ function land(f: Fight, u: Unit, t: Unit, upClose: boolean, blow: Blow): void {
     } else if (u.focus < u.focusMost) u.focus++;
     amount *= 1 + (u.focus * u.focusBy) / 100;
   }
-  const dealt = hurt(f, t, amount, "physical", "attack", u, hard);
+  const dealt = hurt(f, t, amount, blow.kind, "attack", u, hard);
   if (dealt <= 0) return;
   if (u.leech > 0) heal(f, u, (dealt * u.leech) / 100, "leech", null);
   if (u.clip > 0) {
@@ -198,12 +211,20 @@ function strike(f: Fight, u: Unit, t: Unit): void {
   u.attacks++;
   gainMana(u, FIGHT.manaAttack + u.manaMore);
   const hits = 1 + whenAttacks(f, u);
+  const blow = blowOf(u);
+  // An ace goes to whoever its suit picks, landing as an attack (`dealCard`); with nobody to pick it is a plain attack.
+  if (
+    u.deals === "aces" &&
+    dealCard(f, u, blow.attack, (o, attack, kind) => land(f, u, o, false, { ...blow, attack, kind }))
+  ) {
+    if (u.quicken > 0 && u.quick < u.quickMost) u.quick++;
+    return;
+  }
   if (distance(u.cell, t.cell) <= 1) {
     emit(f, { t: "swing", id: u.id, target: t.id });
     for (let n = 0; n < hits; n++) land(f, u, t, true, blowOf(u));
   } else {
     // Thrown now, with the strength it has now, however long it is in the air.
-    const blow = blowOf(u);
     const ticks = flight(u.cell, t.cell);
     for (let n = 0; n < hits; n++) {
       const wait = ticks + n * 2;
@@ -281,6 +302,12 @@ function expire(f: Fight, u: Unit): void {
     off(f, u, "shield");
   }
   if (u.hiddenUntil === now) off(f, u, "hidden");
+  if (u.walledUntil === now) off(f, u, "firewall");
+  if (u.sunderedUntil === now) {
+    u.armour += u.sundered;
+    u.sundered = 0;
+    off(f, u, "sundered");
+  }
 }
 
 function act(f: Fight, u: Unit): void {
@@ -292,6 +319,7 @@ function act(f: Fight, u: Unit): void {
   if (u.manaFull > 0 && u.mana >= u.manaFull && cast(f, u)) {
     u.mana = 0;
     u.casts++;
+    u.castAt = now;
     u.busyUntil = Math.max(u.busyUntil, now + FIGHT.cast);
     whenCasts(f, u);
     return;

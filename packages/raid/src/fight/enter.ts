@@ -97,6 +97,13 @@ const PLAIN = {
   called: false,
   cracked: 0,
   calledLast: -1,
+  deals: "plain",
+  turn: 0,
+  walledUntil: 0,
+  wallBy: -1,
+  wallAt: -1,
+  sunderedUntil: 0,
+  sundered: 0,
   pierce: 0,
   twice: 0,
   prickle: 0,
@@ -116,6 +123,7 @@ const PLAIN = {
   taken: 0,
   healed: 0,
   casts: 0,
+  castAt: -1,
 } as const satisfies Partial<Unit>;
 
 /** Puts a figure on the board. Whoever calls this has made sure the hex is free. */

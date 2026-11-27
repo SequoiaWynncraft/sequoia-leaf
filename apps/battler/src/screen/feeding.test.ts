@@ -26,6 +26,7 @@ function planning(board: FigureId[], bench: FigureId[], fed = 0): RunView {
     stars: 1,
     items: [],
     fed: kind === "greg" ? fed : 0,
+    fights: 0,
   });
   board.forEach((kind, seat) => (run.board[seat] = piece(kind)));
   bench.forEach((kind, slot) => (run.bench[slot] = piece(kind)));
