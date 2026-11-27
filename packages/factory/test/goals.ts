@@ -57,3 +57,14 @@ export function paidFor(g: F.Goal): number {
   for (const k of F.ALL_ITEMS) n += (info?.want[k] ?? 0) * (F.ARRIVAL[k] ?? 0);
   return n;
 }
+
+/** The research past what the last Leaf of version 10 knew that a yard made at tier 4 or later knows: Long reach. */
+const LATER_KNOWN: ReadonlySet<F.Goal> = new Set(["longreach", "longerreach"].map((id) => F.goal(id)));
+/** A copy of a yard as it was before reach was research: Long reach and Longer reach forgotten, so it names nothing past version 10. */
+export function beforeReach(was: F.Yard): F.Yard {
+  const y = structuredClone(was);
+  y.done = y.done.filter((g) => !LATER_KNOWN.has(g));
+  y.told = Math.min(y.told, y.done.length);
+  F.reopen(y);
+  return y;
+}

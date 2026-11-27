@@ -38,6 +38,15 @@
     ]
   },
   {
+    "id": "works-reach",
+    "at": "2026-11-27T21:50Z",
+    "title": "Reach",
+    "lines": [
+      "Long reach, a tier 3 research, lets you build up to 2 plots away from the plot you stand on: the whole yard from any plot.",
+      "A piece's Upgrade works from anywhere."
+    ]
+  },
+  {
     "id": "works-tier-5-research",
     "at": "2026-11-27T21:34Z",
     "title": "Tier 5's first research",

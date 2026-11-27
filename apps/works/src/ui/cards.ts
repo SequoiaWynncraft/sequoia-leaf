@@ -428,11 +428,10 @@ function takeUp(p: StandingPrint, hands: Hands): Action[] {
 
 /** A machine standing in the yard: its kind's card, with what this one is doing and holds, and what can be done with it. */
 function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
-  const m = p.machine;
+  const { machine: m, x, y } = p;
   const k = m.kind;
   const base = machineCard(art, m);
   if (m.later) return base;
-  const { x, y } = p;
   const rows: Row[] = [];
   // A machine's parts are in its recipe's slots: what it holds besides is listed.
   const holding = p.holding.filter(([t]) => !p.flow?.parts.some((part) => part.item === t));
@@ -601,6 +600,7 @@ export const PERK_ART: Readonly<Record<Numbered | Flag, (art: Art) => HTMLCanvas
   span: (art) => art.icon(TUNNEL),
   away: () => yardIcon("moon"),
   hooks: () => yardIcon("orders"),
+  range: () => yardIcon("map"),
   blueprints: () => yardIcon("print"),
   board: () => yardIcon("orders"),
   first: (art) => {

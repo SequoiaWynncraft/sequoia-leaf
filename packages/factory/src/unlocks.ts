@@ -8,7 +8,7 @@
 import { coinsText, num, perMinute } from "@sequoia-leaf/core";
 
 import { REACH } from "./content/machines.ts";
-import { START, type Tool, type Unlocks } from "./content/nodes.ts";
+import { ANYWHERE, START, type Tool, type Unlocks } from "./content/nodes.ts";
 import { FELLING, PLOTS } from "./content/plots.ts";
 import { TIERS } from "./content/tiers.ts";
 import { carried, makes } from "./planner.ts";
@@ -41,7 +41,7 @@ import { carries } from "./wire.ts";
 export const numeral = (grade: number): string => ["", "I", "II", "III"][grade] ?? String(grade);
 
 /** The numbers an unlock may raise, by what each is of. */
-export type Numbered = "stops" | "crate" | "reach" | "depot" | "span" | "away" | "hooks";
+export type Numbered = "stops" | "crate" | "reach" | "depot" | "span" | "away" | "hooks" | "range";
 
 /** What every unlock has: what it is called, and the sentence that says what it is. */
 interface Said {
@@ -206,6 +206,14 @@ function number(of: Numbered, to: number): Unlock {
           amount: `${num(to)} order${s(to)}`,
           says: `The board holds ${num(to)} order${s(to)}${upFrom(was)}.`,
         };
+      case "range":
+        return to >= ANYWHERE
+          ? { name: "You can build", amount: "anywhere", says: "You can build anywhere on your land." }
+          : {
+              name: "You can build",
+              amount: `${num(to)} plot${s(to)} away`,
+              says: `You can build up to ${num(to)} plot${s(to)} away from the plot you stand on${upFrom(was)}.`,
+            };
     }
   })();
   return { is: "number", of, to, was, ...made };
@@ -213,7 +221,7 @@ function number(of: Numbered, to: number): Unlock {
 
 /** The kind a number belongs to: unlocked with its kind, and with nothing before it, the number is part of the kind. */
 const ofKind = (of: Numbered): Kind | undefined => ALL_KINDS.find((k) => OWNS[k]?.includes(of));
-const NUMBERED: readonly Numbered[] = ["stops", "crate", "reach", "depot", "span", "away", "hooks"];
+const NUMBERED: readonly Numbered[] = ["stops", "crate", "reach", "depot", "span", "away", "hooks", "range"];
 
 /**
  * What an `Unlocks` unlocks, each thing once, in the order a screen lists them: kinds of piece,

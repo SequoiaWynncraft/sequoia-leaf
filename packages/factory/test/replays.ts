@@ -17,6 +17,7 @@ import { createHash, type Hash } from "node:crypto";
 import type { Ctx } from "@sequoia-leaf/core";
 
 import * as F from "../src/index.ts";
+import { beforeReach } from "./goals.ts";
 import { boardFilled, Player } from "./player.ts";
 import { rng } from "./random.ts";
 import { delivering, generated, JUNCTION_HOURS, junctions, must, saved, SAVES, staged, STAGES } from "./yards.ts";
@@ -87,15 +88,17 @@ function played(start: () => F.Yard, seed: number, n = 300): (d: Digest) => void
 
 /** The junctions yard run on for eight hours, its owner's commands at the start of each, digested every minute. */
 function junctionsRun(d: Digest): void {
-  const y = junctions();
+  const y = beforeReach(junctions());
   for (const commands of JUNCTION_HOURS) {
     for (const c of commands) must(y, c);
     hours(y, d, 1);
   }
 }
 
-/** A copy of the generated yard, which the tests share. */
-const generatedCopy = (): F.Yard => F.decode(F.encode(generated().y), generated().y.land) ?? F.create();
+/** A copy of the generated yard, which the tests share, without the reach research. */
+const generatedCopy = (): F.Yard => beforeReach(generated().y);
+/** A new yard with every goal below a tier done, as it was before reach was research. */
+const fresh = (seed: number, tier: number) => (): F.Yard => beforeReach(F.create({ seed, tier }));
 
 const ctx = (now: number): Ctx => ({
   now,
@@ -132,14 +135,15 @@ function tended(d: Digest): void {
 export const REPLAYS: readonly (readonly [string, (d: Digest) => void])[] = [
   ...STAGES.map((name) => [`staged ${name}`, (d: Digest) => hours(staged(name), d)] as const),
   ...SAVES.map((name) => [`save ${name}`, (d: Digest) => hours(saved(name), d)] as const),
-  ["delivering", (d) => hours(delivering(), d)],
+  // Each starts as it did before reach was research, so it plays as a yard without it; random play may study it.
+  ["delivering", (d) => hours(beforeReach(delivering()), d)],
   ["generated", (d) => hours(generatedCopy(), d)],
   ["junctions", junctionsRun],
   ["random play, a new yard", played(() => F.create({ seed: 11 }), 101)],
   ["random play, tier 3", played(() => F.create({ seed: 13, tier: 3 }), 103)],
-  ["random play, tier 4 done", played(() => F.create({ seed: 14, tier: 5 }), 105)],
-  ["random play, tier 5's research done", played(() => F.create({ seed: 15, tier: 6 }), 106)],
-  ["random play, the delivering yard with its board filled", played(boardFilled, 107)],
+  ["random play, tier 4 done", played(fresh(14, 5), 105)],
+  ["random play, tier 5's research done", played(fresh(15, 6), 106)],
+  ["random play, the delivering yard with its board filled", played(() => beforeReach(boardFilled()), 107)],
   ["random play, the generated yard", played(generatedCopy, 109)],
   ["the largest staged yard, tended in slices", tended],
 ];

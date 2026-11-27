@@ -366,7 +366,8 @@ describe("the order of things", () => {
     for (const id of node.needs ?? []) need(F.goal(id));
     // Asked for in the reverse of the tables' order, as if the player's list put what the node needs last.
     const list = research.toReversed().map((g) => F.GOALS[g]?.id ?? "");
-    const unknown = new Set<number>(research);
+    // The node not done either, whatever else its tier has: what it needs is then asked for first.
+    const unknown = new Set<number>([...research, F.goal(node.id)]);
     const fresh = { ...open, done: open.done.map((d, g) => (unknown.has(g) ? 0 : d)) };
     const order = researchOrder(fresh, [node.id], list);
     expect(order.slice(0, needed.size).toSorted(up)).toEqual([...needed].toSorted(up));

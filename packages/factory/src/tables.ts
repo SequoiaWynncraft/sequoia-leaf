@@ -400,6 +400,8 @@ export interface Open {
   /** Whether redwoods may be felled; whether a tunnel's way in takes things in from its sides too. */
   readonly felling: boolean;
   readonly mouths: boolean;
+  /** How many plots out from the plot you stand on you build (`Unlocks.range`). */
+  readonly range: number;
 }
 
 /** A tool's bit in `Open.tools`. */
@@ -455,6 +457,7 @@ export function openOf(goals: readonly Goal[]): Open {
     ins: unlocks.some((u) => u.ins === true),
     felling: unlocks.some((u) => u.felling === true),
     mouths: unlocks.some((u) => u.mouths === true),
+    range: top((u) => u.range),
   };
 }
 

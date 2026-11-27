@@ -14,7 +14,7 @@ const ALL: [string, F.Unlocks][] = [
   ["a new yard", F.START],
   ...F.GOALS.map((g): [string, F.Unlocks] => [g.id, g.unlocks]),
 ];
-const NUMBERED = ["stops", "crate", "reach", "depot", "span", "away", "hooks"] as const;
+const NUMBERED = ["stops", "crate", "reach", "depot", "span", "away", "hooks", "range"] as const;
 /** The first goal whose unlocks hold a field. */
 const withField = (has: (u: F.Unlocks) => boolean): F.Unlocks => ALL.find(([, u]) => has(u))?.[1] ?? {};
 

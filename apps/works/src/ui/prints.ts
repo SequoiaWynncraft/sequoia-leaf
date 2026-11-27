@@ -320,7 +320,7 @@ function orderPrint(id: string): NodePrint | OrderPrint | null {
   };
 }
 
-const NUMBERED = ["stops", "crate", "reach", "depot", "span", "away", "hooks"] as const;
+const NUMBERED = ["stops", "crate", "reach", "depot", "span", "away", "hooks", "range"] as const;
 /** The unlocks that are one thing or none: the board, a splitter's flags and its ways in, felling, wide mouths. */
 const FLAGGED = ["board", "first", "ins", "felling", "mouths"] as const;
 

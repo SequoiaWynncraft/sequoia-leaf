@@ -8,6 +8,8 @@
 import { describe, expect, test } from "bun:test";
 
 import * as F from "../src/index.ts";
+import { KNOWN_AT_10 } from "../src/known10.ts";
+import { beforeReach } from "./goals.ts";
 import { Player } from "./player.ts";
 import { bare, TIER5, tunnel } from "./tier5.ts";
 import { generated, must, saved, SAVES, staged } from "./yards.ts";
@@ -32,12 +34,34 @@ describe("the version a yard is kept as", () => {
       expect([F.keptLater(text, y.land), F.decode(text, y.land) !== null]).toEqual([false, true]);
     });
 
-  test("one holding nothing of tier 5 is kept as version 9: every staged yard, every kept save, a tunnel of 5 tiles", () => {
+  test("each of those yards names nothing else past version 10: with its tier 5 part taken out, it is kept as version 9", () => {
+    const AT_10 = new Set<string>(KNOWN_AT_10.goals);
+    for (const [name, make] of Object.entries(TIER5)) {
+      const y = make();
+      const names = F.namesOf(record(F.encode(y)), y.land);
+      const past = [...(names?.goals ?? [])].filter((id) => !AT_10.has(id) && F.GOALS[F.goal(id)]?.tier !== 5);
+      expect([name, past]).toEqual([name, []]);
+    }
+    // A deep tunnel taken out of a plan, a blueprint and what Undo would stand again: nothing past 10 is left.
+    for (const name of [
+      "a 6-tile tunnel in a blueprint",
+      "a 6-tile tunnel in a plan of the whole yard",
+      "a 6-tile tunnel Undo would stand again",
+    ]) {
+      const y = TIER5[name]?.();
+      if (!y) throw new Error(`no ${name}`);
+      y.blueprints = y.blueprints.map(() => null);
+      y.history = [];
+      expect([name, record(F.encode(y)).v]).toEqual([name, F.PLACED]);
+    }
+  });
+
+  test("one holding nothing past version 10 is kept as version 9: every staged yard and kept save without Long reach, a tunnel of 5 tiles", () => {
     const yards = [
       ...(["new", "small", "mid", "gate", "large"] as const).map((n) => staged(n)),
       ...SAVES.map(saved),
       generated().y,
-    ];
+    ].map(beforeReach);
     for (const y of yards) expect(record(F.encode(y)).v).toBe(F.PLACED);
     const y = bare();
     must(y, tunnel(2, 4, 5));

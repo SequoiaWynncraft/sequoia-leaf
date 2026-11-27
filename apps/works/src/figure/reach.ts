@@ -1,7 +1,8 @@
 /**
  * Reach: you put pieces down and take them up only near where you stand, on the plot you stand on
- * and the eight round it. On the guild's land today that is the whole yard from its middle plot, so
- * nothing is harder; on a bigger map you walk out to build far away.
+ * and the plots round it, as many plots out as the yard's range (`Open.range`: 1, the eight round it,
+ * until research makes it more). On the guild's land today 1 is the whole yard from its middle plot,
+ * and 2 from any plot; on a bigger map you walk out to build far away.
  *
  * One rule, asked of a command: every tile it puts a piece on or takes one off must be in reach
  * (`footprint`), whatever stood there before: both mouths of a tunnel, a move's every piece where it
@@ -9,8 +10,8 @@
  * over one of its kind. A preview asks it of the very command its press would send (`acts.ts`), and
  * `doNow` asks it before the rules, so a gold preview is never refused and a coral one never goes
  * through. Only commands that put nothing down and take nothing up are done from anywhere: turning a
- * piece, raising grades with the grade command (Upgrade on a marked area or the whole yard), a card's
- * settings, painting a line, undoing, and putting back a plan of the whole yard. Without a figure of
+ * piece, raising grades with the grade command (Upgrade on a marked area or the whole yard, and a
+ * card's Upgrade), a card's settings, painting a line, undoing, and putting back a plan of the whole yard. Without a figure of
  * yours (a visit, a review page's own yard) nothing is out of reach.
  *
  * It is the page's rule alone for now: Leaf does not know where you stand until visitors walk, and
@@ -39,14 +40,19 @@ import { yourPlot } from "./you.ts";
 export const OUT_OF_REACH = "Out of reach";
 const REACH = "out_of_reach";
 
-/** The tiles within reach, corner to corner, or nothing for no limit: you have no figure here. */
+/**
+ * The tiles within reach, corner to corner, or nothing for no limit: you have no figure here. The
+ * one box every question of reach asks: the plot you stand on and `range` plots out on every side,
+ * however far past the land's edge that goes.
+ */
 export function reachBox(y: Yard = S.world): { x0: number; y0: number; x1: number; y1: number } | null {
   const plot = yourPlot();
   if (plot === null) return null;
   const p = y.land.plots[plot];
   // Off every plot (only ever for a moment, before you are put on clear ground), nothing is in reach.
   if (!p) return { x0: 0, y0: 0, x1: -1, y1: -1 };
-  return { x0: p.x - p.w, y0: p.y - p.h, x1: p.x + 2 * p.w - 1, y1: p.y + 2 * p.h - 1 };
+  const r = y.open.range;
+  return { x0: p.x - r * p.w, y0: p.y - r * p.h, x1: p.x + (r + 1) * p.w - 1, y1: p.y + (r + 1) * p.h - 1 };
 }
 
 /** Whether a tile is within reach. A tile off the map is let be: the rules say why nothing goes there. */
