@@ -3,8 +3,14 @@
  * and ward: Peep, Munch and Clutch (the Nest the gnomes carved as a bird's nest), and the
  * Commodore, a member's figure who calls four more members as his grooters. A new class, Chorus,
  * for mana by the second: Twig, Brew and Drizzle carry it as a third trait, and Crab #31. Crab #8,
- * a Sneak who takes no place on the board (Stowaway). Crab at 3/5/7 with six members, Sneak's
- * first hits a little softer, the four emblems the banner brings, and +10% health on every emblem.
+ * a Sneak who takes no place on the board (Stowaway). Crab's top step at 7 with six members,
+ * Sneak's first hits a little softer, the four emblems the banner brings, and +10% health on every
+ * emblem.
+ *
+ * Five figures more on the stall make copies rarer (the roller's three-star figures a run: 2.01 to
+ * 1.28), so the cheap ones are a little stronger than their tier, and Crab keeps its opener at 2:
+ * with them, the bots clear the trail about as often as before (`review/balance.ts`, beside it with
+ * `era=gaz-stall`).
  */
 import type { BoonSpec } from "../boons.ts";
 import { emblem, type ItemId, type ItemSpec, NO_STATS } from "../items.ts";
@@ -45,8 +51,8 @@ export const GROOT_NIGHT: Patch = {
         kin: "grooter",
         calling: "slinger",
         extra: [],
-        hp: 240,
-        attack: 24,
+        hp: 340,
+        attack: 34,
         speed: 0.8,
         range: 4,
         armour: 15,
@@ -56,7 +62,7 @@ export const GROOT_NIGHT: Patch = {
           name: "Hat Off",
           shape: "bolt",
           text: "Takes its hat off and throws it at the enemy in its reach with the most armour: {damage} physical damage, and that enemy has {crack} less armour and ward for the rest of the fight.",
-          n: { damage: [90, 160, 290], crack: [10, 14, 20] },
+          n: { damage: [130, 230, 420], crack: [10, 14, 20] },
           short: "{damage} physical to the most armoured in reach. Cracks {crack} armour and ward.",
         },
         quip: "Halfway out. Staying there.",
@@ -69,8 +75,8 @@ export const GROOT_NIGHT: Patch = {
         kin: "crab",
         calling: "chorus",
         extra: [],
-        hp: 420,
-        attack: 30,
+        hp: 500,
+        attack: 36,
         speed: 0.7,
         range: 2,
         armour: 25,
@@ -80,7 +86,7 @@ export const GROOT_NIGHT: Patch = {
           name: "Clack",
           shape: "ally",
           text: "Clacks its pebbles: the {count} friends nearest it with a mana bar gain {mana} mana, and it gets a shield of {shield} for {lasts} seconds.",
-          n: { count: [2, 2, 3], mana: [25, 35, 50], shield: [120, 210, 380], lasts: [4, 4, 4] },
+          n: { count: [2, 2, 3], mana: [25, 35, 50], shield: [150, 260, 470], lasts: [4, 4, 4] },
           short: "{count} nearest allies +{mana} mana. Shield {shield} for {lasts}s.",
         },
         quip: "Taps one foot. Has done since spring.",
@@ -93,8 +99,8 @@ export const GROOT_NIGHT: Patch = {
         kin: "grooter",
         calling: "fang",
         extra: [],
-        hp: 560,
-        attack: 46,
+        hp: 660,
+        attack: 55,
         speed: 0.75,
         range: 1,
         armour: 30,
@@ -104,7 +110,7 @@ export const GROOT_NIGHT: Patch = {
           name: "Shell And All",
           shape: "bolt",
           text: "Bites its target {bites} times in {lasts} second: {damage} physical damage a bite, and each bite takes {crack} armour and ward off it for the rest of the fight.",
-          n: { bites: [3, 3, 3], lasts: [1, 1, 1], damage: [80, 140, 250], crack: [6, 8, 12] },
+          n: { bites: [3, 3, 3], lasts: [1, 1, 1], damage: [95, 170, 305], crack: [6, 8, 12] },
           short: "{bites} bites over {lasts}s, {damage} physical each. Each cracks {crack} armour and ward.",
         },
         quip: "Eats the shell first.",
@@ -236,7 +242,8 @@ export const GROOT_NIGHT: Patch = {
     },
     change: {
       crab: {
-        steps: [3, 5, 7],
+        // The opener at 2 as before; the top step at 7, with six crabs and one of them free.
+        steps: [2, 4, 7],
         text: [
           "Roll call: when the fight starts, a Crab #?? joins beside your crabs, with as many stars as your best crab.",
           "Roll call: when the fight starts, a Big Crab #?? joins beside your crabs, with as many stars as your best crab.",

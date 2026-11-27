@@ -545,7 +545,7 @@ describe("a banner's featured figures", () => {
   const opens = Date.UTC(2026, 11, 8);
   const cat = catalogAt(eraAt(opens));
   const night = prizesOf(cat, "groot-night");
-  const featured = featuredOf(cat, "groot-night");
+  const featured = featuredOf(cat, "groot-night").map((f) => f.prize);
   /** What many pulls draw of a rarity from Groot Night, from counters that make it that tier, with or without its featured figures. */
   function drawn(rarity: Rarity, top: number, mid: number, favoured: readonly string[]): Map<string, number> {
     const seen = new Map<string, number>();
@@ -556,7 +556,15 @@ describe("a banner's featured figures", () => {
     return seen;
   }
 
-  it("are Groot Night's six, in its pool from its opening; the grove and banner-1 have none", () => {
+  it("are Groot Night's six, each with the rarity its pool gives it at, from its opening; the grove and banner-1 have none", () => {
+    expect(featuredOf(cat, "groot-night").map((f) => [f.id, f.rarity])).toEqual([
+      ["crab8", "Treant"],
+      ["clutch", "Druid"],
+      ["crab31", "Sprite"],
+      ["munch", "Sprite"],
+      ["peep", "Leafkin"],
+      ["seqwawa", "Treant"],
+    ]);
     expect(featured.toSorted()).toEqual(
       ["figure:crab8", "figure:clutch", "figure:crab31", "figure:munch", "figure:peep", "figure:seqwawa"].toSorted(),
     );

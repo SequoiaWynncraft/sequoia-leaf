@@ -266,16 +266,6 @@ export const pullSpend = (pool: string, n: number): Spend => ({ on: `pull:${pool
 export const bannerLine = (b: Showing | null, zone?: string): string | null =>
   b && `${b.title === b.name ? `${b.name}'s banner` : b.title} is open until ${dayAndTime(b.until, zone)}.`;
 
-/** A banner's featured figures as its catalogue has them, in its order, with the rarity each is drawn at; none for a pool with none. */
-export function featuredOf(view: Pick<PullsView, "era">, pool: string): { id: FigureId; rarity: Rarity }[] {
-  const cat = catalogOf(view);
-  const banner = cat.banners.find((b) => b.id === pool);
-  return (banner?.featured ?? []).flatMap((id) => {
-    const f = cat.figures[id];
-    return f ? [{ id, rarity: f.prize }] : [];
-  });
-}
-
 /**
  * Whether to ask Leaf for the pulls again, by the page's clock: a free pull has fallen due, a banner
  * is due to open or to end, or a release to open. What is open and what each pool gives is only

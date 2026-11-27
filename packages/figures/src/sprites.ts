@@ -18,11 +18,11 @@ import { type Ctx, makeCanvas, must } from "@sequoia-leaf/kit/util.ts";
 import { type Catalog, everyShared } from "@sequoia-leaf/raid/content/catalog.ts";
 import {
   figureIn,
+  GROOTER_IDS,
   isBossId,
   isFigureId,
   isSummonId,
   specOf,
-  type SummonId,
   type UnitKind,
 } from "@sequoia-leaf/raid/content/figures.ts";
 import { isMemberId, type MemberId } from "@sequoia-leaf/raid/content/members.ts";
@@ -167,7 +167,7 @@ function person(body: Body): { right: Frames; left: Frames } {
 }
 
 /** The grooters the Commodore calls, in turn: summoned figures that are people, each the member Leaf names for that place. */
-export const CALLED = ["grooter1", "grooter2", "grooter3", "grooter4"] as const satisfies readonly SummonId[];
+export const CALLED = GROOTER_IDS;
 /** Anyone on the stump drawn as a person from a member's skin: a banner's member, or a grooter called. */
 export type PersonId = MemberId | (typeof CALLED)[number];
 export const isPersonId = (v: unknown): v is PersonId => isMemberId(v) || CALLED.some((id) => id === v);

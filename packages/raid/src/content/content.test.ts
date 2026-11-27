@@ -57,10 +57,10 @@ const mean = (tier: 1 | 2 | 3 | 4 | 5, cat = CAT): number => {
 };
 
 describe("the roster", () => {
-  test("is twenty-nine figures in five tiers, 7, 7, 6, 5, 4; Groot Night makes it thirty-four, 8, 7, 8, 6, 5", () => {
+  test("is twenty-nine figures in five tiers, 7, 7, 6, 5, 4; with gaz on the stall and Groot Night, 8, 7, 8, 6, 6", () => {
     expect(TIERS.map((tier) => figuresOfTier(tier).length)).toEqual([7, 7, 6, 5, 4]);
     expect(FIGURE_IDS.length).toBe(34);
-    expect(TIERS.map((tier) => figuresOfTier(tier, EVERY).length)).toEqual([8, 7, 8, 6, 5]);
+    expect(TIERS.map((tier) => figuresOfTier(tier, EVERY).length)).toEqual([8, 7, 8, 6, 6]);
   });
   test("everyone has a name of their own; the Commodore's four grooters are one figure", () => {
     const specs = new Set(EVERYONE.map((kind) => specOf(EVERY, kind)));

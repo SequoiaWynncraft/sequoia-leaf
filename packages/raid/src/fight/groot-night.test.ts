@@ -1,6 +1,6 @@
 /**
  * Groot Night's rules, each against its own sentence, in a fight set up in its era: the crack and
- * the mana gift, Grooter and Chorus at each step, Crab at 3/5/7 and Sneak's softer first hits, the
+ * the mana gift, Grooter and Chorus at each step, Crab at 2/4/7 and Sneak's softer first hits, the
  * six new abilities, Stowaway's chair, and the four emblems the banner brings.
  */
 import { describe, expect, test } from "bun:test";
@@ -199,7 +199,7 @@ describe("Chorus", () => {
   });
 });
 
-describe("Crab at 3, 5 and 7", () => {
+describe("Crab at 2, 4 and 7", () => {
   const CRABS: readonly Placed[] = [
     onCell("crab7", 0, cellAt(1, 4)),
     onCell("crab12", 0, cellAt(1, 6)),
@@ -210,10 +210,11 @@ describe("Crab at 3, 5 and 7", () => {
     onCell("moth", 0, cellAt(5, 6), 1, ["crabcharm"]),
   ];
   test.each([
-    [2, 0, [0, 0]],
-    [3, 1, [0, 1]],
-    [4, 1, [0, 1]],
+    [1, 0, [0, 0]],
+    [2, 1, [0, 1]],
+    [4, 2, [1, 0]],
     [5, 2, [1, 0]],
+    [6, 2, [1, 0]],
     [7, 3, [1, 2]],
   ] as const)("with %i crabs, step %i: so many big and small crabs nobody counted join", (count, step, joined) => {
     const f = night(CRABS.slice(0, count), [onCell("mud", 1, FOUR)]);
