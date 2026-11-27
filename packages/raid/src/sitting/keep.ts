@@ -2,8 +2,11 @@
  * A sitting as Leaf stores it, and read back. It is plain data, so keeping it is writing it out.
  * Reading goes as a run's does (`save.ts`): the shape first, field by field into a fresh sitting,
  * each seat's run by the run's own reader, then whether the parts agree with each other. Anything
- * else is refused: a sitting that does not read is not one.
+ * else is refused: a sitting that does not read is not one. One of a version above this Leaf's is a
+ * newer Leaf's (`sittingIsNewer`), refused too, and left as it is.
  */
+import { newerThan } from "@sequoia-leaf/core";
+
 import { isFigureId } from "../content/figures.ts";
 import { isComponentId } from "../content/items.ts";
 import { isEra, LEGACY_ERA } from "../content/releases.ts";
@@ -180,6 +183,9 @@ function read(v: unknown): Sitting {
   agree(t);
   return t;
 }
+
+/** Whether the text Leaf stored is a sitting a newer Leaf wrote, beside this one in a deploy. */
+export const sittingIsNewer = (stored: string): boolean => newerThan(stored, SITTING_VERSION);
 
 /** A sitting from the text Leaf stored, or null for anything that is not one. */
 export function decodeSitting(stored: string): Sitting | null {

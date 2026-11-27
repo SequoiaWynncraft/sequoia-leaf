@@ -78,6 +78,7 @@ import {
   SittingRefused,
   SittingShown,
   SittingsListed,
+  SittingUpdating,
 } from "./sittings.ts";
 
 // Leaf's HTTP API, declared once: the server implements it, and its OpenAPI
@@ -360,13 +361,13 @@ export class GameSittingsApi extends HttpApiGroup.make("gameSittings")
       params: SittingParams,
       query: { rev: Schema.optional(Schema.String) },
       success: SittingRead,
-      error: [SittingMissing, StateUnreadable],
+      error: [SittingMissing, StateUnreadable, SittingUpdating],
     }),
     HttpApiEndpoint.post("sittingCommand", "/sittings/:id", {
       params: SittingParams,
       payload: PlayBody,
       success: SittingPlayed,
-      error: [Invalid, NotYou, SittingMissing, StateUnreadable, SlowDown],
+      error: [Invalid, NotYou, SittingMissing, StateUnreadable, SittingUpdating, SlowDown],
     }).middleware(PlayBodyErrors),
   )
   .middleware(Player)

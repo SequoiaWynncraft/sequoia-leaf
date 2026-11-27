@@ -208,6 +208,7 @@ export {
   type Met,
   MOST_COMMANDS,
   MOST_FLUSHED,
+  newerThan,
   type Placed,
   playPath,
   type Refused,

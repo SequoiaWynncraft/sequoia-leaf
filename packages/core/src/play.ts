@@ -230,6 +230,23 @@ export interface Game<State, Command, View, Note, Short = never> {
   postcard?(state: State): Postcard;
 }
 
+/**
+ * Whether stored text is of a version above `version` (its `v`): written by a newer Leaf, as one runs
+ * beside this one in a deploy. Such a row is left exactly as it is, never written, ended or rested,
+ * for the Leaf that reads it.
+ */
+export function newerThan(text: string, version: number): boolean {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    return false;
+  }
+  if (typeof raw !== "object" || raw === null || !("v" in raw)) return false;
+  const { v } = raw;
+  return typeof v === "number" && Number.isInteger(v) && v > version;
+}
+
 /** Whether a command's answer is a refusal. */
 export const isRefused = <S, N>(answer: Done<S, N> | Refused): answer is Refused => "refused" in answer;
 

@@ -4,7 +4,7 @@ import { HttpApiBuilder } from "effect/http-api";
 import { Visits } from "../../activity/visits.ts";
 import { CurrentIdentity, type Identity, LeafApi, SittingBodyErrors } from "../../api/api.ts";
 import { Invalid, SlowDown } from "../../api/errors.ts";
-import { SittingMissing, SittingRefused } from "../../api/sittings.ts";
+import { SittingMissing, SittingRefused, SittingUpdating } from "../../api/sittings.ts";
 import { type Caller, type Shown, Sittings } from "../../sittings/service.ts";
 import { payloadError } from "./middleware.ts";
 import { iso, notYou, unreadable } from "./shared.ts";
@@ -16,6 +16,11 @@ const callerOf = (identity: Identity): Caller => ({ playerId: identity.playerId,
 const shownJson = ({ id, rev, now, view, purse }: Shown) => ({ id, rev, now: iso(now), state: view, purse });
 
 const missing = new SittingMissing({ code: "no_such_sitting", message: "There is no such table" });
+/** A table a newer Leaf stored, beside this one in a deploy: the page asks again. */
+const updating = new SittingUpdating({
+  code: "sitting_updating",
+  message: "This table is being updated. Try again in a moment.",
+});
 const slow = new SlowDown({
   code: "slow_down",
   message: "Commands are coming faster than Leaf takes them. Send them again in a moment",
@@ -90,6 +95,8 @@ export const GameSittingsHandlers = HttpApiBuilder.group(LeafApi, "gameSittings"
                 return yield* missing;
               case "unreadable":
                 return yield* unreadable;
+              case "updating":
+                return yield* updating;
             }
           }),
         )
@@ -109,6 +116,8 @@ export const GameSittingsHandlers = HttpApiBuilder.group(LeafApi, "gameSittings"
                 return yield* missing;
               case "unreadable":
                 return yield* unreadable;
+              case "updating":
+                return yield* updating;
               case "slow":
                 return yield* slow;
             }

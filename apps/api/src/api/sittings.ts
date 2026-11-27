@@ -61,6 +61,11 @@ export class SittingMissing extends Schema.Error<SittingMissing>("SittingMissing
   httpApiStatus: 404,
 }) {}
 
+/** A sitting a newer Leaf stored, as one runs beside this one in a deploy: nothing was done, and it is left as it is. */
+export class SittingUpdating extends Schema.Error<SittingUpdating>("SittingUpdating")(answer("sitting_updating"), {
+  httpApiStatus: 503,
+}) {}
+
 /** A sitting not opened: the caller is seated at another, or as many are going as may be. Nothing was done. */
 export class SittingRefused extends Schema.Error<SittingRefused>("SittingRefused")(
   answer("seated_elsewhere", "sittings_full"),

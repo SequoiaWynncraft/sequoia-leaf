@@ -13,7 +13,7 @@
 import { type Balances, COMMAND_ID, DAY_MS, MOST_FLUSHED, type PlayerId } from "@sequoia-leaf/core";
 import { advance } from "@sequoia-leaf/raid/sitting/clock.ts";
 import { command, openSitting, readCommand, type SittingCommand } from "@sequoia-leaf/raid/sitting/commands.ts";
-import { decodeSitting } from "@sequoia-leaf/raid/sitting/keep.ts";
+import { decodeSitting, sittingIsNewer } from "@sequoia-leaf/raid/sitting/keep.ts";
 import type { Member, Sitting } from "@sequoia-leaf/raid/sitting/sitting.ts";
 import { type SittingView, sittingView } from "@sequoia-leaf/raid/sitting/view.ts";
 import { Clock, Context, Effect, Layer, Option, RcMap, Schema, Semaphore } from "effect";
@@ -58,7 +58,9 @@ export type Reading =
   /** The caller's `rev` is the sitting's, brought to now: nothing to show. */
   | { readonly status: "unchanged"; readonly id: string; readonly rev: number; readonly now: number }
   | { readonly status: "missing" }
-  | { readonly status: "unreadable" };
+  | { readonly status: "unreadable" }
+  /** Stored by a newer Leaf, beside this one in a deploy: left as it is, for the page to ask again. */
+  | { readonly status: "updating" };
 
 export type Opening =
   | ({ readonly status: "shown" } & Shown)
@@ -73,6 +75,7 @@ export type Sending =
   | ({ readonly status: "done"; readonly results: readonly Result[] } & Shown)
   | { readonly status: "missing" }
   | { readonly status: "unreadable" }
+  | { readonly status: "updating" }
   | { readonly status: "invalid"; readonly why: string }
   | { readonly status: "slow" };
 
@@ -165,18 +168,25 @@ function jobsOf({ writes, store, coins, names, inLane }: Parts) {
   /** Does `work` in the sitting's lane at Leaf's clock as it gets its turn, again from what is stored when that moved on. */
   const job = <A>(id: string, work: (now: number) => Effect.Effect<A, Lost>) =>
     inLane(id, Effect.flatMap(Clock.currentTimeMillis, work).pipe(Effect.retry({ times: TRIES - 1 }), Effect.orDie));
-  /** A sitting as stored, read; one that does not read is logged and has its seats freed, and kept as it is. */
+  /**
+   * A sitting as stored, read. One a newer Leaf wrote is left exactly as it is, seats and all; one that
+   * does not read otherwise is logged and has its seats freed, and its state kept as it is.
+   */
   const load = (id: string, now: number) =>
     Effect.gen(function* () {
       const row = yield* store.read(id);
       if (Option.isNone(row)) return "missing" as const;
-      const sitting = decodeSitting(row.value.state);
-      if (sitting !== null) return { rev: row.value.rev, text: row.value.state, sitting } satisfies Loaded;
-      yield* Effect.annotateLogs(Effect.logError("A sitting stored does not read; it is kept as it is"), {
+      const { rev, state } = row.value;
+      const sitting = decodeSitting(state);
+      if (sitting !== null) return { rev, text: state, sitting } satisfies Loaded;
+      const newer = sittingIsNewer(state);
+      const said = newer ? "is a newer Leaf's; it is left as it is" : "does not read; it is kept as it is";
+      yield* Effect.annotateLogs((newer ? Effect.logWarning : Effect.logError)(`A sitting stored ${said}`), {
         sitting: id,
-        rev: row.value.rev,
+        rev,
       });
-      yield* store.shelve(id, row.value.rev, now);
+      if (newer) return "updating" as const;
+      yield* store.shelve(id, rev, now);
       return "unreadable" as const;
     });
   /** A sitting brought to Leaf's clock and kept if that changed it. */

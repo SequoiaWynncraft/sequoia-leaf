@@ -17,7 +17,8 @@ export const RESTANDS_A_RUN = 2000;
  * which says when it was reached): one written meanwhile stands as its batch wrote. A standing is
  * only ever put right, never made: a state that stands nowhere (one never written, or moved to
  * another player as it was made) stays so, and one that does not read (logged) or of a game Leaf does
- * not play is left as it stands. One at a time, `RESTANDS_A_RUN` at most, giving way after each.
+ * not play is left as it stands; one a newer Leaf wrote is not worked out at all, for that Leaf. One
+ * at a time, `RESTANDS_A_RUN` at most, giving way after each.
  */
 export const restandAll = Effect.gen(function* () {
   const store = yield* PlayStore;
@@ -25,6 +26,7 @@ export const restandAll = Effect.gen(function* () {
   for (const { playerId, game, rev, state } of unstood) {
     const id = gameId(game);
     const held = id === undefined || rev === 0 ? null : GAMES[id].read(state, null);
+    if (id !== undefined && held === null && GAMES[id].newer(state)) continue;
     if (id !== undefined && rev > 0 && held === null) yield* unreadable(game, playerId, rev, "it stands as it stood");
     yield* store.restand(playerId, game, rev, held?.standing() ?? null);
     yield* Effect.yieldNow;

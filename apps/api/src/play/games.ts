@@ -10,16 +10,18 @@ import {
   type LeafSpend,
   type Logged,
   type Meeting,
+  newerThan,
   type PlayerId,
   type Standing,
   type ToClient,
   visitRoom,
 } from "@sequoia-leaf/core";
 import { rulesVersions } from "@sequoia-leaf/core/build/rules.ts" with { type: "macro" };
+import { VERSION } from "@sequoia-leaf/factory/codec.ts";
 import { FACTORY } from "@sequoia-leaf/factory/game.ts";
-import { PULLS } from "@sequoia-leaf/pulls";
-import { RAID } from "@sequoia-leaf/raid/game.ts";
-import { TOWN } from "@sequoia-leaf/town";
+import { PULLS, PULLS_VERSION } from "@sequoia-leaf/pulls";
+import { RAID, TABLE_VERSION } from "@sequoia-leaf/raid/game.ts";
+import { TOWN, TOWN_VERSION } from "@sequoia-leaf/town";
 import { Effect } from "effect";
 
 /** What one command came to, before Leaf keeps it: a refusal, or what it did and how to keep the state it left. */
@@ -100,6 +102,8 @@ export interface Played {
   readonly chore: (command: unknown) => boolean;
   /** A stored state read into memory, with the postcard stored with it (null: none); null when the text is not one the game can read. */
   readonly read: (text: string, postcard: string | null) => Held | null;
+  /** Whether stored text is a newer Leaf's (`newerThan`), which `read` refuses: it is left exactly as it is. */
+  readonly newer: (text: string) => boolean;
   /** Whether its states go on by themselves (`Game.tend`), for Leaf to tend. */
   readonly tends: boolean;
   /** Whether its states tell the town anything (`Game.postcard`), which Leaf keeps with each. */
@@ -134,6 +138,14 @@ function meetsOf<State, Command>(
   const command = game.command(raw);
   return command === null ? null : (game.meets?.(state, command) ?? null);
 }
+
+/** The version of its stored text each game writes (its `v`): text of a higher one is a newer Leaf's (`Played.newer`). */
+const WRITES: Readonly<Record<GameId, number>> = {
+  raid: TABLE_VERSION,
+  works: VERSION,
+  town: TOWN_VERSION,
+  pulls: PULLS_VERSION,
+};
 
 /**
  * Wraps a game for the service, keeping its own types inside. A game's rules may change the state
@@ -224,6 +236,7 @@ export function played<State, Command, View, Note, Short>(
       const decoded = game.decode(text);
       return decoded === null ? null : held(decoded, postcard);
     },
+    newer: (text) => newerThan(text, WRITES[game.id]),
     tends: game.tend !== undefined,
     posts: game.postcard !== undefined,
     showsDoors,
@@ -280,6 +293,16 @@ export const unreadable = (game: string, player: PlayerId, rev: number, so: stri
     game,
     rev,
   });
+
+/**
+ * Logs a player's state stored that does not read (`unreadable`), and says whether it may rest: be due
+ * none until it is written again. One a newer Leaf wrote (`Played.newer`) may not: it is left as it is.
+ */
+export function unread(game: Played, player: PlayerId, rev: number, text: string) {
+  const newer = game.newer(text);
+  const so = newer ? "it is a newer Leaf's, left as it is" : "it is kept as it is";
+  return Effect.as(unreadable(game.id, player, rev, so), !newer);
+}
 
 /** What Leaf tells a game about a call by `playing`. */
 export const ctxOf = (
