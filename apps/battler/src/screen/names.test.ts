@@ -58,6 +58,13 @@ const NAMES: Readonly<Record<string, string>> = {
   flurry: "Flurry",
   pomp: "Pomp",
   yule: "Yule",
+  // Up The Tree's (RAID-BANNERS.md, section 3).
+  vi: "Vi",
+  flop: "Flop",
+  bhlue: "Bhlue",
+  ace: "Ace",
+  unc: "Unc",
+  leetanns: "Leetanns",
   hatchling: "Hatchling",
   grooter1: "Grooter",
   grooter2: "Grooter",
