@@ -9,6 +9,7 @@ import { describe, expect, test } from "bun:test";
 
 import { blueprintCode, create, play, readCommand, within, type Yard } from "@sequoia-leaf/factory";
 import { near, xy } from "@sequoia-leaf/factory/test/near.ts";
+import { codeOfRow } from "@sequoia-leaf/factory/test/yards.ts";
 import { asking, pressedTwice } from "@sequoia-leaf/kit/dom.ts";
 import { press } from "@sequoia-leaf/kit/standin.ts";
 
@@ -37,18 +38,6 @@ function yard(tier = 5): Yard {
   y.history = [];
   y.at = ctx().now;
   return y;
-}
-
-/** The code of a blueprint of two belts, kept in a yard somewhere else. */
-function twoBelts(): string {
-  const y = create({ seed: 9, tier: 5 });
-  must(y, { do: "build", kind: "belt", ...near(-3, -3), dir: 0 });
-  must(y, { do: "build", kind: "belt", ...near(-2, -3), dir: 0 });
-  must(y, { do: "saveBlueprint", slot: 0, tiles: within(y, ...xy(-3, -3), ...xy(-2, -3)) });
-  const kept = y.blueprints[0];
-  const code = kept ? blueprintCode(kept) : null;
-  if (code === null) throw new Error("no code");
-  return code;
 }
 
 /** The commands Leaf was sent, by what each did. */
@@ -88,7 +77,7 @@ describe("Paste code", () => {
   test("keeps the pasted blueprint in an empty place at once, on the page and on Leaf alike", async () => {
     const fake = await opened(yard(), 1000);
     setTool("select");
-    const code = twoBelts();
+    const code = codeOfRow(9, ["belt", "belt"]);
     // Pasted with spaces around it and a line break in it: Leaf is sent the code alone.
     expect(pasteIn(2, `  ${code.slice(0, 9)}\n${code.slice(9)}\n`)).toBeNull();
     expect(codeIn(2)).toBe(code);
@@ -102,7 +91,7 @@ describe("Paste code", () => {
   test("over a kept place, asks again for what it pastes there, and keeps it on a second press", async () => {
     await opened(yard(), 1000);
     setTool("select");
-    const code = twoBelts();
+    const code = codeOfRow(9, ["belt", "belt"]);
     const key = pasteKey(0, code);
     expect(key.on).toMatch(/^paste:0:area:\d+:\d+@\d+$/);
     press();

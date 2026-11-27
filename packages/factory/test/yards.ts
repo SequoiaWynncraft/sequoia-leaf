@@ -421,3 +421,17 @@ function built(name: Stage, seed: number): F.Yard {
   for (let k = 0; k < 1200; k++) F.step(y);
   return y;
 }
+
+/**
+ * The code of a blueprint of a row of pieces, each facing east, from three tiles west and north of
+ * the depot eastward, kept in a yard of its own with every goal done: a code from somewhere else.
+ */
+export function codeOfRow(seed: number, kinds: readonly F.KindName[]): string {
+  const y = F.create({ seed, tier: 5 });
+  kinds.forEach((kind, k) => must(y, { do: "build", kind, ...near(-3 + k, -3), dir: 0 }));
+  must(y, { do: "saveBlueprint", slot: 0, tiles: F.within(y, ...xy(-3, -3), ...xy(-4 + kinds.length, -3)) });
+  const kept = y.blueprints[0];
+  const code = kept ? F.blueprintCode(kept) : null;
+  if (code === null) throw new Error("no code");
+  return code;
+}

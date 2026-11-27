@@ -3,8 +3,9 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { leaf as leafOf, playerId } from "@sequoia-leaf/core";
-import { blueprintCode, create as createYard, FACTORY, play, readCommand, within } from "@sequoia-leaf/factory";
-import { near, xy } from "@sequoia-leaf/factory/test/near.ts";
+import { create as createYard, FACTORY } from "@sequoia-leaf/factory";
+import { near } from "@sequoia-leaf/factory/test/near.ts";
+import { codeOfRow } from "@sequoia-leaf/factory/test/yards.ts";
 
 import { runAchievementSync } from "../src/achievements/run.ts";
 import { runCreditSync } from "../src/earning/run.ts";
@@ -359,7 +360,7 @@ async function exchanges(): Promise<Record<string, Exchange>> {
     (sql) => sql`UPDATE play_state SET rev = rev + 1, state = ${staged}, updated_at = ${clock.now}
                  WHERE player_id = ${bob} AND game = 'works'`,
   );
-  const code = millAndBelt();
+  const code = codeOfRow(3, ["mill", "belt"]);
   await call(
     "POST /v1/game/play/{game}, the Works, a blueprint code",
     "POST",
@@ -376,22 +377,6 @@ async function exchanges(): Promise<Record<string, Exchange>> {
   await sittingExchanges(call, recorded, (statement) => leaf.query(statement), { alice, bob, now: clock.now });
   await app.dispose();
   return recorded;
-}
-
-/** The code of a blueprint of a mill and a belt, kept in a yard somewhere else. */
-function millAndBelt(): string {
-  const y = createYard({ seed: 3, tier: 5 });
-  const done = (c: Record<string, unknown>): void => {
-    const read = readCommand({ tick: y.tick, ...c });
-    if (!read || "refused" in play(y, read)) throw new Error(`${JSON.stringify(c)} was not done`);
-  };
-  done({ do: "build", kind: "mill", ...near(-3, -3), dir: 0 });
-  done({ do: "build", kind: "belt", ...near(-2, -3), dir: 0 });
-  done({ do: "saveBlueprint", slot: 0, tiles: within(y, ...xy(-3, -3), ...xy(-2, -3)) });
-  const kept = y.blueprints[0];
-  const code = kept ? blueprintCode(kept) : null;
-  if (code === null) throw new Error("no code");
-  return code;
 }
 
 /**
