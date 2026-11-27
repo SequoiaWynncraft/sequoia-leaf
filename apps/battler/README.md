@@ -138,10 +138,11 @@ kit's card: "The table needs the guild's server."
 - **Round the game.** A front page that picks a way to play (`ui/modes.ts` is the table of them,
   `ui/front.ts` draws it). Along the top a strip for each run laid out, the run in hand and the
   endless run beside it: what it is (its trail, or its endless way), its room and health, End this
-  raid (asked first, and saying how many rooms it is paid for) and Carry on. Down the left the
+  raid (asked first, and saying how many rooms it is paid for) and Carry on; and the member's live
+  table, started and not over, after them. Down the left the
   categories as large tabs (Normal, Endless, Versus), and under the chosen one its modes as cards;
-  a mode the page cannot set out on yet (`setOut` null: the live tables, for now) is not shown,
-  nor a category with none shown. In the middle the chosen mode's card: its name, one sentence, a
+  a mode the page cannot set out on yet (`setOut` null) is not shown, nor a category with none
+  shown; the live tables (Versus) have a card of their own (`tables`, below). In the middle the chosen mode's card: its name, one sentence, a
   picture of the table as it is dressed (the words of every mode in its category laid in one
   place, so choosing between them moves nothing), its options, and its foot: Set out, or Carry on
   with its run laid out and New raid beside it once that run has fought a room, with a line under
@@ -195,6 +196,54 @@ kit's card: "The table needs the guild's server."
   lantern, the cat by the hearth and the dust in the moon move; nothing of it crosses the board.
 - **First time.** One nudge at a time, in the place it matters: a hand points, one line says what
   to do, and it is gone for good once the thing has been done.
+
+## A live table
+
+Up to eight members at one table of the raid, on Leaf's clock (`/v1/game/sittings`, the rules'
+`sitting/`): everyone on their own board through the same rooms, sparring rooms in pairs, a
+carousel, regulars in the empty seats. The page is in `src/screen/live/`.
+
+- **On the front page** (Versus, Live tables, `live/tables.ts` drawing what `live/listing.ts` knows): the tables open to sit at (who
+  opened each, how many sat) with Sit down, and Open a table; once sat, the table's eight seats
+  (an empty one says "A regular will sit here"), Start for whoever opened it and Leave for anyone;
+  once started, Carry on and Leave (asked first: it is going out). The board is the
+  member's record: played, won, in the first four. A table started is a strip along the top too,
+  with Carry on, as a run in hand is; a member who closed the page finds it there again.
+- **At the table** the shared table is driven by the seat's run as Leaf shows it (`live/seated.ts`
+  sets `LIVE.seat` in `state.ts`, which then sends the member's commands to the sitting and draws
+  their run; the front page lets it go; `live/seat.ts` draws the rest). Leaf's answer to a command
+  touches the table only while the member is still at that seat (`ours`): one that comes after they
+  stepped back is the line's alone, and the solo raid never hears of it. Planning predicts what the solo table predicts, and Leaf's
+  answer wins. Set out is not there: the clock sets out. Along the top the clock (`live/hud.ts`):
+  the stage, the seconds left of it counted to the sitting's own deadline, and under it whom the
+  member faces or the carousel's turn. Down the right the players in seat order, each with a bar
+  and a number of health, out ones with their place, the member's own lit; a click opens that
+  player's board as it stood at the last lock. On an upright phone the clock and the players are
+  one row of small chips over the board, with the clock's second line under it.
+- **The fight** is played from the seat's own setup. The away seat of a sparring pair is the
+  second side of the one fight the pair fights: `sides.ts` says so (`OWN.side`), the fight is
+  drawn with the board turned round (`shownCell`, `FV.ours`) so the member's figures are on the
+  near half and "You" in the tally, and it is played to the outcome turned back, as Leaf decided it.
+  When the sitting goes on, what the room paid is said over the board (`paidLines`: how it went,
+  health, acorns, a level), from the run before and after, as Leaf gives no notes for the clock's work.
+- **The carousel** (`live/ring.ts`): nine figures in a ring over the far half, each with the
+  component it holds; the ring is the member's to click when their turn is open, a figure taken is
+  gone, and who took what shows by their row. During it the stall waits and no pick is up.
+- **Going out** and **the end** are papers (`live/panels.ts`): the place, the Coins (the run's own
+  payout, and what the purse took if less), watching on or leaving; and every place.
+- **Being told**: the line (`live/line.ts`) reads the sitting with the `rev` it has at the stage's
+  deadline, every 2 seconds while it is open or in a carousel, and as the page comes back; Leaf has
+  no live room for sittings yet. An answer older than the revision the page holds (two reads
+  crossing) is let go. Commands go in batches with ids, sent again as they were after a failure;
+  putting the line away answers whatever still waits. Whenever Leaf's view shows the member
+  without a seat (left in another tab, or the table closed before it started), the page lets the
+  table go and shows the list, saying why. The first read of the list is tried again until Leaf
+  answers it, and a list read asked before the member took up or let go of a table is not acted on.
+
+`live/reads.ts` holds the small questions (the clock's words, the players' rows, the carousel's
+turn, places in words), tested against sittings the rules play (`live/reads.test.ts`);
+`live/line.test.ts`, `live/seated.test.ts` and `live/listing.test.ts` play the line, the seat and the card
+against the kit's stand-in Leaf.
 
 ## What Leaf keeps, and what the browser keeps
 
@@ -317,6 +366,8 @@ timed can be stepped by hand.
 | `src/screen/ui/pages.ts`      | The pages over the table: the almanac, how to play, table looks                                       |
 | `src/screen/ui/ended.ts`      | The end of a run: how far (or how deep), the party, what is new, what it paid, Again                  |
 | `src/screen/ui/nudge.ts`      | The first-time nudges                                                                                 |
+| `src/screen/sides.ts`         | Which side of a fight is the member's own (the away seat of a sparring pair is the second)            |
+| `src/screen/live/`            | A live table: the line to Leaf, the seat, the clock and players, the carousel, the papers, the card   |
 
 `geometry.ts`, `logic.ts`, `keep.ts`, `light.ts`, `rich.ts`, `playback.ts`, `ui/modes.ts` and `ui/endless.ts` have tests beside them;
 `playback.test.ts` holds that the fight on the table, lead-ins, hit-stops and all, is the rules'
@@ -393,6 +444,12 @@ plain) or, given a skin sheet as a `data:` address, that skin, `seat(ours, their
 `review/feel.json` and `review/feel-phone.json` go through who gets hit, what everyone did and the
 open table: the front page, a Bulwark's card with its draw chip and tip, a fight with each of the
 tally's three tabs, the sheet after a lost room and a won one, and "Last fight" while planning.
+
+`review/tables.json` and `review/tables-phone.json` go through a live table of the member and seven
+regulars, with `window.tables` (`review/tables.ts`) moving Leaf's clock on the play server: the
+Versus card, the table before it starts, the first carousel, planning with the players, the front
+page after closing the page, a player's board, a sparring fight, the carousel on the member's
+turn, going out, the end and the record after it.
 
 `review/own.json` and `review/own-phone.json` go through a raid with the member's own figures: the
 front page for a member who has pulled nothing and with each way chosen, the stall, bench and board

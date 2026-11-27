@@ -63,6 +63,7 @@ import {
 } from "@sequoia-leaf/raid";
 
 import { boonIcon, glyph, itemIcon, traitIcon } from "../art/icons.ts";
+import { FV } from "../board.ts";
 import { fightUnits } from "../fightview.ts";
 import {
   acrossName,
@@ -517,9 +518,9 @@ export function registerCards(): void {
     if (!run || !u) return null;
     return figureDesc(u.kind, u.stars, {
       unit: u,
-      whose: u.side === 0 ? "Yours" : `${acrossName(run.foe)}'s`,
-      run: u.side === 0 ? run : null,
-      party: u.side === 1 ? run.foe : null,
+      whose: u.side === FV.ours ? "Yours" : `${acrossName(run.foe)}'s`,
+      run: u.side === FV.ours ? run : null,
+      party: u.side === FV.ours ? null : run.foe,
     });
   });
   register("trait", (raw) => {

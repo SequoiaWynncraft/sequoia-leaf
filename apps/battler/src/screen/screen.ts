@@ -22,6 +22,8 @@ import {
   type RunView,
 } from "@sequoia-leaf/raid";
 
+import { decided } from "./sides.ts";
+
 /** How a finished run came out, for the page at the end. */
 export interface Ended {
   run: RunView;
@@ -106,7 +108,7 @@ export function playbackOf(run: RunView, fought: Fought, runs: number): Playback
   return {
     key: `${runs}:${run.room}:${fought.setup.seed}`,
     fought,
-    kept: playsAsKept(fought),
+    kept: playsAsKept({ ...fought, outcome: decided(fought.setup, fought.outcome) }),
     room: run.room,
     boss: run.foe.figures.map((p) => p.kind).find(isBossId) ?? null,
     before: counts(run),

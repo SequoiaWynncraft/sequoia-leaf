@@ -21,6 +21,7 @@ import {
 } from "@sequoia-leaf/raid";
 
 import { acrossName, fightTitle } from "../logic.ts";
+import { acrossOf, OWN, ownResult } from "../sides.ts";
 import { snd } from "../sounds.ts";
 import { S } from "../state.ts";
 import { figureDesc } from "./cards.ts";
@@ -65,10 +66,10 @@ export function registerFought(): void {
     const p = SH.played;
     const u = p?.fight.units[Number(raw)];
     if (!p || !u) return null;
-    const across = p.setup.sides[1];
+    const across = acrossOf(p.setup);
     return figureDesc(u.kind, u.stars, {
       unit: u,
-      whose: u.side === 0 ? "Yours" : `${acrossName(across)}'s`,
+      whose: u.side === OWN.side(p.setup) ? "Yours" : `${acrossName(across)}'s`,
       party: p.setup.sides[u.side],
     });
   });
@@ -120,10 +121,10 @@ export function openSheet(
   const bottom = document.getElementById("bottom");
   if (!p || !bottom) return;
   closeSheet(false);
-  const result = leaf?.outcome.result ?? p.fight.result ?? "draw";
+  const result = leaf?.outcome.result ?? ownResult(p.setup, p.fight.result ?? "draw");
   const title = fightTitle(result, leaf?.outcome.ticks ?? p.fight.tick);
   const view = tallyView(foughtRef, "sheet");
-  view.across(p.setup.sides[1]);
+  view.across(acrossOf(p.setup));
   if (leaf?.kept !== false) {
     view.show(
       p.fight.units,
@@ -131,6 +132,7 @@ export function openSheet(
         p.events,
         p.fight.units.map((u) => u.id),
       ),
+      OWN.side(p.setup),
     );
   }
   const close =

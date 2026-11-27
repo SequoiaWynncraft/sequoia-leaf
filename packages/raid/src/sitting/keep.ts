@@ -51,7 +51,7 @@ function readMember(v: unknown): Member {
   const m = record(v, "a member");
   return { id: text(m.id, 64, "a member's id"), name: text(m.name, 80, "a member's name") };
 }
-function readWho(v: unknown): Who {
+export function readWho(v: unknown): Who {
   const w = record(v, "whose a seat is");
   if (w.is === "member") return { is: "member", ...readMember(w) };
   if (w.is !== "regular") return bad("whose a seat is");
@@ -76,7 +76,7 @@ function readOffer(v: unknown): Offer {
     by: o.by === null ? null : chair(o.by, "the ring"),
   };
 }
-function readStage(v: unknown): Stage {
+export function readStage(v: unknown): Stage {
   const s = record(v, "the stage");
   if (s.at === "over") return { at: "over", ended: moment(s.ended, "the end") };
   const until = moment(s.until, "the deadline");

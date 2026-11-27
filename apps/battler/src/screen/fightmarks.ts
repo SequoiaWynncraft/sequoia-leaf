@@ -14,6 +14,7 @@ import { clamp, type Ctx } from "@sequoia-leaf/kit/util.ts";
 import type { Fight, FightEvent, Unit, ZoneKind } from "@sequoia-leaf/raid";
 
 import { hexMark } from "./art/table.ts";
+import { shownCell } from "./board.ts";
 import { burst } from "./fx.ts";
 import { cellXY, HEX_H, HEX_W } from "./geometry.ts";
 import { FOOT } from "./pawns.ts";
@@ -70,7 +71,7 @@ function hexOf(fill: string, rim: string): HTMLCanvasElement {
   return pic;
 }
 function drawHex(g: Ctx, pic: HTMLCanvasElement, cell: number, alpha: number): void {
-  const at = cellXY(cell);
+  const at = cellXY(shownCell(cell));
   g.globalAlpha = alpha;
   g.drawImage(pic, V.bx + at.x - HEX_W / 2, V.by + at.y - HEX_H / 2);
 }
@@ -79,7 +80,7 @@ function drawHex(g: Ctx, pic: HTMLCanvasElement, cell: number, alpha: number): v
 function pulled(view: View, id: number, to: number): void {
   const a = view.actors[id];
   if (!a) return;
-  const p = cellXY(to);
+  const p = cellXY(shownCell(to));
   const at = { x: p.x, y: p.y + FOOT };
   if (Math.abs(at.x - a.x) > 1) a.left = at.x < a.x;
   a.move = { from: { x: a.x, y: a.y }, to: at, t0: view.clock, dur: 4, arc: 4, smooth: false, under: false };

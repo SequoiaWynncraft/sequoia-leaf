@@ -47,6 +47,15 @@ export interface At {
   readonly depths: ReadonlyMap<string, DepthBoard>;
   /** Which of the Wilds' boards is chosen. */
   readonly span: Span;
+  /** The member's record at the live tables (`GET /v1/game/sittings/record`), once read. */
+  readonly tables?: TablesRecord | null;
+}
+
+/** A member's live tables: finished, won, and finished in the first four. */
+export interface TablesRecord {
+  readonly played: number;
+  readonly won: number;
+  readonly four: number;
 }
 
 export type CategoryId = "normal" | "endless" | "versus";
@@ -89,6 +98,8 @@ export interface Mode {
   readonly closed: (at: At) => string | null;
   /** What Set out sends Leaf; null until the mode is wired, and until then the page does not show it. */
   readonly setOut: ((at: At) => SetOut) | null;
+  /** The live tables' card (`live/tables.ts`): tables to open and sit at, not Set out. Shown though it has no Set out. */
+  readonly tables?: true;
   /** Its run laid out, if one is. */
   readonly run: (at: At) => RunView | null;
   readonly board: (at: At) => Board;
@@ -123,15 +134,6 @@ export const guildBoard = (s: Standings): Board => ({
   title: "Bosses beaten",
   rows: s.top.map((r) => ({ place: r.place, name: r.name, value: whole(r.score), you: r.you })),
   you: s.you ? { place: s.you.place, name: "You", value: whole(s.you.score), you: true } : null,
-});
-
-/** A mode the page cannot set out on yet: its words and what its board will rank, and nothing else. */
-const later = (m: Pick<Mode, "id" | "category" | "name" | "text">, ranks: string): Mode => ({
-  ...m,
-  closed: () => null,
-  setOut: null,
-  run: () => null,
-  board: () => ({ title: ranks, rows: [], you: null }),
 });
 
 /** The raid of fifteen rooms on a trail: the mode chosen until the member chooses another. */
@@ -190,15 +192,31 @@ export const THE_DEEP_WOODS: Mode = endlessMode(
   "Deepest this week",
 );
 
-export const MODES: readonly Mode[] = [
-  THE_TRAILS,
-  THE_WILDS,
-  THE_DEEP_WOODS,
-  later(
-    { id: "live", category: "versus", name: "Live tables", text: "8 members at one table, against each other." },
-    "Tables won",
-  ),
-];
+/** The member's record at the live tables, as the Versus card's board: dashes until Leaf has said. */
+export const tablesBoard = (r: TablesRecord | null): Board => ({
+  title: "Your tables",
+  rows: [
+    { place: null, name: "Played", value: r ? whole(r.played) : "-", you: false },
+    { place: null, name: "Won", value: r ? whole(r.won) : "-", you: false },
+    { place: null, name: "In the first four", value: r ? whole(r.four) : "-", you: false },
+  ],
+  you: null,
+});
+
+/** Eight at one table on Leaf's clock (`live/`), regulars in the empty seats. */
+export const LIVE_TABLES: Mode = {
+  id: "live",
+  category: "versus",
+  name: "Live tables",
+  text: "Up to 8 at one table, each on their own board. Regulars sit in the empty seats.",
+  closed: () => null,
+  setOut: null,
+  tables: true,
+  run: () => null,
+  board: (at) => tablesBoard(at.tables ?? null),
+};
+
+export const MODES: readonly Mode[] = [THE_TRAILS, THE_WILDS, THE_DEEP_WOODS, LIVE_TABLES];
 
 /** The runs laid out, each with the mode it is of: the run in hand, then the endless run. */
 export const laidOut = (at: At): { mode: Mode; run: RunView }[] =>
@@ -207,8 +225,9 @@ export const laidOut = (at: At): { mode: Mode; run: RunView }[] =>
     return run ? [{ mode, run }] : [];
   });
 
-/** The modes shown: those the page can set out on. */
-export const shownModes = (modes: readonly Mode[]): Mode[] => modes.filter((m) => m.setOut !== null);
+/** The modes shown: those the page can set out on, and the live tables. */
+export const shownModes = (modes: readonly Mode[]): Mode[] =>
+  modes.filter((m) => m.setOut !== null || m.tables === true);
 /** The categories shown: those with a mode shown. */
 export const shownCategories = (modes: readonly Mode[]): Category[] =>
   CATEGORIES.filter((c) => shownModes(modes).some((m) => m.category === c.id));
