@@ -42,6 +42,7 @@ const at = (over: Partial<At> = {}): At => ({
   own: false,
   standings: null,
   week: { at: 0, deepest: { wilds: 0, deep: 0 } },
+  apart: { deepest: { wilds: 0, deep: 0 }, week: { at: 0, deepest: { wilds: 0, deep: 0 } } },
   depths: new Map(),
   span: "ever",
   ...over,
@@ -125,9 +126,43 @@ describe("the button a mode shows", () => {
 });
 
 describe("the endless ways", () => {
-  test("Set out sends an endless run of the way, whatever trail is chosen, and everyone's figures while the way offers no other", () => {
-    expect(sent(THE_WILDS, at({ trail: 2, own: true }))).toEqual({ do: "start", course: "wilds" });
+  test("Set out sends an endless run of the way, whatever trail is chosen, with the figures chosen", () => {
+    expect(sent(THE_WILDS, at({ trail: 2 }))).toEqual({ do: "start", course: "wilds" });
+    expect(sent(THE_WILDS, at({ trail: 2, own: true }))).toEqual({ do: "start", course: "wilds", own: true });
     expect(sent(THE_DEEP_WOODS, at())).toEqual({ do: "start", course: "deep" });
+    expect(sent(THE_DEEP_WOODS, at({ own: true }))).toEqual({ do: "start", course: "deep", own: true });
+  });
+
+  test("with the member's own figures chosen, the board is theirs: headed so, Leaf's board of them, the member's deepest kept apart", () => {
+    const fair = { top: [{ place: 1, name: "Fernwick", room: 31, you: false }], you: null };
+    const own = { top: [{ place: 1, name: "Quillfeather", room: 19, you: false }], you: null };
+    const depths = new Map([
+      ["wilds:ever", fair],
+      ["own.wilds:ever", own],
+      ["deep:week", fair],
+      ["own.deep:week", own],
+    ]);
+    const apart = { deepest: { wilds: 12, deep: 9 }, week: { at: 0, deepest: { wilds: 7, deep: 4 } } };
+    const almanac = newAlmanac();
+    almanac.deepest = { wilds: 30, deep: 20 };
+    const mine = at({ own: true, depths, apart, almanac });
+    expect(THE_WILDS.board(mine)).toEqual({
+      title: "Deepest room",
+      figures: "Your figures",
+      rows: [{ place: 1, name: "Quillfeather", value: "Room 19", you: false }],
+      you: { place: null, name: "You", value: "Room 12", you: true },
+    });
+    expect(THE_DEEP_WOODS.board(mine)).toMatchObject({
+      title: "Deepest this week",
+      figures: "Your figures",
+      you: { value: "Room 4" },
+    });
+    expect(THE_WILDS.board({ ...mine, own: false })).toMatchObject({
+      title: "Deepest room",
+      figures: "All figures",
+      rows: [{ name: "Fernwick" }],
+      you: { value: "Room 30" },
+    });
   });
 
   test("each has the endless run as its run when it set out that way, and the trails keep the run in hand", () => {
@@ -180,13 +215,19 @@ describe("the endless ways", () => {
     });
     expect(THE_WILDS.board(week)).toEqual({
       title: "Deepest room",
+      figures: "All figures",
       rows: [],
       you: { place: null, name: "You", value: "Room 18", you: true },
     });
     // The Deep Woods' board is this week's, whichever of the Wilds' is chosen.
     const deep = THE_DEEP_WOODS.board(at({ depths: new Map([["deep:week", board]]), span: "ever" }));
     expect([deep.title, deep.rows.length]).toEqual(["Deepest this week", 2]);
-    expect(THE_DEEP_WOODS.board(at())).toEqual({ title: "Deepest this week", rows: [], you: null });
+    expect(THE_DEEP_WOODS.board(at())).toEqual({
+      title: "Deepest this week",
+      figures: "All figures",
+      rows: [],
+      you: null,
+    });
   });
 });
 

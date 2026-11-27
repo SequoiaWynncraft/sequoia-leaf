@@ -32,6 +32,7 @@ const at: At = {
   own: false,
   standings: null,
   week: { at: 0, deepest: { wilds: 0, deep: 0 } },
+  apart: { deepest: { wilds: 0, deep: 0 }, week: { at: 0, deepest: { wilds: 0, deep: 0 } } },
   depths: new Map(),
   span: "ever",
 };

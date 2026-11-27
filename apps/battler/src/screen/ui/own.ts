@@ -34,6 +34,10 @@ const wayName = (own: boolean): string => wayWords(wayOn({ id: "trail", trail: 0
 /** Whether a run set out with the member's own figures. */
 const isOwn = (run: RunView): boolean => run.way.figures.pool === "own";
 const NOT_COUNTED = "Not counted for the board or the almanac.";
+/** What a run with the member's own figures off a trail counts for. */
+const OWN_BOARDS = "Not counted for the almanac. Your deepest room goes on the boards for your figures.";
+/** What a run with the member's own figures counts for: on a trail nothing, on an endless way its own boards. */
+export const countedLine = (endless: boolean): string => (endless ? OWN_BOARDS : NOT_COUNTED);
 
 /** The way picked on the front page to set out by. */
 const picked = { own: false };
@@ -54,6 +58,8 @@ export const traitsHere = (): readonly TraitId[] => catalogOf(S).ids.traits;
 export const everyonesFigures = (): readonly FigureId[] => available(catalogOf(S), { for: "almanac", roster: {} });
 /** Asks who each banner's member is, and draws the page again each time one is better known. */
 export const meetMember = (): Promise<void> => meetMembers(changed);
+/** Whether the member can choose whose figures to set out with: once they have pulled one. */
+export const choosesFigures = (): boolean => pulled() > 0;
 /** Whether the front page sets out with the member's own figures: never for a member who has pulled none. */
 export const setsOutOwn = (): boolean => picked.own && pulled() > 0;
 
@@ -69,9 +75,10 @@ export const unshown = (shown: boolean): Record<string, string> => (shown ? {} :
  * The front page's part on how to set out, under the trails: for a member who has pulled a figure,
  * the two ways to choose from and what the chosen one is (both held in one place, so that choosing
  * moves nothing); for anyone else the one line about the one way there is. While the raid laid out
- * has fought no room (`keep`), nothing is chosen.
+ * has fought no room (`keep`), nothing is chosen. The same choice is on the trails' card and the
+ * endless ways' (`endless`: what a run with the member's own figures counts for there).
  */
-export function waysOf(keep: boolean, redraw: () => void): (HTMLElement | null)[] {
+export function waysOf(keep: boolean, redraw: () => void, endless = false): (HTMLElement | null)[] {
   const fair = (shown = true): HTMLElement =>
     el("p", "k-read fair", { text: "Everyone plays with the same figures here.", ...unshown(shown) });
   if (keep) return [pulled() > 0 ? null : fair()];
@@ -94,7 +101,7 @@ export function waysOf(keep: boolean, redraw: () => void): (HTMLElement | null)[
     el("span", "", {
       text: `In these raids you are offered every 1-acorn figure to buy with acorns, and other figures only if you have pulled them at the Grove. Each copy of a figure you have pulled after the first is 1 level: ${LEVELS.boost}% more health and attack, up to level ${LEVELS.most}.`,
     }),
-    el("span", "", { text: NOT_COUNTED }),
+    el("span", "", { text: countedLine(endless) }),
   );
   return [ways.el, el("div", "stack", {}, fair(!setsOutOwn()), about)];
 }
@@ -105,7 +112,7 @@ export const wayPrefix = (run: RunView): string => (isOwn(run) || pulled() > 0 ?
 /** The end page's second column when a run brought nothing new: for a run with the member's own figures, why. */
 export const nothingNew = (run: RunView): HTMLElement[] => [
   el("div", "k-label", { text: isOwn(run) ? wayName(true) : "New in the almanac" }),
-  el("span", "k-dim", { text: isOwn(run) ? NOT_COUNTED : "Nothing this time." }),
+  el("span", "k-dim", { text: isOwn(run) ? countedLine(run.way.course.id !== "trail") : "Nothing this time." }),
 ];
 
 /** After the almanac's count of figures met: how many the member has pulled, if any. */

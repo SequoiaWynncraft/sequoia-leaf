@@ -58,15 +58,16 @@ const whole = (v: unknown, least: number, most: number): number | null =>
   typeof v === "number" && Number.isInteger(v) && v >= least && v <= most ? v : null;
 
 /**
- * Sets out on an endless run, in a room with every room before it won (so a boss won past the
- * fifteenth is a chair), at a level and with acorns, its stall and its room laid out afresh; and
- * writes that room down as the deepest won this week and ever, as play would have.
+ * Sets out on an endless run, with the member's own figures (`own`: the roster) or everyone's, in a
+ * room with every room before it won (so a boss won past the fifteenth is a chair), at a level and
+ * with acorns, its stall and its room laid out afresh; and writes that room down as the deepest won
+ * this week and ever with those figures, as play would have.
  */
-function venture(table: Table, v: Record<string, unknown>): Run | null {
+function venture(table: Table, v: Record<string, unknown>, own: Roster): Run | null {
   if (!isEndlessWay(v.way)) return null;
   const seed = whole(v.seed, 0, 0xffffffff) ?? 1;
   const room = whole(v.room, 0, 200) ?? 0;
-  const run = startRun(seed, { era: LEGACY_ERA, way: wayOn({ id: v.way }) });
+  const run = startRun(seed, { era: LEGACY_ERA, way: wayOn({ id: v.way }, v.own === true ? own : null) });
   table.begun.endless += 1;
   table.held.endless = run;
   if (room === 0) return run;
@@ -78,16 +79,19 @@ function venture(table: Table, v: Record<string, unknown>): Run | null {
   // With nobody in the party yet, the first figure is still to be picked (`layOutAfresh` draws it).
   run.stage = { phase: "plan", picks: [{ kind: "starter", options: [] }] };
   layOutAfresh(run, seed);
-  table.week = weekAt(table.week, Date.now());
-  table.week.deepest[v.way] = Math.max(table.week.deepest[v.way], room);
-  table.almanac.deepest[v.way] = Math.max(table.almanac.deepest[v.way], room);
+  const mine = v.own === true;
+  if (mine) table.apart.week = weekAt(table.apart.week, Date.now());
+  else table.week = weekAt(table.week, Date.now());
+  const kept = mine ? table.apart : { deepest: table.almanac.deepest, week: table.week };
+  kept.week.deepest[v.way] = Math.max(kept.week.deepest[v.way], room);
+  kept.deepest[v.way] = Math.max(kept.deepest[v.way], room);
   return run;
 }
 
 /** Does one staging step to a table, writing down the number of a run or a figure it made. */
 function step(table: Table, op: Record<string, unknown>, made: number[], own: Roster): void {
   if (isRecord(op.venture)) {
-    if (venture(table, op.venture)) made.push(table.begun.endless);
+    if (venture(table, op.venture, own)) made.push(table.begun.endless);
     return;
   }
   const run = table.held[op.slot === "endless" ? "endless" : "main"];
@@ -131,11 +135,13 @@ function step(table: Table, op: Record<string, unknown>, made: number[], own: Ro
 
 /**
  * The endless boards with other members on them (`others`, each deeper than the next) as their runs
- * leave them with Leaf (`play_kept`), and rooms of the Deep Woods held by them: `{ hold: { room, by } }`
- * has the `by`th of them hold a room (counting from 0) with a regular's board for it, from `now`.
+ * leave them with Leaf (`play_kept`), with everyone's figures and (not as deep) with their own, and
+ * rooms of the Deep Woods held by them: `{ hold: { room, by } }` has the `by`th of them hold a room
+ * (counting from 0) with a regular's board for it, from `now`.
  */
-/** Where an endless way's depths are left, with everyone's figures. */
-const depthSlot = (course: EndlessWay, span: Span): string => lanes(wayOn({ id: course })).depth(span) ?? "";
+/** Where an endless way's depths are left, with everyone's figures or (`own`) the member's own. */
+const depthSlot = (course: EndlessWay, span: Span, own = false): string =>
+  lanes(wayOn({ id: course }, own ? {} : null)).depth(span) ?? "";
 /** Where the holder of a room of the Deep Woods, with everyone's figures, keeps their board. */
 export const heldSlot = (room: number): string => lanes(wayOn({ id: "deep" })).held(room) ?? "";
 
@@ -153,6 +159,10 @@ export const stageWoods = (others: readonly PlayerId[], ops: readonly unknown[],
         yield* keep(player, depthSlot("wilds", "week"), { room: 31 - 3 * i }, at);
         yield* keep(player, depthSlot("deep", "ever"), { room: 27 - 2 * i }, at - 86_400_000 * 9);
         yield* keep(player, depthSlot("deep", "week"), { room: 25 - 2 * i }, at);
+        yield* keep(player, depthSlot("wilds", "ever", true), { room: 33 - 5 * i }, at - 86_400_000 * 9);
+        yield* keep(player, depthSlot("wilds", "week", true), { room: 24 - 3 * i }, at);
+        yield* keep(player, depthSlot("deep", "ever", true), { room: 22 - 2 * i }, at - 86_400_000 * 9);
+        yield* keep(player, depthSlot("deep", "week", true), { room: 20 - 2 * i }, at);
       }
     }
     for (const op of ops) {

@@ -36,7 +36,8 @@ export interface BackAsks {
 
 /** The card, for the run of the Wilds laid out. */
 export function backCard(go: BackAsks, run: RunView): HTMLElement {
-  const lines = backLines(run, S.almanac.deepest.wilds);
+  // The member's deepest with the figures this run set out with: everyone's, or their own, kept apart.
+  const lines = backLines(run, (run.way.figures.pool === "own" ? S.apart.deepest : S.almanac.deepest).wilds);
   const boss = bossOfWing(run.room);
   const { named } = roomOf(run);
   const back = (): void => {

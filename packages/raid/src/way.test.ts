@@ -14,7 +14,6 @@ import { TRAIL } from "./sitting/sitting.ts";
 import { runKeptBefore } from "./testkit.ts";
 import {
   counts,
-  COURSES,
   lanes,
   offered,
   oldRunWay,
@@ -124,15 +123,17 @@ describe("everything keyed from a way, pinned as it is stored and sent", () => {
   });
 });
 
-describe("no new mode is offered", () => {
-  test("the endless courses offer everyone's figures alone; a trail offers both", () => {
-    expect(EVERY.map(offered)).toEqual([true, true, true, true, false, false]);
-    expect(COURSES.wilds.pools).toEqual(["fair"]);
-    expect(COURSES.deep.pools).toEqual(["fair"]);
+describe("whose figures each course offers", () => {
+  test("every course offers everyone's figures and the member's own", () => {
+    expect(EVERY.map(offered)).toEqual([true, true, true, true, true, true]);
   });
-  test("setting out on an endless way with the member's own figures is no command", () => {
-    expect(readCommand({ do: "start", course: "wilds", own: true })).toBeNull();
-    expect(readCommand({ do: "start", course: "deep", own: true })).toBeNull();
+  test("setting out with the member's own figures is a command on every course", () => {
+    expect(readCommand({ do: "start", course: "wilds", own: true })).toEqual({
+      do: "start",
+      course: "wilds",
+      own: true,
+    });
+    expect(readCommand({ do: "start", course: "deep", own: true })).toEqual({ do: "start", course: "deep", own: true });
     expect(readCommand({ do: "start", course: "deep" })).toEqual({ do: "start", course: "deep" });
     expect(readCommand({ do: "start", trail: 2, own: true })).toEqual({ do: "start", trail: 2, own: true });
   });

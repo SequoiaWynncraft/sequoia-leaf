@@ -16,10 +16,12 @@ import {
   wayWords,
 } from "@sequoia-leaf/raid";
 
+/** What the member's own figures are called (`wayWords`). */
+const OWN_FIGURES = wayWords(wayOn({ id: "deep" }, {})).figures;
 /** What an endless way is called (`wayWords`). */
 export const courseName = (course: EndlessWay): string => wayWords(wayOn({ id: course })).name;
-/** The Deep Woods with everyone's figures, whose held rooms a room-taken event names by their lane. */
-const DEEP_WOODS = wayOn({ id: "deep" });
+/** The Deep Woods with everyone's figures and with the member's own, whose held rooms a room-taken event names by their lanes. */
+const DEEP_WOODS = { fair: lanes(wayOn({ id: "deep" })), own: lanes(wayOn({ id: "deep" }, {})) };
 
 /** A board's span: every week there has been, or this one. */
 export type Span = "ever" | "week";
@@ -84,15 +86,17 @@ export const endlessWhere = (run: Pick<RunView, "room" | "resolve">): string =>
 
 /**
  * Whether the Deep Woods' card still says that setting out there lets other members meet the
- * member's board and name: until they have set out there (a run there laid out, or a room won there).
+ * member's board and name: until they have set out there with the figures chosen (`own`: their own)
+ * (a run there laid out, or a room won there: `deepest`, those figures' deepest rooms).
  */
-export const askToBeMet = (almanac: Pick<Almanac, "deepest">, endless: RunView | null): boolean =>
-  almanac.deepest.deep === 0 && endless?.way.course.id !== "deep";
+export const askToBeMet = (deepest: Almanac["deepest"], endless: RunView | null, own = false): boolean =>
+  deepest.deep === 0 && !(endless?.way.course.id === "deep" && (endless.way.figures.pool === "own") === own);
 
-/** A room of the Deep Woods taken from the member: the event's number, the room (from 1), and by whom. */
+/** A room of the Deep Woods taken from the member: the event's number, the room (from 1), whether it was held with their own figures, and by whom. */
 export interface Taken {
   readonly id: number;
   readonly room: number;
+  readonly own: boolean;
   readonly by: string;
 }
 /** A room-taken event (`held_taken`) of the member's, from plain data, if it is one of the raid's from this week (`since`, ms). */
@@ -100,10 +104,11 @@ function takenOf(v: unknown, since: number): Taken | null {
   if (!isRecord(v) || v.type !== "held_taken" || !whole(v.id) || !isRecord(v.data)) return null;
   const at = typeof v.created_at === "string" ? Date.parse(v.created_at) : Number.NaN;
   const { game, slot, by } = v.data;
-  const room = typeof slot === "string" ? lanes(DEEP_WOODS).heldRoom(slot) : null;
+  const fair = typeof slot === "string" ? DEEP_WOODS.fair.heldRoom(slot) : null;
+  const room = fair ?? (typeof slot === "string" ? DEEP_WOODS.own.heldRoom(slot) : null);
   const name = isRecord(by) && typeof by.username === "string" ? by.username : null;
   if (game !== "raid" || room === null || name === null || !(at >= since)) return null;
-  return { id: v.id, room: room + 1, by: name };
+  return { id: v.id, room: room + 1, own: fair === null, by: name };
 }
 
 /**
@@ -115,12 +120,14 @@ function takenOf(v: unknown, since: number): Taken | null {
 export function takenNews(body: unknown, since: number, seen: number): { newest: number; lines: string[] } {
   const events = isRecord(body) && Array.isArray(body.events) ? body.events : [];
   const newest = Math.max(seen, ...events.map((e) => (isRecord(e) && whole(e.id) ? e.id : 0)));
-  const last = new Map<number, Taken>();
+  // By room, everyone's figures' and the member's own apart.
+  const last = new Map<string, Taken>();
   for (const t of events.map((e) => takenOf(e, since))) {
-    if (t && t.id > seen && (last.get(t.room)?.id ?? -1) < t.id) last.set(t.room, t);
+    const key = `${t?.own ? "own." : ""}${t?.room}`;
+    if (t && t.id > seen && (last.get(key)?.id ?? -1) < t.id) last.set(key, t);
   }
   const lines = [...last.values()]
-    .toSorted((a, b) => a.room - b.room)
-    .map((t) => `Room ${t.room} was taken from you by ${t.by}.`);
+    .toSorted((a, b) => Number(a.own) - Number(b.own) || a.room - b.room)
+    .map((t) => `Room ${t.room}${t.own ? `, ${OWN_FIGURES.toLowerCase()},` : ""} was taken from you by ${t.by}.`);
   return { newest, lines };
 }

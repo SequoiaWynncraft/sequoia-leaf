@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 
 import { type Game, type Met, type PlayerId, playerId } from "@sequoia-leaf/core";
-import { RAID, readView, type TableView } from "@sequoia-leaf/raid";
+import { isParty, RAID, readView, type Roster, type TableView } from "@sequoia-leaf/raid";
+import { wayOn } from "@sequoia-leaf/raid/way.ts";
 import { Schema } from "effect";
 
 import { RaidDepths, RaidHeld } from "../src/api/schemas.ts";
@@ -139,8 +140,8 @@ describe("a held slot", () => {
   });
 });
 
-/** A table of Alice's mid-fight in a room held in the Deep Woods, its fight undone and her party made unbeatable. */
-function poised(): string {
+/** A table mid-fight in a room held in the Deep Woods, its fight undone and its party made unbeatable; with `roster`, the member's own figures. */
+function poised(roster: Roster | null = null): string {
   const text = readFileSync(new URL("../../../packages/raid/stored/endless-deep.json", import.meta.url), "utf8");
   const table = RAID.decode(text);
   const run = table?.held.endless;
@@ -151,6 +152,7 @@ function poised(): string {
   run.nextId = 1000;
   run.level = 8;
   run.stage = { phase: "plan", picks: [] };
+  run.way = wayOn({ id: "deep" }, roster);
   table.almanac.deepest = { wilds: 0, deep: 0 };
   table.week = { at: 0, deepest: { wilds: 0, deep: 0 } };
   return RAID.encode(table);
@@ -231,5 +233,61 @@ describe("the Deep Woods at Leaf", () => {
     );
     expect(await keptAt("deep:17")).toEqual([]);
     expect(await services.query((sql) => sql`SELECT * FROM play_kept WHERE player_id = ${carol}`)).toEqual([]);
+  });
+});
+
+/** An endless board as Leaf answers a player. */
+const boardAt = async (path: string, player: PlayerId) =>
+  Schema.decodeUnknownSync(RaidDepths)(await (await get(path, player)).json());
+/** The rooms Leaf says a player holds. */
+const roomsAt = async (path: string, player: PlayerId) =>
+  Schema.decodeUnknownSync(RaidHeld)(await (await get(path, player)).json()).rooms;
+/** The levels on a kept board: `greg 3`. */
+const levelsIn = (data: unknown): string[] => {
+  const party: unknown = JSON.parse(String(data));
+  return isParty(party) ? party.figures.flatMap((p) => (p.level ? [`${p.kind} ${p.level}`] : [])) : ["not a party"];
+};
+const namesOn = (b: typeof RaidDepths.Type) => b.top.map((row) => [row.name, row.room]);
+
+describe("the Deep Woods with the members' own figures, at Leaf", () => {
+  it("hold the same room apart from everyone's figures: their own lane, their own boards, a level never in a fair lane", async () => {
+    await Promise.all([named(alice, "Alice"), named(bob, "Bob")]);
+    await services.run(PlayStore.use((store) => store.create(alice, "raid", poised(), false, clock.now, null)));
+    await services.run(
+      PlayStore.use((store) => store.create(bob, "raid", poised({ greg: 3 }), false, clock.now, null)),
+    );
+    await raided(alice, [{ do: "fight", endless: true }]);
+    await raided(bob, [{ do: "fight", endless: true }]);
+    const fair = await keptAt("deep:17");
+    const own = await keptAt("deep.own:17");
+    expect(fair.map((row) => row.player)).toEqual([alice]);
+    expect(own.map((row) => row.player)).toEqual([bob]);
+    expect(levelsIn(own[0]?.data)).toEqual(Array.from({ length: 5 }, () => "greg 3"));
+    expect(levelsIn(fair[0]?.data)).toEqual([]);
+    // Neither took the other's room.
+    expect([await takenFrom(alice), await takenFrom(bob)]).toEqual([[], []]);
+    expect(await roomsAt("/v1/game/raid/held", alice)).toEqual([18]);
+    expect(await roomsAt("/v1/game/raid/held?pool=own", alice)).toEqual([]);
+    expect(await roomsAt("/v1/game/raid/held", bob)).toEqual([]);
+    expect(await roomsAt("/v1/game/raid/held?pool=own", bob)).toEqual([18]);
+    expect(namesOn(await boardAt("/v1/game/raid/depths/deep/week", bob))).toEqual([["Alice", 18]]);
+    expect(namesOn(await boardAt("/v1/game/raid/depths/deep/week?pool=own", alice))).toEqual([["Bob", 18]]);
+    expect(namesOn(await boardAt("/v1/game/raid/depths/deep/ever?pool=own", alice))).toEqual([["Bob", 18]]);
+    expect((await boardAt("/v1/game/raid/depths/deep/week?pool=own", bob)).you).toMatchObject({ place: 1, room: 18 });
+  });
+
+  it("start again on Monday, everyone's and the members' own alike; the boards of every week keep them", async () => {
+    await Promise.all([named(alice, "Alice"), named(bob, "Bob")]);
+    await left(alice, "depth:wilds:week", 22, T0 - 1000);
+    await left(bob, "depth:own.wilds:week", 27, T0 - 1000);
+    await left(bob, "depth:own.wilds:ever", 27, T0 - 1000);
+    await left(bob, "deep.own:20", 0, T0 - 1000);
+    expect((await boardAt("/v1/game/raid/depths/wilds/week?pool=own", alice)).top.map((r) => r.name)).toEqual(["Bob"]);
+    expect(await roomsAt("/v1/game/raid/held?pool=own", bob)).toEqual([21]);
+    clock.now = MONDAY;
+    expect((await boardAt("/v1/game/raid/depths/wilds/week", alice)).top).toEqual([]);
+    expect((await boardAt("/v1/game/raid/depths/wilds/week?pool=own", alice)).top).toEqual([]);
+    expect(await roomsAt("/v1/game/raid/held?pool=own", bob)).toEqual([]);
+    expect((await boardAt("/v1/game/raid/depths/wilds/ever?pool=own", alice)).top.map((r) => r.room)).toEqual([27]);
   });
 });
