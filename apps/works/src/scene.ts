@@ -491,8 +491,8 @@ function piece(
 ): void {
   const real = ghost === 0;
   const page = pageOf(k);
-  // A piece of more than one tile is drawn once, from its own tile, over every tile it covers.
-  if (!page?.draw || !drawnFrom(y, i)) return;
+  // A piece of more than one tile standing is drawn once, from its own tile, over every tile it covers.
+  if (!page?.draw || (real && !drawnFrom(y, i))) return;
   const c = real ? reading(y, i) : -1;
   const h = y.holders;
   const r = real ? holderOf(y, i) : -1;
@@ -850,7 +850,7 @@ function inHand(g: Ctx, art: Art, w: Yard, grp: Group, now: Moment, cx: number, 
         if (over) h.drawImage(over, x, top);
         const pip = over ? art.m.pips[grade - 2] : undefined;
         if (pip) h.drawImage(pip, x, top);
-        piece(art, yard, i, k, d, grade, yard.span[i] ?? 0, p.open ?? true, x, top, now, 1);
+        if (drawnFrom(yard, i)) piece(art, yard, i, k, d, grade, yard.span[i] ?? 0, p.open ?? true, x, top, now, 1);
       }
     }
     for (const d of listed.slice(mark, used).toSorted((p, q) => p.z - q.z)) h.drawImage(d.c, d.x - camX, d.y - camY);

@@ -47,18 +47,34 @@ const page = (
   name: string,
   dock: number,
 ): string => `/** A throwaway kind for the test that a kind may cover many tiles. */
-import { GOLD } from "@sequoia-leaf/kit/palette.ts";
+import { GOLD, INK } from "@sequoia-leaf/kit/palette.ts";
+import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
 import { bm } from "../art/pal.ts";
 import type { KindPage } from "./kind.ts";
 
 const PLATE = ["nnnn", "nyyn", "nyyn", "nnnn"];
+/** A plate as big as its box, made once for each size. */
+const plates = new Map<string, HTMLCanvasElement>();
+function plate(w: number, h: number): HTMLCanvasElement {
+  const had = plates.get(\`\${w}x\${h}\`);
+  if (had) return had;
+  const { c, g } = makeCanvas(w, h);
+  g.fillStyle = INK;
+  g.fillRect(0, 0, w, h);
+  g.fillStyle = GOLD[0] ?? INK;
+  g.fillRect(2, 2, w - 4, h - 4);
+  g.fillStyle = GOLD[2] ?? INK;
+  g.fillRect(4, 4, w - 8, 4);
+  plates.set(\`\${w}x\${h}\`, c);
+  return c;
+}
 
 export const ${name}: KindPage = {
   picture: () => bm(PLATE, 4, 4).c,
-  draw(art, _y, at) {
-    at.stand(art.zed, at.cx, at.foot - 4, at.z, at.a);
-    return at.foot - 8;
+  draw(_art, _y, at) {
+    at.put(plate(at.w, at.h), at.x, at.top, at.z, at.a);
+    return at.top + 4;
   },
   pointer: "bare",
   lamps: (_y, _i, x, foot, _at, out) => out.push({ x, y: foot - 4, r: 9, power: 0.4, reach: false }),
