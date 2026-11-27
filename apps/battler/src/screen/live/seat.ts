@@ -20,17 +20,30 @@ import type { SittingView } from "@sequoia-leaf/raid/sitting/view.ts";
 import { glyph } from "../art/icons.ts";
 import { say } from "../fx.ts";
 import { BOARD_W } from "../geometry.ts";
+import { unpick } from "../hand.ts";
+import { RAID_KEYS } from "../keymap.ts";
+import { clearPawns, syncPawns } from "../pawns.ts";
 import { arrive, arrived } from "../scene.ts";
 import { playbackOf, type Screen } from "../screen.ts";
 import { ownFirst } from "../sides.ts";
 import { snd } from "../sounds.ts";
 import { changed, go, onScreen, S } from "../state.ts";
 import { pic } from "../ui/cards.ts";
-import { toast } from "../ui/table.ts";
-import { buildHud, forgetScout, markTable, renderClock, renderPlayers } from "./hud.ts";
+import { forgetTable, toast } from "../ui/table.ts";
+import {
+  bannerUp,
+  buildHud,
+  hideBanner,
+  markTable,
+  renderPlayers,
+  renderSay,
+  renderTracker,
+  showBanner,
+} from "./hud.ts";
 import { buildPanels, hidePaper, paperUp, showEnd, showOut } from "./panels.ts";
-import { turnOf } from "./reads.ts";
+import { playerRows, scoutable, turnOf } from "./reads.ts";
 import { buildRing, hideRing, ringHeard, ringMiddle } from "./ring.ts";
+import { stageBegan } from "./rounds.ts";
 import {
   atLiveTable,
   doneWithTable,
@@ -43,6 +56,8 @@ import {
   onSeatView,
   paidFor,
   readyUp,
+  scoutAt,
+  scouting,
   shownRun,
   sitAt,
   stepBack,
@@ -69,7 +84,11 @@ const L: {
   /** Whether it was the member's turn at the carousel when last looked, to say so as it becomes it. */
   choosing: boolean;
   ready: HTMLButtonElement | null;
-} = { asks: null, told: new Set(), coinsAt: null, choosing: false, ready: null };
+  /** When a scouted member's board was last read again, by Leaf's clock. */
+  readAt: number;
+  /** Whether the table is laid out for another's board (`layAfresh`): laid out again when the seat says otherwise. */
+  scouted: boolean;
+} = { asks: null, told: new Set(), coinsAt: null, choosing: false, ready: null, readAt: 0, scouted: false };
 
 /** Takes the figure at a place in the carousel's ring: at once, as Leaf will. */
 function take(offer: number): void {
@@ -108,8 +127,9 @@ function renderReady(view: SittingView): void {
   button.replaceChildren(on ? icon("check") : pic(glyph("swords")), "Ready");
 }
 
-/** As it becomes the member's turn at the carousel, the table says so. */
+/** As it becomes the member's turn at the carousel, the table says so (once a banner over the board is down). */
 function sayTurn(view: SittingView, now: number): void {
+  if (bannerUp()) return;
   const choosing = turnOf(view, now).at === "choosing";
   if (choosing && !L.choosing) {
     // In the ring's empty middle, clear of what the last room paid on the member's own half.
@@ -136,6 +156,54 @@ function sayPaid(view: SittingView): void {
   if (result === "win") snd.win();
   else if (result === "loss") snd.loss();
   else if (result === "draw") snd.draw();
+}
+
+// ---------- scouting ----------
+
+/** The table laid out afresh for the run it shows now (the member's own, or the board they scout): every figure where it stands, none walking there. */
+function layAfresh(view: SittingView): void {
+  const run = shownRun(view);
+  if (!run) return;
+  unpick();
+  S.run = run;
+  forgetTable();
+  clearPawns();
+  syncPawns(run, true);
+  L.scouted = scouting() !== null;
+  document.body.toggleAttribute("data-scouting", L.scouted);
+  renderPlayers(view);
+  changed();
+}
+
+/** Shows a player's board on the table in place of the member's own, or theirs again (the member's own row, the one shown, or null). */
+function scoutTo(seat: number | null): void {
+  const view = liveView();
+  if (!view || !atLiveTable()) return;
+  if (!scoutAt(seat === scouting() ? null : seat)) return;
+  if (scouting() === null) snd.close();
+  else snd.tap();
+  layAfresh(view);
+}
+
+/** Whether something is open over the table that has the keys: a page (the table's `#modal`), the menu, a pinned card. */
+const overTable = (e: KeyboardEvent): boolean =>
+  document.getElementById("modal")?.hidden === false ||
+  (e.target instanceof Element && e.target.closest("[role=dialog]") !== null);
+
+/** 1 to 8 show the players' boards in the order of the list; Space or Escape the member's own again. Before the table's own Escape. */
+function scoutKey(e: KeyboardEvent): void {
+  const view = liveView();
+  const pressed = RAID_KEYS.of(e);
+  if (!view || !pressed || pressed.again || !atLiveTable() || overTable(e)) return;
+  if (pressed.id === "scout" && scoutable(view)) {
+    const row = playerRows(view)[pressed.nth];
+    if (!row) return;
+    e.preventDefault();
+    scoutTo(row.seat);
+  } else if ((pressed.id === "home" || pressed.id === "back") && scouting() !== null) {
+    e.preventDefault();
+    scoutTo(null);
+  }
 }
 
 /** Whether the screen is playing a fight (or showing its end), by its key. */
@@ -181,7 +249,8 @@ function papers(view: SittingView): void {
 /** Draws what the live table adds, for the sitting as it stands now (`was`, as it stood: what the ring has seen taken since). */
 function renderLive(view: SittingView, was: SittingView | null): void {
   const now = liveLine()?.now() ?? 0;
-  renderClock(view, now);
+  renderTracker(view, now);
+  renderSay(view, now);
   renderPlayers(view);
   ringHeard(view, was);
   renderReady(view);
@@ -196,25 +265,30 @@ function renderLive(view: SittingView, was: SittingView | null): void {
 function heard(view: SittingView, was: SittingView): void {
   if (atLiveTable()) {
     if (!mineOf(view)) return stepBack();
+    // Back at their own board (a fight's start, or the end): the table is laid out for it again.
+    if (L.scouted !== (scouting() !== null)) layAfresh(view);
     stageTable(view, was);
+    // The banner first: what else would be said over the board waits for it.
+    if (stageBegan(view, was)) showBanner(view);
     renderLive(view, was);
     papers(view);
   } else if (was.stage.at === "open" && view.stage.at !== "open" && mineOf(view)) {
     // The table started (its opener, or the eighth to sit): the member is taken to it from the front page.
-    if (L.asks?.frontUp()) enterTable();
+    if (L.asks?.frontUp()) enterTable(true);
     else toast("Your live table has started. Carry on from the front page.", "gold");
   } else L.asks?.redrawFront();
 }
 
 // ---------- coming and going ----------
 
-/** Sits the member down at their live table, as it stands. */
-export function enterTable(): void {
+/** Sits the member down at their live table, as it stands; as it starts, with the first stage's banner. */
+export function enterTable(started = false): void {
   const line = liveLine();
   if (!line || !sitAt()) return;
   L.coinsAt ??= balance().coins;
   L.asks?.closePages();
   go({ e: "sit", run: shownRun(line.view), runs: S.runs });
+  if (started) showBanner(line.view);
   renderLive(line.view, null);
   papers(line.view);
 }
@@ -224,7 +298,10 @@ function steppedAway(): void {
   ownFirst();
   markTable(null);
   hidePaper();
-  forgetScout();
+  hideBanner();
+  scoutAt(null);
+  L.scouted = false;
+  document.body.removeAttribute("data-scouting");
   hideRing();
   L.choosing = false;
 }
@@ -232,7 +309,7 @@ function steppedAway(): void {
 /** Builds what a live table adds round the table, and keeps it in step. */
 export function openLive(scope: Scope, asks: LiveAsks): void {
   L.asks = asks;
-  buildHud();
+  buildHud(scope, { view: liveView, scouting, scout: scoutTo });
   buildReady();
   buildRing({
     take,
@@ -260,12 +337,20 @@ export function openLive(scope: Scope, asks: LiveAsks): void {
     // The member's fight has been played to its end, or skipped to it: Leaf hears they are done with it.
     if (atLiveTable() && before.at === "fight" && now.at === "after") watchedFight();
   });
-  // The clock and the carousel's turn count down between Leaf's answers.
+  scope.on(window, "keydown", scoutKey, { capture: true });
+  // The clock and the carousel's turn count down between Leaf's answers; a member's board being scouted is read again each second.
   scope.every(250, () => {
     const view = liveView();
-    const now = liveLine()?.now() ?? 0;
-    if (!view || !atLiveTable()) return;
-    renderClock(view, now);
+    const line = liveLine();
+    const now = line?.now() ?? 0;
+    if (!view || !line || !atLiveTable()) return;
+    renderTracker(view, now);
+    renderSay(view, now);
     sayTurn(view, now);
+    const scouted = scouting();
+    if (scouted !== null && view.seats[scouted]?.who.is === "member" && now - L.readAt >= 1000) {
+      L.readAt = now;
+      line.read();
+    }
   });
 }

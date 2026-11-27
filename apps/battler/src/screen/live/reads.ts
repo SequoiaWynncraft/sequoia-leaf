@@ -16,27 +16,57 @@ const STAGES: Readonly<Record<SittingView["stage"]["at"], string>> = {
   open: "Waiting to start",
   carousel: "Carousel",
   plan: "Planning",
-  fight: "The fight",
+  fight: "Fight",
   over: "Over",
 };
 
 /**
  * The clock at the top: what this stage is, and the seconds left of it at the most (it ends sooner
- * once everyone is done); in a carousel the seconds left of the member's own turn, while it is theirs.
- * None before the start or after the end.
+ * once everyone is done); in a carousel the seconds left of the turn being taken. None before the
+ * start or after the end.
  */
 export function clockOf(view: SittingView, now: number): { label: string; seconds: number | null } {
   const { stage } = view;
   const label = STAGES[stage.at];
   if (stage.at === "open" || stage.at === "over") return { label, seconds: null };
-  if (stage.at !== "carousel") return { label, seconds: secondsTo(stage.until, now) };
-  const turn = turnOf(view, now);
-  return { label, seconds: turn.at === "choosing" ? turn.seconds : null };
+  return { label, seconds: secondsTo(stage.at === "carousel" ? stage.ends : stage.until, now) };
 }
 /** The clock as one line: "Planning · 23 s". */
 export function clockText(view: SittingView, now: number): string {
   const { label, seconds } = clockOf(view, now);
   return seconds === null ? label : `${label} · ${seconds} s`;
+}
+
+/** Whether a player's board may be shown in place of the member's own: while planning and in a carousel. A fight brings them back. */
+export const scoutable = (view: Pick<SittingView, "stage">): boolean =>
+  view.stage.at === "plan" || view.stage.at === "carousel";
+
+/**
+ * A player's table as the shared table shows it while the member scouts it, as Leaf has it now: their
+ * board and bench (each figure with what it holds), rack (how many of each kind), acorns, level, XP
+ * and health, on the
+ * member's own run otherwise (their stall stays theirs, as in TFT), with nobody across and nothing to
+ * pick.
+ */
+export function scoutedRun(view: SittingView, seat: number): RunView | null {
+  const them = view.seats[seat];
+  if (!view.run || !them) return null;
+  const { board, bench, rack, acorns, level, xp } = structuredClone(them.table);
+  return {
+    ...view.run,
+    board,
+    bench,
+    rack,
+    acorns,
+    level,
+    xp,
+    resolve: them.resolve,
+    streak: them.streak,
+    stage: { phase: "plan", picks: [] },
+    boons: [],
+    foe: { ...view.run.foe, who: "", title: "", figures: [] },
+    last: null,
+  };
 }
 
 /** A seat's name as the page writes it: a regular's article made a capital ("A Moth"). */

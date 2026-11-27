@@ -5,19 +5,33 @@
  * Anything else is a view these rules could not have made: null.
  */
 import { isEra } from "../content/releases.ts";
-import { MOST_ROOMS } from "../content/rooms.ts";
+import { ECONOMY, MOST_ROOMS } from "../content/rooms.ts";
+import { SEATS } from "../hex.ts";
 import { isParty } from "../party.ts";
 import { fields, Nonsense, readRunView } from "../save.ts";
 import { readStage, readWho } from "./keep.ts";
 import { CHAIRS } from "./sitting.ts";
-import type { SeatView, SittingView } from "./view.ts";
+import type { SeatTable, SeatView, SittingView } from "./view.ts";
 
-const { record, whole, list, one, setup, bad } = fields;
+const { record, whole, list, one, setup, bad, piece, rack } = fields;
 
 const isKind = (v: unknown): v is SittingView["kind"] => v === "trouble" || v === "spar" || v === "boss";
 const chair = (v: unknown, what: string): number => whole(v, 0, CHAIRS - 1, what);
 const text = (v: unknown, what: string): string =>
   typeof v === "string" && v.length > 0 && v.length <= 80 ? v : bad(what);
+
+/** A seat's table as it stands now: its board and bench, its rack, acorns, level and XP. */
+function readTable(v: unknown): SeatTable {
+  const t = record(v, "a seat's table");
+  return {
+    board: list(t.board, SEATS, "a seat's board").map(piece),
+    bench: list(t.bench, ECONOMY.bench, "a seat's bench").map(piece),
+    rack: rack(t.rack),
+    acorns: whole(t.acorns, 0, 1_000_000, "a seat's acorns"),
+    level: whole(t.level, 1, 99, "a seat's level"),
+    xp: whole(t.xp, 0, 1_000_000, "a seat's XP"),
+  };
+}
 
 function readSeat(v: unknown): SeatView {
   const s = record(v, "a seat");
@@ -31,6 +45,7 @@ function readSeat(v: unknown): SeatView {
     faces: s.faces === null ? null : chair(s.faces, "whom a seat faces"),
     board: one(s.board, isParty, "a seat's board"),
     fight: s.fight === null ? null : setup(s.fight, "a seat's fight"),
+    table: readTable(s.table),
   };
 }
 

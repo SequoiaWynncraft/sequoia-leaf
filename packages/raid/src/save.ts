@@ -615,6 +615,10 @@ export const fields = {
   each,
   unique,
   items: readItems,
+  /** A figure on a board or bench as a page is shown it, or a free place (null). */
+  piece: (v: unknown): Piece | null => readPiece(v, Number.MAX_SAFE_INTEGER, false),
+  /** A rack as how many of each kind, as a run's own is read. */
+  rack: (v: unknown): Rack => readRack({ rack: v }),
   setup: readSetup,
   outcome: readOutcome,
   bad,

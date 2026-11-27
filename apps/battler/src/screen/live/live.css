@@ -2,14 +2,10 @@
 
 /* ---------- at the table: what goes, and what makes room ---------- */
 
-#live-clock,
 #live-players,
 #live-ring,
 #live-say {
   display: none;
-}
-body[data-live] #live-clock {
-  display: grid;
 }
 body[data-live] #live-players {
   display: flex;
@@ -44,62 +40,206 @@ body[data-live="plan"] #live-ready {
 body[data-live] #rack {
   right: calc(var(--edge) + var(--u) * 104);
 }
-/* Out, or in a carousel, the stall waits. */
-body:is([data-live="out"], [data-live="over"], [data-live="carousel"]) #plan {
+/* Out, in a carousel, or while another's board is shown, the stall waits. */
+body:is([data-live="out"], [data-live="over"], [data-live="carousel"], [data-scouting]) #plan {
   opacity: 0.45;
   pointer-events: none;
 }
 
-/* ---------- the clock ---------- */
+/* ---------- the round tracker ---------- */
 
-/* Beside the health, of one width whatever it says, so nothing moves as the stages go by. */
-#live-clock {
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas:
-    "label secs"
-    "vs vs";
-  align-items: baseline;
-  column-gap: calc(var(--u) * 3);
-  padding: var(--u) calc(var(--u) * 4);
-  margin-left: auto;
-  width: calc(var(--u) * 92);
+/*
+ * The table's own track at the top, in the middle of the bar: where the table is, the rounds, the
+ * stage and its seconds, and a thin bar under it all draining to the deadline. Of one size whatever
+ * it says, and the same for six rounds or seven.
+ */
+body[data-live] #track {
+  position: relative;
+  flex: none;
+  width: calc(var(--u) * 204);
+  margin-inline: auto;
   box-sizing: border-box;
-  font: var(--f-ui);
+  padding-bottom: calc(var(--u) * 3);
 }
-/* Of one width at any health, so that the clock beside it stays where it is. */
+/* Of one health width, so that the tracker beside it stays where it is. */
 body[data-live] #resolve {
   margin-left: 0;
   min-width: calc(var(--u) * 42);
   box-sizing: border-box;
   justify-content: center;
 }
-#live-clock .label,
-#live-clock .vs {
+#track > .where {
+  flex: none;
+  min-width: calc(var(--u) * 16);
+  text-align: center;
+}
+/* "1-4" or "Round 19" in one width. */
+body[data-live] #track > .where {
+  width: calc(var(--u) * 32);
+  white-space: nowrap;
+}
+#track > .when {
+  flex: none;
+  margin-left: auto;
+  width: calc(var(--u) * 64);
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: calc(var(--u) * 2);
+  font: var(--f-ui);
+}
+#track > .when .stage {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-#live-clock .label {
-  grid-area: label;
-}
-#live-clock .secs {
-  grid-area: secs;
+#track > .when .secs {
   min-width: 2ch;
   text-align: right;
   font: var(--f-name);
   color: var(--k-gold);
 }
-/* With no seconds to count (a carousel while others choose) it keeps its line, so the stage's name stays put. */
-#live-clock .secs:empty::before {
-  content: "\00a0";
-}
-#live-clock.short .secs {
+#track > .when.short .secs {
   color: var(--k-coral, #e67967);
 }
-#live-clock .vs {
-  grid-area: vs;
-  min-height: 1lh;
-  font: var(--f-small);
+#track > .drain {
+  position: absolute;
+  left: calc(var(--u) * 2);
+  right: calc(var(--u) * 2);
+  bottom: var(--u);
+  height: calc(var(--u) * 1.5);
+  background: var(--k-ink);
+}
+#track > .drain > i {
+  display: block;
+  height: 100%;
+  background: var(--k-gold);
+  transform-origin: left;
+}
+/* A live table's rounds: those played dim, the one being played lit with a marker under it. */
+#track .pip {
+  position: relative;
+}
+#track .pip.past {
+  opacity: 0.45;
+}
+#track .pip.lit {
+  background: var(--k-gold);
+}
+body[data-live] #track .pip {
+  width: calc(var(--u) * 12);
+  height: calc(var(--u) * 12);
+}
+body[data-live] #track .pip canvas {
+  max-width: calc(var(--u) * 10);
+  max-height: calc(var(--u) * 10);
+  object-fit: contain;
+  opacity: 1;
+}
+body[data-live] #track .pip.now::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--u) * -3);
+  translate: -50% 0;
+  border: calc(var(--u) * 1.5) solid transparent;
+  border-bottom-color: var(--k-gold);
+  border-top: 0;
+}
+
+/* Not a phone: in the middle of the window, whatever stands either side of it; the health and the corner at the right. */
+@media (min-width: 621px) and (min-aspect-ratio: 4/5) {
+  body[data-live] #track {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    translate: -50% 0;
+  }
+  body[data-live] #resolve {
+    margin-left: auto;
+  }
+}
+/* A narrower window (not a phone): the round being played and the next three, so that the corner stays in the window. */
+@media (min-width: 621px) and (max-width: 1139px) and (min-aspect-ratio: 4/5) {
+  body[data-live] #track {
+    width: calc(var(--u) * 164);
+  }
+  #live-scouting {
+    width: calc(var(--u) * 120);
+  }
+  body[data-live] #track .pip:is(.past, .later) {
+    display: none;
+  }
+}
+
+/* Narrower still (not a phone): the seconds without the stage's name, as on a phone. */
+@media (min-width: 621px) and (max-width: 839px) and (min-aspect-ratio: 4/5) {
+  body[data-live] #track {
+    width: calc(var(--u) * 114);
+  }
+  #track > .when .stage {
+    display: none;
+  }
+  #track > .when {
+    width: auto;
+    min-width: calc(var(--u) * 14);
+    justify-content: flex-end;
+  }
+}
+
+/* ---------- whose board is shown, and the banner ---------- */
+
+#live-scouting {
+  position: fixed;
+  z-index: 6;
+  left: 50%;
+  translate: -50% 0;
+  top: calc(var(--top) + var(--k-hang) + var(--u) * 26);
+  width: calc(var(--u) * 150);
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 3);
+  padding: var(--u) var(--u) var(--u) calc(var(--u) * 4);
+  font: var(--f-ui);
+}
+#live-scouting[hidden],
+body:not([data-live]) #live-scouting {
+  display: none;
+}
+#live-scouting .who {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--k-gold);
+}
+/* Over the middle of the board a moment as a stage begins: nothing moves, and a press goes through it. */
+#live-banner {
+  position: fixed;
+  z-index: 7;
+  left: 50%;
+  translate: -50% -50%;
+  min-width: calc(var(--u) * 100);
+  box-sizing: border-box;
+  display: grid;
+  justify-items: center;
+  gap: var(--u);
+  padding: calc(var(--u) * 3) calc(var(--u) * 6);
+  pointer-events: none;
+  text-align: center;
+}
+#live-banner[hidden] {
+  display: none;
+}
+#live-banner b {
+  font: var(--f-name);
+  color: var(--k-gold);
+}
+#live-banner span {
+  font: var(--f-ui);
 }
 
 /* ---------- the players down the right side ---------- */
@@ -178,6 +318,19 @@ body[data-live] #resolve {
 .player.out .hp {
   visibility: hidden;
 }
+/* Pressed, a row shows that player's board on the table: an eye in place of its face on hover and focus. */
+.player .eye {
+  grid-area: face;
+  display: grid;
+  place-items: center;
+  visibility: hidden;
+}
+.player:is(:hover, :focus-visible) .eye {
+  visibility: visible;
+}
+.player:is(:hover, :focus-visible) .face {
+  visibility: hidden;
+}
 .player.open {
   box-shadow: inset 0 0 0 var(--u) var(--k-cream);
 }
@@ -197,59 +350,10 @@ body[data-live] #resolve {
   left: calc(var(--u) * -26);
 }
 
-/* ---------- a player's board ---------- */
-
-#live-scout {
-  position: fixed;
-  z-index: 6;
-  right: calc(var(--edge) + var(--u) * 104);
-  top: calc(var(--top) + var(--k-hang) + var(--u) * 24);
-  width: calc(var(--u) * 150);
-  padding: calc(var(--u) * 3);
-  --fs: 1;
-}
-#live-scout h2 {
-  margin: 0;
-  font: var(--f-ui);
-}
-.scout-board {
-  display: flex;
-  flex-direction: column;
-  gap: calc(var(--u) * 1);
-  margin-top: calc(var(--u) * 2);
-}
-.scout-board .hexrow {
-  display: flex;
-  gap: var(--u);
-}
-.scout-board .hexrow.odd {
-  padding-left: calc(var(--u) * 10);
-}
-.scout-board .hex {
-  display: grid;
-  place-items: end center;
-  width: calc(var(--u) * 19);
-  height: calc(var(--u) * 19);
-  background: var(--k-deep);
-  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
-}
-.scout-board .who {
-  display: grid;
-  justify-items: center;
-}
-.scout-board .held {
-  display: flex;
-  height: calc(var(--u) * 5);
-}
-.scout-board .held canvas {
-  width: calc(var(--u) * 5);
-  height: calc(var(--u) * 5);
-}
-
 /* ---------- the line under the board ---------- */
 
-/* The clock's second line again, between the board and the bench: always on a phone, where the clock is small; elsewhere only while the table waits on the others. */
-body[data-live] #live-say.waiting:not([hidden]) {
+/* The carousel's turn, whom the table waits for, or whom the member faces: between the board and the bench. */
+body[data-live] #live-say:not([hidden]) {
   display: block;
 }
 #live-say {
@@ -354,39 +458,36 @@ body[data-live] #live-say.waiting:not([hidden]) {
     min-height: calc(var(--u) * 88);
     box-sizing: border-box;
   }
-  /* The clock leads the row of chips: the stage over its seconds. Its second line is the strip under them. */
-  #live-clock {
-    position: fixed;
-    top: calc(var(--top) + var(--u) * 70);
-    left: var(--edge);
-    width: calc(var(--u) * 30);
-    height: calc(var(--u) * 26);
-    margin: 0;
-    padding: var(--u);
-    grid-template-columns: 1fr;
-    grid-template-areas:
-      "label"
-      "secs";
-    justify-items: center;
-    align-content: center;
-    font: var(--f-small);
+  /*
+   * The tracker compact, on a row of its own: where the table is, the round being played and the next
+   * three, the seconds, and the bar under.
+   */
+  body[data-live] #track {
+    width: calc(var(--u) * 96);
   }
-  #live-clock .vs {
+  /* The number alone. */
+  body[data-live] #track > .where {
+    width: calc(var(--u) * 16);
+  }
+  body[data-live] #track .pip:is(.past, .later),
+  #track > .when .stage {
     display: none;
   }
-  /* The whole width of the clock, the words centred in it: a new stage's name moves nothing. */
-  #live-clock .label,
-  #live-clock .secs {
-    justify-self: stretch;
-    text-align: center;
+  #track > .when {
+    width: auto;
+    min-width: calc(var(--u) * 14);
+    justify-content: flex-end;
   }
-  body[data-live] #live-say:not([hidden]) {
-    display: block;
+  /* Under the row of chips, over the far half of the board. */
+  #live-scouting {
+    top: calc(var(--top) + var(--u) * 98);
+    width: calc(100vw - var(--edge) * 2);
+    max-width: calc(var(--u) * 150);
   }
-  /* The players: a row of small health chips over the board, after the clock. */
+  /* The players: a row of small health chips over the board. */
   #live-players {
     top: calc(var(--top) + var(--u) * 70);
-    left: calc(var(--edge) + var(--u) * 31);
+    left: var(--edge);
     right: var(--edge);
     width: auto;
     height: calc(var(--u) * 26);
@@ -435,13 +536,5 @@ body[data-live] #live-say.waiting:not([hidden]) {
 
   .player .hp {
     width: 100%;
-  }
-  #live-scout {
-    top: auto;
-    bottom: var(--bottom);
-    left: var(--edge);
-    right: var(--edge);
-    width: auto;
-    z-index: 30;
   }
 }

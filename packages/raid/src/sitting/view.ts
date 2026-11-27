@@ -10,10 +10,26 @@ import type { RoomKind } from "../content/rooms.ts";
 import type { FightSetup } from "../fight/types.ts";
 import { runView } from "../game.ts";
 import type { Party } from "../party.ts";
-import { foughtOf, type Note, type RunView } from "../run.ts";
+import type { Rack } from "../racks.ts";
+import { foughtOf, type Note, type Piece, type RunView } from "../run.ts";
 import { cannotTake, join } from "./carousel.ts";
 import type { SittingCommand } from "./commands.ts";
 import { facing, kindOf, marked, nameOf, notNow, notPlanning, type Sitting, type Stage, type Who } from "./sitting.ts";
+
+/**
+ * A seat's table as it stands now, as anyone at a live table may scout it, as in TFT: its board and
+ * bench (each figure with what it holds), its rack, its acorns, its level and XP. Never its stall,
+ * its picks or anything drawn and not yet shown.
+ */
+export interface SeatTable {
+  board: (Piece | null)[];
+  bench: (Piece | null)[];
+  /** What nobody on it holds, as how many of each kind. */
+  rack: Rack;
+  acorns: number;
+  level: number;
+  xp: number;
+}
 
 /** A seat as anyone at the sitting sees it. */
 export interface SeatView {
@@ -30,6 +46,8 @@ export interface SeatView {
   board: Party;
   /** The fight it is in while the fights are watched, to play from; which side is its own is `sideOf`. */
   fight: FightSetup | null;
+  /** Its table as it stands now, to scout. */
+  table: SeatTable;
 }
 
 export interface SittingView {
@@ -45,6 +63,24 @@ export interface SittingView {
   /** The viewer's seat, and their run; null for somebody not seated. */
   you: number | null;
   run: RunView | null;
+}
+
+/** A run's table, as a seat shows it to be scouted. */
+const tableOf = (run: Pick<RunView, "board" | "bench" | "rack" | "acorns" | "level" | "xp">): SeatTable => ({
+  board: run.board,
+  bench: run.bench,
+  rack: run.rack,
+  acorns: run.acorns,
+  level: run.level,
+  xp: run.xp,
+});
+
+/** The viewer's copy with their run as it is after something they did: their own row, level and table, read from it as Leaf's are. */
+function withRun(view: SittingView, run: RunView): SittingView {
+  const seats = view.seats.map((seat, i) =>
+    i === view.you ? { ...seat, level: run.level, table: tableOf(run) } : seat,
+  );
+  return { ...view, seats, run };
 }
 
 export function sittingView(t: Sitting, viewer: string | null): SittingView {
@@ -68,6 +104,7 @@ export function sittingView(t: Sitting, viewer: string | null): SittingView {
       faces: paired && place === null ? facing(t, i) : null,
       board: shown,
       fight: fights ? (foughtOf(run)?.setup ?? null) : null,
+      table: tableOf(run),
     })),
     you: mine ? you : null,
     run: mine ? runView(mine.run) : null,
@@ -89,7 +126,7 @@ function ownMove(view: SittingView, c: Own, you: number, run: RunView): Predicte
     const after = structuredClone(run);
     const notes = join(after, wanted.kind, wanted.item);
     const ring = stage.ring.map((offer, i) => (i === c.offer ? { ...offer, by: you } : offer));
-    return { view: { ...view, stage: { ...stage, ring }, run: after }, notes };
+    return { view: withRun({ ...view, stage: { ...stage, ring } }, after), notes };
   }
   if (stage.at === "plan" && c.do === "ready")
     return { view: { ...view, stage: { ...stage, ready: marked(stage.ready, you, c.on) } }, notes: [] };
@@ -132,7 +169,5 @@ export function predict(view: SittingView, c: SittingCommand): Predicted | null 
   const done = plan(run, c);
   if (!done) return null;
   if (!done.ok) return { refused: done.code };
-  // The viewer's own row is read from their run, as Leaf's is.
-  const seats = view.seats.map((seat, i) => (i === view.you ? { ...seat, level: run.level } : seat));
-  return { view: { ...view, seats, run }, notes: done.notes };
+  return { view: withRun(view, run), notes: done.notes };
 }

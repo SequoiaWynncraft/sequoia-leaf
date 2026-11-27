@@ -7,15 +7,15 @@
  * - `next()` moves Leaf's clock to the stage's deadline and reads the sitting; `to(stage, room?)`
  *   plays on (the bot planning, the first figure left taken) until the sitting is there;
  * - `plan()` has the bot plan the member's room; `pick(i?)` takes from the ring;
- * - `scout(seat)` opens a player's board; `state()` says where things stand; `settled()` waits for Leaf.
+ * - `scout(seat)` presses a player's row (their board on the table; pressed again, the member's own);
+ *   `state()` says where things stand; `settled()` waits for Leaf.
  */
 import { ask as askLeaf } from "@sequoia-leaf/kit/net.ts";
 import { newTable, planCommands, type RaidCommand, SENSIBLE, tableView } from "@sequoia-leaf/raid";
 
-import { scoutSeat } from "../src/screen/live/hud.ts";
 import { clockText, turnOf } from "../src/screen/live/reads.ts";
 import { enterTable } from "../src/screen/live/seat.ts";
-import { liveLine, liveView, takeFromRing } from "../src/screen/live/seated.ts";
+import { liveLine, liveView, scouting, takeFromRing } from "../src/screen/live/seated.ts";
 import { OWN } from "../src/screen/sides.ts";
 import { ask, doNow, S } from "../src/screen/state.ts";
 
@@ -141,6 +141,7 @@ function state(): string {
     faces: mine?.faces,
     screen: S.screen.at,
     live: document.body.dataset.live ?? null,
+    scouting: scouting(),
   });
 }
 
@@ -160,11 +161,12 @@ export function openTablesHandle(): void {
         enterTable();
         return state();
       },
-      /** Opens a player's board (by default the one the member faces, else the next seat), or puts it away. */
+      /** Presses a player's row (by default the one the member faces, else the next seat), as a member does. */
       scout: (seat?: number) => {
         const view = liveView();
         const mine = view?.you === null || !view ? null : view.seats[view.you];
-        if (view) scoutSeat(view, seat ?? mine?.faces ?? ((view.you ?? 0) + 1) % 8);
+        const at = seat ?? mine?.faces ?? ((view?.you ?? 0) + 1) % 8;
+        document.querySelector<HTMLElement>(`#live-players [data-seat="${at}"]`)?.click();
         return state();
       },
     },
