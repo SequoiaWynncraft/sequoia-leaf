@@ -5,6 +5,10 @@
  * the same check, and the same run tick by tick; and every save in `saves/` reads as version 8 read it.
  */
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+import { rulesModules } from "@sequoia-leaf/core";
 
 import * as F from "../src/index.ts";
 import { outward, RINGED } from "./ring.ts";
@@ -91,6 +95,23 @@ describe("a ring of plots round the land", () => {
       }
       expect(places(large)).toEqual(places(small));
     });
+});
+
+describe("the version of the Works' rules", () => {
+  test("covers the land: the plots table and the land made from it are modules the rules run", () => {
+    const root = join(import.meta.dir, "..", "..", "..");
+    const file = (path: string): string | null => {
+      try {
+        return readFileSync(join(root, path), "utf8");
+      } catch {
+        return null;
+      }
+    };
+    const modules = [...rulesModules("works", file).keys()];
+    expect(modules).toEqual(
+      expect.arrayContaining(["packages/factory/src/content/plots.ts", "packages/factory/src/land.ts"]),
+    );
+  });
 });
 
 describe("a Leaf with less land", () => {
