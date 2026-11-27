@@ -7,7 +7,16 @@
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { GOLD, LEAF } from "@sequoia-leaf/kit/palette.ts";
 import { leave, tell } from "@sequoia-leaf/kit/shell.ts";
-import { type AcornsWhy, endingOf, picksOf, type RaidNote, specOf, type TraitId, TRAITS } from "@sequoia-leaf/raid";
+import {
+  type AcornsWhy,
+  endingOf,
+  type EndlessWay,
+  picksOf,
+  type RaidNote,
+  specOf,
+  type TraitId,
+  TRAITS,
+} from "@sequoia-leaf/raid";
 
 import { glyphPic } from "./art/icons.ts";
 import { endFight, fightOn, setSpeed, skipFight, startFight } from "./fightview.ts";
@@ -22,7 +31,7 @@ import { endedIn, type Playback, type Screen } from "./screen.ts";
 import { signal } from "./signals.ts";
 import { snd } from "./sounds.ts";
 import { boardSpot } from "./stage.ts";
-import { ask, changed, doNow, go, onScreen, prefsChanged, S, tableNow } from "./state.ts";
+import { ask, changed, doNow, go, onScreen, playSlot, prefsChanged, S, type Slot, tableNow } from "./state.ts";
 import { acorns } from "./ui/cards.ts";
 import { closeSheet, openSheet, sheetTaking, sheetUp, type Taking } from "./ui/fightsheet.ts";
 import { forgetTable, wakeChip } from "./ui/table.ts";
@@ -34,6 +43,12 @@ export function enterRun(): void {
   go({ e: "sit", ...tableNow() });
 }
 
+/** Sits down to the run in a slot: the run in hand, or the endless run. */
+export function sitDown(slot: Slot): void {
+  playSlot(slot);
+  enterRun();
+}
+
 /**
  * Sets out on a trail, with all figures or (`own`) the member's own: Leaf lays a new run out (putting
  * down any run in hand), and the table shows it. Says whether it did.
@@ -41,7 +56,15 @@ export function enterRun(): void {
 export async function startNew(trail: number, own = false): Promise<boolean> {
   const did = await ask(own ? { do: "start", trail, own } : { do: "start", trail }, document.getElementById("start"));
   if (!did?.ok) return false;
-  enterRun();
+  sitDown("main");
+  return true;
+}
+
+/** Sets out on an endless run, one way or the other, beside the run in hand (which is not touched). Says whether it did. */
+export async function startEndless(way: EndlessWay): Promise<boolean> {
+  const did = await ask({ do: "endless", way }, document.getElementById("start"));
+  if (!did?.ok) return false;
+  sitDown("endless");
   return true;
 }
 
@@ -50,8 +73,9 @@ export function toFront(): void {
   go({ e: "front" });
 }
 
-/** Walks home early: the run ends here, and is still paid for the rooms it cleared. */
-export async function goHome(): Promise<void> {
+/** Ends the run in a slot early: it ends here, and is still paid for the rooms it cleared. */
+export async function goHome(slot: Slot = S.slot): Promise<void> {
+  playSlot(slot);
   if (!S.run || S.run.stage.phase === "over") return;
   unpick();
   const did = await ask({ do: "abandon" });

@@ -55,7 +55,9 @@
  *
  * The games Leaf plays (the play service) are served as in production. For the screenshot tours,
  * `POST /test/play/raid` with `{ "stage": [...] }` stages a moment at Tester's raid table that play
- * does not reach by itself (`stage-raid.ts`), `POST /test/play/works` one in Tester's yard (a
+ * does not reach by itself (`stage-raid.ts`; and for the endless runs, `{ "woods": true }` puts the
+ * four on the endless boards, `{ "hold": { room, by } }` has one of them hold a room of the Deep
+ * Woods, and `{ "taken": { room, by } }` tells Tester one took a room from them), `POST /test/play/works` one in Tester's yard (a
  * kept yard, a time away, a filled order, the others' yards on the board: `stage-works.ts`), and
  * `POST /test/play/town` one in Tester's town and camp (a lived-in camp, a caller waiting, a time
  * away, a full mailbox, Coins to shop with, the others' camps on the board, prizes won, a
@@ -74,6 +76,7 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { CLIENT_HZ, Flag, leaf as leafOf, type PlayerId, playerId, utcDay } from "@sequoia-leaf/core";
+import { heldSlot } from "@sequoia-leaf/raid";
 import { Effect, Layer, Schema } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { SqlClient } from "effect/sql";
@@ -84,7 +87,7 @@ import { Events } from "../src/events/store.ts";
 import type { Quests } from "../src/quests/store.ts";
 import { LiveClient } from "./live-client.ts";
 import { stagePulls } from "./stage-pulls.ts";
-import { stageRaid } from "./stage-raid.ts";
+import { stageRaid, stageWoods } from "./stage-raid.ts";
 import { stageTally } from "./stage-tally.ts";
 import { stageTown } from "./stage-town.ts";
 import { stageWorks } from "./stage-works.ts";
@@ -812,6 +815,30 @@ const stageTheSittings = (ops: readonly unknown[]) =>
     );
     return { now: clock.now, largest: row?.largest ?? 0 };
   });
+
+/**
+ * Stages Tester's raid table (`stage-raid.ts`), and the endless runs of the four: their boards and
+ * rooms of the Deep Woods they hold (`stageWoods`), and the news to Tester that one of them took a
+ * room from them (`{ taken: { room, by } }`, a room counting from 0).
+ */
+const stageTheRaid = (ops: readonly unknown[]) =>
+  Effect.gen(function* () {
+    yield* stageWoods(
+      mates.map((m) => m.id),
+      ops,
+      clock.now,
+    );
+    for (const op of ops) {
+      const taken = typeof op === "object" && op !== null && "taken" in op ? op.taken : null;
+      if (typeof taken !== "object" || taken === null || !("room" in taken) || typeof taken.room !== "number") continue;
+      const by = pick(mates, "by" in taken && typeof taken.by === "number" ? taken.by : 0);
+      const data = { game: "raid", slot: heldSlot(taken.room), by: { id: by.id, username: by.name } };
+      yield* Effect.promise(() =>
+        leaf.run(Events.use((events) => events.insert(tester.id, { type: "held_taken", data }, clock.now))),
+      );
+    }
+    return yield* stageRaid(tester.id, ops);
+  });
 /** Everybody but Tester whose yard or camp a tour may stage. */
 const others = [
   ...mates.map((m) => ({ id: m.id, guest: false })),
@@ -823,7 +850,7 @@ const served = await leaf.serve(
   Layer.mergeAll(
     signingRoute("/sign-in"),
     signingRoute("/sign-out"),
-    stagingRoute("raid", (ops) => stageRaid(tester.id, ops)),
+    stagingRoute("raid", stageTheRaid),
     stagingRoute("town", stageTheTown),
     stagingRoute("works", (ops) => stageWorks(tester.id, ops, others)),
     stagingRoute("pulls", (ops) => stageThePulls(ops)),

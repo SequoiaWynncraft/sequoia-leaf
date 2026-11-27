@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
-import { type Almanac, newAlmanac, type RoomRecord, type RunView, startRun } from "@sequoia-leaf/raid";
+import { type Almanac, type EndlessWay, newAlmanac, type RoomRecord, type RunView, startRun } from "@sequoia-leaf/raid";
 
+import { endlessWhere } from "./endless.ts";
 import {
   type At,
   type Board,
@@ -9,28 +10,40 @@ import {
   ENDS_THE_RUN,
   footOf,
   guildBoard,
+  laidOut as runsLaidOut,
   listed,
   type Mode,
   MODES,
   records,
   shownCategories,
   shownModes,
+  THE_DEEP_WOODS,
   THE_TRAILS,
+  THE_WILDS,
 } from "./modes.ts";
 
 const at = (over: Partial<At> = {}): At => ({
   run: null,
+  endless: null,
   almanac: newAlmanac(),
   trail: 0,
   own: false,
   standings: null,
+  week: { at: 0, deepest: { wilds: 0, deep: 0 } },
+  depths: new Map(),
+  span: "ever",
   ...over,
 });
+const WON: RoomRecord = { room: 0, kind: "trouble", result: "win", standing: [3, 0], boss: null };
 /** A run laid out, before its first room is fought or (`fought`) after it. */
 function laidOut(fought: boolean): RunView {
   const run = startRun(3);
-  const won: RoomRecord = { room: 0, kind: "trouble", result: "win", standing: [3, 0], boss: null };
-  return { ...run, record: fought ? [won] : [] };
+  return { ...run, record: fought ? [WON] : [] };
+}
+/** An endless run laid out one way, in a room (from 0), having fought its rooms before it or (`room` 0) none. */
+function endless(way: EndlessWay, room = 0): RunView {
+  const run = startRun(3, { endless: way });
+  return { ...run, room, record: Array.from({ length: room }, (_, i) => ({ ...WON, room: i })) };
 }
 /** An almanac with the first trail cleared and room 15 reached on it, and room 4 on the second. */
 function walked(): Almanac {
@@ -42,16 +55,15 @@ function walked(): Almanac {
 }
 
 describe("the mode table", () => {
-  test("a mode whose Set out is not wired is not shown: today only the trails are", () => {
+  test("a mode whose Set out is not wired is not shown: today the trails, the Wilds and the Deep Woods are", () => {
     expect(MODES.map((m) => m.id)).toEqual(["trails", "endless", "deep", "live"]);
-    expect(shownModes(MODES).map((m) => m.id)).toEqual(["trails"]);
+    expect(shownModes(MODES).map((m) => m.name)).toEqual(["The trails", "The Wilds", "The Deep Woods"]);
   });
 
   test("a category with nothing shown is not shown", () => {
-    expect(shownCategories(MODES).map((c) => c.id)).toEqual(["normal"]);
-    const wired: Mode[] = MODES.map((m) => (m.id === "deep" ? { ...m, setOut: THE_TRAILS.setOut } : m));
-    expect(shownCategories(wired).map((c) => c.id)).toEqual(["normal", "endless"]);
-    expect(shownModes(wired).map((m) => m.id)).toEqual(["trails", "deep"]);
+    expect(shownCategories(MODES).map((c) => c.id)).toEqual(["normal", "endless"]);
+    const wired: Mode[] = MODES.filter((m) => m.category !== "endless");
+    expect(shownCategories(wired).map((c) => c.id)).toEqual(["normal"]);
   });
 
   test("Set out sends the trail chosen, with the member's own figures when they are chosen", () => {
@@ -95,9 +107,89 @@ describe("the button a mode shows", () => {
   });
 
   test("a mode not wired has no run, and its board ranks nobody yet", () => {
-    const endless = MODES.find((m) => m.id === "endless");
-    expect(endless?.run(at({ run: laidOut(true) }))).toBeNull();
-    expect(endless?.board(at())).toEqual({ title: "Furthest room", rows: [], you: null });
+    const live = MODES.find((m) => m.id === "live");
+    expect(live?.run(at({ run: laidOut(true) }))).toBeNull();
+    expect(live?.board(at())).toEqual({ title: "Tables won", rows: [], you: null });
+  });
+});
+
+describe("the endless ways", () => {
+  test("Set out sends an endless run of the way, whatever trail is chosen", () => {
+    expect(THE_WILDS.setOut?.(at({ trail: 2, own: true }))).toEqual({ do: "endless", way: "wilds" });
+    expect(THE_DEEP_WOODS.setOut?.(at())).toEqual({ do: "endless", way: "deep" });
+  });
+
+  test("each has the endless run as its run when it set out that way, and the trails keep the run in hand", () => {
+    const deep = endless("deep", 3);
+    const both = at({ run: laidOut(true), endless: deep });
+    expect(THE_DEEP_WOODS.run(both)).toBe(deep);
+    expect(THE_WILDS.run(both)).toBeNull();
+    expect(THE_TRAILS.run(both)).toBe(both.run);
+    expect(footOf(THE_DEEP_WOODS, both)).toEqual({ button: "carryOn", anew: true, off: false, line: ENDS_THE_RUN });
+  });
+
+  test("setting out one way while a run of the other is laid out: not before it has fought a room, and then it says what it ends", () => {
+    expect(footOf(THE_WILDS, at({ endless: endless("deep") }))).toEqual({
+      button: "setOut",
+      anew: false,
+      off: true,
+      line: "Your raid in The Deep Woods has not fought a room yet.",
+    });
+    expect(footOf(THE_WILDS, at({ endless: endless("deep", 2) }))).toEqual({
+      button: "setOut",
+      anew: false,
+      off: false,
+      line: "A new raid ends your raid in The Deep Woods.",
+    });
+    // The run in hand is never touched by an endless run, nor the endless run by a trail's.
+    expect(footOf(THE_WILDS, at({ run: laidOut(true) })).line).toBeNull();
+    expect(footOf(THE_TRAILS, at({ endless: endless("wilds", 2) })).line).toBeNull();
+  });
+
+  test("their boards are Leaf's, the member's own lit and under the list; until Leaf gives one, the member's own deepest", () => {
+    const board = {
+      top: [
+        { place: 1, name: "Fernwick", room: 31, you: false },
+        { place: 2, name: "Quillfeather", room: 23, you: true },
+      ],
+      you: { place: 2, room: 23 },
+    };
+    const shown = THE_WILDS.board(at({ depths: new Map([["wilds:ever", board]]) }));
+    expect(shown.title).toBe("Deepest room");
+    expect(shown.rows.map((r) => [r.place, r.name, r.value, r.you])).toEqual([
+      [1, "Fernwick", "Room 31", false],
+      [2, "Quillfeather", "Room 23", true],
+    ]);
+    expect(listed(shown, 1).under).toEqual({ place: 2, name: "Quillfeather", value: "Room 23", you: true });
+    // This week's board is another, and before Leaf has given it, the week's deepest the table keeps.
+    const week = at({
+      depths: new Map([["wilds:ever", board]]),
+      span: "week",
+      week: { at: 0, deepest: { wilds: 18, deep: 0 } },
+    });
+    expect(THE_WILDS.board(week)).toEqual({
+      title: "Deepest room",
+      rows: [],
+      you: { place: null, name: "You", value: "Room 18", you: true },
+    });
+    // The Deep Woods' board is this week's, whichever of the Wilds' is chosen.
+    const deep = THE_DEEP_WOODS.board(at({ depths: new Map([["deep:week", board]]), span: "ever" }));
+    expect([deep.title, deep.rows.length]).toEqual(["Deepest this week", 2]);
+    expect(THE_DEEP_WOODS.board(at())).toEqual({ title: "Deepest this week", rows: [], you: null });
+  });
+});
+
+describe("the strip along the top", () => {
+  test("both runs laid out are on it, each with its mode: the run in hand, then the endless run", () => {
+    const deep = endless("deep", 22);
+    const both = runsLaidOut(at({ run: laidOut(true), endless: deep }));
+    expect(both.map(({ mode, run }) => [mode.name, run.endless])).toEqual([
+      ["The trails", null],
+      ["The Deep Woods", "deep"],
+    ]);
+    expect(endlessWhere(deep)).toBe(`Room 23. Health ${deep.resolve}.`);
+    expect(runsLaidOut(at({ endless: endless("wilds") })).map(({ mode }) => mode.name)).toEqual(["The Wilds"]);
+    expect(runsLaidOut(at())).toEqual([]);
   });
 });
 

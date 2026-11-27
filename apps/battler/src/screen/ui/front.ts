@@ -3,24 +3,27 @@
  * out; down the left the categories, and under the chosen one its modes; in the middle the chosen
  * mode's card, with its options and its Set out; on the right its board; along the bottom the
  * almanac, how to play, table looks and leaving. A phone has the same, one under another. Whatever
- * is chosen, the card, the board and the button keep their size and place.
+ * is chosen, the card, the board and the button keep their size and place. The endless ways' own
+ * parts (their boards, rooms held, a room taken) are `woods.ts`'s.
  */
 import { choices, stepped } from "@sequoia-leaf/kit/choices.ts";
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { ask as fetchLeaf } from "@sequoia-leaf/kit/net.ts";
 import { type Board as Standings, readBoard } from "@sequoia-leaf/kit/person.ts";
-import { ROOM_COUNT, type RunView, TRAILS, unfought } from "@sequoia-leaf/raid";
+import { type EndlessWay, ROOM_COUNT, type RunView, TRAILS, unfought } from "@sequoia-leaf/raid";
 
 import { type Glyph, glyph, roomIcon } from "../art/icons.ts";
 import { paintLook } from "../art/place.ts";
 import { snd } from "../sounds.ts";
-import { ask, S } from "../state.ts";
+import { ask, S, type Slot } from "../state.ts";
 import { figPic, pic } from "./cards.ts";
+import { endlessWhere } from "./endless.ts";
 import {
   type At,
   type Board,
   type BoardRow,
   footOf,
+  laidOut,
   listed,
   type Mode,
   type ModeId,
@@ -31,12 +34,17 @@ import {
   trailClosed,
 } from "./modes.ts";
 import { setsOutOwn, unshown, wayPrefix, waysOf } from "./own.ts";
+import { readNow, readWoods, spanTabs, takenLine, woodsAt, woodsAway, woodsOpts } from "./woods.ts";
 
 /** What the front page asks of the rest of the page. */
 export interface FrontAsks {
-  carryOn: () => void;
+  /** Sits down to the run in a slot: the run in hand, or the endless run. */
+  carryOn: (slot: Slot) => void;
   start: (trail: number, own: boolean) => void;
-  goHome: () => void;
+  /** Sets out on an endless run, one way or the other. */
+  endless: (way: EndlessWay) => void;
+  /** Ends the run in a slot early. */
+  goHome: (slot: Slot) => void;
   leave: () => void;
   open: (page: "almanac" | "howto" | "looks") => void;
   /** Draws the page again, the keyboard where it was. */
@@ -50,20 +58,22 @@ const TRAIL_ICONS = ["trouble", "spar", "boss"] as const;
 
 /**
  * What the page keeps for the session: the mode chosen, a trail not open yet that the member is
- * looking at (of those open, Leaf keeps the one picked), and whether ending the raid is being asked.
+ * looking at (of those open, Leaf keeps the one picked), and which run's ending is being asked.
  */
-const kept: { mode: ModeId; trail: number | null; home: boolean } = { mode: "trails", trail: null, home: false };
-/** A page has been opened over it, or it has been put away: ending the raid is asked from the start again, and a trail not open yet is no longer looked at. */
+const kept: { mode: ModeId; trail: number | null; home: Slot | null } = { mode: "trails", trail: null, home: null };
+/**
+ * A page has been opened over it, or it has been put away: ending a run is asked from the start
+ * again, a trail not open yet is no longer looked at, and a room taken has been said.
+ */
 export const frontAway = (): void => {
-  kept.home = false;
+  kept.home = null;
   kept.trail = null;
+  woodsAway();
 };
 
-/** The guild's raid board as last read, and when: read again when the front page is drawn a minute or more after. */
-const guild: { board: Standings | null; readAt: number } = { board: null, readAt: -Infinity };
-const READ_EVERY_MS = 60_000;
+/** The guild's raid board as last read: read again when the front page is drawn a minute or more after (`readNow`). */
+const guild: { board: Standings | null } = { board: null };
 async function readGuild(redraw: () => void): Promise<void> {
-  guild.readAt = Date.now();
   const answer = await fetchLeaf("/v1/game/play/raid/standings");
   const board = answer.status === 200 ? readBoard(answer.body) : null;
   if (!board) return;
@@ -71,50 +81,69 @@ async function readGuild(redraw: () => void): Promise<void> {
   redraw();
 }
 const atNow = (): At => ({
-  run: S.run,
+  run: S.laid.run,
+  endless: S.laid.endless,
   almanac: S.almanac,
   trail: kept.trail ?? S.trail,
   own: setsOutOwn(),
   standings: guild.board,
+  week: S.week,
+  ...woodsAt(),
 });
+/** The slot of the table a run is in. */
+const slotOf = (run: RunView): Slot => (run.endless ? "endless" : "main");
 
 // ---------- along the top ----------
 
-/** Ending the raid before its last room: asked first, and not before its first room is fought (the rules' `unfought`). */
+/** A button's id for a run: as it is for the run in hand, and with `-endless` for the endless run. */
+const idFor = (id: string, slot: Slot): string => (slot === "main" ? id : `${id}-${slot}`);
+
+/** Ending a run before its last room: asked first, and not before its first room is fought (the rules' `unfought`). */
 function homeOf(go: FrontAsks, run: RunView): HTMLElement {
   if (unfought(run))
     return el("span", "k-read k-dim", { text: "You can end this raid once its first room is fought." });
+  const slot = slotOf(run);
   const asking = (on: boolean) => (): void => {
-    kept.home = on;
+    kept.home = on ? slot : null;
     go.redraw();
   };
-  if (!kept.home)
-    return el("button", "k-btn coral sm", { type: "button", id: "gohome", onclick: asking(true) }, "End this raid");
-  const won = run.record.filter((r) => r.result === "win").length;
+  if (kept.home !== slot)
+    return el(
+      "button",
+      "k-btn coral sm",
+      { type: "button", id: idFor("gohome", slot), onclick: asking(true) },
+      "End this raid",
+    );
+  // What it is paid for: the rooms won of the fifteen (an endless run's deeper rooms pay nothing).
+  const won = run.record.filter((r) => r.result === "win" && r.room < ROOM_COUNT).length;
   return el(
     "div",
-    "k-row",
+    "k-row ask",
     {},
     el("span", "k-d", {
       text: `End this raid now? You are paid for the ${won} ${won === 1 ? "room" : "rooms"} you won.`,
     }),
-    el("button", "k-btn coral sm", { type: "button", onclick: () => go.goHome() }, "End raid"),
+    el("button", "k-btn coral sm", { type: "button", onclick: () => go.goHome(slot) }, "End raid"),
     el("button", "k-btn wood sm", { type: "button", onclick: asking(false) }, "Keep playing"),
   );
 }
 
-/** A run laid out: its trail, room and health, ending it, and carrying on. */
-function strip(go: FrontAsks, run: RunView): HTMLElement {
+/** A run laid out, on one line: what it is (its trail, or its endless way), its room and health, ending it, and carrying on. */
+function strip(go: FrontAsks, mode: Mode, run: RunView): HTMLElement {
+  const slot = slotOf(run);
+  const where = run.endless
+    ? endlessWhere(run)
+    : `${wayPrefix(run)}Room ${run.room + 1} of ${ROOM_COUNT}. Health ${run.resolve}.`;
   return el(
     "div",
     "k-card lit run",
     {},
     el(
       "div",
-      "k-col k-grow tight",
+      "what k-grow",
       {},
-      el("b", "k-gold", { text: TRAILS[run.trail]?.name ?? "" }),
-      el("span", "k-dim", { text: `${wayPrefix(run)}Room ${run.room + 1} of ${ROOM_COUNT}. Health ${run.resolve}.` }),
+      el("b", "k-gold", { text: run.endless ? mode.name : (TRAILS[run.trail]?.name ?? "") }),
+      el("span", "k-dim", { text: where }),
     ),
     el(
       "div",
@@ -123,8 +152,8 @@ function strip(go: FrontAsks, run: RunView): HTMLElement {
       homeOf(go, run),
       el(
         "button",
-        "k-btn",
-        { type: "button", id: "carryon", onclick: () => go.carryOn() },
+        "k-btn sm",
+        { type: "button", id: idFor("carryon", slot), onclick: () => go.carryOn(slot) },
         pic(glyph("play")),
         "Carry on",
       ),
@@ -232,19 +261,17 @@ function trailsOf(go: FrontAsks, at: At): HTMLElement[] {
 /** Set out, or carry on with the run laid out (and beside it New raid); under them, why not or what a new raid ends. */
 function footOfCard(go: FrontAsks, mode: Mode, at: At): HTMLElement {
   const foot = footOf(mode, at);
+  const run = mode.run(at);
+  const setOut = (): void => {
+    const c = mode.setOut?.(at);
+    if (c?.do === "endless") go.endless(c.way);
+    else if (c) go.start(c.trail, c.own === true);
+  };
   const start = (words: string, look: string): HTMLElement =>
     el(
       "button",
       `k-btn ${look}`,
-      {
-        type: "button",
-        id: "start",
-        disabled: foot.off,
-        onclick: () => {
-          const c = mode.setOut?.(at);
-          if (c) go.start(c.trail, c.own === true);
-        },
-      },
+      { type: "button", id: "start", disabled: foot.off, onclick: setOut },
       pic(glyph("swords")),
       words,
     );
@@ -262,7 +289,7 @@ function footOfCard(go: FrontAsks, mode: Mode, at: At): HTMLElement {
         : el(
             "button",
             "k-btn",
-            { type: "button", id: "mode-carry", onclick: () => go.carryOn() },
+            { type: "button", id: "mode-carry", onclick: () => run && go.carryOn(slotOf(run)) },
             pic(glyph("play")),
             "Carry on",
           ),
@@ -271,8 +298,12 @@ function footOfCard(go: FrontAsks, mode: Mode, at: At): HTMLElement {
   );
 }
 
-/** The chosen mode: its name, what it is, a picture of the table, its options, and its foot. */
-function card(go: FrontAsks, mode: Mode, at: At): HTMLElement {
+/**
+ * The chosen mode: its name, what it is, a picture of the table, its options, and its foot. The
+ * words of every mode shown in its category are laid in one place, the others hidden, so choosing
+ * between them moves nothing.
+ */
+function card(go: FrontAsks, mode: Mode, at: At, shown: readonly Mode[]): HTMLElement {
   const run = mode.run(at);
   // The raid laid out, while it has fought no room, stays the one set out on: what is chosen is for the next.
   const keep = run !== null && unfought(run);
@@ -283,7 +314,7 @@ function card(go: FrontAsks, mode: Mode, at: At): HTMLElement {
           ...trailsOf(go, at),
           ...waysOf(keep, go.redraw),
         ]
-      : [];
+      : woodsOpts(mode, at);
   return el(
     "section",
     "k-card mode",
@@ -293,7 +324,22 @@ function card(go: FrontAsks, mode: Mode, at: At): HTMLElement {
       "mode-head",
       {},
       figPic(paintLook(S.looks)),
-      el("div", "k-col tight", {}, el("h2", "k-title big", { text: mode.name }), el("p", "k-d", { text: mode.text })),
+      el(
+        "div",
+        "stack",
+        {},
+        ...shown
+          .filter((m) => m.category === mode.category)
+          .map((m) =>
+            el(
+              "div",
+              "k-col tight",
+              unshown(m === mode),
+              el("h2", "k-title big", { text: m.name }),
+              el("p", "k-d", { text: m.text }),
+            ),
+          ),
+      ),
     ),
     el("div", "mode-opts k-scroll", {}, ...options),
     footOfCard(go, mode, at),
@@ -313,16 +359,21 @@ const boardRow = (r: BoardRow): HTMLElement =>
     el("b", "k-gold", { text: r.value }),
   );
 
-/** A board: its title, its rows (the member's own lit), and the member's own under them when it is below them. */
-export function boardOf(board: Board): HTMLElement {
+/**
+ * A board: its title (and under it, `tabs`, the boards to choose between), its rows (the member's own
+ * lit), and the member's own under them when it is below them; one with nobody on it says so.
+ */
+export function boardOf(board: Board, tabs: HTMLElement | null = null): HTMLElement {
   const { top, under } = listed(board, BOARD_MOST);
   return el(
     "section",
     "k-card board",
     { "aria-label": board.title },
     el("h2", "k-title", { text: board.title }),
+    tabs,
     ...top.map(boardRow),
     ...(under ? [el("hr", "k-rule"), boardRow(under)] : []),
+    top.length === 0 && !under ? el("p", "k-dim", { text: "Nobody yet." }) : null,
   );
 }
 
@@ -356,17 +407,26 @@ function bottom(go: FrontAsks): HTMLElement {
 
 /** What the front page's panel holds. */
 export function frontBody(go: FrontAsks): HTMLElement {
-  if (Date.now() - guild.readAt >= READ_EVERY_MS) void readGuild(go.redraw);
+  readNow("guild", () => readGuild(go.redraw));
   const at = atNow();
   const shown = shownModes(MODES);
   const mode = shown.find((m) => m.id === kept.mode) ?? THE_TRAILS;
-  const runs = MODES.flatMap((m) => m.run(at) ?? []);
+  readWoods(mode, at, go.redraw);
+  const runs = laidOut(at);
   return el(
     "div",
     "k-body menu",
     {},
-    runs.length > 0 ? el("div", "runs", {}, ...runs.map((r) => strip(go, r))) : null,
-    el("div", "menu-cols", {}, picker(go, shown, mode), card(go, mode, at), boardOf(mode.board(at))),
+    takenLine(),
+    runs.length > 0 ? el("div", "runs", {}, ...runs.map((r) => strip(go, r.mode, r.run))) : null,
+    el(
+      "div",
+      "menu-cols",
+      {},
+      picker(go, shown, mode),
+      card(go, mode, at, shown),
+      boardOf(mode.board(at), spanTabs(mode, at, go.redraw)),
+    ),
     bottom(go),
   );
 }

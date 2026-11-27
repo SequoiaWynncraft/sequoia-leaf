@@ -14,6 +14,10 @@
  * a guess was wrong, or something here was changed by hand), the page takes Leaf's and draws again.
  * Only the member's view settings stay in the browser (`keep.ts`).
  *
+ * Leaf's table keeps two runs, the run in hand and the endless run beside it; the table plays one of
+ * them at a time (`S.slot`), and every command for a run is aimed at that one (`endless: true` for
+ * the endless run).
+ *
  * What the table is showing is one value (`S.screen`, `screen.ts`), moved on only by `go`, which
  * also asks Leaf for a room's takings once its fight has been played; whoever animates the table
  * hears each move (`onScreen`).
@@ -21,6 +25,7 @@
 import { makeHold, openPlay, type Play, type Trouble, waitingLook } from "@sequoia-leaf/kit/play.ts";
 import {
   type Almanac,
+  isRunCommand,
   type Looks,
   newAlmanac,
   newLooks,
@@ -38,15 +43,24 @@ import {
 import { keepPrefs, newPrefs, type Prefs, readPrefs } from "./keep.ts";
 import { endedOf, type Event, type Screen, step, type Table } from "./screen.ts";
 
+/** Which of the table's two runs the page plays: the run in hand, or the endless run beside it. */
+export type Slot = "main" | "endless";
+
 export const S: {
-  /** The run in hand, as the page's copy; while the screen shows a run that has ended, that run. */
+  /** The run the table plays (`slot`), as the page's copy; while the screen shows a run that has ended, that run. */
   run: RunView | null;
+  /** Which of the table's runs that is. */
+  slot: Slot;
+  /** Both runs laid out, as Leaf has them: the run in hand and the endless run. */
+  laid: { run: RunView | null; endless: RunView | null };
   almanac: Almanac;
   looks: Looks;
   /** The trail picked to set out on next. */
   trail: number;
-  /** Runs begun at this table. */
+  /** The number of the run the table plays: runs begun at this table, or for the endless run endless runs begun. */
   runs: number;
+  /** This week's deepest rooms won in each endless way, as Leaf has them. */
+  week: TableView["week"];
   /** The figures the member has pulled, with their levels. */
   roster: Roster;
   prefs: Prefs;
@@ -54,10 +68,13 @@ export const S: {
   screen: Screen;
 } = {
   run: null,
+  slot: "main",
+  laid: { run: null, endless: null },
   almanac: newAlmanac(),
   looks: newLooks(),
   trail: 0,
   runs: 0,
+  week: { at: 0, deepest: { wilds: 0, deep: 0 } },
   roster: {},
   prefs: newPrefs(),
   screen: { at: "front" },
@@ -113,21 +130,40 @@ function heldOff(command: RaidCommand): boolean {
 export const busy = (): boolean => hold.held(true);
 
 /** What the page shows, as text, to tell whether Leaf's answer changed it. */
-const picture = (): string => JSON.stringify([S.run, S.almanac, S.looks, S.trail, S.runs, S.roster]);
+const picture = (): string => JSON.stringify([S.run, S.laid, S.almanac, S.looks, S.trail, S.runs, S.week, S.roster]);
+
+/** The run in a slot of Leaf's table. */
+const inSlot = (view: TableView, slot: Slot): RunView | null => (slot === "endless" ? view.endless : view.run);
 
 /** Takes Leaf's state (the copy, with what is still waiting on top) into what the page shows. */
 function take(view: TableView): void {
   S.almanac = view.almanac;
   S.looks = view.looks;
   S.trail = view.trail;
-  S.runs = view.runs;
+  S.runs = S.slot === "endless" ? view.ventures : view.runs;
+  S.week = view.week;
   S.roster = view.roster;
+  S.laid = { run: view.run, endless: view.endless };
   // A run that has ended stays on the table, for its last page, while the screen shows it.
-  S.run = view.run ?? endedOf(S.screen)?.run ?? null;
+  S.run = inSlot(view, S.slot) ?? endedOf(S.screen)?.run ?? null;
 }
 
-/** Leaf's run as the page has it, and the runs begun at the table: what the screen sits down to. */
-export const tableNow = (): Table => ({ run: table?.state.run ?? null, runs: S.runs });
+/** Leaf's run in the slot the table plays, as the page has it, and its number: what the screen sits down to. */
+export const tableNow = (): Table => ({ run: table ? inSlot(table.state, S.slot) : null, runs: S.runs });
+
+/** Where both runs laid out stand, as text: what their strips on the front page say. */
+export const laidKey = (): string =>
+  [S.laid.run, S.laid.endless].map((r) => (r ? `${r.room}.${r.record.length}.${r.resolve}` : "-")).join(":");
+
+/** Has the table play the run in a slot, from the front page. */
+export function playSlot(slot: Slot): void {
+  S.slot = slot;
+  if (table) take(table.state);
+}
+
+/** A command as it is sent: one for a run is aimed at the run the table plays. */
+const aimed = (command: RaidCommand): RaidCommand =>
+  S.slot === "endless" && isRunCommand(command) ? { ...command, endless: true } : command;
 
 let moving = false;
 const moves: Event[] = [];
@@ -158,7 +194,7 @@ export function go(event: Event): void {
 async function settleRoom(): Promise<void> {
   const play = table;
   if (!play) return;
-  const answer = await hold.until(false, play.send({ do: "take" }));
+  const answer = await hold.until(false, play.send(aimed({ do: "take" })));
   take(play.state);
   if ("refused" in answer) {
     go({ e: "elsewhere", ...tableNow() });
@@ -211,8 +247,9 @@ async function sent(play: Play<TableView, RaidCommand, RaidNote>, command: RaidC
  * sends it. A command they turn down is said so here and not sent. Null for one that must `ask`,
  * and for one held off while Leaf answers (nothing is done or sent).
  */
-export function doNow(command: RaidCommand): Did | null {
+export function doNow(asked: RaidCommand): Did | null {
   const play = table;
+  const command = aimed(asked);
   if (!play || heldOff(command)) return null;
   const guess = predict(play.state, command);
   if (!guess) return null;
@@ -234,8 +271,9 @@ export function doNow(command: RaidCommand): Did | null {
  *
  * Null, with nothing asked, for one held off while Leaf answers another.
  */
-export async function ask(command: RaidCommand, waiting: Element | null = null): Promise<Did | null> {
+export async function ask(asked: RaidCommand, waiting: Element | null = null): Promise<Did | null> {
   const play = table;
+  const command = aimed(asked);
   if (!play || heldOff(command)) return null;
   const answer = await hold.until(STEADY.has(command.do), waitingLook(waiting, play.send(command)));
   take(play.state);
