@@ -1,17 +1,18 @@
 /**
  * The small verbs a fight is written in: hurt, heal, shield, stun, slow, burn, crack, taunt, hide,
  * leap, knock back, summon, give mana, and "this lands in a moment". Attacks, abilities, traits and items are all
- * made of these, and each one writes down what it did as an event.
+ * made of these, and each one writes down what it did as an event. Where a verb is a moment for
+ * hooks (an enemy's ability landing, a figure hurt or falling), it asks them (`hooks.ts`) and names
+ * nothing it asks.
  */
-import { boonNumber } from "../content/boons.ts";
 import type { Catalog } from "../content/catalog.ts";
-import { abilityNumber, specOf, type UnitKind } from "../content/figures.ts";
+import type { UnitKind } from "../content/figures.ts";
 import { carriedTraits, type ItemId, itemNumber } from "../content/items.ts";
 import { FIGHT } from "../content/rooms.ts";
-import { traitDraw, traitNumber } from "../content/traits.ts";
-import { distance, line, mirror, neighboursFor, type Side, within } from "../hex.ts";
+import { traitDraw } from "../content/traits.ts";
+import { distance, line, mirror, neighboursFor, type Side } from "../hex.ts";
 import { emit, FOREVER, secs } from "./clock.ts";
-import { freeNear, getUp, graidFalls, summon } from "./enter.ts";
+import { whenFalls, whenFell, whenHurt, whenStruck } from "./hooks.ts";
 import type { DamageKind, DamageSource, Fight, HealSource, LeapWhy, Unit } from "./types.ts";
 
 export { emit, flight, FOREVER, HZ, later, secs } from "./clock.ts";
@@ -21,6 +22,9 @@ export { enter, freeNear, getUp, lastFallen, type Start, summon } from "./enter.
 export const powered = (u: Unit, amount: number): number => (amount * u.power) / 100;
 /** Whether anything can be aimed at it: up, and not underground. */
 export const targetable = (f: Fight, u: Unit): boolean => u.alive && u.hiddenUntil <= f.tick;
+/** Whether what an enemy's ability lands on a figure is blocked (`struck`). A friend's never is. */
+export const blocks = (f: Fight, target: Unit, by: Unit | null): boolean =>
+  by !== null && by.side !== target.side && whenStruck(f, target, by);
 const other = (side: Side): Side => (side === 0 ? 1 : 0);
 /** A hex's place in the order a side breaks ties in, so that both sides break them alike. */
 export const order = (side: Side, cell: number): number => (side === 0 ? cell : mirror(cell));
@@ -148,9 +152,10 @@ export function leap(f: Fight, u: Unit, to: number, why: LeapWhy): void {
   u.busyUntil = Math.max(u.busyUntil, f.tick + 2);
   emit(f, { t: "leap", id: u.id, from, to, why });
 }
-/** Pushes a figure straight away from a hex, as far as there are free hexes, up to a number. A Rock stays; so does anything too big. */
-export function knockBack(f: Fight, target: Unit, from: number, hexes: number): number {
+/** Pushes a figure straight away from whoever pushes it, as far as there are free hexes, up to a number. A Rock stays; so does anything too big. */
+export function knockBack(f: Fight, target: Unit, by: Unit, hexes: number): number {
   if (!target.alive || target.rooted || target.steady || hexes <= 0) return 0;
+  const from = by.cell;
   const reach = distance(from, target.cell);
   const path = line(from, target.cell, reach + hexes);
   let to = -1;
@@ -161,7 +166,8 @@ export function knockBack(f: Fight, target: Unit, from: number, hexes: number): 
     to = cell;
     moved++;
   }
-  if (to >= 0) leap(f, target, to, "knocked");
+  if (to < 0 || blocks(f, target, by)) return 0;
+  leap(f, target, to, "knocked");
   return moved;
 }
 
@@ -221,12 +227,12 @@ export function stun(f: Fight, target: Unit, seconds: number, by: Unit | null): 
   if (target.steady) ticks = Math.round(ticks / 2);
   if (target.stunCut > 0) ticks = Math.round((ticks * (100 - target.stunCut)) / 100);
   const until = f.tick + ticks;
-  if (ticks <= 0 || until <= target.stunUntil) return;
+  if (ticks <= 0 || until <= target.stunUntil || blocks(f, target, by)) return;
   target.stunUntil = until;
   emit(f, { t: "status", id: target.id, status: "stun", on: true, ticks, amount: 0, by: by?.id ?? -1 });
 }
 export function slow(f: Fight, target: Unit, percent: number, seconds: number, by: Unit | null): void {
-  if (!targetable(f, target) || percent <= 0) return;
+  if (!targetable(f, target) || percent <= 0 || blocks(f, target, by)) return;
   const ticks = secs(seconds);
   const running = target.slowUntil > f.tick;
   target.slowBy = running ? Math.max(target.slowBy, percent) : percent;
@@ -235,16 +241,16 @@ export function slow(f: Fight, target: Unit, percent: number, seconds: number, b
 }
 /**
  * Sets something alight: a share of its health every second, and weaker healing meanwhile, for as
- * long as Ember's first step says. Burning again keeps the hotter fire.
+ * long as a burn lasts (`Fight.burning`). Burning again keeps the hotter fire.
  */
 export function burn(f: Fight, target: Unit, percent: number, by: Unit | null): void {
   if (!targetable(f, target) || percent <= 0) return;
-  const burnFor = secs(traitNumber(f.cat, "ember", "lasts", 1));
+  const burnFor = f.burning.lasts;
   const running = target.burnUntil > f.tick;
   const hotter = !running || percent > target.burnBy;
   target.burnBy = running ? Math.max(target.burnBy, percent) : percent;
   target.burnUntil = f.tick + burnFor;
-  target.burnDamp = traitNumber(f.cat, "ember", "damp", 1);
+  target.burnDamp = f.burning.damp;
   if (by) target.burnFrom = by.id;
   if (hotter) {
     emit(f, {
@@ -259,7 +265,7 @@ export function burn(f: Fight, target: Unit, percent: number, by: Unit | null): 
   }
 }
 export function taunt(f: Fight, target: Unit, seconds: number, by: Unit): void {
-  if (!targetable(f, target)) return;
+  if (!targetable(f, target) || blocks(f, target, by)) return;
   const ticks = secs(seconds);
   target.tauntUntil = f.tick + ticks;
   target.tauntBy = by.id;
@@ -313,15 +319,13 @@ export function heal(f: Fight, target: Unit, raw: number, source: HealSource, by
   return n;
 }
 /**
- * Mender at its top step: healing past a friend's full health becomes a shield for a while, up to a
- * share of that friend's health (`over`), shields already on it counted.
+ * Healing past a friend's full health becomes a shield for a while (Mender at its top step), up to a
+ * share of that friend's health (the healer's `overheal`), shields already on it counted.
  */
 function overflow(f: Fight, target: Unit, extra: number, by: Unit): void {
-  const step = f.traits[by.side].mender ?? 0;
-  const room = Math.floor((target.maxHp * traitNumber(f.cat, "mender", "over", step)) / 100 - target.shield);
+  const room = Math.floor((target.maxHp * by.overheal) / 100 - target.shield);
   // The healer's shield: theirs to count, already as strong as Mender makes it.
-  if (Math.min(extra, room) >= 1)
-    shieldOn(f, target, Math.round(Math.min(extra, room)), traitNumber(f.cat, "mender", "lasts", step), by);
+  if (Math.min(extra, room) >= 1) shieldOn(f, target, Math.round(Math.min(extra, room)), by.overhealFor, by);
 }
 /** Puts a shield up, or adds to the one there. `seconds` of 0 lasts until it is broken. */
 export function shieldUp(f: Fight, target: Unit, raw: number, seconds: number, by: Unit | null): number {
@@ -343,9 +347,14 @@ function shieldOn(f: Fight, target: Unit, n: number, seconds: number, by: Unit |
 
 // ---------- hurting ----------
 
+/** The armour a hit of a kind meets: an attack by one that pierces meets less of it. */
+const armourAgainst = (target: Unit, by: Unit | null, source: DamageSource): number =>
+  by && by.pierce > 0 && source === "attack" ? target.armour * (1 - by.pierce / 100) : target.armour;
+
 /**
  * Lands damage. Physical damage meets armour and magic meets ward (damage x 100 / (100 + defence));
- * true damage meets nothing. A shield takes it first. Gives back what the target lost.
+ * true damage meets nothing. A shield takes it first. Gives back what the target lost. An enemy's
+ * ability may be blocked (`struck`), and then nothing of it lands.
  */
 export function hurt(
   f: Fight,
@@ -357,12 +366,11 @@ export function hurt(
   hard = false,
 ): number {
   if (!target.alive || target.hiddenUntil > f.tick || raw <= 0) return 0;
+  if (source === "ability" && blocks(f, target, by)) return 0;
   const direct = source === "attack" || source === "ability";
   let amount = raw;
   if (kind === "physical") {
-    let armour = target.armour;
-    if (by && by.pierce > 0 && source === "attack") armour *= 1 - by.pierce / 100;
-    amount = (amount * 100) / (100 + Math.max(0, armour));
+    amount = (amount * 100) / (100 + Math.max(0, armourAgainst(target, by, source)));
   } else if (kind === "magic") {
     amount = (amount * 100) / (100 + Math.max(0, target.ward));
   }
@@ -397,7 +405,7 @@ export function hurt(
   }
   if (direct && by && target.hp > 0) leaves(f, target, by);
   if (target.hp <= 0) fall(f, target, by);
-  else answer(f, target);
+  else whenHurt(f, target);
   return n;
 }
 
@@ -408,38 +416,11 @@ function leaves(f: Fight, target: Unit, by: Unit): void {
     crack(f, target, Math.min(by.crack, by.crackMost - target.cracked), by);
 }
 
-/** What a figure does about having been hurt and still being up. */
-function answer(f: Fight, u: Unit): void {
-  if (u.digs && u.hp * 2 < u.maxHp) {
-    // Burrow: the first time under half health, it digs in where it stands and keeps fighting.
-    u.digs = false;
-    heal(f, u, (u.maxHp * u.digHeal) / 100, "burrow", null);
-    brace(f, u, u.digLess, 0, u.digFor);
-  }
-  if (u.logUnder > 0 && u.hp * 100 < u.maxHp * u.logUnder) {
-    // Hollow Log: once, it climbs inside.
-    const worth = (u.maxHp * u.logShield) / 100;
-    u.logUnder = 0;
-    emit(f, { t: "item", id: u.id, item: "hollowlog" });
-    shieldUp(f, u, worth, u.logFor, null);
-  }
-  if (u.kind === "bigcrab" && !u.called && u.hp * 2 < u.maxHp) {
-    // The big crab calls the roll.
-    u.called = true;
-    const crabs = abilityNumber(f.cat, "bigcrab", "crabs", u.stars);
-    for (let i = 0; i < crabs; i++) summon(f, "uncounted", 2, u.side, freeNear(f, u.cell), u);
-  }
-}
-
+/** Falls, unless what touches it gets it back up (`falls`); a figure getting back up in a moment still counts as standing. */
 function fall(f: Fight, u: Unit, by: Unit | null): void {
-  if (f.wind[u.side] && !u.summoned) {
-    // Second Wind: the first to fall gets back up, with whatever was on it shaken off.
-    f.wind[u.side] = false;
-    getUp(f, u, (u.maxHp * boonNumber(f.cat, "secondwind", "health")) / 100, "wind");
-    return;
-  }
-  // A Graid figure with its getting back up to come is down for a moment, and still counts as standing.
-  const back = graidFalls(f, u);
+  const rise = whenFalls(f, u);
+  if (rise?.up === "now") return;
+  const back = rise?.back ?? 0;
   u.alive = false;
   u.downs++;
   u.hp = 0;
@@ -451,22 +432,7 @@ function fall(f: Fight, u: Unit, by: Unit | null): void {
     u.fallNo = ++f.falls;
   }
   emit(f, { t: "fall", id: u.id, by: by?.id ?? -1, cell: u.cell, ...(back > 0 && { back }) });
-  if (u.kind === "toadstool") {
-    // It puffs as it goes: said as an ability, so that a screen can show the spores spreading.
-    const spores = powered(u, abilityNumber(f.cat, "toadstool", "damage", u.stars));
-    const caught = foesWithin(f, u.side, u.cell, 2);
-    emit(f, {
-      t: "cast",
-      id: u.id,
-      kind: u.kind,
-      name: specOf(f.cat, u.kind).ability?.name ?? "",
-      shape: "ring",
-      cells: [u.cell, ...within(u.cell, 2)],
-      targets: caught.map((o) => o.id),
-      ticks: 0,
-    });
-    for (const o of caught) hurt(f, o, spores, "magic", "ability", u);
-  }
+  whenFell(f, u);
 }
 
 export { other as otherSide };

@@ -91,6 +91,7 @@ export const GROOT_NIGHT: Patch = {
         },
         quip: "Taps one foot. Has done since spring.",
         prize: "Sprite",
+        stands: "mana",
       },
       // Eats you shell and all: three bites, each at whoever it is after then.
       munch: {
@@ -190,6 +191,7 @@ export const GROOT_NIGHT: Patch = {
         },
         quip: "Calls the roll. Calls the raid.",
         prize: "Yggdrasil",
+        stands: "room",
       },
     },
     // Chorus as a third trait.

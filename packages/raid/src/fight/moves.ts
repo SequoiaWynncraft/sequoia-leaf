@@ -4,7 +4,21 @@
  */
 import { FIGHT } from "../content/rooms.ts";
 import { distance, line, neighboursFor, walkLength, within } from "../hex.ts";
-import { emit, flight, foesWithin, freeBeside, freeNear, hurt, HZ, later, leap, order, secs, unitAt } from "./core.ts";
+import {
+  blocks,
+  emit,
+  flight,
+  foesWithin,
+  freeBeside,
+  freeNear,
+  hurt,
+  HZ,
+  later,
+  leap,
+  order,
+  secs,
+  unitAt,
+} from "./core.ts";
 import { fly } from "./mind.ts";
 import type { DamageKind, Fight, Unit, Zone, ZoneKind } from "./types.ts";
 
@@ -64,7 +78,7 @@ export function pull(f: Fight, by: Unit, o: Unit): boolean {
   const to = [...line(o.cell, by.cell, 1), ...neighboursFor(by.side, o.cell)].find(
     (c) => f.taken[c] === -1 && distance(c, by.cell) < near,
   );
-  if (to === undefined) return false;
+  if (to === undefined || blocks(f, o, by)) return false;
   leap(f, o, to, "pull");
   return true;
 }

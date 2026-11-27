@@ -10,14 +10,11 @@ import { chance, mix } from "@sequoia-leaf/core";
  * dusk tick; then every figure still up has its turn (uses its ability if its mana is full and it is
  * worth using, else attacks whoever it is after if they are in reach, else walks a hex toward them).
  */
-import { boonNumber } from "../content/boons.ts";
 import { catalogOf } from "../content/catalog.ts";
-import { abilityNumber, figureIn, isFigureId, specOf, type Stars, starScale } from "../content/figures.ts";
-import { carries, isFinishedId, type ItemId, itemNumber as numberOf, itemStats } from "../content/items.ts";
+import { specOf, starScale } from "../content/figures.ts";
 import { FIGHT, levelBoost } from "../content/rooms.ts";
-import { traitNumber } from "../content/traits.ts";
-import { backRow, cellAt, colOf, distance, HOME_ROWS, seatCell, type Side, stepToward } from "../hex.ts";
-import type { Party, Placed } from "../party.ts";
+import { distance, seatCell, type Side, stepToward } from "../hex.ts";
+import { type Party, type Placed, traitSteps } from "../party.ts";
 import { cast } from "./abilities.ts";
 import {
   drawOf,
@@ -30,106 +27,24 @@ import {
   heal,
   hurt,
   HZ,
-  leap,
-  mostHurt,
   otherSide,
-  powered,
-  secs,
-  shieldUp,
-  summon,
   targetable,
 } from "./core.ts";
+import { burnOf, HOOKS } from "./effects.ts";
+import { type Tables, unarmed, whenAttacks, whenCasts, whenSecond } from "./hooks.ts";
 import { drawnFoe, fly, foesByDraw, onTarget } from "./mind.ts";
 import { slowNow } from "./moves.ts";
 import { attackReach, boardFor, ruleSeated, wildsOf } from "./rules.ts";
-import { switchOn } from "./switch.ts";
+import { growing, seatedAll, type Stats, switchOn } from "./seating.ts";
 import type { Fight, FightEvent, FightResult, FightSetup, FightSummary, Pending, StatusId, Unit } from "./types.ts";
 
 // ---------- sitting down ----------
 
-/** What a finished item does besides its stats, as numbers on whoever holds it. A component's or an emblem's is all in its stats and the trait it grants. */
-function equip(f: Fight, u: Unit, item: ItemId): void {
-  const itemNumber = (id: ItemId, name: string): number => numberOf(f.cat, id, name);
-  if (!isFinishedId(item)) return;
-  switch (item) {
-    case "blackthorn":
-      u.pierce = itemNumber(item, "pierce");
-      break;
-    case "wasptail":
-      u.twice = itemNumber(item, "every");
-      break;
-    case "glowthorn":
-      u.manaMore += itemNumber(item, "mana");
-      break;
-    case "hedgehog":
-      u.prickle += itemNumber(item, "prickle");
-      break;
-    case "conker":
-      u.clip += itemNumber(item, "clip");
-      break;
-    case "hummingbird":
-      u.range += itemNumber(item, "reach");
-      break;
-    case "mothlantern":
-      if (u.manaFull > 0) u.mana = Math.max(u.mana, Math.round((u.manaFull * itemNumber(item, "head")) / 100));
-      break;
-    case "quilt":
-      u.slip += itemNumber(item, "slip");
-      break;
-    case "honeycake":
-      u.leech += itemNumber(item, "leech");
-      break;
-    case "fairyring":
-      u.powerGrow += itemNumber(item, "grow");
-      break;
-    case "lichen":
-      u.castShield += itemNumber(item, "shield");
-      u.castShieldFor = itemNumber(item, "lasts");
-      break;
-    case "stewpot":
-      u.serveEvery = secs(itemNumber(item, "every"));
-      u.serveHeal = itemNumber(item, "heal");
-      break;
-    case "stump":
-      u.noHard = true;
-      u.stunCut = itemNumber(item, "steady");
-      break;
-    case "hollowlog":
-      u.logUnder = itemNumber(item, "under");
-      u.logShield = itemNumber(item, "shield");
-      u.logFor = itemNumber(item, "lasts");
-      break;
-    case "hoard":
-      u.regrow += itemNumber(item, "regrow");
-      break;
-  }
-}
-
-/** Puts one of a party's figures on its hex, with its stars, its level, its items and its party's boons counted in. */
-function seat(f: Fight, side: Side, p: Placed, party: Party): Unit {
+/** Puts one of a party's figures on its hex, with its stars, its level, and its items and what touches it as it sits down (`growing`) counted in. */
+function seat(f: Fight, side: Side, p: Placed, party: Party, grows: (p: Placed) => Stats): Unit {
   const spec = specOf(f.cat, p.kind);
   const might = party.might / 100;
-  let health = 0;
-  let attack = 0;
-  let speed = 0;
-  let power = 0;
-  let armour = 0;
-  let ward = 0;
-  for (const item of p.items) {
-    const s = itemStats(f.cat, item);
-    health += s.health;
-    attack += s.attack;
-    speed += s.speed;
-    power += s.power;
-    armour += s.armour;
-    ward += s.ward;
-  }
-  // What Greg has eaten: percent of his health, for good.
-  if (p.kind === "greg") health += Math.min(p.fed, traitNumber(f.cat, "greg", "most", 1));
-  if (party.boons.includes("smallfry") && isFigureId(p.kind) && figureIn(f.cat, p.kind).tier <= 2) {
-    health += boonNumber(f.cat, "smallfry", "boost");
-    attack += boonNumber(f.cat, "smallfry", "boost");
-  }
+  const { health, attack, speed, power, armour, ward } = grows(p);
   const star = starScale(p.stars) * (1 + levelBoost(p.level ?? 0) / 100);
   const u = enter(f, {
     side,
@@ -150,50 +65,15 @@ function seat(f: Fight, side: Side, p: Placed, party: Party): Unit {
   u.armour += armour;
   u.ward += ward;
   u.draw = drawOf(f.cat, p.kind, p.items);
-  for (const item of p.items) equip(f, u, item);
-  if (party.boons.includes("headstart")) gainMana(u, boonNumber(f.cat, "headstart", "mana"));
-  if (party.boons.includes("formation")) {
-    const row = Math.floor(p.seat / 7);
-    if (row === 0) u.armour += boonNumber(f.cat, "formation", "armour");
-    if (row === HOME_ROWS - 1) u.speed *= 1 + boonNumber(f.cat, "formation", "speed") / 100;
-  }
   return u;
 }
 
 /**
- * Roll call: the crabs nobody counted turn up beside the first of a side's crabs (whoever carries
- * Crab, a Crab emblem's holder too), as starry as the best of them: as many big and small as the
- * step says.
+ * Seats both parties and switches everything on, by the catalogue of the setup's era and the fight's
+ * own hooks (a test may hand it made-up ones). What happened is in `opening`; the clock has not
+ * started.
  */
-function rollCall(f: Fight, side: Side): void {
-  const step = f.traits[side].crab ?? 0;
-  if (step <= 0) return;
-  const crabs = f.units.filter((u) => u.side === side && carries(f.cat, u.kind, u.items, "crab"));
-  const anchor = crabs[0] ?? f.units.find((u) => u.side === side);
-  if (!anchor) return;
-  const stars = crabs.reduce<Stars>((most, u) => (u.stars > most ? u.stars : most), 1);
-  for (let n = traitNumber(f.cat, "crab", "big", step); n > 0; n--)
-    summon(f, "biguncounted", stars, side, freeNear(f, anchor.cell, 4), null);
-  for (let n = traitNumber(f.cat, "crab", "small", step); n > 0; n--)
-    summon(f, "uncounted", stars, side, freeNear(f, anchor.cell, 4), null);
-}
-
-/** Sneaks with their trait on, and magpies always, start by getting round the back. */
-function leaps(f: Fight): void {
-  for (const u of f.units.slice()) {
-    const sneaks = u.sneakBy > 0 || u.kind === "magpie";
-    if (!sneaks || !u.alive || u.rooted) continue;
-    const to = freeNear(f, cellAt(colOf(u.cell), backRow(otherSide(u.side))), 3);
-    if (to >= 0) leap(f, u, to, "sneak");
-    u.busyUntil = 0;
-  }
-}
-
-/**
- * Seats both parties and switches everything on, by the catalogue of the setup's era (a test may
- * hand it a made-up one). What happened is in `opening`; the clock has not started.
- */
-export function openFight(setup: FightSetup, cat = catalogOf(setup)): Fight {
+export function openFight(setup: FightSetup, cat = catalogOf(setup), hooks: Tables = HOOKS): Fight {
   const [ours, theirs] = setup.sides;
   const seed = setup.seed >>> 0;
   const taken = boardFor(setup);
@@ -210,7 +90,7 @@ export function openFight(setup: FightSetup, cat = catalogOf(setup)): Fight {
     over: false,
     result: null,
     opening,
-    traits: [{}, {}],
+    traits: [traitSteps(cat, ours), traitSteps(cat, theirs)],
     dusk: 0,
     falls: 0,
     wilds: wildsOf(setup),
@@ -218,28 +98,25 @@ export function openFight(setup: FightSetup, cat = catalogOf(setup)): Fight {
     pending: [],
     boons: [ours.boons, theirs.boons],
     might: [ours.might, theirs.might],
-    wind: [ours.boons.includes("secondwind"), theirs.boons.includes("secondwind")],
+    wind: [false, false],
+    burning: burnOf(cat),
+    hooks: unarmed(hooks),
   };
   // Seated turn and turn about, starting with a side the seed picks, so neither always moves first.
   const first: Side = (seed & 1) === 0 ? 0 : 1;
   const order: readonly Side[] = [first, otherSide(first)];
   const lists = [ours, theirs].map((party) => party.figures.toSorted((a, b) => a.seat - b.seat));
   const longest = Math.max(ours.figures.length, theirs.figures.length);
+  const grows = [growing(f, 0, ours), growing(f, 1, theirs)] as const;
   for (let i = 0; i < longest; i++) {
     for (const side of order) {
       const p = lists[side]?.[i];
-      if (p) seat(f, side, p, setup.sides[side]);
+      if (p) seat(f, side, p, setup.sides[side], grows[side]);
     }
   }
   for (const side of order) switchOn(f, side, setup.sides[side]);
   ruleSeated(f, setup);
-  for (const u of f.units) {
-    if (u.kind === "crab" || u.kind === "bigcrab") {
-      shieldUp(f, u, powered(u, abilityNumber(f.cat, u.kind, "shell", u.stars)), 0, null);
-    }
-  }
-  for (const side of order) rollCall(f, side);
-  leaps(f);
+  seatedAll(f, order);
   for (const u of f.units) {
     u.attack0 = u.attack;
     u.busyUntil = 0;
@@ -319,17 +196,15 @@ function strike(f: Fight, u: Unit, t: Unit): void {
   u.target = t.id;
   u.attacks++;
   gainMana(u, FIGHT.manaAttack + u.manaMore);
-  const twice = u.twice > 0 && u.attacks % u.twice === 0;
-  if (twice) emit(f, { t: "item", id: u.id, item: "wasptail" });
+  const hits = 1 + whenAttacks(f, u);
   if (distance(u.cell, t.cell) <= 1) {
     emit(f, { t: "swing", id: u.id, target: t.id });
-    land(f, u, t, true, blowOf(u));
-    if (twice) land(f, u, t, true, blowOf(u));
+    for (let n = 0; n < hits; n++) land(f, u, t, true, blowOf(u));
   } else {
     // Thrown now, with the strength it has now, however long it is in the air.
     const blow = blowOf(u);
     const ticks = flight(u.cell, t.cell);
-    for (let n = 0; n < (twice ? 2 : 1); n++) {
+    for (let n = 0; n < hits; n++) {
       const wait = ticks + n * 2;
       emit(f, { t: "shot", id: u.id, target: t.id, from: u.cell, to: t.cell, ticks: wait, what: "attack" });
       fly(f, t, blow.attack, "physical", wait, () => land(f, u, t, false, blow));
@@ -417,14 +292,7 @@ function act(f: Fight, u: Unit): void {
     u.mana = 0;
     u.casts++;
     u.busyUntil = Math.max(u.busyUntil, now + FIGHT.cast);
-    if (u.powerGrow > 0) {
-      u.power += u.powerGrow;
-      emit(f, { t: "item", id: u.id, item: "fairyring" });
-    }
-    if (u.castShield > 0 && u.alive) {
-      emit(f, { t: "item", id: u.id, item: "lichen" });
-      shieldUp(f, u, (u.maxHp * u.castShield) / 100, u.castShieldFor, null);
-    }
+    whenCasts(f, u);
     return;
   }
   const t = choose(f, u);
@@ -433,7 +301,7 @@ function act(f: Fight, u: Unit): void {
   if (at && u.cool <= 0 && u.attack > 0) strike(f, u, at);
 }
 
-/** Once a second: burns bite, the regrowing regrow, the Stewpot goes round, and after dusk everyone hurts. */
+/** Once a second: burns bite, the regrowing regrow, mana comes by the second, `second` is asked, and after dusk everyone hurts. */
 function everySecond(f: Fight): void {
   const second = f.tick / HZ;
   for (const u of f.units) {
@@ -444,13 +312,7 @@ function everySecond(f: Fight): void {
     }
     if (u.regrow > 0) heal(f, u, (u.maxHp * u.regrow) / 100, "regrow", null);
     if (u.manaRate > 0) gainMana(u, u.manaRate);
-    if (u.serveEvery > 0 && f.tick % u.serveEvery === 0) {
-      const hungry = mostHurt(f, u.side, true)[0];
-      if (hungry) {
-        emit(f, { t: "item", id: u.id, item: "stewpot" });
-        heal(f, hungry, (hungry.maxHp * u.serveHeal) / 100, "item", u);
-      }
-    }
+    whenSecond(f, u);
   }
   if (second > f.wilds.dusk) {
     f.dusk = second - f.wilds.dusk;
