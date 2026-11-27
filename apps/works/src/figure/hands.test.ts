@@ -300,6 +300,23 @@ describe("reach", () => {
     expect(S.world.dir[9 * y.land.w + 40]).toBe(1);
   });
 
+  test("a tunnel raised from its far mouth counts its two mouths, both in reach: gold, and raised", async () => {
+    // The reviewer's case: an eastbound tunnel from 28 to 31, reach from the Hollow ending at 31; raised
+    // to grade 2 by a press on its far mouth, which is no tunnel going on past it to 34.
+    const y = everywhere();
+    stands(y, TUNNEL, 28, 11, 2);
+    await opened(y, 100_000);
+    placeYou(HOLLOW);
+    expect(reachBox()?.x1).toBe(31);
+    expect(beyondReach({ do: "build", kind: TUNNEL, x: 31, y: 11, dir: 0, grade: 2 })).toBeNull();
+    setTool(TUNNEL);
+    setGrade(2);
+    aimAt(31, 11);
+    expect([gold(), aimOf(S.hand)?.why ?? null]).toEqual([true, null]);
+    expect(confirm()).toBe(true);
+    expect([S.world.grade[11 * y.land.w + 28], S.world.grade[11 * y.land.w + 31]]).toEqual([2, 2]);
+  });
+
   test("moving a tunnel's way in onto its far mouth, which would bring the far mouth out of reach, is coral and refused", async () => {
     // The reviewer's case: an eastbound tunnel from 28 to 31; moved one tile on, it would come up at 34.
     const y = everywhere();

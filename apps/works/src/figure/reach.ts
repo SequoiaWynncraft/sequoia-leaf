@@ -25,6 +25,7 @@ import {
   piecesAt,
   placed,
   SPANS,
+  tilesAt,
   tilesOf,
   tunnelExit,
   type Turned,
@@ -71,17 +72,18 @@ function setsDown(y: Yard, p: Piece): number[] {
 }
 
 /**
- * The tiles a build changes: every tile the piece it stands will cover (a tunnel's far mouth where the
- * rules dig it, or over a tunnel the mouth that stands), and every tile of whatever stood there. Over a
- * piece of its kind, set down again raised or turned, that is its tiles as they were and as they will
- * be turned, which differ for a piece of more than one tile that is not square.
+ * The tiles a build changes, as the rules build it. Over one of its kind, which the rules lay again
+ * only on its own tile, it is that piece set down again where it stands, raised or turned: the piece
+ * as it stands (a tunnel by its two mouths), and every tile it will cover as it then faces, which
+ * differ for a piece of more than one tile that is not square. Else every tile the new piece will
+ * cover (a tunnel's far mouth where the rules dig it), and every tile of whatever stood there.
  */
 function built(y: Yard, act: Extract<Act, { do: "build" }>): number[] {
   const i = at(y, act.x, act.y);
-  const over = i >= 0 && y.kind[i] === act.kind;
-  const exit = SPANS[act.kind] === 1 && !over ? tunnelExit(y, act.x, act.y, act.dir) : null;
-  const span = over ? Math.abs(y.span[i] ?? 0) : (exit?.span ?? 0);
-  return [...new Set(setsDown(y, { kind: act.kind, x: act.x, y: act.y, dir: act.dir, span }))];
+  if (i >= 0 && y.kind[i] === act.kind)
+    return [...new Set([...taken(y, [i]), ...tilesAt(act.kind, act.x, act.y, act.dir, y.land.w, y.land.h)])];
+  const exit = SPANS[act.kind] === 1 ? tunnelExit(y, act.x, act.y, act.dir) : null;
+  return setsDown(y, { kind: act.kind, x: act.x, y: act.y, dir: act.dir, span: exit?.span ?? 0 });
 }
 
 /**
