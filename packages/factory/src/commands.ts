@@ -61,17 +61,8 @@ import {
   unqueue,
   unstudy,
 } from "./orders.ts";
-import {
-  blueprintAt,
-  clear,
-  copyOf,
-  deleteBlueprint,
-  move,
-  type Piece,
-  saveBlueprint,
-  stand,
-  upgrade,
-} from "./pieces.ts";
+import { blueprintAt, clear, copyOf, deleteBlueprint, move, type Piece, saveBlueprint, stand } from "./pieces.ts";
+import { type Raise, upgradeAs } from "./raised.ts";
 import { REASON } from "./reasons.ts";
 import { type Leg, legPiece } from "./route.ts";
 import {
@@ -103,7 +94,7 @@ interface Carries {
   remove: At;
   clear: { readonly tiles: readonly number[] };
   /** With `grade`, raised to it, not the highest; for one tile (a card's Upgrade) with no tool. */
-  upgrade: { readonly tiles: readonly number[]; readonly grade?: number };
+  upgrade: { readonly tiles: readonly number[]; readonly raise?: Raise };
   saveBlueprint: { readonly slot: number; readonly tiles: readonly number[] };
   /** Every piece in the yard, as a plan of the whole yard (`whole.ts`). */
   saveYard: { readonly slot: number };
@@ -334,10 +325,10 @@ export const COMMANDS: { readonly [D in Name]: Spec<D> } = {
   },
   upgrade: {
     refused: "cannot_upgrade",
-    lock: (a) => (a.grade !== undefined && a.tiles.length === 1 ? null : { use: "upgrade" }),
-    read: (_v, f) => f.tiles && f.grade && { do: "upgrade", tiles: f.tiles, ...f.grade },
-    write: (a) => ({ tiles: a.tiles, ...(a.grade === undefined ? {} : { grade: a.grade }) }),
-    act: (y, a, coins, no) => spent(y, upgrade(y, a.tiles, coins, a.grade), REASON.upgrade, no),
+    lock: (a) => (a.raise && a.tiles.length === 1 ? null : { use: "upgrade" }),
+    read: (_v, f) => f.tiles && f.raise && { do: "upgrade", tiles: f.tiles, ...f.raise },
+    write: ({ tiles, raise: r }) => ({ tiles, ...(r && { grade: r.grade, kind: kindName(r.kind), from: r.from }) }),
+    act: (y, a, coins, no) => spent(y, upgradeAs(y, a.tiles, coins, a.raise), REASON.upgrade, no),
   },
   saveBlueprint: {
     refused: "cannot_save_blueprint",

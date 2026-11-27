@@ -3,13 +3,13 @@
  * (`later.test.ts`), and for proving a Leaf of version 10 leaves each as a newer Leaf's.
  */
 import * as F from "../src/index.ts";
-import { learn } from "./goals.ts";
+import { beforeReach, learn } from "./goals.ts";
 import { bareLand } from "./land.ts";
 import { must } from "./yards.ts";
 
-/** A bare yard with tier 4 done (tunnels to 5 tiles), and the research named known. */
+/** A bare yard with tier 4 done (tunnels to 5 tiles) but nothing past version 10 (no reach research), and the research named known. */
 export function bare(research: readonly string[] = []): F.Yard {
-  const y = F.create({ land: bareLand(40, 11, [], [36, 5]), tier: 5, seed: 1 });
+  const y = beforeReach(F.create({ land: bareLand(40, 11, [], [36, 5]), tier: 5, seed: 1 }));
   for (const id of research) learn(y, F.goal(id));
   y.history = [];
   return y;
@@ -61,7 +61,7 @@ export const TIER5: Readonly<Record<string, () => F.Yard>> = {
     return alone(y);
   },
   "a 6-tile tunnel in a plan of the whole yard": () => {
-    const y = F.create({ land: bareLand(40, 11, [], [36, 5]), tier: 6, seed: 1 });
+    const y = beforeReach(F.create({ land: bareLand(40, 11, [], [36, 5]), tier: 6, seed: 1 }));
     must(y, tunnel(2, 4, 6));
     must(y, { do: "saveYard", slot: 0 });
     must(y, { do: "remove", x: 2, y: 4 });

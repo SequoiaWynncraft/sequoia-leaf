@@ -305,7 +305,8 @@ export function raiseAt(tx: number, ty: number): boolean {
   if (!isKind(k) || FIXED[k] === 1) return false;
   const grade = (w.grade[i] ?? 0) + 1;
   const cost = priceAt(w, k, x, y, grade);
-  const did = doNow({ do: "upgrade", tiles: [i], grade });
+  // It names the piece as the card saw it: if something else stands there by the time Leaf has it, it is refused.
+  const did = doNow({ do: "upgrade", tiles: [i], raise: { kind: k, from: grade - 1, grade } });
   if (refused(did)) return false;
   lifted(x, y, cost);
   toolHooks.changed();

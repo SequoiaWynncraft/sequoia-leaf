@@ -6,6 +6,7 @@ import { isDir } from "./build.ts";
 import type { ActOf } from "./commands.ts";
 import { LAND } from "./land.ts";
 import { keptOf, type Piece } from "./pieces.ts";
+import type { Raise } from "./raised.ts";
 import { type Leg, legKind, legSpan } from "./route.ts";
 import {
   BELT,
@@ -74,8 +75,8 @@ export interface Fields {
   readonly item: Item | null | undefined;
   readonly tiles: readonly number[] | null;
   readonly slot: number | null;
-  /** A grade the command may say or leave out: as said, nothing when left out, or null for one that is no grade. */
-  readonly grade: { readonly grade?: number } | null;
+  /** One piece raised from its card (`raised.ts`): as said, nothing when no grade is said, or null for one that does not read. */
+  readonly raise: { readonly raise?: Raise } | null;
 }
 export function fieldsOf(v: Record<string, unknown>): Fields {
   return {
@@ -86,10 +87,15 @@ export function fieldsOf(v: Record<string, unknown>): Fields {
         ? v.tiles
         : null,
     slot: whole(v.slot, BLUEPRINTS_MOST - 1) ? v.slot : null,
-    grade: v.grade === undefined ? {} : graded(gradeOf(v.grade)),
+    raise: v.grade === undefined ? {} : raiseOf(v),
   };
 }
-const graded = (grade: number | null): { readonly grade: number } | null => (grade === null ? null : { grade });
+/** The grade raised to, and the kind and grade the piece was seen at, all said, or null. */
+function raiseOf(v: Record<string, unknown>): { readonly raise: Raise } | null {
+  const [grade, kind] = [gradeOf(v.grade), kindNamed(v.kind)];
+  const from = whole(v.from, TOP) && v.from >= 1 ? v.from : null;
+  return grade === null || kind === null || from === null ? null : { raise: { kind, from, grade } };
+}
 
 /** A piece as the wire names it: its kind, and what it is set to make. */
 export const named = (p: Piece): Record<string, unknown> => ({

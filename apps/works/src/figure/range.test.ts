@@ -108,7 +108,7 @@ describe("a card's Upgrade, from anywhere", () => {
     const i = at(S.world, 44, 33);
     expect(S.world.grade[i]).toBe(2);
     await until(() => fake.leaf.commands.length > 0);
-    expect(fake.leaf.commands).toMatchObject([{ do: "upgrade", tiles: [i], grade: 2 }]);
+    expect(fake.leaf.commands).toMatchObject([{ do: "upgrade", tiles: [i], grade: 2, kind: "mill", from: 1 }]);
     expect(fake.leaf.coins).toBe(100_000 - cost);
   });
 });

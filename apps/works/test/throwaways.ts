@@ -122,8 +122,16 @@ const kindOf = (name) => {
   return k;
 };
 const land = bareLand(34, 20, [], [26, 10]);
+// A yard made at tier 4 or later knows Long reach, which a Leaf of version 10 did not: forgotten here,
+// so that what is past version 10 in a yard is the throwaway kinds alone.
+const noReach = (y) => {
+  y.done = y.done.filter((g) => !["longreach", "longerreach"].includes(F.GOALS[g]?.id));
+  y.told = Math.min(y.told, y.done.length);
+  F.reopen(y);
+  return y;
+};
 const fresh = () => {
-  const y = F.create({ land, tier: 4, seed: 1 });
+  const y = noReach(F.create({ land, tier: 4, seed: 1 }));
   for (const n of ["sifter", "forge", "chute"]) y.open.kinds[kindOf(n)] = 1;
   return y;
 };
@@ -363,7 +371,7 @@ out.undoShiftSweep = shiftedLegal.length > 300 && shiftedLegal.every((p) => p ==
 // Kept: a yard whose only kind past 15 is in a plan of the whole yard, in a blueprint, or in what Undo
 // would undo is kept as this version, which a Leaf of version 10 leaves as a newer one's; one with
 // none as 9, as before there could be one.
-const planOnly = F.create({ land, tier: 5, seed: 1 });
+const planOnly = noReach(F.create({ land, tier: 5, seed: 1 }));
 F.build(planOnly, FORGE, 20, 10, 0, Infinity);
 F.saveYard(planOnly, 1);
 F.remove(planOnly, 20, 10);
@@ -375,14 +383,17 @@ const historyOnly = fresh();
 act(historyOnly, { do: "build", kind: FORGE, x: 20, y: 10, dir: 0 }, Infinity, "h1");
 act(historyOnly, { do: "remove", x: 20, y: 10 }, Infinity, "h2");
 const wide = [planOnly, printOnly, historyOnly];
-// The yard alone, with Long reach forgotten: nothing past what a Leaf of version 10 knew.
-const plain = fresh();
-plain.done = plain.done.filter((g) => F.GOALS[g]?.id !== "longreach");
-plain.told = Math.min(plain.told, plain.done.length);
-F.reopen(plain);
-const versions = [...wide, plain].map((v) => JSON.parse(F.encode(v)).v);
+const versions = [...wide, fresh()].map((v) => JSON.parse(F.encode(v)).v);
+// Each with its plan, blueprint and Undo record taken out names nothing past version 10: kept as 9.
+const cleared = wide.map((v) => {
+  const c = F.decode(F.encode(v), v.land);
+  c.blueprints = c.blueprints.map(() => null);
+  c.history = [];
+  return JSON.parse(F.encode(c)).v;
+});
 out.keptWide =
   JSON.stringify(versions) === JSON.stringify([F.VERSION, F.VERSION, F.VERSION, F.PLACED]) &&
+  cleared.every((v) => v === F.PLACED) &&
   wide.every((v) => !v.kind.some((k) => k > 15 && k !== F.NONE));
 console.log(JSON.stringify({ texts: wide.map((v) => F.encode(v)) }));
 
