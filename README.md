@@ -1588,6 +1588,14 @@ body that is not one 400 `invalid_grant`. The grant takes one of the player's
 batches, so while their commands come faster than Leaf takes them it gets 429
 `slow_down`; ask again.
 
+From where Leaf runs, the same grant without a website session (it is Leaf's own
+`grantPrize` on Leaf's database beside the server; each write is kept only over
+the `rev` it was made from):
+
+```sh
+bun apps/api/scripts/grant.ts <player id> figure=<id> | banner=<id> by=<staff Leaf id> [copies=1] [dry]
+```
+
 ## Moving over
 
 The few players with progress in the old saves (the `saves` table) had their
