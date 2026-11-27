@@ -16,13 +16,13 @@
  * where its field is read: a field it did not keep yet gets what a new run starts with, and a charm
  * taken before charms were emblems gets its emblem on the item bench. A run kept when Greg ate a meal
  * after every fight (`meals`: a table before version 5, a sitting before version 2) has each meal
- * counted as the share of health it gave him (`MEAL`).
+ * counted as the share of health it gave him (`MEAL`). A run kept before it kept its way (a table
+ * before version 8, a sitting before version 4) has it read from its trail, roster and endless way.
  */
 import { mix } from "@sequoia-leaf/core";
 
 import { BOON_IDS, type BoonId, isBoonId } from "./content/boons.ts";
 import { catalogOf, everyFigure } from "./content/catalog.ts";
-import { type EndlessWay, isEndlessWay } from "./content/endless.ts";
 import { type FigureId, isBossId, isFigureId, isStars, isUnitKind } from "./content/figures.ts";
 import {
   carries,
@@ -36,14 +36,13 @@ import {
   type ItemId,
 } from "./content/items.ts";
 import { type Era, isEra, LEGACY_ERA } from "./content/releases.ts";
-import { ECONOMY, MAX_LEVEL, TRAIL_COUNT } from "./content/rooms.ts";
+import { ECONOMY, MAX_LEVEL } from "./content/rooms.ts";
 import { type FightRules, ROOM_RULES, ruled } from "./content/rules.ts";
 import { isTraitId, renamedTitle, renamedTraits, TRAIT_IDS, traitNumber } from "./content/traits.ts";
 import { isRuleId, RULE_IDS } from "./content/wilds.ts";
 import { lastRoom } from "./endless.ts";
 import type { FightResult, FightSetup, FightSummary, Tally } from "./fight/types.ts";
 import { SEATS } from "./hex.ts";
-import { readRoster, type Roster } from "./own.ts";
 import { isParty, type Party } from "./party.ts";
 import { setupRules } from "./room.ts";
 import {
@@ -62,6 +61,7 @@ import {
   type Stage,
   stallSize,
 } from "./run.ts";
+import { oldRunWay, onTrailThere, readWay, type Way } from "./way.ts";
 import { pickAgain } from "./wilds.ts";
 import type { Wing } from "./wing.ts";
 
@@ -108,12 +108,13 @@ function readPiece(v: unknown, nextId: number, meals: boolean): Piece | null {
     fed: fedOf(p.fed, meals),
   };
 }
-/** A run's roster. A run saved before there were runs with the member's own figures is one on the main way. */
-const readOwn = (v: unknown): Roster | null =>
-  v === undefined || v === null ? null : (readRoster(v) ?? bad("the roster"));
-/** A run's endless way. A run saved before there were endless runs is one of fifteen rooms. */
-const readEndless = (v: unknown): EndlessWay | null =>
-  v === undefined || v === null ? null : isEndlessWay(v) ? v : bad("the endless way");
+/**
+ * How a run set out: as it keeps it (`way`); or for a run kept before it kept one (by Leaf; the page
+ * is always shown a way), as its trail, its roster (`own`, kept only with the member's own figures)
+ * and its endless way (kept only on an endless run) said it.
+ */
+const readWayOf = (r: Record<string, unknown>, shown: boolean): Way =>
+  (r.way !== undefined || shown ? readWay(r.way) : oldRunWay(r.trail, r.own, r.endless)) ?? bad("the way");
 const isChoiceKind = (v: unknown): v is Choice["kind"] =>
   v === "starter" || v === "component" || v === "boon" || v === "rule";
 /** A pick waiting, with nothing on offer: as it is shown behind the first, and before it is drawn again. */
@@ -339,7 +340,7 @@ function readParts(
   const seen = record(r.seen, "the almanac notes");
   const run: RunView = {
     era: readEra(r.era, "the era"),
-    trail: whole(r.trail, 0, ROOMY, "the trail"),
+    way: readWayOf(r, shown),
     room,
     stage: readStage(r, old, shown, drawn),
     resolve: whole(r.resolve, 0, ROOMY, "the resolve"),
@@ -366,8 +367,6 @@ function readParts(
     record: list(r.record, 400, "the record").map((x) => readRecord(x, room)),
     nextId,
     last: drawn(() => readLast(r.last), null, false),
-    own: readOwn(r.own),
-    endless: readEndless(r.endless),
     wing: readWing(r.wing, shown),
     seen: {
       fielded: unique(each(seen.fielded, isFigureId, everyFigure().length, "the almanac notes"), "the almanac notes"),
@@ -442,7 +441,7 @@ function readRun(v: unknown, old: boolean, meals: boolean): Run {
 // ---------- today's numbers ----------
 
 /**
- * Brings a run of the right shape under today's numbers, and refuses nothing. The trail, the room,
+ * Brings a run of the right shape under today's numbers, and refuses nothing. Its trail, the room,
  * the level and resolve go no higher than they go now; experience past a level's step makes the
  * levels it makes; the stall is today's size, cut or filled out with empty places; the bench is
  * today's size, its figures past the end moved up into empty places or, with none, sold for what
@@ -451,7 +450,7 @@ function readRun(v: unknown, old: boolean, meals: boolean): Run {
  * and nobody else anything; a pick of boons has no more redraws than one has now.
  */
 function settle(run: Run): void {
-  run.trail = Math.min(run.trail, TRAIL_COUNT - 1);
+  run.way = onTrailThere(run.way);
   run.room = Math.min(run.room, lastRoom(run));
   run.resolve = Math.min(run.resolve, ECONOMY.resolve);
   run.level = Math.min(run.level, MAX_LEVEL);

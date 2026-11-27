@@ -11,10 +11,10 @@ import { type Met, shuffled } from "@sequoia-leaf/core";
 
 import { ROOM_RULES } from "./content/rules.ts";
 import { isRuleId, RULE_IDS, type RuleId, WILDS } from "./content/wilds.ts";
-import { roomAt } from "./endless.ts";
 import { foeOf } from "./foe.ts";
 import { closedNow, roomOf } from "./room.ts";
 import type { Choice, Note, Run, Spot } from "./run.ts";
+import { courseOf } from "./way.ts";
 import { nearestOpen, seatOpen, wingOf } from "./wing.ts";
 
 /** What a pick of rules offers: `WILDS.offers` of them, drawn from the run's stream, never the rule just `played`. */
@@ -24,9 +24,10 @@ export const ruleOptions = (run: Run, played: RuleId | null): RuleId[] =>
     RULE_IDS.filter((id) => id !== played),
   ).slice(0, WILDS.offers);
 
-/** The pick of a rule a room just fought (its place, from 0) leaves waiting: after each boss of the Wilds from `WILDS.first` on. */
+/** The pick of a rule a room just fought (its place, from 0) leaves waiting: on a course that binds each wing (the Wilds), after each boss from `WILDS.first` on. */
 export function rulePicks(run: Run, fought: number): Choice[] {
-  if (run.endless !== "wilds" || fought < WILDS.first || roomAt(fought)?.kind !== "boss") return [];
+  const course = courseOf(run.way);
+  if (course.binds !== "wing" || fought < WILDS.first || course.rooms(fought)?.kind !== "boss") return [];
   const played = roomOf(run, fought).named[0] ?? null;
   return [{ kind: "rule", options: ruleOptions(run, played) }];
 }
@@ -82,6 +83,6 @@ export function pickAgain(run: Run, kept: unknown): void {
     "at" in kept &&
     kept.at === wingOf(run.room);
   const { stage } = run;
-  if (!lost || run.endless !== "wilds" || stage.phase !== "plan" || stage.picks[0]?.kind === "rule") return;
+  if (!lost || courseOf(run.way).binds !== "wing" || stage.phase !== "plan" || stage.picks[0]?.kind === "rule") return;
   stage.picks.unshift({ kind: "rule", options: ruleOptions(run, null) });
 }

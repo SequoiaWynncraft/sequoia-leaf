@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { type PlayerId, playerId } from "@sequoia-leaf/core";
 import {
   figureIn,
+  LEGACY_ERA,
   planCommands,
   type RaidCommand,
   readNotes,
@@ -163,7 +164,10 @@ describe("the fights a player's day takes", () => {
   const record: FightRecord = {
     run: 1,
     way: "main",
+    course: "trail",
     trail: 0,
+    pool: "fair",
+    era: LEGACY_ERA,
     room: 0,
     kind: "trouble",
     across: "plan:0",

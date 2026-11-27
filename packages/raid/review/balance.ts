@@ -25,6 +25,7 @@ import type { FightSetup, FightSummary } from "@sequoia-leaf/raid/fight/types.ts
 import { fightRecord, margin } from "@sequoia-leaf/raid/fought.ts";
 import { Tally } from "@sequoia-leaf/raid/rates.ts";
 import { beginFight, endingOf, foughtOf, startRun, takeTakings, traitsNow } from "@sequoia-leaf/raid/run.ts";
+import { onTrail } from "@sequoia-leaf/raid/way.ts";
 
 /** The catalogue with every release open: what these sims play. */
 const NOW = catalogAt(LAST_ERA);
@@ -110,7 +111,7 @@ for (const habit of HABITS) {
   const line: Line = { name: habit.name, wing1: 0, wing2: 0, met: 0, beat: 0, rooms: 0, level: 0, ends: [] };
   for (let i = 0; i < ROOM_COUNT + 1; i++) line.ends.push(0);
   for (let n = 1; n <= runs; n++) {
-    const run = startRun(n * 7919 + 13, { era: LAST_ERA, trail });
+    const run = startRun(n * 7919 + 13, { era: LAST_ERA, way: onTrail(trail) });
     for (let guard = 0; guard < 200 && run.stage.phase !== "over"; guard++) {
       planRoom(run, habit);
       const room = run.room;

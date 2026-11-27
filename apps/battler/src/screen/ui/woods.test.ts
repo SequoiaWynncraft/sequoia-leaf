@@ -2,7 +2,7 @@ import { afterEach, describe, expect, jest, test } from "bun:test";
 
 import { restart, start } from "@sequoia-leaf/kit/live.ts";
 import { HELLO, type Reply, type Standin, standin, TESTER } from "@sequoia-leaf/kit/standin.ts";
-import { heldSlot, newAlmanac } from "@sequoia-leaf/raid";
+import { newAlmanac } from "@sequoia-leaf/raid";
 
 import { type At, THE_DEEP_WOODS } from "./modes.ts";
 import { frontShown, READ_EVERY_MS, readTaken, readWoods, seenKey, whileShown, woodsAway } from "./woods.ts";
@@ -22,7 +22,7 @@ const taken = (id: number, room: number, by: string): unknown => ({
   id,
   type: "held_taken",
   created_at: "2026-11-26T12:00:00Z",
-  data: { game: "raid", slot: heldSlot(room), by: { id: `id-${by}`, username: by } },
+  data: { game: "raid", slot: `deep:${room}`, by: { id: `id-${by}`, username: by } },
 });
 const at: At = {
   run: null,

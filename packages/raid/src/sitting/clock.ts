@@ -30,6 +30,7 @@ import {
   summariseRun,
   takeTakings,
 } from "../run.ts";
+import { onTrail } from "../way.ts";
 import { layCarousel, turnCarousel } from "./carousel.ts";
 import {
   CAROUSELS,
@@ -64,7 +65,7 @@ export function begin(t: Sitting, sat: readonly Member[], at: number): void {
     ...regulars.map((figure): Who => ({ is: "regular", figure, habit: pick(t, traitsOf(catalogOf(t), figure)) })),
   ];
   t.seats = whos.map((who) => {
-    const run = startRun(draw32(t), { era: t.era, trail: TRAIL });
+    const run = startRun(draw32(t), { era: t.era, way: onTrail(TRAIL) });
     return { who, run, shown: signed({ who, run }), place: null };
   });
   t.room = 0;

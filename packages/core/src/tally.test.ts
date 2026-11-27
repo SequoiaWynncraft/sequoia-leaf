@@ -48,13 +48,13 @@ describe("what the games log", () => {
     expect(
       talliedFrom([
         { kind: LOGGED.raidStarted, data: { trail: 0 } },
-        { kind: LOGGED.raidRoom, data: { won: true } },
-        { kind: LOGGED.raidRoom, data: { won: false } },
-        { kind: LOGGED.raidEnded, data: { ended: "lost" } },
-        { kind: LOGGED.raidEnded, data: { ended: "won" } },
-        // A raid with the member's own figures is counted nowhere.
-        { kind: LOGGED.raidRoom, data: { won: true, own: true } },
-        { kind: LOGGED.raidEnded, data: { ended: "won", own: true } },
+        { kind: LOGGED.raidRoom, data: { won: true, tallied: true } },
+        { kind: LOGGED.raidRoom, data: { won: false, tallied: true } },
+        { kind: LOGGED.raidEnded, data: { ended: "lost", tallied: true } },
+        { kind: LOGGED.raidEnded, data: { ended: "won", tallied: true } },
+        // A raid its line says is not counted (one with the member's own figures) is counted nowhere.
+        { kind: LOGGED.raidRoom, data: { won: true, own: true, tallied: false } },
+        { kind: LOGGED.raidEnded, data: { ended: "won", own: true, tallied: false } },
         { kind: LOGGED.worksOrder, data: { order: 3 } },
         { kind: LOGGED.worksPlot, data: { price: 40 } },
         { kind: LOGGED.townCrab, data: {} },

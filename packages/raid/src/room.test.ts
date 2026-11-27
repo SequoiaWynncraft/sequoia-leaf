@@ -15,6 +15,7 @@ import { closedNow, roomOf, setupRules } from "./room.ts";
 import { beginFight, fieldCap, foughtOf, playsAsKept, type Run, startRun } from "./run.ts";
 import { fields } from "./save.ts";
 import { at, partyOfFigures } from "./testkit.ts";
+import { wayOn } from "./way.ts";
 import { wingOf } from "./wing.ts";
 
 /** What one rule sets, from what it drew. */
@@ -90,7 +91,7 @@ describe("a fight's rule kept by its id", () => {
     const text = readFileSync(new URL("../review/golden/stored/table-v6-wilds.json", import.meta.url), "utf8");
     expect(text.replace(/\s/g, "")).toContain('"rule":{"id":"fog"');
     const table = RAID.decode(text);
-    const fought = table?.endless ? foughtOf(table.endless) : null;
+    const fought = table?.held.endless ? foughtOf(table.held.endless) : null;
     if (!table || !fought) throw new Error("no fight in it");
     expect(fought.setup.named).toEqual(["fog"]);
     expect(fought.setup.rules).toEqual({ reach: WILDS.fog });
@@ -104,7 +105,7 @@ describe("a fight's rule kept by its id", () => {
 
 /** A run of the Wilds in a room (from 0), under a rule picked for the wing a place is in. */
 function wildsAt(room: number, rule: RuleId | null, wingAt = room, stumps: number[] = [2, 9, 20]): Run {
-  const run = startRun(5, { era: LEGACY_ERA, endless: "wilds" });
+  const run = startRun(5, { era: LEGACY_ERA, way: wayOn({ id: "wilds" }) });
   run.room = room;
   run.stage = { phase: "plan", picks: [] };
   run.wing = rule ? { rule, at: wingOf(wingAt), stumps: rule === "stumps" ? stumps : [] } : null;

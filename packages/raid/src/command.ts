@@ -4,8 +4,8 @@
  * once, and what it does to the run. Leaf's table, a seat at a live table, the page's predictions
  * and the bot all do a command by its spec, so no table can be missing one.
  *
- * A table keeps two runs, each in a slot of its own (`Slot`): the main run (a trail, with all
- * figures or the member's own) and the endless run. On the wire a command for a run says its slot
+ * A table keeps two runs, each in a slot of its own (`Slot`, read from how the run set out:
+ * `way.ts`): the main run (a trail) and the endless run. On the wire a command for a run says its slot
  * (`slot: "endless"`); one that says none is for the main run, and `endless: true` is still read as
  * the endless slot. A seat at a live table has one run, the caller's, and reads no slot. The table's
  * own commands are `game.ts`'s; a sitting's, `sitting/commands.ts`'s.
@@ -36,9 +36,9 @@ import {
   takeTakings,
   toBench,
 } from "./run.ts";
+import type { Slot } from "./way.ts";
 
-/** Which of a table's two runs a command is for. */
-export type Slot = "main" | "endless";
+export type { Slot } from "./way.ts";
 
 /** What can be done to a run. */
 export type RunCommand =
@@ -217,10 +217,11 @@ export type TableCommand =
    */
   | { do: "start"; trail: number; own?: boolean }
   /**
-   * Set out on an endless run, one way or the other. The endless run, if one has fought a room, is
-   * put down first, as walking home. The main run is not touched.
+   * Set out on an endless run, one way or the other, with all figures, or (`own`, where its course
+   * offers it) with those the member has pulled. The endless run, if one has fought a room, is put
+   * down first, as walking home. The main run is not touched.
    */
-  | { do: "start"; course: EndlessWay }
+  | { do: "start"; course: EndlessWay; own?: boolean }
   /** Pick the trail to set out on next, on the front page. */
   | { do: "trail"; trail: number }
   /** Put a look on the table. (A command's `id` on the wire is its own, so the look is `look`.) */

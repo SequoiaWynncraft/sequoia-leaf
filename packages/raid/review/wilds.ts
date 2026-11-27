@@ -31,6 +31,7 @@ import {
   startRun,
   takeTakings,
 } from "@sequoia-leaf/raid/run.ts";
+import { wayOn } from "@sequoia-leaf/raid/way.ts";
 
 const args = process.argv.slice(2);
 const runs = Number(args[0] ?? 40);
@@ -110,7 +111,7 @@ for (const habit of HABITS) {
   const line = emptyLine();
   byHabit.set(habit.name, line);
   for (let n = 0; n < runs; n++) {
-    const run = startRun(n * 7919 + 13, { era: LAST_ERA, trail: 0, endless: "wilds" });
+    const run = startRun(n * 7919 + 13, { era: LAST_ERA, way: wayOn({ id: "wilds" }) });
     for (let guard = 0; guard < 400 && run.stage.phase !== "over" && run.room <= deepest; guard++) {
       const pick = picksOf(run)[0];
       if (pick?.kind === "rule") {

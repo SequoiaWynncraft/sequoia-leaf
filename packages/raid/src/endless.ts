@@ -1,32 +1,31 @@
 /**
  * The endless runs: a run that does not stop at the fifteenth room. After it the rooms come round
  * again (`CYCLE`), the forest in them growing room by room, every boss beaten adds a chair, and a
- * regular is as strong as a member could be that deep. Its two ways (`EndlessWay`) differ only in
- * who waits in a sparring room: in the Wilds a regular; in the Deep Woods the member who holds the
- * room (`heldSlot`, handed over by Leaf as `met`; `foe.ts` seats them), or a regular while nobody
- * does. Everything here reads the run's `endless`; a run without it is the fifteen rooms it always
- * was. What binds the room a run is in is `room.ts`'s (`roomOf`), which reads these.
+ * regular is as strong as a member could be that deep. Its two courses differ only in who waits in
+ * a sparring room: in the Wilds a regular; in the Deep Woods the member who holds the room (its
+ * way's `lanes().held`, handed over by Leaf as `met`; `foe.ts` seats them), or a regular while
+ * nobody does. Everything here reads the run's way through its course's row (`content/ways.ts`); a
+ * run on a trail is the fifteen rooms it always was. What binds the room a run is in is `room.ts`'s
+ * (`roomOf`), which reads these.
  */
 import { boonNumber } from "./content/boons.ts";
 import { catalogOf } from "./content/catalog.ts";
-import { CYCLE, ENDLESS, type EndlessWay } from "./content/endless.ts";
-import { MAX_LEVEL, ROOM_COUNT, ROOMS, type RoomSpec, type SparStrength } from "./content/rooms.ts";
+import { ENDLESS } from "./content/endless.ts";
+import { MAX_LEVEL, ROOM_COUNT, type SparStrength } from "./content/rooms.ts";
+import { roomAt } from "./content/ways.ts";
 import type { RoomRecord, Run } from "./run.ts";
+import { courseOf, type Way } from "./way.ts";
 
 export type { EndlessWay } from "./content/endless.ts";
+export { grownAt, roomAt } from "./content/ways.ts";
 
-/** Which way a run set out: the main way, its own figures, or one of the endless ways. */
-export interface Way {
-  readonly own: unknown;
-  readonly endless: EndlessWay | null;
+/** What of a run says how it set out. */
+interface OnWay {
+  readonly way: Way;
 }
 
 /** The last room of a run, counting from 0: the fifteenth, or none for an endless run. */
-export const lastRoom = (run: Pick<Way, "endless">): number => (run.endless ? Infinity : ROOM_COUNT - 1);
-
-/** The room at a place, counting from 0: one of the fifteen, and after them the cycle, round and round. */
-export const roomAt = (room: number): RoomSpec | undefined =>
-  room < ROOM_COUNT ? ROOMS[room] : CYCLE[(room - ROOM_COUNT) % CYCLE.length];
+export const lastRoom = (run: OnWay): number => courseOf(run.way).last;
 
 /** How many boss rooms come after the fifteenth and before a room: the chairs a party that beat them all has there. */
 function bossesBefore(room: number): number {
@@ -35,18 +34,9 @@ function bossesBefore(room: number): number {
   return n;
 }
 
-/** The chairs an endless run has: a boss beaten after the fifteenth room, each, `ENDLESS.chairs` at most. */
-export const chairsOf = (run: Pick<Way, "endless"> & { readonly record: readonly RoomRecord[] }): number =>
-  run.endless
-    ? Math.min(
-        ENDLESS.chairs,
-        run.record.filter((r) => r.room >= ROOM_COUNT && r.kind === "boss" && r.result === "win").length,
-      )
-    : 0;
-
-/** How strong the forest is in a room, in percent: 100 to the fifteenth, then `ENDLESS.grows` more for each room past it. */
-export const grownAt = (room: number): number =>
-  room < ROOM_COUNT ? 100 : 100 * (1 + ENDLESS.grows / 100) ** (room - ROOM_COUNT + 1);
+/** The chairs a run has earned, as its course gives them: on an endless run a boss beaten after the fifteenth room, each, `ENDLESS.chairs` at most. */
+export const chairsOf = (run: OnWay & { readonly record: readonly RoomRecord[] }): number =>
+  courseOf(run.way).chairs(run.record);
 
 /**
  * A regular's strength in a room: the room's own to the fifteenth; after it the top level and a
@@ -65,18 +55,12 @@ export function sparAt(room: number): SparStrength {
   };
 }
 
-/** Whether a room of a run is held by a member: a sparring room of the Deep Woods, from `ENDLESS.heldFrom` on. */
-export const isHeld = (run: Pick<Way, "endless">, room: number): boolean =>
-  run.endless === "deep" && room >= ENDLESS.heldFrom && roomAt(room)?.kind === "spar";
-
-/** Where the member who holds a sparring room of the Deep Woods keeps their board: the room, counting from 0. */
-export const heldSlot = (room: number): string => `deep:${room}`;
-/** The room a slot of the Deep Woods is (`heldSlot`), counting from 0; null for any other slot. */
-export function heldRoom(slot: string): number | null {
-  const m = /^deep:(\d{1,4})$/.exec(slot);
-  return m ? Number(m[1]) : null;
+/** Whether a room of a run is held by a member: a sparring room of a course whose rooms are held, from the room its row says on (the Deep Woods, from `ENDLESS.heldFrom`). */
+export function isHeld(run: OnWay, room: number): boolean {
+  const { across, rooms } = courseOf(run.way);
+  return typeof across === "object" && room >= across.held.from && rooms(room)?.kind === "spar";
 }
 
-/** How many figures an endless run's chairs add to what may be fielded, beside An Extra Chair's. */
-export const extraChairs = (run: Pick<Run, "boons" | "record" | "era"> & Pick<Way, "endless">): number =>
+/** How many figures a run's chairs add to what may be fielded, beside An Extra Chair's. */
+export const extraChairs = (run: Pick<Run, "boons" | "record" | "era"> & OnWay): number =>
   (run.boons.includes("extrachair") ? boonNumber(catalogOf(run), "extrachair", "more") : 0) + chairsOf(run);

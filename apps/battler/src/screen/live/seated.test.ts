@@ -53,7 +53,7 @@ function planning(): { t: Sitting; now: number } {
 /** The solo raid as Leaf has it: a run of its own. */
 function soloTable(): unknown {
   const table = newTable({ seed: 1, now: 0 });
-  table.run = startRun(5, { era: LEGACY_ERA });
+  table.held.main = startRun(5, { era: LEGACY_ERA });
   return { state: wire(tableView(table, { awards: [], now: 0 })), rev: 0 };
 }
 

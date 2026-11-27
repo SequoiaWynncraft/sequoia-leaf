@@ -275,7 +275,7 @@ describe("a new player", () => {
   it("gets a new table, untouched, and 300 Coins, once", async () => {
     const first = await opened();
     expect(first.rev).toBe(0);
-    expect(first.view.run).toBeNull();
+    expect(first.view.held.main).toBeNull();
     expect(first.now).toBe(new Date(clock.now).toISOString());
     const again = await opened();
     expect(again.state).toEqual(first.state);
@@ -289,9 +289,9 @@ describe("a new player", () => {
 
   it("is a guest as readily as a member", async () => {
     const table = await opened(carol);
-    expect(table.view.run).toBeNull();
+    expect(table.view.held.main).toBeNull();
     const done = await commanded(ided([{ do: "start", trail: 0 }]), carol);
-    expect(done.view.run && picksOf(done.view.run)[0]?.kind).toBe("starter");
+    expect(done.view.held.main && picksOf(done.view.held.main)[0]?.kind).toBe("starter");
     expect(await coinsOf(carol)).toBe(300);
   });
 });
@@ -312,7 +312,7 @@ async function playRun(player: PlayerId = alice) {
   take(await commanded(ided([{ do: "start", trail: 0 }]), player));
   let paid = 0;
   let last: unknown[] = [];
-  for (let room = 0; room < 40 && view.run; room++) {
+  for (let room = 0; room < 40 && view.held.main; room++) {
     for (let again = 0; again < 30; again++) {
       const commands = planCommands(view, SENSIBLE);
       if (commands.length === 0) break;
@@ -331,7 +331,7 @@ async function playRun(player: PlayerId = alice) {
 describe("a whole run, played by commands through HTTP", () => {
   it("goes from a new table to its end, paying its Coins once and logging what happened", async () => {
     const { paid, last, view, rev } = await playRun();
-    expect(view.run).toBeNull();
+    expect(view.held.main).toBeNull();
     expect(paid).toBeGreaterThan(0);
     expect(await coinsOf(alice)).toBe(300 + paid);
     expect(await entries(alice)).toEqual([
@@ -357,20 +357,25 @@ describe("a whole run, played by commands through HTTP", () => {
     expect(activity.every((a) => a.game === "raid" && a.playerId === alice && a.at > T0)).toBe(true);
     expect(activity.map((a) => a.at)).toEqual(activity.map((a) => a.at).toSorted((a, b) => a - b));
     const rooms = activity.filter((a) => a.kind === "raid_room").map((a) => JSON.parse(a.data));
+    // Each line as it always was, and beside it how the run set out and whether the Tally counts it.
+    const way = { course: "trail", pool: "fair", tallied: true };
     expect(rooms[0]).toEqual({
       room: 1,
       kind: "trouble",
       won: expect.any(Boolean),
       resolve: expect.any(Number),
       seconds: expect.any(Number),
+      trail: 0,
+      ...way,
     });
     expect(JSON.parse(activity.at(-1)?.data ?? "{}")).toEqual({
       trail: 0,
       rooms_won: expect.any(Number),
       ended: expect.stringMatching(/^(won|lost)$/),
       coins: paid,
+      ...way,
     });
-    expect(JSON.parse(activity[0]?.data ?? "{}")).toEqual({ trail: 0 });
+    expect(JSON.parse(activity[0]?.data ?? "{}")).toEqual({ trail: 0, ...way });
   });
 });
 
@@ -535,8 +540,8 @@ describe("commands", () => {
     // Sent again once the disk has room, the batch is done whole, as if for the first time.
     const done = await commanded(batch);
     expect(done.results.map((r) => ("notes" in r ? "done" : r.refused))).toEqual(["done", "done", "done"]);
-    expect(done.view.runs).toBe(1);
-    expect(done.view.run?.rustles).toBe(0);
+    expect(done.view.begun.main).toBe(1);
+    expect(done.view.held.main?.rustles).toBe(0);
     expect(await services.query((sql) => sql`SELECT kind FROM activity`)).toEqual([{ kind: "raid_started" }]);
     expect(
       await services.query(
@@ -615,7 +620,7 @@ describe("one player's game", () => {
       alice,
     );
     const bobs = await opened(bob);
-    expect(bobs.view.run).toBeNull();
+    expect(bobs.view.held.main).toBeNull();
     expect(bobs.rev).toBe(0);
     // The same command id from Bob is Bob's own command, not an echo of Alice's answer.
     const shared = [{ id: "c-shared", do: "start", trail: 0 }];
@@ -624,9 +629,9 @@ describe("one player's game", () => {
     expect(fromBob.results[0]).toMatchObject({ notes: [{ t: "started", run: 1 }] });
     // Alice's raid has fought no room yet, so setting out again is refused, and it stays as it is.
     expect(fromAlice.results[0]).toEqual({ id: "c-shared", refused: "unfought" });
-    const alices = (await opened(alice)).view.run;
+    const alices = (await opened(alice)).view.held.main;
     expect(alices && picksOf(alices)).toEqual([]);
-    const bobsNow = (await opened(bob)).view.run;
+    const bobsNow = (await opened(bob)).view.held.main;
     expect(bobsNow && picksOf(bobsNow)[0]?.kind).toBe("starter");
   });
 
@@ -761,7 +766,7 @@ describe("the view", () => {
     expect(kept).toContain('"rng"');
     expect(shown).not.toContain('"rng"');
     // The fight's seed is shown, now that the boards are locked; the run's own seed never is.
-    const run = done.view.run;
+    const run = done.view.held.main;
     expect(run && "seed" in run).toBe(false);
     expect(Object.keys(Object(Object(done.state).run))).not.toContain("seed");
     expect(run && foughtOf(run)?.setup.seed).toEqual(expect.any(Number));
@@ -1344,7 +1349,7 @@ const given: { readonly room: number | undefined; readonly met: Met | undefined 
 const spied = played({
   ...RAID,
   apply: (state, c, ctx) => {
-    if (c.do === "take") given.push({ room: state.run?.room, met: ctx.met });
+    if (c.do === "take") given.push({ room: state.held.main?.room, met: ctx.met });
     return RAID.apply(state, c, ctx);
   },
 });
@@ -1377,24 +1382,24 @@ async function planRoom(table: Table, view: TableView): Promise<TableView> {
 /** Sets out, and plays on until the run is in `room`, planning each room before it as the bot would; `room` itself unplanned. */
 async function setOutTo(table: Table, room: number): Promise<TableView> {
   let view = (await table([{ do: "start", trail: 0 }])).view;
-  for (let guard = 0; guard < 40 && view.run && view.run.room < room; guard++) {
+  for (let guard = 0; guard < 40 && view.held.main && view.held.main.room < room; guard++) {
     // oxlint-disable-next-line no-await-in-loop -- each room is planned from Leaf's answer to the last
     view = await planRoom(table, view);
     // oxlint-disable-next-line no-await-in-loop -- the next room is planned from Leaf's answer
     view = (await table([{ do: "fight" }, { do: "take" }])).view;
   }
-  if (view.run?.room !== room) throw new Error(`The run did not reach room ${room}`);
+  if (view.held.main?.room !== room) throw new Error(`The run did not reach room ${room}`);
   return view;
 }
 /** The party a fight was decided from, on the table's side, as the view after it shows it. */
-const sideOf = (view: TableView) => (view.run ? foughtOf(view.run)?.setup.sides[0] : undefined);
+const sideOf = (view: TableView) => (view.held.main ? foughtOf(view.held.main)?.setup.sides[0] : undefined);
 
 describe("a member's board at a sparring room of the Little Raid", () => {
   it("is kept as fought there, the newest over the older, and nothing of a command refused", async () => {
     const table = atHttp(alice);
     const view = await setOutTo(table, 2);
     // Room 1 was trouble: a component is to be picked before the party may set out.
-    expect(view.run ? picksOf(view.run)[0]?.kind : null).toBe("component");
+    expect(view.held.main ? picksOf(view.held.main)[0]?.kind : null).toBe("component");
     const refused = await table([{ do: "fight" }]);
     expect(refused.results).toEqual([{ id: expect.any(String), refused: "pick_component" }]);
     expect(await keptOf(alice)).toEqual([]);
@@ -1430,7 +1435,7 @@ describe("a member's board at a sparring room of the Little Raid", () => {
     expect(given.at(-1)).toEqual({ room: 1, met: { player: alice, name: "Alice", data: board, of: 1 } });
     expect(given.slice(0, -1).every((g) => g.met === undefined)).toBe(true);
     // Across the table: her board, signed, or a regular, as the crowd fell.
-    const foe = taken.view.run?.foe;
+    const foe = taken.view.held.main?.foe;
     if (foe?.by === undefined) expect(foe && regularOf(foe)).not.toBeNull();
     else
       expect(foe).toMatchObject({
@@ -1597,7 +1602,7 @@ describe("what players did", () => {
     expect(await count()).toBe(LOGGED_A_DAY);
     // Setting out is still done; it is only not written down.
     const begun = await commanded(ided([{ do: "start", trail: 0 }]));
-    expect(begun.view.runs).toBe(1);
+    expect(begun.view.begun.main).toBe(1);
     expect(await count()).toBe(LOGGED_A_DAY);
     // Another player, and the next UTC day, have their own.
     await commanded(ided([{ do: "start", trail: 0 }]), bob);

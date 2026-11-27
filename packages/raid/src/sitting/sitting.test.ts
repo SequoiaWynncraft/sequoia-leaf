@@ -7,13 +7,12 @@ import { COMMANDS } from "../command.ts";
 import { type FigureId, figureIn } from "../content/figures.ts";
 import { forge } from "../content/items.ts";
 import { PAYOUT } from "../content/keepsakes.ts";
-import { newLooks } from "../content/looks.ts";
 import { LEGACY_ERA } from "../content/releases.ts";
 import { BOSS_ROOMS, ECONOMY, ROOM_COUNT } from "../content/rooms.ts";
 import { resolveFight } from "../fight/engine.ts";
 import type { FightSummary } from "../fight/types.ts";
 import { planCommands, runView } from "../game.ts";
-import { newAlmanac, payout } from "../outside.ts";
+import { payout } from "../outside.ts";
 import {
   choose,
   endingOf,
@@ -27,7 +26,7 @@ import {
   startRun,
   summariseRun,
 } from "../run.ts";
-import { CAT, EVERYONES } from "../testkit.ts";
+import { CAT, EVERYONES, viewWith } from "../testkit.ts";
 import { hasTaken, join } from "./carousel.ts";
 import { advance, pairings } from "./clock.ts";
 import { type Answer, type Call, command, openSitting, paidOff, readCommand, type SittingCommand } from "./commands.ts";
@@ -143,18 +142,7 @@ function wishes(seen: Sitting, who: number, members: number, dice: Stream): Sitt
   if (who === members - 1 && seen.room >= 7) return [{ do: "leave" }];
   if (seen.stage.at === "carousel") return [{ do: "pick", offer: below(dice, seen.stage.ring.length) }];
   if (seen.stage.at === "fight") return below(dice, 5) === 0 ? [{ do: "rustle" }] : [];
-  const view = {
-    runs: 1,
-    run: runView(mine.run),
-    endless: null,
-    ventures: 0,
-    week: { at: 0, deepest: { wilds: 0, deep: 0 } },
-    almanac: newAlmanac(),
-    trail: 0,
-    looks: newLooks(),
-    roster: {},
-    era: LEGACY_ERA,
-  };
+  const view = viewWith(runView(mine.run));
   const plan = planCommands(view, SENSIBLE).flatMap((c) => readCommand(c) ?? []);
   return below(dice, 6) === 0 ? [...plan, { do: "rustle" }] : plan;
 }

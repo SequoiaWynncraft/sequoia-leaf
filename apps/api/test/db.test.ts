@@ -5,6 +5,7 @@ import { join } from "node:path";
 
 import { type Ctx, leaf, playerId } from "@sequoia-leaf/core";
 import { PULLS } from "@sequoia-leaf/pulls";
+import { LEGACY_ERA } from "@sequoia-leaf/raid";
 import { Effect, Layer } from "effect";
 import { SqlClient } from "effect/sql";
 
@@ -41,11 +42,26 @@ function onFile<A, E>(path: string, program: Effect.Effect<A, E, SqlClient.SqlCl
 }
 
 /** Runs SQL against the database file at `path`. */
-/** Undoes migration 46: none of the raid's sittings kept. */
-const beforeRaidSittings = (sql: SqlClient.SqlClient) =>
-  Effect.all([sql`DROP TABLE raid_sitting_seats`, sql`DROP TABLE raid_sitting_places`, sql`DROP TABLE raid_sittings`]);
+/** Undoes migration 47: no fight's course, pool or era kept beside its way. */
+const beforeFightsWay = (sql: SqlClient.SqlClient) =>
+  Effect.all([
+    sql`ALTER TABLE raid_fights DROP COLUMN course`,
+    sql`ALTER TABLE raid_fights DROP COLUMN pool`,
+    sql`ALTER TABLE raid_fights DROP COLUMN era`,
+  ]);
 
-/** Undoes migrations 46 and 45: no raid fights kept. */
+/** Undoes migrations 47 and 46: none of the raid's sittings kept. */
+const beforeRaidSittings = (sql: SqlClient.SqlClient) =>
+  Effect.andThen(
+    beforeFightsWay(sql),
+    Effect.all([
+      sql`DROP TABLE raid_sitting_seats`,
+      sql`DROP TABLE raid_sitting_places`,
+      sql`DROP TABLE raid_sittings`,
+    ]),
+  );
+
+/** Undoes migrations 47 to 45: no raid fights kept. */
 const beforeRaidFights = (sql: SqlClient.SqlClient) =>
   Effect.andThen(beforeRaidSittings(sql), sql`DROP TABLE raid_fights`);
 
@@ -265,6 +281,7 @@ describe("the database", () => {
       { migration_id: 44, name: "copies_awards" },
       { migration_id: 45, name: "raid_fights" },
       { migration_id: 46, name: "raid_sittings" },
+      { migration_id: 47, name: "raid_fights_way" },
     ]);
     // Each feed has its own lease and cursor, not started yet.
     expect(await query(path, (sql) => sql`SELECT name, started_at, cursor FROM sync_state ORDER BY name`)).toEqual([
@@ -339,7 +356,7 @@ describe("the database", () => {
 
     expect(account.balance).toBe(110);
     expect(await query(path, (sql) => sql`SELECT max(migration_id) AS latest FROM effect_sql_migrations`)).toEqual([
-      { latest: 46 },
+      { latest: 47 },
     ]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM announcements`)).toEqual([{ n: 0 }]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM saves`)).toEqual([{ n: 0 }]);
@@ -772,6 +789,35 @@ describe("the database", () => {
         (sql) => sql`SELECT player_id AS player, id, at FROM awards WHERE id LIKE 'copies:%' ORDER BY player_id, id`,
       ),
     ).toEqual([...given(pulled), ...given(guest)]);
+  });
+
+  it("gives each raid fight kept before it the course and pool its way said, of era 2", async () => {
+    const path = join(directory, "leaf.db");
+    await onFile(
+      path,
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        // Back to before migration 47: a fight of each way a record said.
+        yield* beforeFightsWay(sql);
+        yield* sql`DELETE FROM effect_sql_migrations WHERE migration_id >= 47`;
+        for (const [n, way] of ["main", "own", "wilds", "deep"].entries()) {
+          yield* sql`
+            INSERT INTO raid_fights (player_id, at, rules, run, way, trail, room, kind, across, result, margin, seconds,
+              resolve, level, acorns, party, against)
+            VALUES (${alice}, ${n}, 'r', 1, ${way}, ${way === "main" ? 2 : 0}, 3, 'spar', 'plan:0', 'win', 0.5, 9, 20,
+              3, 4, '{}', NULL)
+          `;
+        }
+      }),
+    );
+    // The era written is the one the raid reads a fight kept with none as.
+    expect(Number(LEGACY_ERA)).toBe(2);
+    expect(await query(path, (sql) => sql`SELECT way, course, trail, pool, era FROM raid_fights ORDER BY at`)).toEqual([
+      { way: "main", course: "trail", trail: 2, pool: "fair", era: 2 },
+      { way: "own", course: "trail", trail: 0, pool: "own", era: 2 },
+      { way: "wilds", course: "wilds", trail: 0, pool: "fair", era: 2 },
+      { way: "deep", course: "deep", trail: 0, pool: "fair", era: 2 },
+    ]);
   });
 
   it("enforces foreign keys, which SQLite leaves off unless asked", async () => {

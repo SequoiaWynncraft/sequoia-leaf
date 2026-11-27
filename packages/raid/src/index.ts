@@ -267,12 +267,33 @@ export {
 } from "./run.ts";
 export { forgeItems } from "./rack.ts";
 export { type Fed, feed, mealFor } from "./feed.ts";
-export { boardMet, boardSlot, opposition } from "./foe.ts";
+export { boardMet, opposition } from "./foe.ts";
 
 // The endless runs: the Wilds and the Deep Woods.
 export { ENDLESS, ENDLESS_WAYS, type EndlessWay, isEndlessWay } from "./content/endless.ts";
-export { chairsOf, grownAt, heldRoom, heldSlot, isHeld, lastRoom, roomAt, sparAt } from "./endless.ts";
-export { type Deepest, type Depths, depthSlot, type Week, weekAt } from "./depths.ts";
+export { chairsOf, grownAt, isHeld, lastRoom, roomAt, sparAt } from "./endless.ts";
+export { type Apart, type Deepest, type Depths, type Week, weekAt } from "./depths.ts";
+// How a run set out, and everything keyed from it.
+export {
+  type Course,
+  type CourseId,
+  courseOf,
+  COURSES,
+  counts,
+  lanes,
+  offered,
+  onTrail,
+  payKey,
+  type Pool,
+  type RunRef,
+  slotOf,
+  type Span,
+  trailOf,
+  type Way,
+  wayLogged,
+  wayOn,
+  wayWords,
+} from "./way.ts";
 export { checkRun, type Loaded, readRunView } from "./save.ts";
 // What binds a room: the Wilds' rules, a wing each.
 export { isRuleId, RULE_IDS, type RuleId, WILDS } from "./content/wilds.ts";
@@ -367,6 +388,7 @@ export {
   refusalText,
   runView,
   type RunView,
+  startOf,
   type Table,
   TABLE_REFUSALS,
   TABLE_VERSION,

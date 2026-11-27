@@ -29,6 +29,7 @@ import {
   takeTakings,
   traitsNow,
 } from "@sequoia-leaf/raid/run.ts";
+import { wayOn } from "@sequoia-leaf/raid/way.ts";
 
 const args = process.argv.slice(2);
 const runs = Number(args[0] ?? 100);
@@ -106,7 +107,7 @@ for (let n = 0; n < total; n++) {
   const habit = HABITS[n % HABITS.length] ?? SENSIBLE;
   if (n % week === 0) holders.clear();
   const counted = n >= warm;
-  const run = startRun(n * 7919 + 13, { era: LAST_ERA, trail: 0, endless: way });
+  const run = startRun(n * 7919 + 13, { era: LAST_ERA, way: wayOn({ id: way }) });
   for (let guard = 0; guard < 400 && run.stage.phase !== "over"; guard++) {
     planRoom(run, habit);
     const room = run.room;

@@ -1,15 +1,16 @@
 /**
  * How deep the endless runs go, as the table keeps it: the deepest room won in each way, ever (the
- * almanac's `deepest`) and this week (the table's `Week`); what a won room leaves with Leaf
- * (`Done.keep`) for the boards and, in the Deep Woods, to hold the room; and what an endless run is
+ * almanac's `deepest`) and this week (the table's `Week`), and apart from them the same with the
+ * member's own figures (`Apart`); what a won room leaves with Leaf (`Done.keep`) for the boards and,
+ * in the Deep Woods, to hold the room, each in its way's lanes (`lanes`); and what an endless run is
  * paid for. A week starts on Monday at 00:00 UTC, on Leaf's clock.
  */
 import { type Kept, utcWeekStart } from "@sequoia-leaf/core";
 
-import { ENDLESS_WAYS, type EndlessWay } from "./content/endless.ts";
-import { ROOM_COUNT } from "./content/rooms.ts";
-import { heldSlot, isHeld } from "./endless.ts";
+import { ENDLESS_WAYS, type EndlessWay, isEndlessWay } from "./content/endless.ts";
+import { isHeld } from "./endless.ts";
 import type { Fought, Run, RunSummary, RunView } from "./run.ts";
+import { counts, courseOf, lanes } from "./way.ts";
 
 /** The deepest room won in each endless way, counting from 1; 0 for none. */
 export type Depths = Record<EndlessWay, number>;
@@ -45,8 +46,18 @@ export function readWeek(v: unknown): Week {
   return { at: whole(at) ? at : 0, deepest: readDepths(field(v, "deepest")) };
 }
 
-/** Where a member's deepest room in an endless way is left for its boards: ever, and this week. */
-export const depthSlot = (way: EndlessWay, span: "ever" | "week"): string => `depth:${way}:${span}`;
+/** The deepest rooms won with the member's own figures, kept apart from everyone's figures': ever, and this week. */
+export interface Apart {
+  deepest: Depths;
+  week: Week;
+}
+export const noApart = (): Apart => ({ deepest: noDepths(), week: readWeek(undefined) });
+/** What is kept apart, from plain data. What does not read (or was kept before anything was) is none. */
+export const readApart = (v: unknown): Apart => ({
+  deepest: readDepths(field(v, "deepest")),
+  week: readWeek(field(v, "week")),
+});
+
 /** A depth as it is left for a board. */
 export interface Deepest {
   room: number;
@@ -54,40 +65,43 @@ export interface Deepest {
 
 /**
  * What an endless run's fight leaves, once decided: nothing unless it is won. A room won deeper
- * than ever or than this week is written into `ever` and `week`, and left for that board; a room
- * held in the Deep Woods (`isHeld`) is held by the board that won it (`heldSlot`). A guest's
- * deepest are written down, and nothing is left.
+ * than ever or than this week (in `ever` and `week`: the record of the run's pool) is written into
+ * them, and left for that board; a room held (`isHeld`) is held by the board that won it. Each is
+ * left in the run's way's lanes (`lanes`). A guest's deepest are written down, and nothing is left.
  */
 export function reached(
   s: { readonly ever: Depths; readonly week: Week },
-  run: Pick<Run, "room" | "endless">,
+  run: Pick<Run, "room" | "way">,
   { setup, outcome }: Fought,
   guest: boolean,
 ): Kept[] {
-  const way = run.endless;
-  if (way === null || outcome.result !== "win") return [];
+  const course = run.way.course.id;
+  if (!counts(run.way).deepest || !isEndlessWay(course) || outcome.result !== "win") return [];
+  const lane = lanes(run.way);
   const deepest: Deepest = { room: run.room + 1 };
   const kept: Kept[] = [];
-  if (isHeld(run, run.room)) {
-    kept.push({ slot: heldSlot(run.room), data: setup.sides[0], held: true });
+  const held = isHeld(run, run.room) ? lane.held(run.room) : null;
+  if (held !== null) kept.push({ slot: held, data: setup.sides[0], held: true });
+  const ever = lane.depth("ever");
+  if (ever !== null && deepest.room > s.ever[course]) {
+    s.ever[course] = deepest.room;
+    kept.push({ slot: ever, data: deepest });
   }
-  if (deepest.room > s.ever[way]) {
-    s.ever[way] = deepest.room;
-    kept.push({ slot: depthSlot(way, "ever"), data: deepest });
-  }
-  if (deepest.room > s.week.deepest[way]) {
-    s.week.deepest[way] = deepest.room;
-    kept.push({ slot: depthSlot(way, "week"), data: deepest });
+  const week = lane.depth("week");
+  if (week !== null && deepest.room > s.week.deepest[course]) {
+    s.week.deepest[course] = deepest.room;
+    kept.push({ slot: week, data: deepest });
   }
   return guest ? [] : kept;
 }
 
 /**
- * What a run is paid for (`payout`): its summary, but an endless run that won the fifteenth room is
- * paid as a run of fifteen rooms that won, though it went on. Its rooms and bosses are counted only
- * to the fifteenth (`summariseRun`).
+ * What a run is paid for (`payout`): its summary, but a run whose course goes on past the rooms
+ * that pay, having won the last of them, is paid as a run of fifteen rooms that won, though it went
+ * on. Its rooms and bosses are counted only to there (`summariseRun`).
  */
-export function paidFor(run: Pick<RunView, "endless" | "record">, summary: RunSummary): RunSummary {
-  const won = run.record.some((r) => r.room === ROOM_COUNT - 1 && r.result === "win");
-  return run.endless && won ? { ...summary, ending: "won" } : summary;
+export function paidFor(run: Pick<RunView, "way" | "record">, summary: RunSummary): RunSummary {
+  const { last, paysThrough } = courseOf(run.way);
+  const won = run.record.some((r) => r.room === paysThrough - 1 && r.result === "win");
+  return last >= paysThrough && won ? { ...summary, ending: "won" } : summary;
 }

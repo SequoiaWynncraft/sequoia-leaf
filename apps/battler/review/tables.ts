@@ -58,7 +58,7 @@ async function next(): Promise<string> {
 async function plan(rounds = 16): Promise<string> {
   const view = liveView();
   if (rounds === 0 || !view?.run || view.stage.at !== "plan" || view.run.stage.phase !== "plan") return state();
-  const commands = planCommands({ ...BLANK, run: view.run }, SENSIBLE);
+  const commands = planCommands({ ...BLANK, held: { main: view.run, endless: null } }, SENSIBLE);
   if (commands.length === 0) return state();
   for (const c of commands) {
     // oxlint-disable-next-line no-await-in-loop -- in order, each after the one before

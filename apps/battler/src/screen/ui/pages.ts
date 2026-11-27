@@ -14,7 +14,6 @@ import {
   BOSS_IDS,
   catalogOf,
   ECONOMY,
-  type EndlessWay,
   FIGHT,
   type FigureId,
   finishedIn,
@@ -34,6 +33,7 @@ import {
   TRAILS,
   traitIn,
   tryOn,
+  type Way,
   wornOf,
 } from "@sequoia-leaf/raid";
 
@@ -55,10 +55,8 @@ export interface PageAsks {
   carryOn: (slot: Slot) => void;
   /** Sit down to the run in a slot and watch its last fight again. */
   watch: (slot: Slot) => void;
-  /** Set out on a trail, with all figures or (`own`) the member's own. */
-  start: (trail: number, own: boolean) => void;
-  /** Set out on an endless run, one way or the other. */
-  endless: (way: EndlessWay) => void;
+  /** Set out on a way: a trail or an endless way, with all figures or the member's own. */
+  setOut: (way: Way) => void;
   /** End the run in a slot early. */
   goHome: (slot: Slot) => void;
   leave: () => void;

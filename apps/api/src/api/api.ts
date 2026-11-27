@@ -326,17 +326,22 @@ export class GamePlayApi extends HttpApiGroup.make("gamePlay")
   .middleware(Player)
   .prefix("/v1/game") {}
 
+/** Whose figures an endless board is of: everyone's (by default), or the members' own, a board apart. */
+const RaidPool = { pool: Schema.optional(Schema.Literals(["fair", "own"])) };
+
 /**
  * The Little Raid's endless runs: an endless way's board of the deepest rooms won, for all time or
- * this week, and the rooms of the Deep Woods the caller holds this week.
+ * this week, and the rooms of the Deep Woods the caller holds this week; each of everyone's figures
+ * unless `pool` says the members' own.
  */
 export class GameRaidApi extends HttpApiGroup.make("gameRaid")
   .add(
     HttpApiEndpoint.get("depths", "/raid/depths/:way/:span", {
       params: { way: Schema.Literals(ENDLESS_WAYS), span: Schema.Literals(["ever", "week"]) },
+      query: RaidPool,
       success: RaidDepths,
     }),
-    HttpApiEndpoint.get("held", "/raid/held", { success: RaidHeld }),
+    HttpApiEndpoint.get("held", "/raid/held", { query: RaidPool, success: RaidHeld }),
   )
   .middleware(Player)
   .prefix("/v1/game") {}

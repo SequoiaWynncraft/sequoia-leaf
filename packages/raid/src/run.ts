@@ -19,18 +19,19 @@ import { type BoonId, boonIn, boonNumber, boonOr, FIGHT_BOONS } from "./content/
 import { type Catalog, catalogOf, type Era } from "./content/catalog.ts";
 import { type BossId, type FigureId, figureIn, type Stars } from "./content/figures.ts";
 import { type ComponentId, emblemKin, type FinishedId, holdItem, isEmblemId, type ItemId } from "./content/items.ts";
-import { ECONOMY, MAX_LEVEL, ROOM_COUNT, type RoomKind, ROOMS, sellPrice, TRAILS } from "./content/rooms.ts";
+import { ECONOMY, MAX_LEVEL, type RoomKind, ROOMS, sellPrice } from "./content/rooms.ts";
 import { topStep, type TraitId, traitNumber } from "./content/traits.ts";
 import { drawOffer, starters } from "./draws.ts";
-import { type EndlessWay, lastRoom } from "./endless.ts";
+import { lastRoom } from "./endless.ts";
 import type { Fed } from "./feed.ts";
 import { resolveFight } from "./fight/engine.ts";
 import type { FightResult, FightSetup, FightSummary } from "./fight/types.ts";
 import { across, foeOf } from "./foe.ts";
 import { COLS, SEATS } from "./hex.ts";
-import { placedOf, type Roster } from "./own.ts";
+import { placedOf } from "./own.ts";
 import { type Party, type TraitState, traitStates, traitSteps } from "./party.ts";
 import { closedNow, roomOf, type RoomRun, setupRules } from "./room.ts";
+import { courseOf, onTrail, onTrailThere, trailOf, type Way } from "./way.ts";
 import { enterRoom, ruleOptions, rulePicks, takeRule } from "./wilds.ts";
 import type { Wing } from "./wing.ts";
 
@@ -84,7 +85,12 @@ export interface Run {
   rng: number;
   /** The era it last moved in (`releases.ts`): what its draws draw from (`catalogOf`). */
   era: Era;
-  trail: number;
+  /**
+   * How it set out (`way.ts`): its course (a trail, or an endless way) and whose figures (everyone's,
+   * or the member's own, with their roster as it was when the run started: what the stall sells
+   * above one acorn, and each figure's level). Its slot, boards, pay and records are read from it.
+   */
+  way: Way;
   /** The room being planned for or fought, counting from 0. */
   room: number;
   stage: Stage;
@@ -111,13 +117,6 @@ export interface Run {
   nextId: number;
   /** The last fight fought, as it was set up, so that it can be played again to be looked back on. */
   last: FightSetup | null;
-  /**
-   * For a run with the member's own figures, their roster as it was when the run started: what the
-   * stall sells above one acorn, and each figure's level. Null on the main way, which reads nothing owned.
-   */
-  own: Roster | null;
-  /** For an endless run (`endless.ts`), which of its ways it set out on; null for a run of fifteen rooms. */
-  endless: EndlessWay | null;
   /** In the Wilds, the rule picked for a wing (`wing.ts`): it holds while the run is in that wing. Null before the first pick. */
   wing: Wing | null;
   /** Things this run has done that the almanac remembers. */
@@ -321,7 +320,7 @@ export const sellValue = (cat: Catalog, piece: Piece): number => sellPrice(figur
 /** What the next rustle costs. */
 export const rustleCost = (run: Pick<Run, "rustles">): number => (run.rustles > 0 ? 0 : ECONOMY.rustle);
 /** The party as it would go into a fight now. */
-export function partyOf(run: Pick<Run, "board" | "boons" | "own">): Party {
+export function partyOf(run: Pick<Run, "board" | "boons" | "way">): Party {
   return {
     who: "You",
     title: "",
@@ -380,21 +379,16 @@ export function remember<T>(list: T[], v: T): void {
 export interface RunOptions {
   /** The era it sets out in. */
   era: Era;
-  /** Which trail, counting from 0. */
-  trail?: number;
-  /** For a run with the member's own figures, their roster; left out on the main way. */
-  own?: Roster;
-  /** For an endless run, its way. */
-  endless?: EndlessWay;
+  /** How it sets out: by default on the first trail, with everyone's figures. */
+  way?: Way;
 }
 /** Starts a run. It begins with a choice waiting: one of three one-acorn figures to set out with. */
 export function startRun(seed: number, options: RunOptions): Run {
-  const trail = Math.min(TRAILS.length - 1, Math.max(0, Math.trunc(options.trail ?? 0)));
   const run: Run = {
     seed: seed >>> 0,
     rng: mix(seed >>> 0, 1),
     era: options.era,
-    trail,
+    way: onTrailThere(options.way ?? onTrail(0)),
     room: 0,
     stage: { phase: "plan", picks: [] },
     resolve: ECONOMY.resolve,
@@ -414,8 +408,6 @@ export function startRun(seed: number, options: RunOptions): Run {
     record: [],
     nextId: 1,
     last: null,
-    own: options.own ?? null,
-    endless: options.endless ?? null,
     wing: null,
     seen: { fielded: [], threeStars: [], forged: [], topped: [] },
   };
@@ -869,14 +861,16 @@ export function summariseRun(run: RunView): RunSummary {
   const wonRooms = new Set(
     run.record.flatMap((r) => (r.result === "win" && r.kind === ROOMS[r.room]?.kind ? [r.room] : [])),
   );
+  // Bosses and the furthest room count only as far as the course's rooms pay.
+  const { paysThrough } = courseOf(run.way);
   const bosses: BossId[] = [];
   for (const r of run.record)
-    if (r.result === "win" && r.boss && r.room < ROOM_COUNT && !bosses.includes(r.boss)) bosses.push(r.boss);
+    if (r.result === "win" && r.boss && r.room < paysThrough && !bosses.includes(r.boss)) bosses.push(r.boss);
   return {
-    trail: run.trail,
+    trail: trailOf(run.way),
     ending: endingOf(run),
     cleared: wonRooms.size,
-    reached: Math.min(ROOM_COUNT, Math.max(run.room, ...run.record.map((r) => r.room)) + 1),
+    reached: Math.min(paysThrough, Math.max(run.room, ...run.record.map((r) => r.room)) + 1),
     bosses,
     fielded: run.seen.fielded.slice(),
     threeStars: run.seen.threeStars.slice(),

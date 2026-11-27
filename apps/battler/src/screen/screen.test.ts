@@ -26,9 +26,9 @@ function must(state: Kept, command: RaidCommand): { state: Kept; notes: RaidNote
 /** A table with a run in its first room, its starter on the board. */
 const begun = (): Kept =>
   must(must(RAID.create(ctx()), { do: "start", trail: 0 }).state, { do: "choose", option: 0 }).state;
-const at = (state: Kept): Table => ({ run: tableView(state, ctx()).run, runs: state.runs });
+const at = (state: Kept): Table => ({ run: tableView(state, ctx()).held.main, runs: state.begun.main });
 const runOf = (state: Kept): RunView => {
-  const run = tableView(state, ctx()).run;
+  const run = tableView(state, ctx()).held.main;
   if (!run) throw new Error("no run");
   return run;
 };
@@ -61,7 +61,7 @@ describe("the screen", () => {
 
   test("the takings are counted out: each number shows as it was until its line is counted, the acorns as they land", () => {
     const fighting = must(begun(), { do: "fight" }).state;
-    const play = playbackOf(runOf(fighting), structuredClone(fightOf(fighting)), fighting.runs);
+    const play = playbackOf(runOf(fighting), structuredClone(fightOf(fighting)), fighting.begun.main);
     const taken = must(fighting, { do: "take" });
     const run = runOf(taken.state);
     const counting: Screen = {
@@ -89,7 +89,7 @@ describe("the screen", () => {
 
   test("Carry on goes to the next room as Leaf has it, or to the end when the takings ended the run", () => {
     const fighting = must(begun(), { do: "fight" }).state;
-    const play = playbackOf(runOf(fighting), fightOf(fighting), fighting.runs);
+    const play = playbackOf(runOf(fighting), fightOf(fighting), fighting.begun.main);
     const taken = must(fighting, { do: "take" });
     const counted: Screen = { at: "after", play, takings: { notes: taken.notes, counted: 0, landed: 0, done: true } };
     expect(after(counted, { e: "carry", ...at(taken.state) })).toEqual({ at: "plan", looking: false });
@@ -249,6 +249,6 @@ describe("a page whose room another page settled", () => {
     expect(screen.at === "after" && screen.takings.notes?.[0]).toMatchObject({ t: "result" });
     go({ e: "carry", ...tableNow() });
     expect(S.screen).toEqual({ at: "plan", looking: false });
-    expect(fake.leaf.state.run?.room).toBe(1);
+    expect(fake.leaf.state.held.main?.room).toBe(1);
   });
 });

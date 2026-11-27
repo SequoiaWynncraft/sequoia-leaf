@@ -1,19 +1,20 @@
 /**
  * The second way to set out: a run whose stall sells the figures the member has pulled at the
  * Grove, each a little stronger for every further copy pulled. The run writes its roster down when
- * it starts (`Run.own`) and reads everything here from that; a run on the main way has none, and
- * reads nothing a member owns.
+ * it starts (its way's `figures`) and reads everything here from that; a run with everyone's
+ * figures has none, and reads nothing a member owns.
  */
-import { available, catalogOf, figureOf, type Figures, type Roster } from "./content/catalog.ts";
+import { available, catalogOf, figureOf, type Roster } from "./content/catalog.ts";
 import { type FigureId, isFigureId, type Tier, TIERS } from "./content/figures.ts";
 import type { Era } from "./content/releases.ts";
 import { LEVELS, STALL_ODDS } from "./content/rooms.ts";
+import type { Way } from "./content/ways.ts";
 import type { Placed } from "./party.ts";
 
 export type { Roster } from "./content/catalog.ts";
-/** What of a run says which way it set out: its roster, or none on the main way. */
-interface Way {
-  readonly own: Roster | null;
+/** What of a run says whose figures it set out with. */
+interface OnWay {
+  readonly way: Way;
 }
 
 /**
@@ -42,31 +43,30 @@ export function readRoster(v: unknown): Roster | null {
   return roster;
 }
 
-/** A figure's level in a run: what its roster says, no higher than levels go; 0 on the main way and for a figure not pulled. */
-export const levelOf = (run: Way, kind: FigureId): number => Math.min(LEVELS.most, run.own?.[kind] ?? 0);
+/** The roster a run set out with: none with everyone's figures. */
+const rosterIn = ({ way: { figures } }: OnWay): Roster | null => (figures.pool === "own" ? figures.roster : null);
+/** A figure's level in a run: what its roster says, no higher than levels go; 0 with everyone's figures and for a figure not pulled. */
+export const levelOf = (run: OnWay, kind: FigureId): number => Math.min(LEVELS.most, rosterIn(run)?.[kind] ?? 0);
 
 /** One of a run's figures as it would stand in a fight on a seat, with its level in the run. */
-export function placedOf(run: Way, p: Omit<Placed, "seat" | "level"> & { kind: FigureId }, seat: number): Placed {
+export function placedOf(run: OnWay, p: Omit<Placed, "seat" | "level"> & { kind: FigureId }, seat: number): Placed {
   const level = levelOf(run, p.kind);
   return { kind: p.kind, stars: p.stars, seat, items: p.items.slice(), fed: p.fed, ...(level > 0 && { level }) };
 }
-
-/** Whose figures a run's stall sells: everyone's on the main way, or the roster it started with. */
-const figuresOf = ({ own }: Way): Figures => (own ? { pool: "own", roster: own } : { pool: "fair" });
 
 /**
  * Who the stall may offer at a cost, as the run's era has them: on the main way everyone's figures
  * of that cost; in a run with the member's own figures every one-acorn figure, and above one acorn
  * those of its roster, a banner's headliner among them.
  */
-export const stallPool = (run: Way & { readonly era: Era }, tier: Tier): readonly FigureId[] =>
-  available(catalogOf(run), { for: "stall", figures: figuresOf(run), tier });
+export const stallPool = (run: OnWay & { readonly era: Era }, tier: Tier): readonly FigureId[] =>
+  available(catalogOf(run), { for: "stall", figures: run.way.figures, tier });
 
 /**
  * The stall's odds at a run's level, a weight for each cost from one acorn up: the table's, with
  * nothing for a cost nobody can be offered at, so that its share goes to the others.
  */
-export function stallOdds(run: Way & { readonly level: number; readonly era: Era }): number[] {
+export function stallOdds(run: OnWay & { readonly level: number; readonly era: Era }): number[] {
   const odds = STALL_ODDS[Math.min(run.level, STALL_ODDS.length) - 1] ?? STALL_ODDS[0] ?? [];
   return odds.map((weight, i) => {
     const tier = TIERS[i];

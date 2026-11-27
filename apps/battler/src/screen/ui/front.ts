@@ -10,7 +10,7 @@ import { choices, stepped } from "@sequoia-leaf/kit/choices.ts";
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { ask as fetchLeaf } from "@sequoia-leaf/kit/net.ts";
 import { type Board as Standings, readBoard } from "@sequoia-leaf/kit/person.ts";
-import { type EndlessWay, ROOM_COUNT, type RunView, TRAILS, unfought } from "@sequoia-leaf/raid";
+import { lastRoom, ROOM_COUNT, type RunView, slotOf, TRAILS, unfought, type Way, wayWords } from "@sequoia-leaf/raid";
 
 import { type Glyph, glyph, roomIcon } from "../art/icons.ts";
 import { paintLook } from "../art/place.ts";
@@ -44,9 +44,8 @@ export interface FrontAsks {
   carryOn: (slot: Slot) => void;
   /** Sits down to the run in a slot and plays its last fight again. */
   watch: (slot: Slot) => void;
-  start: (trail: number, own: boolean) => void;
-  /** Sets out on an endless run, one way or the other. */
-  endless: (way: EndlessWay) => void;
+  /** Sets out on a way: a trail or an endless way, with all figures or the member's own. */
+  setOut: (way: Way) => void;
   /** Ends the run in a slot early. */
   goHome: (slot: Slot) => void;
   leave: () => void;
@@ -96,9 +95,6 @@ const atNow = (): At => ({
   ...woodsAt(),
   tables: tablesRecord(),
 });
-/** The slot of the table a run is in. */
-const slotOf = (run: RunView): Slot => (run.endless ? "endless" : "main");
-
 // ---------- along the top ----------
 
 /** A button's id for a run: as it is for the run in hand, and with `-endless` for the endless run. */
@@ -108,7 +104,7 @@ const idFor = (id: string, slot: Slot): string => (slot === "main" ? id : `${id}
 function homeOf(go: FrontAsks, run: RunView): HTMLElement {
   if (unfought(run))
     return el("span", "k-read k-dim", { text: "You can end this raid once its first room is fought." });
-  const slot = slotOf(run);
+  const slot = slotOf(run.way);
   const asking = (on: boolean) => (): void => {
     kept.home = on ? slot : null;
     go.redraw();
@@ -134,12 +130,13 @@ function homeOf(go: FrontAsks, run: RunView): HTMLElement {
   );
 }
 
-/** A run laid out, on one line: what it is (its trail, or its endless way), its room and health, ending it, and carrying on. */
-function strip(go: FrontAsks, mode: Mode, run: RunView): HTMLElement {
-  const slot = slotOf(run);
-  const where = run.endless
-    ? endlessWhere(run)
-    : `${wayPrefix(run)}Room ${run.room + 1} of ${ROOM_COUNT}. Health ${run.resolve}.`;
+/** A run laid out, on one line: what it is (its trail, or its endless way: `wayWords`), its room and health, ending it, and carrying on. */
+function strip(go: FrontAsks, run: RunView): HTMLElement {
+  const slot = slotOf(run.way);
+  const where =
+    lastRoom(run) === Infinity
+      ? endlessWhere(run)
+      : `${wayPrefix(run)}Room ${run.room + 1} of ${ROOM_COUNT}. Health ${run.resolve}.`;
   return el(
     "div",
     "k-card lit run",
@@ -148,7 +145,7 @@ function strip(go: FrontAsks, mode: Mode, run: RunView): HTMLElement {
       "div",
       "what k-grow",
       {},
-      el("b", "k-gold", { text: run.endless ? mode.name : (TRAILS[run.trail]?.name ?? "") }),
+      el("b", "k-gold", { text: wayWords(run.way).name }),
       el("span", "k-dim", { text: where }),
     ),
     el(
@@ -269,9 +266,8 @@ function footOfCard(go: FrontAsks, mode: Mode, at: At): HTMLElement {
   const foot = footOf(mode, at);
   const run = mode.run(at);
   const setOut = (): void => {
-    const c = mode.setOut?.(at);
-    if (c && "course" in c) go.endless(c.course);
-    else if (c) go.start(c.trail, c.own === true);
+    const way = mode.setOut?.(at);
+    if (way) go.setOut(way);
   };
   const start = (words: string, look: string): HTMLElement =>
     el(
@@ -295,7 +291,7 @@ function footOfCard(go: FrontAsks, mode: Mode, at: At): HTMLElement {
         : el(
             "button",
             "k-btn",
-            { type: "button", id: "mode-carry", onclick: () => run && go.carryOn(slotOf(run)) },
+            { type: "button", id: "mode-carry", onclick: () => run && go.carryOn(slotOf(run.way)) },
             pic(glyph("play")),
             "Carry on",
           ),
@@ -441,7 +437,7 @@ export function frontBody(asked: FrontAsks): HTMLElement {
     "k-body menu",
     {},
     takenLine(),
-    runs.length > 0 || live ? el("div", "runs", {}, ...runs.map((r) => strip(go, r.mode, r.run)), live) : null,
+    runs.length > 0 || live ? el("div", "runs", {}, ...runs.map((r) => strip(go, r.run)), live) : null,
     el(
       "div",
       "menu-cols",

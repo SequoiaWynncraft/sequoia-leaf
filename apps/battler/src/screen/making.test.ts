@@ -10,16 +10,13 @@ import {
   GOOD_WITH,
   type ItemId,
   LEGACY_ERA,
-  newAlmanac,
-  newLooks,
   type Piece,
   predict,
   type RaidCommand,
   type RunView,
   startRun,
-  type TableView,
 } from "@sequoia-leaf/raid";
-import { CAT } from "@sequoia-leaf/raid/testkit.ts";
+import { CAT, viewWith } from "@sequoia-leaf/raid/testkit.ts";
 
 import { commandsFor, dropOf, type Offer, offerOf, offersFor, onOffer, pairsOf, wanters, wants } from "./making.ts";
 
@@ -113,18 +110,7 @@ describe("what a figure's card offers", () => {
 
   test("the commands are ones the page may show at once, and nothing is offered that the rules refuse", () => {
     const run = planning([["rock", ["plume"]]], ["bark", "chestnut", "chestnut"]);
-    const view: TableView = {
-      runs: 1,
-      run,
-      endless: null,
-      ventures: 0,
-      week: { at: 0, deepest: { wilds: 0, deep: 0 } },
-      almanac: emptyAlmanac,
-      trail: 0,
-      looks: plainLooks,
-      roster: {},
-      era: LEGACY_ERA,
-    };
+    const view = viewWith(run);
     const commands: RaidCommand[] = commandsFor(run, offerOf(run, first(run), "hoard"), { on: "board", at: 0 });
     expect(commands).toEqual([
       { do: "forge", item: 1, with: 2 },
@@ -136,12 +122,10 @@ describe("what a figure's card offers", () => {
       if (!guess || !("view" in guess)) throw new Error(`${c.do} was not done`);
       shown = guess.view;
     }
-    expect([shown.run?.board[0]?.items, shown.run?.items]).toEqual([["plume", "hoard"], ["bark"]]);
+    expect([shown.held.main?.board[0]?.items, shown.held.main?.items]).toEqual([["plume", "hoard"], ["bark"]]);
     expect(commandsFor(run, offerOf(run, first(run), "hedgehog"), { on: "board", at: 0 })).toEqual([]);
   });
 });
-const emptyAlmanac: TableView["almanac"] = newAlmanac();
-const plainLooks: TableView["looks"] = newLooks();
 
 describe("who on the board wants an item", () => {
   // A Kettle is good with a Stewpot, a Glowthorn and a Lichen Locket; a Rock with none of those.

@@ -9,9 +9,11 @@ import type { ItemId } from "./content/items.ts";
 import { LEGACY_ERA } from "./content/releases.ts";
 import { openFight, stepFight } from "./fight/engine.ts";
 import type { Fight, FightEvent, Unit } from "./fight/types.ts";
+import { newTable, type TableView, tableView } from "./game.ts";
 import { cellSeat, COLS, type Side } from "./hex.ts";
 import type { Party, Placed } from "./party.ts";
-import { beginFight, newPiece, type Run, takeTakings } from "./run.ts";
+import { beginFight, newPiece, type Run, type RunView, takeTakings } from "./run.ts";
+import { readWay } from "./way.ts";
 
 /** The catalogue the tests play in: the era live when eras came in (`LEGACY_ERA`). */
 export const CAT: Catalog = catalogAt(LEGACY_ERA);
@@ -184,3 +186,42 @@ export const EVERY_COMMAND: {
 export const EVERY_PLANNING = Object.values(EVERY_COMMAND).flatMap((each) =>
   isPlanning(each.c) ? [{ c: each.c, ready: each.ready }] : [],
 );
+
+/** A run as a table before version 8 (or a sitting before version 4) kept it: its way as its trail, its roster (`own`) and its endless way. */
+function runKeptBefore(run: unknown): unknown {
+  if (typeof run !== "object" || run === null || !("way" in run)) return run;
+  const { way, ...rest } = run;
+  const read = readWay(way);
+  if (!read) return run;
+  const { course, figures } = read;
+  return {
+    ...rest,
+    trail: course.id === "trail" ? course.trail : 0,
+    own: figures.pool === "own" ? figures.roster : null,
+    endless: course.id === "trail" ? null : course.id,
+  };
+}
+/**
+ * A table kept now (its text), as a table of an older version (`v`, before 8) kept it: its runs in
+ * `run` and `endless` with their counts in `runs` and `ventures`, each run's way in its three fields,
+ * and nothing kept apart. Whatever else an older version kept differently is the test's to change.
+ */
+export function tableKeptAs(text: string, v: number): Record<string, unknown> & { run: Kept; endless: Kept } {
+  const { held, begun, apart: _, ...rest } = JSON.parse(text);
+  return {
+    ...rest,
+    v,
+    runs: begun.main,
+    run: runKeptBefore(held.main),
+    ventures: begun.endless,
+    endless: runKeptBefore(held.endless),
+  };
+}
+/** A run as a stored table keeps it, to be changed by hand. */
+type Kept = Record<string, unknown>;
+
+/** The page's view of a new table (of `LEGACY_ERA`) with a run in hand, the first begun there. */
+export function viewWith(run: RunView): TableView {
+  const blank = tableView(newTable({ seed: 1, now: 0 }), { awards: [], now: 0 });
+  return { ...blank, era: LEGACY_ERA, begun: { main: 1, endless: 0 }, held: { main: run, endless: null } };
+}

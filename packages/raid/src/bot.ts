@@ -22,6 +22,7 @@ import {
 import { ECONOMY, MAX_LEVEL } from "./content/rooms.ts";
 import { stepFor, type TraitId, traitNumber } from "./content/traits.ts";
 import type { RuleId } from "./content/wilds.ts";
+import { lastRoom } from "./endless.ts";
 import { arrange } from "./formation.ts";
 import { SEATS } from "./hex.ts";
 import { countTraits } from "./party.ts";
@@ -160,7 +161,7 @@ function bestParty(cat: Catalog, habit: Habit, all: readonly Piece[], size: numb
 
 const floorOf = (run: RunView, habit: Habit): number => {
   // Near the end, or near going home, there is nothing to save for. An endless run has no end.
-  if ((run.room >= 13 && !run.endless) || run.resolve <= 8) return 0;
+  if (run.room >= lastRoom(run) - 1 || run.resolve <= 8) return 0;
   return habit.keeps[Math.min(2, Math.floor(run.room / 5))] ?? 0;
 };
 

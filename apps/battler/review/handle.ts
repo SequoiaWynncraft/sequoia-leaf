@@ -21,6 +21,7 @@ import {
   isBossId,
   LAST_ERA,
   MEASURES,
+  onTrail,
   picksOf,
   pieceAt,
   pieces,
@@ -31,22 +32,13 @@ import {
   type RunView,
   SENSIBLE,
   type TableView,
+  wayOn,
 } from "@sequoia-leaf/raid";
 import { isUnitKind, specOf } from "@sequoia-leaf/raid/content/figures.ts";
 import { COLS } from "@sequoia-leaf/raid/hex.ts";
 
 import { fightEvents, fightState, startFight } from "../src/screen/fightview.ts";
-import {
-  carryOn,
-  doSpeed,
-  enterRun,
-  lookBack,
-  setOut,
-  sitDown,
-  startEndless,
-  startNew,
-  toFront,
-} from "../src/screen/flow.ts";
+import { carryOn, doSpeed, enterRun, lookBack, setOut, sitDown, startOn, toFront } from "../src/screen/flow.ts";
 import { grab, hover, tapPawn, unpick } from "../src/screen/hand.ts";
 import { heldRow, heldTop } from "../src/screen/held.ts";
 import { NUDGES } from "../src/screen/logic.ts";
@@ -226,7 +218,7 @@ async function send(c: RaidCommand): Promise<Did | null> {
 async function plan(rounds = 30): Promise<void> {
   const view = leafView();
   if (rounds === 0 || !view) return;
-  const commands = planCommands(view, SENSIBLE, S.slot === "endless");
+  const commands = planCommands(view, SENSIBLE, S.slot);
   if (commands.length === 0) return;
   for (const c of commands) {
     // oxlint-disable-next-line no-await-in-loop -- in order, each after the one before
@@ -309,13 +301,13 @@ export function openHandle(): void {
       // From the chosen seed where the play server stages it; otherwise as the front page sets out.
       playSlot("main");
       const staging = await staged({ start: { seed, trail, own } });
-      if (staging.length === 0) await startNew(trail, own);
+      if (staging.length === 0) await startOn(onTrail(trail, own ? S.roster : null));
       return settle();
     },
     async endless(way, room = 0, acorns = 60) {
       playSlot("endless");
       const staging = await staged({ venture: { way, seed: 5, room, acorns } });
-      if (staging.length === 0) await startEndless(way);
+      if (staging.length === 0) await startOn(wayOn({ id: way }));
       return settle();
     },
     async woods(...ops) {

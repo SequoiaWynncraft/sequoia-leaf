@@ -7,7 +7,9 @@ import {
   newAlmanac,
   type RoomRecord,
   type RunView,
+  startOf,
   startRun,
+  wayOn,
 } from "@sequoia-leaf/raid";
 
 import { endlessWhere } from "./endless.ts";
@@ -44,6 +46,11 @@ const at = (over: Partial<At> = {}): At => ({
   span: "ever",
   ...over,
 });
+/** What a mode's Set out sends Leaf off the wire, at a moment of the page. */
+const sent = (mode: Mode, here: At): ReturnType<typeof startOf> | null => {
+  const way = mode.setOut?.(here);
+  return way ? startOf(way) : null;
+};
 const WON: RoomRecord = { room: 0, kind: "trouble", result: "win", standing: [3, 0], boss: null };
 /** A run laid out, before its first room is fought or (`fought`) after it. */
 function laidOut(fought: boolean): RunView {
@@ -52,7 +59,7 @@ function laidOut(fought: boolean): RunView {
 }
 /** An endless run laid out one way, in a room (from 0), having fought its rooms before it or (`room` 0) none. */
 function endless(way: EndlessWay, room = 0): RunView {
-  const run = startRun(3, { era: LEGACY_ERA, endless: way });
+  const run = startRun(3, { era: LEGACY_ERA, way: wayOn({ id: way }) });
   return { ...run, room, record: Array.from({ length: room }, (_, i) => ({ ...WON, room: i })) };
 }
 /** An almanac with the first trail cleared and room 15 reached on it, and room 4 on the second. */
@@ -77,8 +84,8 @@ describe("the mode table", () => {
   });
 
   test("Set out sends the trail chosen, with the member's own figures when they are chosen", () => {
-    expect(THE_TRAILS.setOut?.(at({ trail: 0 }))).toEqual({ do: "start", trail: 0 });
-    expect(THE_TRAILS.setOut?.(at({ trail: 1, own: true }))).toEqual({ do: "start", trail: 1, own: true });
+    expect(sent(THE_TRAILS, at({ trail: 0 }))).toEqual({ do: "start", trail: 0 });
+    expect(sent(THE_TRAILS, at({ trail: 1, own: true }))).toEqual({ do: "start", trail: 1, own: true });
   });
 });
 
@@ -118,9 +125,9 @@ describe("the button a mode shows", () => {
 });
 
 describe("the endless ways", () => {
-  test("Set out sends an endless run of the way, whatever trail is chosen", () => {
-    expect(THE_WILDS.setOut?.(at({ trail: 2, own: true }))).toEqual({ do: "start", course: "wilds" });
-    expect(THE_DEEP_WOODS.setOut?.(at())).toEqual({ do: "start", course: "deep" });
+  test("Set out sends an endless run of the way, whatever trail is chosen, and everyone's figures while the way offers no other", () => {
+    expect(sent(THE_WILDS, at({ trail: 2, own: true }))).toEqual({ do: "start", course: "wilds" });
+    expect(sent(THE_DEEP_WOODS, at())).toEqual({ do: "start", course: "deep" });
   });
 
   test("each has the endless run as its run when it set out that way, and the trails keep the run in hand", () => {
@@ -187,8 +194,8 @@ describe("the strip along the top", () => {
   test("both runs laid out are on it, each with its mode: the run in hand, then the endless run", () => {
     const deep = endless("deep", 22);
     const both = runsLaidOut(at({ run: laidOut(true), endless: deep }));
-    expect(both.map(({ mode, run }) => [mode.name, run.endless])).toEqual([
-      ["The trails", null],
+    expect(both.map(({ mode, run }) => [mode.name, run.way.course.id])).toEqual([
+      ["The trails", "trail"],
       ["The Deep Woods", "deep"],
     ]);
     expect(endlessWhere(deep)).toBe(`Room 23. Health ${deep.resolve}.`);

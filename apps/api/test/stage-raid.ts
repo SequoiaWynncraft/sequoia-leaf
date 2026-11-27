@@ -21,28 +21,31 @@ import {
   boardMet,
   catalogAt,
   catalogOf,
-  depthSlot,
   ENDLESS,
-  heldSlot,
+  type EndlessWay,
   isComponentId,
   isEndlessWay,
   isFigureId,
   isFinishedId,
   isMemberId,
   isRuleId,
+  lanes,
   layOutAfresh,
   LEGACY_ERA,
   MAX_LEVEL,
+  onTrail,
   RAID,
   roomAt,
   type Roster,
   rosterOf,
   type Run,
+  type Span,
   sparAt,
   sparParty,
   startRun,
   type Table,
   TRAIL_COUNT,
+  wayOn,
   weekAt,
 } from "@sequoia-leaf/raid";
 import { Effect, Option, Schema } from "effect";
@@ -63,9 +66,9 @@ function venture(table: Table, v: Record<string, unknown>): Run | null {
   if (!isEndlessWay(v.way)) return null;
   const seed = whole(v.seed, 0, 0xffffffff) ?? 1;
   const room = whole(v.room, 0, 200) ?? 0;
-  const run = startRun(seed, { era: LEGACY_ERA, endless: v.way });
-  table.ventures += 1;
-  table.endless = run;
+  const run = startRun(seed, { era: LEGACY_ERA, way: wayOn({ id: v.way }) });
+  table.begun.endless += 1;
+  table.held.endless = run;
   if (room === 0) return run;
   for (let i = 0; i < room; i++)
     run.record.push({ room: i, kind: roomAt(i)?.kind ?? "spar", result: "win", standing: [3, 0], boss: null });
@@ -84,17 +87,17 @@ function venture(table: Table, v: Record<string, unknown>): Run | null {
 /** Does one staging step to a table, writing down the number of a run or a figure it made. */
 function step(table: Table, op: Record<string, unknown>, made: number[], own: Roster): void {
   if (isRecord(op.venture)) {
-    if (venture(table, op.venture)) made.push(table.ventures);
+    if (venture(table, op.venture)) made.push(table.begun.endless);
     return;
   }
-  const run = op.slot === "endless" ? table.endless : table.run;
+  const run = table.held[op.slot === "endless" ? "endless" : "main"];
   if (isRecord(op.start)) {
     const seed = whole(op.start.seed, 0, 0xffffffff) ?? 1;
     const trail = whole(op.start.trail, 0, TRAIL_COUNT - 1) ?? 0;
-    table.runs += 1;
-    table.run = startRun(seed, { era: LEGACY_ERA, ...(op.start.own === true ? { trail, own } : { trail }) });
+    table.begun.main += 1;
+    table.held.main = startRun(seed, { era: LEGACY_ERA, way: onTrail(trail, op.start.own === true ? own : null) });
     table.trail = trail;
-    made.push(table.runs);
+    made.push(table.begun.main);
     return;
   }
   if (!run) return;
@@ -117,7 +120,7 @@ function step(table: Table, op: Record<string, unknown>, made: number[], own: Ro
   // The party waiting in the room as another member's board, signed as the rules sign one Leaf hands over.
   if (typeof op.member === "string") {
     const met = { player: "20000000-0000-4000-8000-0000000000aa", name: op.member, data: run.foe, of: 1 };
-    run.foe = boardMet(catalogOf(run), met, false, run.endless ? ENDLESS.chairs : 0) ?? run.foe;
+    run.foe = boardMet(catalogOf(run), met, false, run.way.course.id === "trail" ? 0 : ENDLESS.chairs) ?? run.foe;
   }
   if (isRuleId(op.rule) && run.stage.phase === "plan")
     run.stage.picks = [{ kind: "rule", options: [op.rule] }, ...run.stage.picks.filter((c) => c.kind !== "rule")];
@@ -131,6 +134,11 @@ function step(table: Table, op: Record<string, unknown>, made: number[], own: Ro
  * leave them with Leaf (`play_kept`), and rooms of the Deep Woods held by them: `{ hold: { room, by } }`
  * has the `by`th of them hold a room (counting from 0) with a regular's board for it, from `now`.
  */
+/** Where an endless way's depths are left, with everyone's figures. */
+const depthSlot = (course: EndlessWay, span: Span): string => lanes(wayOn({ id: course })).depth(span) ?? "";
+/** Where the holder of a room of the Deep Woods, with everyone's figures, keeps their board. */
+export const heldSlot = (room: number): string => lanes(wayOn({ id: "deep" })).held(room) ?? "";
+
 export const stageWoods = (others: readonly PlayerId[], ops: readonly unknown[], now: number) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;

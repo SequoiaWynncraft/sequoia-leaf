@@ -14,13 +14,14 @@ import { isLookKind, lookOf, readLooks } from "./content/looks.ts";
 import { isEra } from "./content/releases.ts";
 import { ECONOMY, MAX_LEVEL, ROOM_COUNT, TRAIL_COUNT } from "./content/rooms.ts";
 import { isTraitId, TRAIT_IDS } from "./content/traits.ts";
-import { readWeek } from "./depths.ts";
+import { readApart, readWeek } from "./depths.ts";
 import type { Fed } from "./feed.ts";
 import type { RaidNote, RunView, TableView } from "./game.ts";
 import { type News, type Payout, readAlmanac, trailOpen } from "./outside.ts";
 import { readRoster } from "./own.ts";
 import { ACORNS_WHYS, type AcornsWhy, type Ending, type Note, type RunSummary, type Spot } from "./run.ts";
 import { fields, Nonsense, readRunView } from "./save.ts";
+import { type Slot, slotOf } from "./way.ts";
 
 const { record, whole, flag, list, one, each, items, setup, outcome, bad } = fields;
 const UINT = 0xffffffff;
@@ -33,11 +34,11 @@ const text = (v: unknown, what: string): string => (typeof v === "string" && v.l
 
 /** A run as the page is shown it. */
 const runOf = (v: unknown, what: string): RunView => readRunView(v) ?? bad(what);
-/** One of a table's two runs as the page is shown it, or none: the run in hand, or (`endless`) the endless run. */
-function heldOf(v: unknown, endless: boolean): RunView | null {
-  const what = endless ? "the endless run" : "the run";
+/** The run held in a slot of a table as the page is shown it, or none: one of another slot (`slotOf` its way), or over, is not. */
+function heldOf(v: unknown, slot: Slot): RunView | null {
+  const what = `the run held in ${slot}`;
   const run = v === null ? null : runOf(v, what);
-  return run && (run.stage.phase === "over" || (run.endless !== null) !== endless) ? bad(what) : run;
+  return run && (run.stage.phase === "over" || slotOf(run.way) !== slot) ? bad(what) : run;
 }
 const isEnding = (v: unknown): v is Ending => v === "won" || v === "lost" || v === "left";
 
@@ -49,13 +50,17 @@ export function readView(v: unknown): TableView | null {
     const looks = readLooks(r.looks) ?? bad("the looks");
     const trail = whole(r.trail, 0, TRAIL_COUNT - 1, "the trail");
     if (!trailOpen(almanac, trail)) bad("the trail");
+    const held = record(r.held, "the runs held");
+    const begun = record(r.begun, "the runs begun");
     return {
       era: one(r.era, isEra, "the era"),
-      runs: whole(r.runs, 0, 1_000_000_000, "the runs"),
-      run: heldOf(r.run, false),
-      endless: heldOf(r.endless, true),
-      ventures: whole(r.ventures, 0, 1_000_000_000, "the endless runs"),
+      begun: {
+        main: whole(begun.main, 0, 1_000_000_000, "the runs"),
+        endless: whole(begun.endless, 0, 1_000_000_000, "the endless runs"),
+      },
+      held: { main: heldOf(held.main, "main"), endless: heldOf(held.endless, "endless") },
       week: readWeek(r.week),
+      apart: readApart(r.apart),
       almanac,
       trail,
       looks,

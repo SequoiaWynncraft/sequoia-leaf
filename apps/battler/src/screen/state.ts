@@ -162,18 +162,18 @@ const picture = (): string =>
   JSON.stringify([S.run, S.laid, S.almanac, S.looks, S.trail, S.runs, S.week, S.roster, S.era]);
 
 /** The run in a slot of Leaf's table. */
-const inSlot = (view: TableView, slot: Slot): RunView | null => (slot === "endless" ? view.endless : view.run);
+const inSlot = (view: TableView, slot: Slot): RunView | null => view.held[slot];
 
 /** Takes Leaf's state (the copy, with what is still waiting on top) into what the page shows. */
 function take(view: TableView): void {
   S.almanac = view.almanac;
   S.looks = view.looks;
   S.trail = view.trail;
-  S.runs = S.slot === "endless" ? view.ventures : view.runs;
+  S.runs = view.begun[S.slot];
   S.week = view.week;
   S.roster = view.roster;
   S.era = view.era;
-  S.laid = { run: view.run, endless: view.endless };
+  S.laid = { run: view.held.main, endless: view.held.endless };
   // A run that has ended stays on the table, for its last page, while the screen shows it.
   S.run = LIVE.seat ? LIVE.seat.run() : (inSlot(view, S.slot) ?? endedOf(S.screen)?.run ?? null);
 }

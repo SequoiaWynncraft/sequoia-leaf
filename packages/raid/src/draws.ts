@@ -8,10 +8,11 @@ import { available, catalogOf } from "./content/catalog.ts";
 import { type FigureId, TIERS } from "./content/figures.ts";
 import type { Era } from "./content/releases.ts";
 import { ECONOMY } from "./content/rooms.ts";
-import { type Roster, stallOdds, stallPool } from "./own.ts";
+import type { Way } from "./content/ways.ts";
+import { stallOdds, stallPool } from "./own.ts";
 
-/** What of a run its draws read: its stream, its era, its roster and its level. */
-type Drawing = Stream & { readonly era: Era; readonly own: Roster | null; readonly level: number };
+/** What of a run its draws read: its stream, its era, how it set out (whose figures) and its level. */
+type Drawing = Stream & { readonly era: Era; readonly way: Way; readonly level: number };
 
 /** A run's first pick: three of the one-acorn figures open in its era. */
 export const starters = (run: Stream & { readonly era: Era }): FigureId[] =>

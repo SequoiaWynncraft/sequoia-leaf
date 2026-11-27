@@ -40,7 +40,7 @@ function done(table: Table, c: RaidCommand, seed: number): Table {
 function tableFor(ready: (run: Run) => void): Table {
   const opened = done(done(RAID.create(at(1)), { do: "start", trail: 0 }, 2), { do: "start", course: "deep" }, 3);
   const t = structuredClone(opened);
-  for (const run of [t.run, t.endless]) if (run) ready(run);
+  for (const run of [t.held.main, t.held.endless]) if (run) ready(run);
   return t;
 }
 
@@ -79,8 +79,8 @@ describe("every command of a run, at every kind of table", () => {
         const answer = RAID.apply(t, aimed, at(9));
         if (isRefused(answer)) throw new Error(`${c.do} at the ${slot} run was refused: ${answer.refused}`);
         // The other run is as it was, but for Leaf's dice, which are stirred into every run's.
-        const other = slot === "main" ? "endless" : "run";
-        expect({ ...answer.state[other], rng: 0 }).toEqual({ ...t[other], rng: 0 });
+        const other = slot === "main" ? "endless" : "main";
+        expect({ ...answer.state.held[other], rng: 0 }).toEqual({ ...t.held[other], rng: 0 });
         const guess = predict(RAID.view(t, at(9)), aimed);
         const leafs = { view: RAID.view(answer.state, at(9)), notes: answer.notes };
         expect(named([c.do, slot], guess)).toEqual(named([c.do, slot], spec.draws ? null : leafs));
@@ -117,7 +117,7 @@ describe("every command of a run, at every kind of table", () => {
 
   test("the bot's commands for the endless run say its slot, and read back as themselves", () => {
     const t = tableFor(EVERY_COMMAND.buy.ready);
-    const commands = planCommands(RAID.view(t, at(9)), SENSIBLE, true);
+    const commands = planCommands(RAID.view(t, at(9)), SENSIBLE, "endless");
     expect(commands.length).toBeGreaterThan(0);
     for (const c of commands) {
       expect("slot" in c && c.slot).toBe("endless");

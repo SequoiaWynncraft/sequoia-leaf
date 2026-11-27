@@ -2,15 +2,17 @@
  * The room a run is in, as one value (`Room`): what kind of room it is, the rules in force there and
  * what they set in its fight (`content/rules.ts`), how strong the forest is, how many figures may be
  * fielded, and the picks it leaves. `roomOf` is the only reader of the run's wing (`wing.ts` says
- * which rooms a wing is) and of what its way does with a room (`endless.ts`): the fight's setup, who
- * waits there (`foe.ts`), formation, the bot, the room's card and the takings all read the room.
+ * which rooms a wing is) and of what its course's row does with a room (`content/ways.ts`): the
+ * fight's setup, who waits there (`foe.ts`), formation, the bot, the room's card and the takings all
+ * read the room.
  */
 import { ECONOMY, type RoomKind } from "./content/rooms.ts";
 import { apart, bind, type FightRules, PLAIN_RULES, ROOM_RULES, ruled, shut } from "./content/rules.ts";
 import type { RuleId } from "./content/wilds.ts";
-import { extraChairs, grownAt, roomAt } from "./endless.ts";
+import { extraChairs } from "./endless.ts";
 import type { FightSetup } from "./fight/types.ts";
 import type { RunView } from "./run.ts";
+import { courseOf } from "./way.ts";
 import { wingOf } from "./wing.ts";
 
 export interface Room {
@@ -30,7 +32,7 @@ export interface Room {
 }
 
 /** What `roomOf` reads of a run. */
-export type RoomRun = Pick<RunView, "room" | "wing" | "endless" | "level" | "boons" | "record" | "era">;
+export type RoomRun = Pick<RunView, "room" | "wing" | "way" | "level" | "boons" | "record" | "era">;
 
 /** The picks of components each kind of room leaves: a boss two when it is won, sparring none. */
 const COMPONENT_PICKS: Readonly<Record<RoomKind, { readonly won: number; readonly lost: number }>> = {
@@ -49,17 +51,18 @@ function inForce(run: Pick<RoomRun, "wing">, at: number): { named: RuleId[]; rul
 
 /**
  * The room at a place of a run (by default the one it is in), as the run would find it there now:
- * the wing's rule only while the place is in its wing, the forest grown as the way grows it, the
+ * the wing's rule only while the place is in its wing, the forest grown as the course grows it, the
  * chairs the run has, and a boon after it only if it has not been fought yet.
  */
 export function roomOf(run: RoomRun, at = run.room): Room {
-  // Every place from the first is a room (`roomAt`); one before it is fought nowhere, and leaves nothing.
-  const kind = roomAt(at)?.kind ?? "spar";
+  const course = courseOf(run.way);
+  // Every place from the first is a room of the course; one before it is fought nowhere, and leaves nothing.
+  const kind = course.rooms(at)?.kind ?? "spar";
   return {
     at,
     kind,
     ...inForce(run, at),
-    might: run.endless ? grownAt(at) : 100,
+    might: course.grows(at),
     chairs: run.level + extraChairs(run),
     picks: {
       ...COMPONENT_PICKS[kind],

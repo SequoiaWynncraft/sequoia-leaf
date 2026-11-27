@@ -38,6 +38,7 @@ import {
   still,
   unitOf,
 } from "./testkit.ts";
+import { onTrail } from "./way.ts";
 import { readView } from "./wire.ts";
 
 /** Every banner's headliner. */
@@ -60,7 +61,7 @@ function setOut(awards: readonly string[], own: boolean): Run {
   const done = RAID.apply(RAID.create(ctx()), own ? { do: "start", trail: 0, own } : { do: "start", trail: 0 }, {
     ...ctx(awards),
   });
-  const run = "refused" in done ? null : done.state.run;
+  const run = "refused" in done ? null : done.state.held.main;
   if (!run) throw new Error("did not set out");
   return run;
 }
@@ -91,7 +92,7 @@ describe("the twenty-eight", () => {
   test("stay twenty-nine: a banner's member is a figure, and not one of them", () => {
     expect(EVERYONES.length).toBe(29);
     expect(CAT.order).toEqual([...EVERYONES, ...HEADLINERS]);
-    const stall: readonly string[] = TIERS.flatMap((tier) => stallPool({ own: null, era: LEGACY_ERA }, tier));
+    const stall: readonly string[] = TIERS.flatMap((tier) => stallPool({ way: onTrail(0), era: LEGACY_ERA }, tier));
     expect(stall).toEqual([...EVERYONES]);
     for (const id of HEADLINERS) {
       expect(stall).not.toContain(id);
@@ -109,7 +110,7 @@ describe("the twenty-eight", () => {
 describe("the main way, whatever a member has pulled", () => {
   test("is told nothing of the roster, and its stall never offers a banner's member", () => {
     const run = setOut(HAS, false);
-    expect(run.own).toBeNull();
+    expect(run.way).toEqual(onTrail(0));
     const seen = offered(run);
     expect([...seen.keys()].filter(isMemberId)).toEqual([]);
     expect(seen.size).toBe(EVERYONES.length);
@@ -144,11 +145,11 @@ describe("the main way, whatever a member has pulled", () => {
 
 describe("a run with the member's own figures", () => {
   test("is offered to a member whose only pull is a banner's member", () => {
-    expect(setOut(["pull:headliner:banner-1"], true).own).toEqual({ [UNIT]: 0 });
+    expect(setOut(["pull:headliner:banner-1"], true).way).toEqual(onTrail(0, { [UNIT]: 0 }));
   });
   test("sells the banner's member a member has pulled, at its cost's odds with their other five-acorn figures", () => {
     const run = setOut(HAS, true);
-    expect(run.own).toEqual({ [UNIT]: 3, greg: 0 });
+    expect(run.way).toEqual(onTrail(0, { [UNIT]: 3, greg: 0 }));
     expect(stallPool(run, 5)).toEqual(["greg", UNIT]);
     const odds = STALL_ODDS[MAX_LEVEL - 1] ?? [0, 0, 0, 0, 0];
     const seen = offered(run);
@@ -225,13 +226,13 @@ describe("a table kept in a run with a banner's member", () => {
   const text = readFileSync(new URL("../stored/own-member.json", import.meta.url), "utf8");
   const read = (): Table => {
     const table = RAID.decode(text);
-    if (!table?.run) throw new Error("does not read");
+    if (!table?.held.main) throw new Error("does not read");
     return table;
   };
   test("reads with the member on its board, on its stall and in its roster, and is stored again the same", () => {
     const table = read();
-    const run = table.run;
-    expect(run?.own?.[UNIT]).toBe(2);
+    const run = table.held.main;
+    expect(run && levelOf(run, UNIT)).toBe(2);
     expect(run?.board.some((p) => p?.kind === UNIT)).toBe(true);
     expect(run?.seen.fielded).toContain(UNIT);
     expect(RAID.decode(RAID.encode(table))).toEqual(table);

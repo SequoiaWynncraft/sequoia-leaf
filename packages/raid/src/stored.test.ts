@@ -12,6 +12,7 @@ import { traitNumber } from "./content/traits.ts";
 import { RAID, type Table, TABLE_VERSION } from "./game.ts";
 import { type Choice, type Fought, foughtOf, type Phase, picksOf, type Piece, type Run } from "./run.ts";
 import { CAT } from "./testkit.ts";
+import { wayOn } from "./way.ts";
 
 /**
  * Tables as Leaf stores them, made by the rules of earlier versions and frozen in `../stored`. Each
@@ -40,8 +41,8 @@ const read = (text: string): Table => {
   return table;
 };
 const runOf = (table: Table): Run => {
-  if (!table.run) throw new Error("no run");
-  return table.run;
+  if (!table.held.main) throw new Error("no run");
+  return table.held.main;
 };
 /** A run as a table of version 1 kept it: where it stood as a phase, the picks, two flags and the fight. */
 type Kept1 = Omit<Run, "stage"> & {
@@ -63,7 +64,7 @@ describe("every stored table kept as a fixture", () => {
     const table = read(text);
     expect(read(RAID.encode(table))).toEqual(table);
     expect(RAID.view(table, ctx())).toBeDefined();
-    const run = table.run;
+    const run = table.held.main;
     const next = !run ? "start" : run.stage.phase === "fight" ? "take" : picksOf(run).length > 0 ? "choose" : "fight";
     const command = RAID.command({ do: next, trail: 0, option: 0 });
     if (!command) throw new Error("no command");
@@ -91,21 +92,23 @@ describe("every stored table kept as a fixture", () => {
 describe("a table kept with an endless run", () => {
   test("reads with the run in hand and, beside it, the endless run fighting a room held in the Deep Woods", () => {
     const table = read(fixture("endless-deep.json"));
-    expect(table.run?.endless).toBeNull();
-    expect(table.endless).toMatchObject({ endless: "deep", room: 17, foe: { who: "Fernwhistle" } });
-    expect(foughtOf(table.endless ?? runOf(table))?.setup.sides[1].by).toBe("10000000-0000-0000-0000-000000000002");
+    expect(table.held.main?.way.course.id).toBe("trail");
+    expect(table.held.endless).toMatchObject({ way: wayOn({ id: "deep" }), room: 17, foe: { who: "Fernwhistle" } });
+    expect(foughtOf(table.held.endless ?? runOf(table))?.setup.sides[1].by).toBe(
+      "10000000-0000-0000-0000-000000000002",
+    );
     expect(table.almanac.deepest.deep).toBe(18);
     const done = RAID.apply(table, { do: "take", slot: "endless" }, ctx());
-    expect(isRefused(done) ? done.refused : done.state.endless?.room).toBe(18);
+    expect(isRefused(done) ? done.refused : done.state.held.endless?.room).toBe(18);
   });
 });
 
 describe("a table kept before there were runs with the member's own figures", () => {
   test("reads with its run on the main way: no roster, and nobody with a level", () => {
     for (const [name, text] of FIXTURES) {
-      const run = read(text).run;
+      const run = read(text).held.main;
       if (name.startsWith("own-") || !run) continue;
-      expect(run.own).toBeNull();
+      expect(run.way.figures).toEqual({ pool: "fair" });
       const parties = [run.last, foughtOf(run)?.setup].flatMap((setup) => setup?.sides ?? []);
       expect(parties.flatMap((party) => party.figures).some((p) => "level" in p)).toBe(false);
     }
@@ -115,7 +118,10 @@ describe("a table kept before there were runs with the member's own figures", ()
 describe("a table kept in the fight of a run with the member's own figures", () => {
   test("reads with its roster, and the fight with its levels and the outcome Leaf kept", () => {
     const run = runOf(read(fixture("own-fighting.json")));
-    expect(run.own).toEqual({ crab7: 2, worm: 0, slug: 1, rock: 0, badger: 3, greg: 1 });
+    expect(run.way.figures).toEqual({
+      pool: "own",
+      roster: { crab7: 2, worm: 0, slug: 1, rock: 0, badger: 3, greg: 1 },
+    });
     const fight = foughtOf(run);
     if (!fight) throw new Error("no fight");
     expect(fight.setup.sides[0].figures.map((p) => [p.kind, p.stars, p.level])).toEqual([
@@ -326,7 +332,7 @@ describe("a table whose run cannot be read", () => {
         Object.assign(raw.run, { board: [{ id: 1, kind: "nobody", stars: 1, items: [], fed: 0 }] });
       }),
     );
-    expect(table).toEqual({ ...whole, run: null });
+    expect(table).toEqual({ ...whole, held: { ...whole.held, main: null } });
   });
 });
 
