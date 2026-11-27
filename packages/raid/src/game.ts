@@ -538,16 +538,18 @@ export function planCommands(view: TableView, habit: Habit, endless = false): Ra
 
 const GAME = "little-raid-table";
 /**
- * 6: the table, each run and each fight's setup keep their era (`releases.ts`). 5: what Greg has
- * eaten is a share of his health (`feed`), where it was meals of 3% each. 4: a run of the Wilds
- * keeps the rule picked for its wing (`Run.wing`), and a fight its rule. 3: the endless run beside
- * the run in hand, and the week's deepest rooms. 2: a run keeps where it stands as one value
- * (`Stage`). A table of versions 1 to 5 is read as well: it and its runs are of `LEGACY_ERA`, one of
- * versions 1 to 4 has Greg's meals at 3% each, and one of versions 1 to 3 has no rules, so a run of
- * the Wilds past room 5 picks one at its next boss.
+ * 7: a fight's setup keeps what binds it by what the rules set (`FightSetup.rules`) and the rules
+ * named, where it kept its one rule by id. 6: the table, each run and each fight's setup keep their
+ * era (`releases.ts`). 5: what Greg has eaten is a share of his health (`feed`), where it was meals
+ * of 3% each. 4: a run of the Wilds keeps the rule picked for its wing (`Run.wing`), and a fight its
+ * rule. 3: the endless run beside the run in hand, and the week's deepest rooms. 2: a run keeps
+ * where it stands as one value (`Stage`). A table of versions 1 to 6 is read as well: one of
+ * versions 4 to 6 has each fight's rule read as that rule's row; one of versions 1 to 5 and its runs
+ * are of `LEGACY_ERA`, one of versions 1 to 4 has Greg's meals at 3% each, and one of versions 1 to
+ * 3 has no rules, so a run of the Wilds past room 5 picks one at its next boss.
  */
-export const TABLE_VERSION = 6;
-const READS = [1, 2, 3, 4, 5, TABLE_VERSION] as const;
+export const TABLE_VERSION = 7;
+const READS = [1, 2, 3, 4, 5, 6, TABLE_VERSION] as const;
 
 export const encodeTable = (state: Table): string =>
   JSON.stringify({

@@ -30,16 +30,17 @@ import type { Era } from "./content/releases.ts";
 import { ECONOMY, MAX_LEVEL, ROOM_COUNT, type RoomKind, ROOMS, sellPrice, TRAILS } from "./content/rooms.ts";
 import { topStep, type TraitId, traitNumber } from "./content/traits.ts";
 import { drawOffer, starters } from "./draws.ts";
-import { type EndlessWay, extraChairs, foeOf, lastRoom, roomOf } from "./endless.ts";
+import { type EndlessWay, lastRoom } from "./endless.ts";
 import type { Fed } from "./feed.ts";
 import { resolveFight } from "./fight/engine.ts";
 import type { FightResult, FightSetup, FightSummary } from "./fight/types.ts";
-import { across } from "./foe.ts";
+import { across, foeOf } from "./foe.ts";
 import { COLS, SEATS } from "./hex.ts";
 import { placedOf, type Roster } from "./own.ts";
 import { type Party, type TraitState, traitStates, traitSteps } from "./party.ts";
+import { closedNow, roomOf, type RoomRun, setupRules } from "./room.ts";
 import { enterRoom, ruleOptions, rulePicks, takeRule } from "./wilds.ts";
-import { closedNow, ruleSetup, type Wing } from "./wing.ts";
+import type { Wing } from "./wing.ts";
 
 // ---------- what a run is ----------
 
@@ -279,9 +280,8 @@ const yes = (notes: Note[]): Done => ({ ok: true, notes });
 export const pieces = (run: Pick<Run, "board" | "bench">): Piece[] =>
   [...run.board, ...run.bench].filter((p) => p !== null);
 export const fielded = (run: Pick<Run, "board">): number => run.board.reduce((n, p) => n + (p ? 1 : 0), 0);
-/** How many figures may be fielded: the level, one more with An Extra Chair, and an endless run's chairs. */
-export const fieldCap = (run: Pick<Run, "level" | "boons" | "record" | "endless">): number =>
-  run.level + extraChairs(run);
+/** How many figures may be fielded in the room the run is in (`Room.chairs`): the level, one more with An Extra Chair, and an endless run's chairs. */
+export const fieldCap = (run: RoomRun): number => roomOf(run).chairs;
 /** Who is at a spot: null for nobody, undefined for no such spot. */
 export function pieceAt(run: RunView, spot: Spot): Piece | null | undefined {
   if (!Number.isInteger(spot.at)) return undefined;
@@ -341,8 +341,6 @@ export function partyOf(run: Pick<Run, "board" | "boons" | "own">): Party {
 /** The traits the fielded party has any of, with counts and steps, switched-on ones first. */
 export const traitsNow = (run: Pick<Run, "board">): TraitState[] =>
   traitStates(run.board.flatMap((p) => (p ? [p] : [])));
-/** The room the run is in. */
-export const roomNow = roomOf;
 
 // ---------- the stall ----------
 
@@ -745,7 +743,7 @@ export function beginFight(run: Run): Begun {
   for (const p of run.board) if (p) remember(run.seen.fielded, p.kind);
   for (const state of traitsNow(run)) if (state.step >= topStep(state.trait)) remember(run.seen.topped, state.trait);
   const sides: FightSetup["sides"] = [partyOf(run), structuredClone(run.foe)];
-  const setup: FightSetup = { seed: draw32(run), era: run.era, sides, ...ruleSetup(run) };
+  const setup: FightSetup = { seed: draw32(run), era: run.era, sides, ...setupRules(roomOf(run)) };
   const outcome = resolveFight(setup);
   run.stage = { phase: "fight", fight: { setup, outcome } };
   return { ok: true, notes: [{ t: "fight", room: run.room, seed: setup.seed, setup, outcome }], setup };
@@ -767,7 +765,7 @@ export function resolveLost(run: Pick<Run, "boons">, fight: FightSummary): numbe
  */
 export function takenTo(run: RunView, more?: boolean): number | null {
   const fight = foughtOf(run);
-  if (!fight || !roomOf(run)) return null;
+  if (!fight || run.room > lastRoom(run)) return null;
   const won = !more && fight.outcome.result === "win" && run.room >= lastRoom(run);
   if (won || run.resolve - resolveLost(run, fight.outcome) <= 0) return null;
   return Math.min(run.room + 1, lastRoom(run));
@@ -784,8 +782,8 @@ export function takeTakings(run: Run, met?: Met, more?: boolean): Taken {
   const { stage } = run;
   if (stage.phase !== "fight") return no(stage.phase === "over" ? "raid_over" : "no_fight");
   const { setup, outcome: fight } = stage.fight;
+  if (run.room > lastRoom(run)) return no("no_such_room");
   const room = roomOf(run);
-  if (!room) return no("no_such_room");
   const to = takenTo(run, more);
   const won = fight.result === "win";
   const last = run.room >= lastRoom(run);
@@ -824,17 +822,13 @@ export function takeTakings(run: Run, met?: Met, more?: boolean): Taken {
   notes.push({ t: "xp", gained: xp, cost: 0 });
   gainXp(run, xp, notes);
 
-  // Things to choose: a Wilds rule after a boss, components from trouble and bosses, a boon after some rooms.
+  // Things to choose: a Wilds rule after a boss, then the room's picks (`Room.picks`): components, and a boon after some rooms.
   const picks: Choice[] = rulePicks(run, run.room);
-  if (room.kind !== "spar") {
-    for (let i = 0; i < (room.kind === "boss" && won ? 2 : 1); i++) {
-      const count = won ? ECONOMY.componentsWon : ECONOMY.componentsLost;
-      picks.push({ kind: "component", options: componentOptions(run, count) });
-    }
+  for (let i = 0; i < (won ? room.picks.won : room.picks.lost); i++) {
+    const count = won ? ECONOMY.componentsWon : ECONOMY.componentsLost;
+    picks.push({ kind: "component", options: componentOptions(run, count) });
   }
-  const boonDue =
-    ECONOMY.boonRooms.some((r) => r === run.room) && run.record.filter((r) => r.room === run.room).length === 1;
-  if (boonDue) picks.push({ kind: "boon", options: boonOptions(run, []), redraws: ECONOMY.boonRedraws });
+  if (room.picks.boon) picks.push({ kind: "boon", options: boonOptions(run, []), redraws: ECONOMY.boonRedraws });
 
   // On to the next room. The last one is fought again until it is won or resolve runs out.
   run.room = to;
@@ -844,8 +838,7 @@ export function takeTakings(run: Run, met?: Met, more?: boolean): Taken {
   if (run.held) run.held = false;
   else restock(run);
   notes.push(...enterRoom(run, draw32(run), met));
-  const next = roomOf(run);
-  if (next) notes.push({ t: "room", room: run.room, kind: next.kind, who: run.foe.who, title: run.foe.title });
+  notes.push({ t: "room", room: run.room, kind: roomOf(run).kind, who: run.foe.who, title: run.foe.title });
   const waiting = picks[0];
   if (waiting) notes.push({ t: "choice", kind: waiting.kind });
   return { ok: true, notes, fight };

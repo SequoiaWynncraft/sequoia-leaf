@@ -1,18 +1,21 @@
 /**
- * The Wilds' rules in a run (`content/wilds.ts`; `wing.ts` says which one holds). After the boss in
+ * The Wilds' rules in a run (`content/wilds.ts`; `room.ts` says which one holds). After the boss in
  * room 5, and after every boss after it, a pick of two rules waits (`rulePicks`), drawn from the
  * run's stream, never the rule just played. Taking one (`takeRule`) lays the wing's first room out
- * under it, and every room after it in the wing is laid out under it too (`enterRoom`): under Stumps
- * new stumps, who waits sits only on open seats (`foeOf`), and the member's figures on a seat that
- * closed move to the nearest open one, each saying so (`shifted`).
+ * under it, and every room after it in the wing is laid out under it too (`enterRoom`): what the
+ * rule draws for a room drawn first (Stumps' stumps, `RuleRow.draws`), who waits sits only on open
+ * seats (`foeOf`), and the member's figures on a seat that closed move to the nearest open one,
+ * each saying so (`shifted`).
  */
 import { type Met, shuffled } from "@sequoia-leaf/core";
 
+import { ROOM_RULES } from "./content/rules.ts";
 import { isRuleId, RULE_IDS, type RuleId, WILDS } from "./content/wilds.ts";
-import { foeOf, roomAt } from "./endless.ts";
-import { SEATS } from "./hex.ts";
+import { roomAt } from "./endless.ts";
+import { foeOf } from "./foe.ts";
+import { closedNow, roomOf } from "./room.ts";
 import type { Choice, Note, Run, Spot } from "./run.ts";
-import { closedNow, nearestOpen, ruleOf, seatOpen, wingOf } from "./wing.ts";
+import { nearestOpen, seatOpen, wingOf } from "./wing.ts";
 
 /** What a pick of rules offers: `WILDS.offers` of them, drawn from the run's stream, never the rule just `played`. */
 export const ruleOptions = (run: Run, played: RuleId | null): RuleId[] =>
@@ -24,17 +27,14 @@ export const ruleOptions = (run: Run, played: RuleId | null): RuleId[] =>
 /** The pick of a rule a room just fought (its place, from 0) leaves waiting: after each boss of the Wilds from `WILDS.first` on. */
 export function rulePicks(run: Run, fought: number): Choice[] {
   if (run.endless !== "wilds" || fought < WILDS.first || roomAt(fought)?.kind !== "boss") return [];
-  const played = ruleOf({ room: fought, wing: run.wing })?.id ?? null;
+  const played = roomOf(run, fought).named[0] ?? null;
   return [{ kind: "rule", options: ruleOptions(run, played) }];
 }
 
-const ALL_SEATS = Array.from({ length: SEATS }, (_, seat) => seat);
-/** Draws the room's stumps from the run's stream. */
-function drawStumps(run: Run): void {
-  if (run.wing)
-    run.wing.stumps = shuffled(run, ALL_SEATS)
-      .slice(0, WILDS.stumps)
-      .toSorted((a, b) => a - b);
+/** Draws what the rule in force in the room draws for it (Stumps' stumps), from the run's stream; nothing under none. */
+function drawFor(run: Run): void {
+  const [rule] = roomOf(run).named;
+  if (run.wing && rule) run.wing.stumps = ROOM_RULES[rule].draws(run);
 }
 
 /** The member's figures on a closed seat move to the nearest open empty one (with none, to the bench), and each says so. */
@@ -57,14 +57,14 @@ function moveOff(run: Run): Note[] {
 /** Takes the rule picked for the wing the run has come to, and lays the room out under it: whoever is on a closed seat, on either side, moves off it. */
 export function takeRule(run: Run, rule: RuleId): Note[] {
   run.wing = { rule, at: wingOf(run.room), stumps: [] };
-  if (rule === "stumps") drawStumps(run);
+  drawFor(run);
   run.foe = { ...run.foe, figures: seatOpen(run.foe.figures, closedNow(run)) };
   return moveOff(run);
 }
 
-/** Lays out the room a run has come to, from the room's seed: under Stumps new stumps first, then who waits there, then the member's figures off the closed seats. */
+/** Lays out the room a run has come to, from the room's seed: what its rule draws first (under Stumps new stumps), then who waits there, then the member's figures off the closed seats. */
 export function enterRoom(run: Run, seed: number, met?: Met): Note[] {
-  if (ruleOf(run)?.id === "stumps") drawStumps(run);
+  drawFor(run);
   run.foe = foeOf(run, seed, met);
   return moveOff(run);
 }

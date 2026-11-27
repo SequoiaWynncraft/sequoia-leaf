@@ -1,6 +1,7 @@
 import { fondOf, type Habit, planRoom, SENSIBLE } from "@sequoia-leaf/raid/bot.ts";
 import { catalogAt } from "@sequoia-leaf/raid/content/catalog.ts";
 import { LAST_ERA } from "@sequoia-leaf/raid/content/releases.ts";
+import { ROOM_RULES } from "@sequoia-leaf/raid/content/rules.ts";
 /**
  * The Wilds' rules against a plain wing, with bots of different habits:
  *
@@ -15,10 +16,10 @@ import { LAST_ERA } from "@sequoia-leaf/raid/content/releases.ts";
  * a side, under Early Dusk and without it: dusk, draws.
  */
 import { CALLINGS, KINS } from "@sequoia-leaf/raid/content/traits.ts";
-import { RULE_IDS, type RuleId, RULES, WILDS } from "@sequoia-leaf/raid/content/wilds.ts";
+import { RULE_IDS, type RuleId, WILDS } from "@sequoia-leaf/raid/content/wilds.ts";
 import { sparAt } from "@sequoia-leaf/raid/endless.ts";
 import { resolveFight } from "@sequoia-leaf/raid/fight/engine.ts";
-import type { FightRule, FightSummary } from "@sequoia-leaf/raid/fight/types.ts";
+import type { FightSetup, FightSummary } from "@sequoia-leaf/raid/fight/types.ts";
 import { regularAt } from "@sequoia-leaf/raid/foe.ts";
 import {
   beginFight,
@@ -153,7 +154,7 @@ console.log(
   `The Wilds' rules: ${runs} runs for each of ${HABITS.length} habits to room ${deepest + 1} at most, ${wings} wings each played 7 ways, in ${took.toFixed(0)}s.\n`,
 );
 console.log("Rooms won in a wing: the plain wing, and each rule against it, in points (10 or more is marked *).");
-console.log(`${"habit".padEnd(10)} plain ${RULE_IDS.map((r) => RULES[r].name.padStart(13)).join("")}`);
+console.log(`${"habit".padEnd(10)} plain ${RULE_IDS.map((r) => ROOM_RULES[r].name.padStart(13)).join("")}`);
 for (const [name, line] of byHabit) {
   const plain = line.plain.fought === 0 ? 0 : line.plain.won / line.plain.fought;
   const cells = RULE_IDS.map((r) => {
@@ -169,7 +170,7 @@ console.log(
 );
 for (const [r, o] of offered) {
   console.log(
-    `  ${RULES[r].name.padEnd(13)} offered ${String(o.offered).padStart(5)}  picked ${pct(o.offered === 0 ? 0 : o.picked / o.offered)}  better ${pct(o.pairs === 0 ? 0 : o.better / o.pairs)}`,
+    `  ${ROOM_RULES[r].name.padEnd(13)} offered ${String(o.offered).padStart(5)}  picked ${pct(o.offered === 0 ? 0 : o.picked / o.offered)}  better ${pct(o.pairs === 0 ? 0 : o.better / o.pairs)}`,
   );
 }
 
@@ -178,14 +179,14 @@ const regulars: Record<"dusk" | "plain", Eleven> = {
   dusk: { fights: 0, dusk: 0, draws: 0 },
   plain: { fights: 0, dusk: 0, draws: 0 },
 };
-const DUSK: FightRule = { id: "dusk", stumps: [] };
+const DUSK: Pick<FightSetup, "rules" | "named"> = { rules: ROOM_RULES.dusk.sets([]), named: ["dusk"] };
 for (let seed = 1; seed <= 400; seed++) {
   const room = 30 + (seed % 15);
   const ours = regularAt(catalogAt(LAST_ERA), seed * 2, room, 0, sparAt(room));
   const theirs = regularAt(catalogAt(LAST_ERA), seed * 2 + 1, room, 0, sparAt(room));
   if (ours.figures.length < 11 || theirs.figures.length < 11) continue;
   for (const rule of [DUSK, null]) {
-    const f = resolveFight({ seed, era: LAST_ERA, sides: [ours, theirs], ...(rule ? { rule } : {}) });
+    const f = resolveFight({ seed, era: LAST_ERA, sides: [ours, theirs], ...rule });
     countEleven(regulars[rule ? "dusk" : "plain"], f);
   }
 }

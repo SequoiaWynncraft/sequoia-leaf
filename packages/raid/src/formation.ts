@@ -23,7 +23,7 @@ export interface Standing {
 /**
  * A seat for each of a party, in the order given. `leaping` says whether its Sneaks will leap when
  * the fight starts; if not, they line up with the other close fighters. Nobody sits on a seat a
- * Wilds rule has `closed` (`wing.ts`).
+ * room closes (`closed`, `room.ts`).
  */
 export function arrange(party: readonly Standing[], leaping: boolean, closed: ReadonlySet<number> = NONE): number[] {
   const seats = party.map(() => -1);

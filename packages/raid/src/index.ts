@@ -126,9 +126,9 @@ export {
   HANDLES,
   MAX_LEVEL,
   ROOM_COUNT,
-  type Room,
   type RoomKind,
   ROOMS,
+  type RoomSpec,
   sellPrice,
   STALL_ODDS,
   levelBoost,
@@ -188,7 +188,6 @@ export type {
   Fight,
   FightEvent,
   FightResult,
-  FightRule,
   FightSetup,
   FightSummary,
   HealSource,
@@ -234,7 +233,6 @@ export {
   refusal,
   REFUSALS,
   type Refused,
-  roomNow,
   type RoomRecord,
   type Ending,
   endingOf,
@@ -272,10 +270,12 @@ export { ENDLESS, ENDLESS_WAYS, type EndlessWay, isEndlessWay } from "./content/
 export { chairsOf, grownAt, heldRoom, heldSlot, isHeld, lastRoom, roomAt, sparAt } from "./endless.ts";
 export { type Deepest, type Depths, depthSlot, type Week, weekAt } from "./depths.ts";
 export { checkRun, type Loaded, readRunView } from "./save.ts";
-// The Wilds' rules, a wing each.
-export { isRuleId, RULE_IDS, type RuleId, RULES, type RuleSpec, WILDS } from "./content/wilds.ts";
-export { closedNow, closedSeats, ruleOf, type Wing, wingEnd, wingOf } from "./wing.ts";
-export { closedCells } from "./fight/rules.ts";
+// What binds a room: the Wilds' rules, a wing each.
+export { isRuleId, RULE_IDS, type RuleId, WILDS } from "./content/wilds.ts";
+export { bind, type FightRules, PLAIN_RULES, ROOM_RULES, ruled, type RuleRow, shut } from "./content/rules.ts";
+export { closedNow, type Room, roomOf, type RoomRun } from "./room.ts";
+export { type Wing, wingEnd, wingOf } from "./wing.ts";
+export { closedCells, rulesOf } from "./fight/rules.ts";
 
 // Between runs.
 export {

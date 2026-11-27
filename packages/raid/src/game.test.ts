@@ -1005,7 +1005,9 @@ describe("another member's board in a sparring room", () => {
     const long = metOf(board, 1000, { name: "x".repeat(81) });
     expect(must(into2, { do: "take" }, { ...at, met: long }).state).toEqual(plain);
     // Nine figures, as many as anybody can field, is a board.
-    expect(fieldCap({ level: MAX_LEVEL, boons: ["extrachair"], record: [], endless: null })).toBe(9);
+    expect(fieldCap({ room: 0, wing: null, level: MAX_LEVEL, boons: ["extrachair"], record: [], endless: null })).toBe(
+      9,
+    );
     const nine = { ...board, figures: Array.from({ length: 9 }, (_, seat) => greg(seat)) };
     expect(runOf(must(into2, { do: "take" }, { ...at, met: metOf(nine) }).state).foe.by).toBe(MEMBER);
   });

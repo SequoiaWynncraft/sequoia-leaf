@@ -3,7 +3,7 @@
  * fifteenth, how much the forest grows in them, the chairs a beaten boss adds, and how strong a
  * regular is down there. Tuning the endless runs is editing this file.
  */
-import { type Room, ROOMS } from "./rooms.ts";
+import { ROOMS, type RoomSpec } from "./rooms.ts";
 
 /**
  * The two ways into the endless slot. In the Wilds every sparring room is a regular's. In the Deep
@@ -34,4 +34,4 @@ export const ENDLESS = {
 } as const;
 
 /** The rooms after the fifteenth, in the order they come round, for ever. */
-export const CYCLE: readonly Room[] = ROOMS;
+export const CYCLE: readonly RoomSpec[] = ROOMS;

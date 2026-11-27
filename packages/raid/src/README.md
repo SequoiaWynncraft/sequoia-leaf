@@ -480,13 +480,17 @@ run when it says `slot: "endless"`. What older pages send is still read the same
   (`endless:<n>`, `Table.ventures`), and is written into nothing else of the almanac: no trophy, no
   trail opened, no standing. Its log lines and fight records carry its way.
 
-## The Wilds' rules (`wilds.ts`, `wing.ts`, `fight/rules.ts`, `content/wilds.ts`)
+## The Wilds' rules (`room.ts`, `wilds.ts`, `wing.ts`, `fight/rules.ts`, `content/rules.ts`, `content/wilds.ts`)
 
 After the boss in room 5 of the Wilds, and after every boss after it, won or lost, a pick of two
 rules waits ahead of the boss's components (`rulePicks`, a `Choice` of kind `rule`), drawn from the
 run's stream, never the rule just played, so never the same two twice in a row. The rule picked holds
-for the next five rooms, a wing (`Run.wing`, `ruleOf`): rooms 6 to 10, 11 to 15, and so on. Both
-parties play by it. The Deep Woods and the trails have none.
+for the next five rooms, a wing (`Run.wing`): rooms 6 to 10, 11 to 15, and so on. Both parties play
+by it. The Deep Woods and the trails have none. Each rule is a row (`ROOM_RULES`): its name, its
+sentence, what it draws for a room, and what it sets in a fight (`FightRules`: seats closed, seats
+closed only for sitting down, the furthest an attack reaches, when dusk falls, the extra attack of a
+figure alone). Two rules in force at once would be bound (`bind`): closed seats together, the lower
+reach and dusk, the extra attack added.
 
 - **Stumps.** 3 seats are stumps, the same on both halves, drawn anew every room (`Wing.stumps`):
   nobody stands on them or walks through them all fight long.
@@ -497,12 +501,16 @@ parties play by it. The Deep Woods and the trails have none.
 - **Elbow Room.** A figure that sits down with no friend touching it has 30% more attack (its
   fight's opening says so, as a boost).
 
-A closed seat (`closedSeats`) takes nobody: a move onto one is refused (`closed_hex`); formation
+The room a run is in is one value (`roomOf`, the only reader of the wing): its kind, its rules and
+what they set, the rules named, the forest's might, the chairs and the picks it leaves. A closed seat
+(`closedNow`) takes nobody: a move onto one is refused (`closed_hex`); formation
 (`arrange`) and so the regulars and the bot seat round them; the forest's plans move anyone on one to
 the nearest open seat on its half (`seatOpen`); and when a wing starts, or under Stumps each room,
 the member's figures on one move to the nearest open seat (with none, the bench), each saying so
-(`shifted`). A fight is set up with the rule (`FightSetup.rule`); in it a closed hex holds `CLOSED`
-in `Fight.taken`. The bot picks Fog when more of its board fights up close than from 3 hexes or more,
+(`shifted`). A fight is set up with what its room sets, apart from plain (`FightSetup.rules`), and
+the rules named for the page (`FightSetup.named`); it is played by those numbers and never by a
+rule's id, and in it a closed hex holds `CLOSED` in `Fight.taken`. A fight kept with its rule by id
+(a table before version 7) is read as that rule's row. The bot picks Fog when more of its board fights up close than from 3 hexes or more,
 Long Table the other way round, and otherwise the first card. A run kept before rules (a table of
 version 3) has none, and picks at its next boss; a rule an update takes out is none, and the run
 picks again for the rest of its wing (`pickAgain`).
@@ -707,9 +715,11 @@ While no member is still in, every wait is 0 (`later`): the regulars play straig
 | `depths.ts`            | How deep endless runs go: the deepest rooms ever and this week, what a won room leaves, what one is paid for           |
 | `content/endless.ts`   | The endless runs' numbers: growth, chairs, the first held room, regulars after room 15, the rooms that come round      |
 | `wilds.ts`             | The Wilds' rules in a run: the pick after a boss, taking a rule, each room laid out under it                           |
-| `wing.ts`              | Which rule a room is played under, the seats it closes, the nearest open seat                                          |
-| `fight/rules.ts`       | The Wilds' rules in a fight: closed hexes, Fog, Early Dusk, Elbow Room                                                 |
-| `content/wilds.ts`     | The Wilds' rules: their names, sentences and numbers                                                                   |
+| `room.ts`              | The room a run is in (`roomOf`): its kind, what binds it, the forest's might, the chairs, the picks it leaves          |
+| `wing.ts`              | The rule picked for a wing, which rooms a wing is, the nearest open seat                                               |
+| `fight/rules.ts`       | What binds a fight, played: closed hexes, the furthest an attack reaches, dusk, a figure alone                         |
+| `content/rules.ts`     | Each rule a room may be played under as a row: its words, what it draws and what it sets; `bind`                       |
+| `content/wilds.ts`     | The Wilds' rules: their ids and numbers                                                                                |
 | `wire.ts`              | Reading Leaf's view and notes back                                                                                     |
 | `sitting/`             | Eight at once on Leaf's clock: the state, the clock, the carousel, commands, what a page is shown, storing it          |
 | `tally.ts`             | What every figure did in a fight, read from its events                                                                 |

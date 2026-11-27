@@ -9,16 +9,19 @@ import { legal } from "./command.ts";
 import { catalogAt } from "./content/catalog.ts";
 import type { FigureId, Stars } from "./content/figures.ts";
 import { LEGACY_ERA } from "./content/releases.ts";
+import { PLAIN_RULES, ROOM_RULES, shut } from "./content/rules.ts";
 import { RULE_IDS, type RuleId, WILDS } from "./content/wilds.ts";
-import { foeOf, roomAt } from "./endless.ts";
+import { roomAt } from "./endless.ts";
 import { HZ } from "./fight/core.ts";
 import { openFight, stepFight } from "./fight/engine.ts";
-import { attackReach, closedCells } from "./fight/rules.ts";
-import type { Fight, FightEvent, FightRule, FightSetup } from "./fight/types.ts";
+import { attackReach, closedCells, rulesOf } from "./fight/rules.ts";
+import type { Fight, FightEvent, FightSetup } from "./fight/types.ts";
+import { foeOf } from "./foe.ts";
 import { arrange } from "./formation.ts";
 import { RAID, type RaidNote, type Table } from "./game.ts";
 import { colOf, distance, rowOf, seatCell, SEATS } from "./hex.ts";
 import type { Placed } from "./party.ts";
+import { closedNow, roomOf, setupRules } from "./room.ts";
 import {
   beginFight,
   type Choice,
@@ -33,7 +36,7 @@ import {
 } from "./run.ts";
 import { sparParty } from "./spar.ts";
 import { at, onCell, partyOfFigures, ready, stepUntil, stillSide, unitOf } from "./testkit.ts";
-import { closedNow, closedSeats, ruleOf, wingOf } from "./wing.ts";
+import { wingOf } from "./wing.ts";
 import { readNotes, readView } from "./wire.ts";
 
 /** A run of the Wilds brought to a room, its board three stars of the best there are: one that wins. */
@@ -124,7 +127,8 @@ describe("the pick of a rule", () => {
       run.stage = { phase: "plan", picks: [] };
       // To the wing's boss: rooms 6 to 10, counting from 1.
       run.room = WILDS.first + WILDS.wing;
-      expect(ruleOf(run)?.id).toBe(played);
+      expect(roomOf(run).named).toHaveLength(1);
+      expect(roomOf(run).named[0]).toBe(played);
       run.foe = foeOf(run, seed);
       fought(run);
       const next = rulePick(run)?.options ?? [];
@@ -138,18 +142,27 @@ describe("the pick of a rule", () => {
   });
   test("the rule holds for the 5 rooms of its wing, and the room after it waits for the next pick", () => {
     const run = ruled(5, "fog");
-    for (let room = 5; room < 10; room++) expect(ruleOf({ room, wing: run.wing })?.id).toBe("fog");
-    expect(ruleOf({ room: 10, wing: run.wing })).toBeNull();
+    for (let room = 5; room < 10; room++) expect(roomOf(run, room).named).toEqual(["fog"]);
+    expect(roomOf(run, 10).named).toEqual([]);
+    expect(roomOf(run, 10).rules).toEqual(PLAIN_RULES);
     expect(wingOf(4)).not.toBe(wingOf(5));
   });
 });
 
+/** What a fight under one rule is set up with, as a room in force sets it up: from what the rule drew (`stumps`). */
+const under = (rule: RuleId, stumps: number[] = []): Pick<FightSetup, "rules" | "named"> =>
+  setupRules({ rules: rulesOf({ rules: ROOM_RULES[rule].sets(stumps) }), named: [rule] });
 /** A fight's setup under a rule, or none. */
-const setupOf = (ours: Placed[], theirs: Placed[], rule?: FightRule, seed = 7): FightSetup => ({
+const setupOf = (
+  ours: Placed[],
+  theirs: Placed[],
+  rule?: Pick<FightSetup, "rules" | "named">,
+  seed = 7,
+): FightSetup => ({
   seed,
   era: LEGACY_ERA,
   sides: [partyOfFigures(ours), partyOfFigures(theirs)],
-  ...(rule ? { rule } : {}),
+  ...rule,
 });
 /** A fight played to its end: the opening, every step's events, and where everyone stood after each step. */
 function playOut(setup: FightSetup): {
@@ -193,8 +206,8 @@ const BRAWL: Placed[] = [
 
 describe("each rule in the fight", () => {
   test("Stumps: nobody stands on a stump or walks through one, on either half", () => {
-    const rule: FightRule = { id: "stumps", stumps: [2, 3, 10] };
-    const stumps = new Set(closedCells(rule));
+    const rule = under("stumps", [2, 3, 10]);
+    const stumps = new Set(closedCells(rulesOf(rule)));
     expect(stumps.size).toBe(6);
     for (let seed = 1; seed <= 12; seed++) {
       const { cells, events } = playOut(setupOf(BRAWL, BRAWL, rule, seed));
@@ -206,28 +219,28 @@ describe("each rule in the fight", () => {
   });
   test("Narrow Table: nobody stands in the outside columns all fight long, even those planned there", () => {
     for (let seed = 1; seed <= 12; seed++) {
-      const { cells } = playOut(setupOf(BRAWL, BRAWL, { id: "narrow", stumps: [] }, seed));
+      const { cells } = playOut(setupOf(BRAWL, BRAWL, under("narrow"), seed));
       expect(cells.flat().filter((c) => colOf(c) === 0 || colOf(c) === 6)).toEqual([]);
     }
     const plain = playOut(setupOf(BRAWL, BRAWL));
     expect(plain.cells[0]?.some((c) => colOf(c) === 0)).toBe(true);
   });
   test("Long Table: both front rows are empty at the start, and walked into once the fight is on", () => {
-    const { cells } = playOut(setupOf(BRAWL, BRAWL, { id: "long", stumps: [] }));
+    const { cells } = playOut(setupOf(BRAWL, BRAWL, under("long")));
     expect(cells[0]?.filter(onFront)).toEqual([]);
     expect(cells.flat().some(onFront)).toBe(true);
   });
   test("Fog: no attack reaches further than 2 hexes", () => {
     const far: Placed[] = [at("rock", 3, 0), at("heron", 2, 3), at("finch", 4, 3), at("fogowl", 3, 3)];
-    const shots = (rule?: FightRule): number[] =>
+    const shots = (rule?: Pick<FightSetup, "rules" | "named">): number[] =>
       playOut(setupOf(far, far, rule)).events.flatMap((e) =>
         e.t === "shot" && e.what === "attack" ? [distance(e.from, e.to)] : [],
       );
     expect(Math.max(...shots())).toBeGreaterThan(WILDS.fog);
-    const fogged = shots({ id: "fog", stumps: [] });
+    const fogged = shots(under("fog"));
     expect(fogged.length).toBeGreaterThan(0);
     expect(Math.max(...fogged)).toBeLessThanOrEqual(WILDS.fog);
-    const f = openFight(setupOf(far, far, { id: "fog", stumps: [] }));
+    const f = openFight(setupOf(far, far, under("fog")));
     expect(f.units.every((u) => attackReach(f, u) <= WILDS.fog)).toBe(true);
     // Each figure keeps its own reach, for its ability.
     expect(Math.max(...f.units.map((u) => u.range))).toBeGreaterThan(WILDS.fog);
@@ -240,7 +253,7 @@ describe("each rule in the fight", () => {
       seed: 3,
       era: LEGACY_ERA,
       sides: [partyOfFigures([onCell("drizzlefrog", 0, frogAt)]), partyOfFigures([onCell("rock", 1, rockAt)])],
-      rule: { id: "fog", stumps: [] },
+      ...under("fog"),
     });
     const frog = unitOf(f, "drizzlefrog", 0);
     const rock = unitOf(f, "rock", 1);
@@ -255,16 +268,16 @@ describe("each rule in the fight", () => {
   });
   test("Early Dusk: dusk falls after 12 seconds, not 30", () => {
     const sturdy: Placed[] = [at("crab40", 3, 0, 3), at("rock", 2, 0, 3), at("badger", 4, 0, 3)];
-    const early = openFight(setupOf(sturdy, sturdy, { id: "dusk", stumps: [] }));
+    const early = openFight(setupOf(sturdy, sturdy, under("dusk")));
     expect(early.wilds.dusk).toBe(WILDS.dusk);
     expect(openFight(setupOf(sturdy, sturdy)).wilds.dusk).toBe(30);
     // The first dusk event comes in the step of second 13 under the rule, and later without it.
-    const secondOf = (rule?: FightRule): number => {
+    const secondOf = (rule?: Pick<FightSetup, "rules" | "named">): number => {
       const f = openFight(setupOf(sturdy, sturdy, rule));
       while (!f.over) if (stepFight(f).some((e) => e.t === "dusk")) return f.tick / HZ;
       return -1;
     };
-    expect(secondOf({ id: "dusk", stumps: [] })).toBe(WILDS.dusk + 1);
+    expect(secondOf(under("dusk"))).toBe(WILDS.dusk + 1);
     const plain = secondOf();
     expect(plain === -1 || plain > WILDS.dusk + 1).toBe(true);
   });
@@ -272,7 +285,7 @@ describe("each rule in the fight", () => {
     const ours: Placed[] = [at("badger", 0, 0), at("rock", 3, 0), at("crab7", 4, 0)];
     const theirs: Placed[] = [at("badger", 3, 0)];
     const plain = openFight(setupOf(ours, theirs));
-    const elbow = openFight(setupOf(ours, theirs, { id: "elbow", stumps: [] }));
+    const elbow = openFight(setupOf(ours, theirs, under("elbow")));
     expect(attackOf(elbow, "badger")).toBe(
       attackOf(plain, "badger") + Math.round((attackOf(plain, "badger") * 30) / 100),
     );
@@ -291,7 +304,7 @@ describe("each rule in the fight", () => {
   test("a fight set up with no rule is played as it always was", () => {
     const a = playOut(setupOf(BRAWL, BRAWL));
     const f = openFight(setupOf(BRAWL, BRAWL));
-    expect(f.wilds).toEqual({ dusk: 30, reach: Number.POSITIVE_INFINITY });
+    expect(f.wilds).toEqual({ closed: [], closedToSit: [], reach: Number.POSITIVE_INFINITY, dusk: 30, alone: 0 });
     expect(f.taken.every((v) => v >= -1)).toBe(true);
     expect(a.f.result).not.toBeNull();
   });
@@ -331,7 +344,7 @@ describe("closed hexes", () => {
           expect(run.foe.figures.filter((p) => closed.has(p.seat))).toEqual([]);
           expect(run.board.flatMap((p, s) => (p && closed.has(s) ? [s] : []))).toEqual([]);
         }
-        const closed = closedSeats({ id: rule, stumps: [3, 9, 24] });
+        const closed = shut(rulesOf(under(rule, [3, 9, 24])));
         const regular = sparParty(catalogAt(LEGACY_ERA), seed, 16, 0, { level: 9, spent: 60, components: 4 }, closed);
         expect(regular.figures.length).toBeGreaterThan(5);
         expect(regular.figures.filter((p) => closed.has(p.seat))).toEqual([]);
@@ -354,7 +367,7 @@ describe("closed hexes", () => {
         expect(run.board.flatMap((p, s) => (p && closed.has(s) ? [s] : []))).toEqual([]);
         const begun = beginFight(run);
         expect(begun.ok).toBe(true);
-        if (begun.ok) expect(begun.setup.rule?.id).toBe(rule);
+        if (begun.ok) expect(begun.setup.named).toEqual([rule]);
         takeTakings(run);
       }
     }
@@ -466,7 +479,7 @@ describe("a run's rule, kept", () => {
     expect(old?.wing).toBeNull();
     const kept = frozen("wilds-rule.json").endless;
     expect(kept?.wing?.rule).toBe("stumps");
-    expect(kept && ruleOf(kept)?.stumps).toHaveLength(WILDS.stumps);
+    expect(kept && roomOf(kept).rules.closed).toHaveLength(WILDS.stumps);
     const closed = kept ? closedNow(kept) : new Set<number>();
     expect(kept?.board.flatMap((p, s) => (p && closed.has(s) ? [s] : []))).toEqual([]);
     expect(kept?.foe.figures.filter((p) => closed.has(p.seat))).toEqual([]);
@@ -478,7 +491,9 @@ describe("a run's rule, kept", () => {
       expect(back).toEqual(state);
       expect(back?.endless?.wing?.rule).toBe(rule);
       const fight = back?.endless ? foughtOf(back.endless) : null;
-      expect(fight?.setup.rule?.id).toBe(rule);
+      expect(fight?.setup.named).toEqual([rule]);
+      // What binds it is what binds the room it was locked in.
+      if (back?.endless && fight) expect(rulesOf(fight.setup)).toEqual(roomOf(back.endless).rules);
     }
   });
   test("a table of version 3 has none: its run of the Wilds past room 5 plays on, and picks one at its next boss", () => {
@@ -488,12 +503,14 @@ describe("a run's rule, kept", () => {
     const stage = rec(old.endless, "stage");
     const fight = rec(stage, "fight");
     const setup = rec(fight, "setup");
-    delete setup.rule;
+    delete setup.rules;
+    delete setup.named;
     old.endless.stage = { ...stage, fight: { ...fight, setup } };
     const state = RAID.decode(JSON.stringify(old));
     const run = state?.endless;
     expect(run?.wing).toBeNull();
-    expect(run ? foughtOf(run)?.setup.rule : "none").toBeUndefined();
+    expect(run ? foughtOf(run)?.setup.rules : "none").toBeUndefined();
+    expect(run ? foughtOf(run)?.setup.named : "none").toBeUndefined();
     if (!state || !run) throw new Error("does not read");
     let table = must(state, { do: "take", slot: "endless" });
     expect(table.endless ? rulePick(table.endless) : undefined).toBeUndefined();

@@ -3,19 +3,14 @@
  * again (`CYCLE`), the forest in them growing room by room, every boss beaten adds a chair, and a
  * regular is as strong as a member could be that deep. Its two ways (`EndlessWay`) differ only in
  * who waits in a sparring room: in the Wilds a regular; in the Deep Woods the member who holds the
- * room (`heldSlot`, handed over by Leaf as `met`), or a regular while nobody does. Everything here
- * reads the run's `endless`; a run without it is the fifteen rooms it always was.
+ * room (`heldSlot`, handed over by Leaf as `met`; `foe.ts` seats them), or a regular while nobody
+ * does. Everything here reads the run's `endless`; a run without it is the fifteen rooms it always
+ * was. What binds the room a run is in is `room.ts`'s (`roomOf`), which reads these.
  */
-import type { Met } from "@sequoia-leaf/core";
-
 import { boonNumber } from "./content/boons.ts";
-import { catalogOf } from "./content/catalog.ts";
 import { CYCLE, ENDLESS, type EndlessWay } from "./content/endless.ts";
-import { MAX_LEVEL, type Room, ROOM_COUNT, ROOMS, type SparStrength } from "./content/rooms.ts";
-import { boardMet, forest, opposition, regularAt } from "./foe.ts";
-import type { Party } from "./party.ts";
+import { MAX_LEVEL, ROOM_COUNT, ROOMS, type RoomSpec, type SparStrength } from "./content/rooms.ts";
 import type { RoomRecord, Run } from "./run.ts";
-import { closedNow, seatOpen } from "./wing.ts";
 
 export type { EndlessWay } from "./content/endless.ts";
 
@@ -29,12 +24,8 @@ export interface Way {
 export const lastRoom = (run: Pick<Way, "endless">): number => (run.endless ? Infinity : ROOM_COUNT - 1);
 
 /** The room at a place, counting from 0: one of the fifteen, and after them the cycle, round and round. */
-export const roomAt = (room: number): Room | undefined =>
+export const roomAt = (room: number): RoomSpec | undefined =>
   room < ROOM_COUNT ? ROOMS[room] : CYCLE[(room - ROOM_COUNT) % CYCLE.length];
-
-/** The room a run is in; none past its last. */
-export const roomOf = (run: Pick<Run, "room"> & Pick<Way, "endless">): Room | undefined =>
-  run.room <= lastRoom(run) ? roomAt(run.room) : undefined;
 
 /** How many boss rooms come after the fifteenth and before a room: the chairs a party that beat them all has there. */
 function bossesBefore(room: number): number {
@@ -83,27 +74,6 @@ export const heldSlot = (room: number): string => `deep:${room}`;
 export function heldRoom(slot: string): number | null {
   const m = /^deep:(\d{1,4})$/.exec(slot);
   return m ? Number(m[1]) : null;
-}
-
-/**
- * Who is waiting in the room a run is in, from the room's seed: for a run that is not endless, as
- * `opposition` has it. In an endless run, the forest grown for the room (`grownAt`); in a sparring
- * room a regular as strong as `sparAt` says, but in a room held (`isHeld`) the board of the member
- * who holds it, when Leaf hands one over (`met`) and it is one a member could have fielded (`boardMet`).
- * Under a Wilds rule nobody sits on a seat it closes: the regular is seated round them, and the
- * forest's plan moves anyone on one to the nearest open seat (`seatOpen`).
- */
-export function foeOf(run: Pick<Run, "room" | "trail" | "wing" | "era"> & Way, seed: number, met?: Met): Party {
-  if (!run.endless) return opposition(catalogOf(run), seed, run.room, run.trail, met, run.own !== null);
-  const room = roomAt(run.room);
-  const closed = closedNow(run);
-  if (room && room.kind !== "spar") {
-    const party = forest(seed, run.room, room, run.trail, grownAt(run.room));
-    return { ...party, figures: seatOpen(party.figures, closed) };
-  }
-  const regular = regularAt(catalogOf(run), seed, run.room, run.trail, sparAt(run.room), closed);
-  const held = isHeld(run, run.room) && met ? boardMet(catalogOf(run), met, false, ENDLESS.chairs) : null;
-  return held ?? regular;
 }
 
 /** How many figures an endless run's chairs add to what may be fielded, beside An Extra Chair's. */

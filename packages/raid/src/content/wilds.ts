@@ -1,11 +1,10 @@
 /**
- * The Wilds' rules as a table (`wing.ts` says which one a room is played under, `wilds.ts` deals
- * the pick, `fight/rules.ts` plays them). After the boss in room 5, and after every boss after it,
- * the member picks one of two, and the next five rooms, a wing, are played under it by both
- * parties. Tuning a rule is editing its number here; its sentence says the number.
+ * The Wilds' rules as numbers (`rules.ts` has each rule's row: its words and what it sets; `wing.ts`
+ * and `room.ts` say which one a room is played under; `wilds.ts` deals the pick). After the boss in
+ * room 5, and after every boss after it, the member picks one of two, and the next five rooms, a
+ * wing, are played under it by both parties. Tuning a rule is editing its number here; its sentence
+ * says the number.
  */
-import { FIGHT } from "./rooms.ts";
-
 export const RULE_IDS = ["stumps", "narrow", "long", "fog", "dusk", "elbow"] as const;
 export type RuleId = (typeof RULE_IDS)[number];
 export const isRuleId = (v: unknown): v is RuleId => RULE_IDS.some((id) => id === v);
@@ -28,27 +27,3 @@ export const WILDS = {
   /** Elbow Room: how much more attack a figure with no friend touching it has, in percent. */
   elbow: 30,
 } as const;
-
-export interface RuleSpec {
-  readonly name: string;
-  /** What the rule is, as its card says it. */
-  readonly text: string;
-}
-
-export const RULES: Readonly<Record<RuleId, RuleSpec>> = {
-  stumps: {
-    name: "Stumps",
-    text: `${WILDS.stumps} hexes on each side are stumps: nobody stands on them or walks through them. New ones every room.`,
-  },
-  narrow: { name: "Narrow Table", text: "The 2 outside columns are closed. The board is 5 across." },
-  long: {
-    name: "Long Table",
-    text: "Both front rows are empty at the start. The parties begin 2 hexes further apart.",
-  },
-  fog: { name: "Fog", text: `No attack reaches further than ${WILDS.fog} hexes.` },
-  dusk: { name: "Early Dusk", text: `Dusk falls after ${WILDS.dusk} seconds, not ${FIGHT.dusk}.` },
-  elbow: {
-    name: "Elbow Room",
-    text: `A figure that starts with no friend touching it has ${WILDS.elbow}% more attack.`,
-  },
-};
