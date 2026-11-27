@@ -229,7 +229,7 @@ export function cratesOpening(): { y: F.Yard; crate: number; behind: number } {
 }
 
 /** The yards in `saves/`, as each version kept them (`saves.test.ts`). */
-export const SAVES = ["v7-small", "v7-mid", "v7-study", "v7-gate", "v6-mid", "v3-tier2"] as const;
+export const SAVES = ["v8-whole", "v7-small", "v7-mid", "v7-study", "v7-gate", "v6-mid", "v3-tier2"] as const;
 
 /** A save read, with its owner there at its last tick. */
 export function saved(name: (typeof SAVES)[number]): F.Yard {
