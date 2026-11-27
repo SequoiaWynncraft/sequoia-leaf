@@ -34,7 +34,7 @@ import { snd } from "./sounds.ts";
 import { boardSpot } from "./stage.ts";
 import {
   ask,
-  catalogNow,
+  catalogFor,
   changed,
   doNow,
   go,
@@ -261,7 +261,7 @@ function counting(notes: readonly RaidNote[], play: Playback): void {
   else if (won && play.boss)
     tell({
       town: "news",
-      text: `${specOf(catalogNow(), play.boss).name} was seen off at the stump, room ${play.room + 1}.`,
+      text: `${specOf(catalogFor(S.run), play.boss).name} was seen off at the stump, room ${play.room + 1}.`,
       tone: "gold",
     });
   let t = 0.1;

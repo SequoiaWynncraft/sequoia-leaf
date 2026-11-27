@@ -228,8 +228,8 @@ export function boonShort(cat: Catalog, id: BoonId): string {
   const spec = boonIn(cat, id);
   return filled(spec, spec.short);
 }
-/** One of a boon's numbers; 0 if it has no such number. */
-export const boonNumber = (cat: Catalog, id: BoonId, name: string): number => boonIn(cat, id).n[name] ?? 0;
+/** One of a boon's numbers; 0 if it has no such number, or the catalogue has no such boon. */
+export const boonNumber = (cat: Catalog, id: BoonId, name: string): number => cat.boons[id]?.n[name] ?? 0;
 /** One of a boon's numbers if it is among the boons held (`has`); else what it is without. */
 export const boonOr = (cat: Catalog, has: readonly BoonId[], id: BoonId, name: string, without: number): number =>
   has.includes(id) ? boonNumber(cat, id, name) : without;

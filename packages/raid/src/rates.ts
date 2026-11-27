@@ -1,5 +1,21 @@
 /** How often fights are won, for the reports on the rules (`review/balance.ts`, Leaf's `raid-stats.ts`). */
+import type { Catalog } from "./content/catalog.ts";
 import { ROOM_COUNT, TRAIL_COUNT } from "./content/rooms.ts";
+import type { TraitId } from "./content/traits.ts";
+
+/**
+ * A comp as players name one: the traits switched on, each at the count its step takes in the
+ * catalogue of the fight's own era, the biggest first.
+ */
+export function compOf(cat: Catalog, steps: Readonly<Partial<Record<TraitId, number>>>): string {
+  const on = cat.ids.traits.flatMap((id) => {
+    const t = cat.traits[id];
+    const count = t?.steps[(steps[id] ?? 0) - 1];
+    return t && count !== undefined ? [{ name: t.name, count }] : [];
+  });
+  const named = on.toSorted((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  return named.map((t) => `${t.name} ${t.count}`).join(" + ") || "No trait on";
+}
 
 /** Where a fight was fought, as a `Tally` keeps it: its room on its trail. */
 export const placeOf = (trail: number, room: number): number => trail * ROOM_COUNT + room;

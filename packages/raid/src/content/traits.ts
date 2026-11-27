@@ -235,20 +235,19 @@ export const BASE_TRAITS: Readonly<Partial<Record<TraitId, TraitSpec>>> = {
 /** A trait as a catalogue has it. */
 export const traitIn = (cat: Catalog, id: TraitId): TraitSpec => opened(cat.traits, id, cat.era);
 
-/** The step a trait is on for a number of different figures: 0 for not switched on (and for none, whatever the era). */
+/** The step a trait is on for a number of different figures: 0 for not switched on, and for a trait the catalogue does not have. */
 export function stepFor(cat: Catalog, id: TraitId, count: number): number {
-  if (count <= 0) return 0;
   let step = 0;
-  for (const need of traitIn(cat, id).steps) if (count >= need) step++;
+  for (const need of count > 0 ? (cat.traits[id]?.steps ?? []) : []) if (count >= need) step++;
   return step;
 }
-/** The top step a trait has. */
-export const topStep = (cat: Catalog, id: TraitId): number => traitIn(cat, id).steps.length;
+/** The top step a trait has; 0 for one the catalogue does not have. */
+export const topStep = (cat: Catalog, id: TraitId): number => cat.traits[id]?.steps.length ?? 0;
 /** One of a trait's numbers at a step (1 is the first step); 0 when the trait is off. */
 export const stepValue = (list: readonly number[], step: number): number => (step > 0 ? (list[step - 1] ?? 0) : 0);
-/** One of a trait's named numbers at a step; 0 when the trait is off or has no such number. */
+/** One of a trait's named numbers at a step; 0 when the trait is off, not in the catalogue, or has no such number. */
 export const traitNumber = (cat: Catalog, id: TraitId, name: string, step: number): number =>
-  step > 0 ? stepValue(traitIn(cat, id).n[name] ?? [], step) : 0;
+  step > 0 ? stepValue(cat.traits[id]?.n[name] ?? [], step) : 0;
 /** Fills the `{name}` gaps in a sentence. */
 export const fill = (text: string, values: Readonly<Record<string, number | string>>): string =>
   text.replaceAll(/\{(\w+)\}/g, (whole: string, key: string) => {

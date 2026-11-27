@@ -15,18 +15,10 @@ import { draw32, type Met, mix, pick, shuffled } from "@sequoia-leaf/core";
  * each room, the components and boons on offer, each fight's seed. `seed` is only where the stream
  * started; nothing the run draws is worked out from it after that.
  */
-import { BOON_IDS, type BoonId, boonIn, boonNumber, boonOr, FIGHT_BOONS } from "./content/boons.ts";
+import { type BoonId, boonIn, boonNumber, boonOr, FIGHT_BOONS } from "./content/boons.ts";
 import { type Catalog, catalogOf, type Era } from "./content/catalog.ts";
 import { type BossId, type FigureId, figureIn, type Stars } from "./content/figures.ts";
-import {
-  COMPONENT_IDS,
-  type ComponentId,
-  emblemKin,
-  type FinishedId,
-  holdItem,
-  isEmblemId,
-  type ItemId,
-} from "./content/items.ts";
+import { type ComponentId, emblemKin, type FinishedId, holdItem, isEmblemId, type ItemId } from "./content/items.ts";
 import { ECONOMY, MAX_LEVEL, ROOM_COUNT, type RoomKind, ROOMS, sellPrice, TRAILS } from "./content/rooms.ts";
 import { topStep, type TraitId, traitNumber } from "./content/traits.ts";
 import { drawOffer, starters } from "./draws.ts";
@@ -353,26 +345,28 @@ function restock(run: Run): void {
 
 // ---------- choices ----------
 
-function boonOptions(run: Run, not: readonly BoonId[]): BoonId[] {
-  const kins = new Set(pieces(run).map((p) => figureIn(catalogOf(run), p.kind).kin));
+/** The boons a run is offered after a room: three of those its catalogue has open (`cat`, its era's), one charm at most. */
+export function boonOptions(run: Run, not: readonly BoonId[], cat = catalogOf(run)): BoonId[] {
+  const kins = new Set(pieces(run).map((p) => figureIn(cat, p.kind).kin));
   // A charm only for a kin the party owns a figure of.
-  const fits = (id: BoonId) => !run.boons.includes(id) && (!isEmblemId(id) || kins.has(emblemKin(catalogOf(run), id)));
-  const all = BOON_IDS.filter(fits);
+  const fits = (id: BoonId) => !run.boons.includes(id) && (!isEmblemId(id) || kins.has(emblemKin(cat, id)));
+  const all = cat.ids.boons.filter(fits);
   const fresh = all.filter((id) => !not.includes(id));
   const left = fresh.length >= ECONOMY.boonOptions ? fresh : all;
   const out: BoonId[] = [];
   // One charm at most in any three, so there is always something else to take.
   let charm = false;
   while (out.length < ECONOMY.boonOptions) {
-    const pool = left.filter((id) => !out.includes(id) && !(charm && boonIn(catalogOf(run), id).sort === "charm"));
+    const pool = left.filter((id) => !out.includes(id) && !(charm && boonIn(cat, id).sort === "charm"));
     if (pool.length === 0) break;
     const id = pick(run, pool);
     out.push(id);
-    if (boonIn(catalogOf(run), id).sort === "charm") charm = true;
+    if (boonIn(cat, id).sort === "charm") charm = true;
   }
   return out;
 }
-const componentOptions = (run: Run, count: number): ComponentId[] => shuffled(run, COMPONENT_IDS).slice(0, count);
+const componentOptions = (run: Run, count: number): ComponentId[] =>
+  shuffled(run, catalogOf(run).ids.components).slice(0, count);
 
 export function newPiece(run: RunView, kind: FigureId): Piece {
   return { id: run.nextId++, kind, stars: 1, items: [], fed: 0 };
@@ -506,7 +500,7 @@ export function choose(run: Run, option: number): Done {
       run.acorns += amount;
       notes.push({ t: "acorns", why: "windfall", amount });
     } else if (boon === "basket") {
-      const items = Array.from({ length: boonNumber(cat, boon, "components") }, () => pick(run, COMPONENT_IDS));
+      const items = Array.from({ length: boonNumber(cat, boon, "components") }, () => pick(run, cat.ids.components));
       run.items.push(...items);
       notes.push({ t: "items", why: "basket", items });
     } else if (boon === "blanket") {

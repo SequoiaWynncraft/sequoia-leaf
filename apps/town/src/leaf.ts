@@ -28,8 +28,10 @@ import { pageCard, troubleCard as kitTroubleCard } from "@sequoia-leaf/kit/live.
 import { outside } from "@sequoia-leaf/kit/net.ts";
 import { askPerson } from "@sequoia-leaf/kit/person.ts";
 import { makeHold, openPlay, type Play, type Trouble, waitingLook } from "@sequoia-leaf/kit/play.ts";
+import { catalogOf } from "@sequoia-leaf/raid/content/catalog.ts";
 import { predict, readNotes, readView, type TownCommand, type TownNote, type TownView } from "@sequoia-leaf/town";
 import { type Camp, MOST_OWNED, WHY_NOT } from "@sequoia-leaf/town/camp.ts";
+import { nameCarvings } from "@sequoia-leaf/town/things.ts";
 
 /** What a command did: its notes, or the code it was refused with. */
 export type Did = { notes: TownNote[] } | { refused: string };
@@ -107,8 +109,10 @@ export async function openTown(player: string, trouble: (why: Trouble) => void):
   me = player;
   leaf = opened;
   troubled = trouble;
+  nameCarvings(catalogOf(opened.state));
   opened.onTrouble(trouble);
-  opened.onState((_view, differs) => {
+  opened.onState((view, differs) => {
+    nameCarvings(catalogOf(view));
     tell(differs);
   });
   return null;

@@ -25,7 +25,7 @@ import {
 } from "@sequoia-leaf/pulls";
 import type { BannerPerson } from "@sequoia-leaf/pulls/wire.ts";
 import { type Banner, BANNERS, GROVE } from "@sequoia-leaf/raid/content/banners.ts";
-import { type Catalog, catalogAt, catalogOf } from "@sequoia-leaf/raid/content/catalog.ts";
+import { type Catalog, catalogAt, catalogOf, rarityIn } from "@sequoia-leaf/raid/content/catalog.ts";
 import { type FigureId, figureIn, isFigureId } from "@sequoia-leaf/raid/content/figures.ts";
 import { LOOK_KINDS, LOOKS } from "@sequoia-leaf/raid/content/looks.ts";
 import { eraAt, LAST_ERA } from "@sequoia-leaf/raid/content/releases.ts";
@@ -344,8 +344,9 @@ export function prizeBook(view: Pick<PullsView, "era">, pool: string): [Rarity, 
 
 /** Every prize that can be had for Seeds in the view's era, cheapest first, with whether the player has it or the Seeds for it. */
 export function offers(view: Pick<PullsView, "have" | "seeds" | "era">): Offer[] {
-  return forSeeds(catalogOf(view)).flatMap((prize): Offer[] => {
-    const rarity = rarityOf(prize);
+  const cat = catalogOf(view);
+  return forSeeds(cat).flatMap((prize): Offer[] => {
+    const rarity = rarityIn(cat, prize);
     if (rarity !== "Dryad" && rarity !== "Druid") return [];
     const price = RATES.exchange[rarity];
     return [{ prize, rarity, price, owned: view.have[prize] !== undefined, enough: view.seeds >= price }];

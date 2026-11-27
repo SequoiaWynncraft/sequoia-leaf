@@ -12,6 +12,8 @@ import {
   type BoonId,
   boonIn,
   boonShort,
+  type Catalog,
+  catalogOf,
   type Choice,
   type ComponentId,
   componentIn,
@@ -31,7 +33,7 @@ import { fly } from "../fx.ts";
 import { signal } from "../signals.ts";
 import { snd } from "../sounds.ts";
 import { boardSpot } from "../stage.ts";
-import { ask, catalogNow, S } from "../state.ts";
+import { ask, S } from "../state.ts";
 import { boonRef, figureRef, itemRef, makesLines, pic, rich, traitRef } from "./cards.ts";
 import { bossAhead, ruleCard } from "./rulecards.ts";
 import { wantedBy } from "./suits.ts";
@@ -57,24 +59,24 @@ function art(c: HTMLCanvasElement, ref: string): HTMLElement {
   return box;
 }
 
-function starterCard(kind: FigureId): HTMLElement[] {
-  const spec = figureIn(catalogNow(), kind);
+function starterCard(cat: Catalog, kind: FigureId): HTMLElement[] {
+  const spec = figureIn(cat, kind);
   return [
     art(portrait(kind), figureRef(kind)),
     el("b", "k-gold", { text: spec.name }),
-    el("div", "k-dim", { text: roleLine(catalogNow(), kind) }),
+    el("div", "k-dim", { text: roleLine(cat, kind) }),
     el(
       "div",
       "k-wrap",
       {},
-      ...traitsOf(catalogNow(), kind).map((t) => {
-        const chip = el("span", "k-chip", {}, pic(traitIcon(t)), traitIn(catalogNow(), t).name);
+      ...traitsOf(cat, kind).map((t) => {
+        const chip = el("span", "k-chip", {}, pic(traitIcon(t)), traitIn(cat, t).name);
         link(chip, traitRef(t), { acts: true });
         return chip;
       }),
     ),
     el("b", "", { text: spec.ability?.name ?? "" }),
-    rich(abilityShort(catalogNow(), kind, 1)),
+    rich(abilityShort(cat, kind, 1)),
   ];
 }
 /**
@@ -84,8 +86,8 @@ function starterCard(kind: FigureId): HTMLElement[] {
  * name are the fielded figures that want anything it makes, and on each line the ones that want
  * that item.
  */
-function componentCard(run: RunView, item: ComponentId): (HTMLElement | null)[] {
-  const lines = makesLines(item, run).map((line) =>
+function componentCard(cat: Catalog, run: RunView, item: ComponentId): (HTMLElement | null)[] {
+  const lines = makesLines(cat, item, run).map((line) =>
     el(
       "div",
       `makes${line.lit ? " lit" : ""}`,
@@ -97,19 +99,19 @@ function componentCard(run: RunView, item: ComponentId): (HTMLElement | null)[] 
   );
   return [
     art(itemIcon(item), itemRef(item)),
-    el("b", "k-gold", { text: componentIn(catalogNow(), item).name }),
-    rich(itemAdds(catalogNow(), item).join(" · ")),
+    el("b", "k-gold", { text: componentIn(cat, item).name }),
+    rich(itemAdds(cat, item).join(" · ")),
     wantedBy(run, item),
     el("div", "makeslist", {}, ...lines),
   ];
 }
-function boonCardParts(boon: BoonId): HTMLElement[] {
-  const spec = boonIn(catalogNow(), boon);
+function boonCardParts(cat: Catalog, boon: BoonId): HTMLElement[] {
+  const spec = boonIn(cat, boon);
   return [
     art(boonIcon(boon), boonRef(boon)),
     el("b", "k-gold", { text: spec.name }),
     el("div", "k-dim", { text: spec.sort === "charm" ? "A charm" : "A boon" }),
-    rich(boonShort(catalogNow(), boon)),
+    rich(boonShort(cat, boon)),
   ];
 }
 
@@ -117,11 +119,11 @@ function boonCardParts(boon: BoonId): HTMLElement[] {
 function partsOf(run: RunView, choice: Choice, i: number): (HTMLElement | null)[] {
   switch (choice.kind) {
     case "starter":
-      return starterCard(choice.options[i] ?? "rock");
+      return starterCard(catalogOf(run), choice.options[i] ?? "rock");
     case "component":
-      return componentCard(run, choice.options[i] ?? "thorn");
+      return componentCard(catalogOf(run), run, choice.options[i] ?? "thorn");
     case "boon":
-      return boonCardParts(choice.options[i] ?? "windfall");
+      return boonCardParts(catalogOf(run), choice.options[i] ?? "windfall");
     case "rule":
       return ruleCard(choice.options[i] ?? "fog");
   }

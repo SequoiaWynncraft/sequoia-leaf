@@ -106,9 +106,28 @@ export interface Catalog {
   /** The kin each emblem makes its holder. */
   readonly emblems: Readonly<Partial<Record<EmblemId, KinId>>>;
   readonly boons: Readonly<Partial<Record<BoonId, BoonSpec>>>;
+  /**
+   * What is open, as lists in their kinds' own order: what is walked to draw, count or show traits,
+   * items and boons. The global id lists name what any release has, and are never walked for that.
+   */
+  readonly ids: Open;
   /** The banners whose release is open. */
   readonly banners: readonly Banner[];
+  /** The catalogue of an era up to this one: what a banner's pool was when it opened. */
+  readonly earlier: (era: Era) => Catalog;
 }
+/** The ids of what a catalogue has open, kind by kind. */
+export interface Open {
+  readonly traits: readonly TraitId[];
+  readonly components: readonly ComponentId[];
+  readonly finished: readonly FinishedId[];
+  readonly emblems: readonly EmblemId[];
+  readonly boons: readonly BoonId[];
+}
+/** What of a catalogue a patch folds into, kind by kind. */
+type Kinds = Pick<Catalog, "traits" | "components" | "finished" | "emblems" | "boons">;
+const present = <K extends string>(ids: readonly K[], table: Readonly<Partial<Record<K, unknown>>>): K[] =>
+  ids.filter((id) => table[id] !== undefined);
 
 /**
  * Who may have a figure a release brings, and how it is drawn: everyone, by the set; or whoever
@@ -131,7 +150,7 @@ export function catalogsOf(patches: readonly Patch[]): readonly Catalog[] {
   const since: Partial<Record<FigureId, ReleaseId>> = {};
   const came: FigureId[] = [];
   const banners: Banner[] = [];
-  let was: Omit<Catalog, "era" | "figures" | "order" | "banners"> = {
+  let was: Kinds = {
     traits: {},
     components: {},
     finished: {},
@@ -162,7 +181,20 @@ export function catalogsOf(patches: readonly Patch[]): readonly Catalog[] {
     }
     const order = [...DRAWN.filter((id) => figures[id]), ...came.filter((id) => !DRAWN.includes(id))];
     banners.push(...BANNERS.filter((b) => b.opens === release));
-    out.push({ era: eraOf(release), figures, order, ...was, banners: [...banners] });
+    const era = eraOf(release);
+    const ids: Open = {
+      traits: present(TRAIT_IDS, was.traits),
+      components: present(COMPONENT_IDS, was.components),
+      finished: present(FINISHED_IDS, was.finished),
+      emblems: present(EMBLEM_IDS, was.emblems),
+      boons: present(BOON_IDS, was.boons),
+    };
+    const earlier = (at: Era): Catalog => {
+      const cat = out[at - 1];
+      if (!cat || at > era) throw new RangeError(`Era ${era} has no catalogue of era ${at}`);
+      return cat;
+    };
+    out.push({ era, figures, order, ...was, ids, banners: [...banners], earlier });
   }
   return out;
 }
@@ -219,19 +251,17 @@ function stall(cat: Catalog, figures: Figures, tier: Tier): FigureId[] {
 }
 
 /**
- * A pool's prizes of a rarity: a banner's headliner, or everyone's figures of that rarity that came
- * by the pool's era. A banner's era is its release's; the grove's is the catalogue's. Either way a
- * release whose figures join with the next is left out until it does (`pullsEra`).
+ * A pool's prizes of a rarity: a banner's headliner, or everyone's figures of that rarity, as the
+ * catalogue of the pool's era has them, rarities and all: a banner's era is its release's, the
+ * grove's the catalogue's. Either way a release whose figures join with the next is left out until
+ * it does (`pullsEra`). So a banner pays out what it opened with, at the odds it opened with.
  */
 function prizes(cat: Catalog, pool: string, rarity: Rarity): FigureId[] {
   const banner = cat.banners.find((b) => b.id === pool);
   if (!banner && pool !== GROVE) return [];
   if (rarity === "Yggdrasil") return banner ? [banner.headliner] : [];
-  const by = pullsEra(banner ? eraOf(banner.opens) : cat.era);
-  return cat.order.filter((id) => {
-    const f = cat.figures[id];
-    return f?.access === "shared" && f.prize === rarity && eraOf(f.since) <= by;
-  });
+  const pooled = cat.earlier(pullsEra(banner ? eraOf(banner.opens) : cat.era));
+  return pooled.order.filter((id) => pooled.figures[id]?.access === "shared" && pooled.figures[id]?.prize === rarity);
 }
 
 /** The figures open at a catalogue's era that a draw may draw from, in the catalogue's order. */
@@ -268,9 +298,14 @@ export function prizeOf(id: FigureId): string {
 export function figureOf(prize: string): FigureId | null {
   return EVER.order.find((id) => prizeOf(id) === prize) ?? null;
 }
-/** Every figure that is or was a prize, with its rarity. */
-export const prizeRarities = (): readonly (readonly [string, Rarity])[] =>
-  EVER.order.flatMap((id) => {
-    const f = EVER.figures[id];
+/** Every figure of a catalogue as a prize, with its rarity there. */
+export const prizeRarities = (cat: Catalog): readonly (readonly [string, Rarity])[] =>
+  cat.order.flatMap((id) => {
+    const f = cat.figures[id];
     return f ? [[prizeOf(id), f.prize] as const] : [];
   });
+/** A figure prize's rarity in a catalogue; undefined for one it does not have, or a prize that is no figure. */
+export function rarityIn(cat: Catalog, prize: string): Rarity | undefined {
+  const id = figureOf(prize);
+  return id === null ? undefined : cat.figures[id]?.prize;
+}

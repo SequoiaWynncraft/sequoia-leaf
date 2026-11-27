@@ -20,7 +20,7 @@ import {
   isEmblemId,
 } from "./content/items.ts";
 import { ECONOMY, MAX_LEVEL } from "./content/rooms.ts";
-import { stepFor, TRAIT_IDS, type TraitId, traitNumber } from "./content/traits.ts";
+import { stepFor, type TraitId, traitNumber } from "./content/traits.ts";
 import type { RuleId } from "./content/wilds.ts";
 import { arrange } from "./formation.ts";
 import { SEATS } from "./hex.ts";
@@ -127,7 +127,7 @@ function partyScore(cat: Catalog, habit: Habit, party: readonly Piece[]): number
   let score = 0;
   for (const p of party) score += worthOf(cat, habit, p.kind, p.stars);
   const counts = countTraits(cat, party);
-  for (const trait of TRAIT_IDS) {
+  for (const trait of cat.ids.traits) {
     const step = stepFor(cat, trait, counts[trait] ?? 0);
     if (step > 0) score += step * 1.1 * (habit.taste[trait] ?? 1);
   }

@@ -22,7 +22,7 @@ import {
 
 import { glyph, itemIcon, traitIcon } from "../art/icons.ts";
 import { endedOf } from "../screen.ts";
-import { catalogNow, S } from "../state.ts";
+import { catalogFor, S } from "../state.ts";
 import { figPic, pic } from "./cards.ts";
 import { WAY_NAMES } from "./endless.ts";
 import { nothingNew, runTag } from "./own.ts";
@@ -69,7 +69,7 @@ function howFar(run: RunView, sum: RunSummary): HTMLElement[] {
 
 /** One thing new in the almanac, with its picture. */
 function newThing(n: News): HTMLElement {
-  const cat = catalogNow();
+  const cat = catalogFor(S.run);
   if (n.t === "fielded") return el("span", "new", {}, pic(portrait(n.figure)), `Met ${nameOf(cat, n.figure)}`);
   if (n.t === "threeStars") return el("span", "new", {}, pic(starsPic(3)), `${nameOf(cat, n.figure)} to three stars`);
   if (n.t === "forged") return el("span", "new", {}, pic(itemIcon(n.item)), `Made ${itemName(cat, n.item)}`);

@@ -13,7 +13,7 @@ import { available, type Catalog } from "./content/catalog.ts";
 import { type FigureId, figureIn, specOf, type Stars, starScale, traitsOf } from "./content/figures.ts";
 import { type ComponentId, holdItem, type ItemId } from "./content/items.ts";
 import { HANDLES, ROOMS, type SparStrength, STALL_ODDS, TRAILS } from "./content/rooms.ts";
-import { type CallingId, CALLINGS, type KinId, KINS, stepFor, traitIn } from "./content/traits.ts";
+import { type CallingId, isCalling, isKin, type KinId, stepFor, traitIn } from "./content/traits.ts";
 import { arrange } from "./formation.ts";
 import { type Carrier, countTraits, type Party, type Placed } from "./party.ts";
 
@@ -69,8 +69,8 @@ export function sparParty(
   const s: Stream = { rng: seed >>> 0 };
   const trail = TRAILS[trailIndex] ?? TRAILS[0];
   const who = pick(s, HANDLES);
-  const kin: KinId = pick(s, KINS);
-  const calling: CallingId = pick(s, CALLINGS);
+  const kin: KinId = pick(s, cat.ids.traits.filter(isKin));
+  const calling: CallingId = pick(s, cat.ids.traits.filter(isCalling));
   const likes = (id: FigureId): number =>
     (traitsOf(cat, id).includes(kin) ? LIKES_KIN : 1) * (traitsOf(cat, id).includes(calling) ? LIKES_CALLING : 1);
   const levelOdds = STALL_ODDS[Math.min(STALL_ODDS.length, Math.max(1, strength.level)) - 1] ?? STALL_ODDS[0];

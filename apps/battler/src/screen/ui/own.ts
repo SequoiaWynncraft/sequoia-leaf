@@ -20,6 +20,7 @@ import {
   LEVELS,
   type RunView,
   stallOdds,
+  type TraitId,
   type UnitKind,
 } from "@sequoia-leaf/raid";
 
@@ -43,6 +44,8 @@ export const figuresHere = (era: Era = S.era): readonly FigureId[] =>
   available(catalogAt(era), { for: "almanac", roster: S.roster });
 /** The figures for the table on screen: in the era of its run (a seat's is its sitting's), or of Leaf's view with none. */
 export const figuresAt = (run: Pick<RunView, "era"> | null): readonly FigureId[] => figuresHere(run?.era);
+/** The almanac's traits: those open in the era of Leaf's view, in their own order. */
+export const traitsHere = (): readonly TraitId[] => catalogOf(S).ids.traits;
 /** Everyone's figures, as Leaf's era has them: what the almanac counts fielded among. */
 export const everyonesFigures = (): readonly FigureId[] => available(catalogOf(S), { for: "almanac", roster: {} });
 /** Asks who each banner's member is, and draws the page again each time one is better known. */

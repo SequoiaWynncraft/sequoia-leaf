@@ -8,7 +8,6 @@ import {
   type Catalog,
   catalogOf,
   type ComponentId,
-  FINISHED_IDS,
   type FinishedId,
   finishedIn,
   forgeItems,
@@ -48,7 +47,7 @@ export const wants = (cat: Catalog, holder: Holder, item: FinishedId): boolean =
  */
 export function wanters(run: Pick<RunView, "board" | "era">, item: ItemId): Piece[] {
   const cat = catalogOf(run);
-  const made = isFinishedId(item) ? [item] : FINISHED_IDS.filter((id) => isHalf(cat, id, item));
+  const made = isFinishedId(item) ? [item] : cat.ids.finished.filter((id) => isHalf(cat, id, item));
   return run.board.flatMap((p) => (p && made.some((id) => wants(cat, p, id)) ? [p] : []));
 }
 

@@ -33,7 +33,7 @@ import { facing } from "./screen.ts";
 import { snd } from "./sounds.ts";
 import { drawSeals } from "./spells.ts";
 import { boardHalves, place, type Standing, V } from "./stage.ts";
-import { catalogNow, S } from "./state.ts";
+import { catalogFor, S } from "./state.ts";
 import { drawZone } from "./zone.ts";
 
 /** When the board was last found full, for flashing its count. */
@@ -117,7 +117,7 @@ function pawnStanding(g: Ctx, p: Pawn, ox: number, oy: number): Standing {
   const items = piece?.items ?? [];
   const pop = V.t - p.popAt;
   const cheer = V.t - p.cheerAt;
-  const shine = shineOf(catalogNow(), p.kind, items, p.x, V.t);
+  const shine = shineOf(catalogFor(S.run), p.kind, items, p.x, V.t);
   let lift = p.lift + shine.hop;
   if (pop >= 0 && pop < 0.4) lift += Math.sin((pop / 0.4) * Math.PI) * 8;
   if (cheer >= 0 && cheer < 0.3) lift += Math.sin((cheer / 0.3) * Math.PI) * 5;
@@ -135,7 +135,7 @@ function pawnStanding(g: Ctx, p: Pawn, ox: number, oy: number): Standing {
       }
       const alpha = p.alpha * (shine.dim ? DIM : 1);
       if (alpha < 1) g.globalAlpha = alpha;
-      drawStanding(g, catalogNow(), p.kind, x, y, S.looks.bases, {
+      drawStanding(g, catalogFor(S.run), p.kind, x, y, S.looks.bases, {
         hover,
         beat: beatAt(V.t, p.phase),
         left: p.facing,
@@ -155,7 +155,7 @@ function pawnStanding(g: Ctx, p: Pawn, ox: number, oy: number): Standing {
       drawStars(g, p.stars, x, starsAt, grew);
       // A component in the hand: what it would make with the one this figure holds, faint, over its head.
       const forging = handMarks().forging;
-      const would = forging && piece ? handing(catalogNow(), piece, forging) : null;
+      const would = forging && piece ? handing(catalogFor(S.run), piece, forging) : null;
       if (would?.can && would.forged) {
         const pic = itemPic(would.forged);
         g.globalAlpha = 0.55 + 0.15 * Math.sin(V.t * 4 + p.phase * 6);
@@ -180,7 +180,7 @@ function foeStanding(
   const come = approach(order, big);
   if (!come.here) return null;
   const f = framesOf(kind);
-  const shine = shineOf(catalogNow(), kind, items, at.x, V.t);
+  const shine = shineOf(catalogFor(S.run), kind, items, at.x, V.t);
   const x = V.bx + at.x;
   const y = V.by + at.y + FOOT - come.away - come.lift - shine.hop;
   const phase = (seat * 0.23) % 1;
@@ -190,7 +190,7 @@ function foeStanding(
     y: at.y + FOOT - come.away,
     draw: () => {
       if (shine.dim) g.globalAlpha = DIM;
-      drawStanding(g, catalogNow(), kind, x, y, "plain", {
+      drawStanding(g, catalogFor(S.run), kind, x, y, "plain", {
         hover,
         beat: beatAt(V.t, phase),
         left: true,
@@ -454,7 +454,7 @@ export function drawOver(g: Ctx): boolean {
       const y = V.by + marks.at.y + 6;
       g.fillStyle = "rgba(26,15,30,0.25)";
       g.fillRect(Math.round(x) - 6, Math.round(y) + 3, 12, 2);
-      drawStanding(g, catalogNow(), p.kind, x, y - 4, S.looks.bases, { beat: 1 });
+      drawStanding(g, catalogFor(S.run), p.kind, x, y - 4, S.looks.bases, { beat: 1 });
       drawStars(g, p.stars, x, y - 7 - framesOf(p.kind).tall);
     } else {
       const s = pawnStanding(g, p, V.bx, V.by);
@@ -468,7 +468,7 @@ export function drawOver(g: Ctx): boolean {
     const x = V.bx + marks.at.x;
     const y = V.by + marks.at.y;
     if ("kind" in ghost) {
-      drawStanding(g, catalogNow(), ghost.kind, x, y + 2, S.looks.bases, { beat: 1 });
+      drawStanding(g, catalogFor(S.run), ghost.kind, x, y + 2, S.looks.bases, { beat: 1 });
     } else {
       const pic = itemPic(ghost.item);
       g.drawImage(pic, Math.round(x - pic.width / 2), Math.round(y - pic.height / 2) - 4);

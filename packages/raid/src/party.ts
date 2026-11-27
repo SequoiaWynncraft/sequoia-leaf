@@ -16,7 +16,7 @@ import {
   type UnitKind,
 } from "./content/figures.ts";
 import { carriedTraits, HOLDS, isItemId, type ItemId } from "./content/items.ts";
-import { stepFor, TRAIT_IDS, type TraitId } from "./content/traits.ts";
+import { stepFor, type TraitId } from "./content/traits.ts";
 import { SEATS } from "./hex.ts";
 
 export interface Placed {
@@ -81,7 +81,7 @@ export interface TraitState {
 export function traitStates(cat: Catalog, figures: readonly Carrier[]): TraitState[] {
   const counts = countTraits(cat, figures);
   const out: TraitState[] = [];
-  for (const trait of TRAIT_IDS) {
+  for (const trait of cat.ids.traits) {
     const count = counts[trait] ?? 0;
     if (count > 0) out.push({ trait, count, step: stepFor(cat, trait, count) });
   }
@@ -91,7 +91,7 @@ export function traitStates(cat: Catalog, figures: readonly Carrier[]): TraitSta
 export function traitSteps(cat: Catalog, party: Pick<Party, "figures">): Partial<Record<TraitId, number>> {
   const counts = countTraits(cat, party.figures);
   const steps: Partial<Record<TraitId, number>> = {};
-  for (const trait of TRAIT_IDS) {
+  for (const trait of cat.ids.traits) {
     const step = stepFor(cat, trait, counts[trait] ?? 0);
     if (step > 0) steps[trait] = step;
   }

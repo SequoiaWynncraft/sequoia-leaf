@@ -68,6 +68,8 @@ export const fightState = (): {
 });
 /** Everyone who has been in the fight on the table, for whoever keeps count. */
 export const fightUnits = (): readonly Unit[] => FV.pb?.fight.units ?? [];
+/** The catalogue of the fight on show: its setup's era. */
+export const fightCatalog = (): Catalog | null => FV.pb?.fight.cat ?? null;
 /** Everything shown happening in the fight on the table so far, for whoever keeps count. */
 export const fightEvents = (): readonly FightEvent[] => FV.seen;
 export function setSpeed(s: Speed): void {

@@ -12,12 +12,11 @@ import { closeLeaf } from "@sequoia-leaf/kit/pursebar.ts";
 import { tipAt } from "@sequoia-leaf/kit/tip.ts";
 import {
   BOSS_IDS,
-  COMPONENT_IDS,
+  catalogOf,
   ECONOMY,
   type EndlessWay,
   FIGHT,
   type FigureId,
-  FINISHED_IDS,
   finishedIn,
   isMemberId,
   itemName,
@@ -33,7 +32,6 @@ import {
   TRAIL_COUNT,
   trailOpen,
   TRAILS,
-  TRAIT_IDS,
   traitIn,
   tryOn,
   wornOf,
@@ -42,11 +40,11 @@ import {
 import { glyph, itemIcon, traitIcon } from "../art/icons.ts";
 import { paintLook } from "../art/place.ts";
 import { snd } from "../sounds.ts";
-import { ask, catalogNow, pagesKey, S, type Slot } from "../state.ts";
+import { ask, pagesKey, S, type Slot } from "../state.ts";
 import { figPic, pic } from "./cards.ts";
 import { summary } from "./ended.ts";
 import { frontAway, frontBody } from "./front.ts";
-import { everyonesFigures, figuresHere, pulledLine, pulledTag, unshown } from "./own.ts";
+import { everyonesFigures, figuresHere, pulledLine, pulledTag, traitsHere, unshown } from "./own.ts";
 import { frontShown } from "./woods.ts";
 
 export type PageId = "front" | "almanac" | "howto" | "looks" | "summary";
@@ -132,7 +130,7 @@ function figureTile(id: FigureId): HTMLElement {
     `k-card tile${met ? "" : " unmet"}`,
     { type: "button", "aria-label": met ? null : "Not met" },
     pic(portrait(id, { dark: !met }), 2),
-    met ? el("span", "k-s", { text: nameOf(catalogNow(), id) }) : null,
+    met ? el("span", "k-s", { text: nameOf(catalogOf(S), id) }) : null,
     starred ? pic(starsPic(3), 1, "badge") : null,
     pulledTag(id),
   );
@@ -175,7 +173,7 @@ function almanac(): HTMLElement {
   } else if (tab === "traits") {
     add(page, el("div", "k-dim", { text: `${a.topped.length} switched all the way on.` }));
     const list = el("div", "k-col", {});
-    for (const id of TRAIT_IDS) {
+    for (const id of traitsHere()) {
       const row = el(
         "button",
         `k-card${a.topped.includes(id) ? " lit" : ""}`,
@@ -185,8 +183,8 @@ function almanac(): HTMLElement {
           "div",
           "k-col k-grow tight",
           {},
-          el("b", "", { text: traitIn(catalogNow(), id).name }),
-          el("span", "k-d", { text: traitIn(catalogNow(), id).gist }),
+          el("b", "", { text: traitIn(catalogOf(S), id).name }),
+          el("span", "k-d", { text: traitIn(catalogOf(S), id).gist }),
         ),
         a.topped.includes(id) ? icon("check") : null,
       );
@@ -195,29 +193,29 @@ function almanac(): HTMLElement {
     }
     add(page, list);
   } else if (tab === "items") {
-    add(page, el("div", "k-dim", { text: `${a.forged.length} of ${FINISHED_IDS.length} made.` }));
+    add(page, el("div", "k-dim", { text: `${a.forged.length} of ${catalogOf(S).ids.finished.length} made.` }));
     const comps = el("div", "tiles small", {});
-    for (const id of COMPONENT_IDS) {
+    for (const id of catalogOf(S).ids.components) {
       const tile = el(
         "button",
         "k-card tile",
         { type: "button" },
         pic(itemIcon(id), 2),
-        el("span", "k-s", { text: itemName(catalogNow(), id) }),
+        el("span", "k-s", { text: itemName(catalogOf(S), id) }),
       );
       link(tile, `item:${id}/lore`);
       comps.append(tile);
     }
     const made = el("div", "tiles small", {});
-    for (const id of FINISHED_IDS) {
+    for (const id of catalogOf(S).ids.finished) {
       const have = a.forged.includes(id);
-      const [x, y] = finishedIn(catalogNow(), id).made;
+      const [x, y] = finishedIn(catalogOf(S), id).made;
       const tile = el(
         "button",
         `k-card tile${have ? "" : " unmet"}`,
         { type: "button", "aria-label": have ? null : "Not made" },
         have ? pic(itemIcon(id), 2) : el("span", "pair", {}, pic(itemIcon(x)), pic(itemIcon(y))),
-        have ? el("span", "k-s", { text: itemName(catalogNow(), id) }) : null,
+        have ? el("span", "k-s", { text: itemName(catalogOf(S), id) }) : null,
       );
       link(tile, `item:${id}/lore`);
       made.append(tile);
@@ -255,7 +253,7 @@ function almanac(): HTMLElement {
                 el(
                   "div",
                   "who",
-                  { title: beaten.includes(boss) ? specOf(catalogNow(), boss).name : "" },
+                  { title: beaten.includes(boss) ? specOf(catalogOf(S), boss).name : "" },
                   pic(portrait(boss, { dark: !beaten.includes(boss) })),
                 ),
               ),

@@ -47,7 +47,7 @@ import { drawOver, drawScene, stepScene, wordsScene } from "./screen/scene.ts";
 import { startSettings } from "./screen/settings.ts";
 import { snd } from "./screen/sounds.ts";
 import * as stage from "./screen/stage.ts";
-import { catalogNow, onChange, onHeld, onNotes, onRefused, openTable, S } from "./screen/state.ts";
+import { catalogFor, onChange, onHeld, onNotes, onRefused, openTable, S } from "./screen/state.ts";
 import { registerCards } from "./screen/ui/cards.ts";
 import { onCarry, placeSheet, registerFought } from "./screen/ui/fightsheet.ts";
 import { openLight } from "./screen/ui/lit.ts";
@@ -91,7 +91,7 @@ function tellFirstThreeStars(notes: readonly RaidNote[]): void {
     if (note.t === "merged" && note.stars === 3 && first)
       tell({
         town: "news",
-        text: `A first three-star figure at the stump: ${nameOf(catalogNow(), note.kind)}.`,
+        text: `A first three-star figure at the stump: ${nameOf(catalogFor(S.run), note.kind)}.`,
         tone: "gold",
       });
   }

@@ -16,18 +16,14 @@
 import { BunRuntime, BunServices } from "@effect/platform-bun";
 import { SqliteClient } from "@effect/sql-sqlite-bun";
 import { boonIn } from "@sequoia-leaf/raid/content/boons.ts";
-import { catalogAt } from "@sequoia-leaf/raid/content/catalog.ts";
+import { type Catalog, catalogAt } from "@sequoia-leaf/raid/content/catalog.ts";
 import { specOf, type UnitKind } from "@sequoia-leaf/raid/content/figures.ts";
 import { itemName } from "@sequoia-leaf/raid/content/items.ts";
-import { LAST_ERA } from "@sequoia-leaf/raid/content/releases.ts";
-import { TRAIT_IDS, traitIn } from "@sequoia-leaf/raid/content/traits.ts";
+import { eraAt } from "@sequoia-leaf/raid/content/releases.ts";
 import { type FightRecord, type FoughtSide, readFight } from "@sequoia-leaf/raid/fought.ts";
-import { placeOf, Tally } from "@sequoia-leaf/raid/rates.ts";
+import { compOf, placeOf, Tally } from "@sequoia-leaf/raid/rates.ts";
 import { Effect, FileSystem, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
-
-/** The raid's catalogue with every release open: it names whatever any kept fight fielded. */
-const NAMES = catalogAt(LAST_ERA);
 
 const args = process.argv.slice(2);
 const option = (name: string): string | undefined => args.find((a) => a.startsWith(`${name}=`))?.slice(name.length + 1);
@@ -71,35 +67,33 @@ const linesOf = (file: string) =>
     return (yield* all(undefined)).map((row) => row.line);
   }).pipe(Effect.provide(SqliteClient.layer({ filename: file, readonly: true })));
 
-/** A comp as players name one: the traits switched on, each at the count its step takes, the biggest first. */
-function compOf(traits: FoughtSide["traits"]): string {
-  const on = TRAIT_IDS.flatMap((id) => {
-    const count = traitIn(NAMES, id).steps[(traits[id] ?? 0) - 1];
-    return count === undefined ? [] : [{ name: traitIn(NAMES, id).name, count }];
-  });
-  const named = on.toSorted((a, b) => b.count - a.count || a.name.localeCompare(b.name));
-  return named.map((t) => `${t.name} ${t.count}`).join(" + ") || "No trait on";
-}
-
 const pct = (n: number): string => `${Math.round(n * 100)}%`;
 const signed = (n: number): string => `${n >= 0 ? "+" : ""}${Math.round(n * 100)}`;
-const named = (kind: UnitKind): string => specOf(NAMES, kind).name;
+const named = (cat: Catalog, kind: UnitKind): string => specOf(cat, kind).name;
 
-/** The tables, each with the lines a fight's party counts toward in it, each once a fight. */
-const TABLES: readonly { title: string; mostPlayed?: true; lines: (party: FoughtSide) => string[] }[] = [
-  { title: "Comps, the most played first", mostPlayed: true, lines: (party) => [compOf(party.traits)] },
-  { title: "Figures fielded", lines: (party) => party.figures.map((p) => named(p.kind)) },
+/**
+ * The tables, each with the lines a fight's party counts toward in it, each once a fight, read in the
+ * catalogue of the fight's own era: the era on Leaf's clock when its row was written, which is the
+ * era its run fought it in.
+ */
+const TABLES: readonly { title: string; mostPlayed?: true; lines: (party: FoughtSide, cat: Catalog) => string[] }[] = [
+  { title: "Comps, the most played first", mostPlayed: true, lines: (party, cat) => [compOf(cat, party.traits)] },
+  { title: "Figures fielded", lines: (party, cat) => party.figures.map((p) => named(cat, p.kind)) },
   {
     title: "Figures at their stars",
-    lines: (party) => party.figures.map((p) => `${named(p.kind)} at ${p.stars} star${p.stars === 1 ? "" : "s"}`),
+    lines: (party, cat) =>
+      party.figures.map((p) => `${named(cat, p.kind)} at ${p.stars} star${p.stars === 1 ? "" : "s"}`),
   },
-  { title: "Items held", lines: (party) => party.figures.flatMap((p) => p.items.map((item) => itemName(NAMES, item))) },
+  {
+    title: "Items held",
+    lines: (party, cat) => party.figures.flatMap((p) => p.items.map((item) => itemName(cat, item))),
+  },
   {
     title: "Items on each figure",
-    lines: (party) =>
-      party.figures.flatMap((p) => p.items.map((item) => `${itemName(NAMES, item)} on ${named(p.kind)}`)),
+    lines: (party, cat) =>
+      party.figures.flatMap((p) => p.items.map((item) => `${itemName(cat, item)} on ${named(cat, p.kind)}`)),
   },
-  { title: "Boons", lines: (party) => party.boons.map((b) => boonIn(NAMES, b).name) },
+  { title: "Boons", lines: (party, cat) => party.boons.map((b) => boonIn(cat, b).name) },
 ];
 
 /** A table: how often each line's fights were won, beside the same rooms, and on how many fights. */
@@ -132,12 +126,13 @@ function report(rows: readonly Row[], unread: number): void {
   );
   const all = new Tally();
   const tables = TABLES.map((table) => ({ table, tallies: new Map<string, Tally>() }));
-  for (const { fight } of counted) {
+  for (const { fight, at } of counted) {
+    const cat = catalogAt(eraAt(at));
     const win = fight.result === "win";
     const place = placeOf(fight.trail, fight.room);
     all.add(win, place);
     for (const { table, tallies } of tables) {
-      for (const line of new Set(table.lines(fight.party))) {
+      for (const line of new Set(table.lines(fight.party, cat))) {
         const t = tallies.get(line) ?? new Tally();
         t.add(win, place);
         tallies.set(line, t);

@@ -198,7 +198,8 @@ function madeUp(era: Era): Catalog {
       order.push(id);
     }
   }
-  return { ...catalogAt(era), figures, order };
+  // Its earlier eras are the made-up spread's too: what a banner's pool was when it opened.
+  return { ...catalogAt(era), figures, order, earlier: madeUp };
 }
 
 describe("a millisecond before each release, and at it", () => {

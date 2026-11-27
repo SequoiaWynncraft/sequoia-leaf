@@ -1702,7 +1702,8 @@
             "waiting": "A raid is under way: room 1, on The Easy Way.",
             "till": 0
           }
-        }
+        },
+        "era": 2
       },
       "purse": {
         "coins": 300,
@@ -1877,7 +1878,8 @@
             "waiting": "A raid is under way: room 1, on The Easy Way.",
             "till": 0
           }
-        }
+        },
+        "era": 2
       },
       "purse": {
         "coins": 275,
@@ -2337,7 +2339,8 @@
           "said": [],
           "mail": []
         },
-        "doors": {}
+        "doors": {},
+        "era": 2
       },
       "purse": {
         "coins": 300,

@@ -194,10 +194,11 @@ test("the base's tables are read by its patch alone, the patches by the catalogu
       .map((path) => `${name} in ${path}`),
   );
   expect(strays).toEqual([]);
-  // A release's patch is read by the catalogue alone.
-  expect(files.filter((path) => /from "[^"]*releases\/[\w-]+\.ts"/.test(text(path)))).toEqual([
-    join(content, "catalog.ts"),
-  ]);
+  // A release's patch is read by the catalogue alone (and by tests that fold made-up spreads of them).
+  const read = files.filter(
+    (path) => !path.endsWith(".test.ts") && /from "[^"]*releases\/[\w-]+\.ts"/.test(text(path)),
+  );
+  expect(read).toEqual([join(content, "catalog.ts")]);
   // Nothing in the raid exports the old tables.
   const exported = files
     .filter((path) => path.startsWith(join("packages", "raid")))

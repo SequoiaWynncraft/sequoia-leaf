@@ -10,7 +10,6 @@ import {
   buy,
   type Catalog,
   catalogOf,
-  COMPONENT_IDS,
   type ComponentId,
   countTraits,
   ECONOMY,
@@ -108,7 +107,7 @@ export function handing(cat: Catalog, piece: Pick<Piece, "kind" | "items">, item
 
 /** What a component makes with each of the five components. */
 export function recipesOf(cat: Catalog, item: ComponentId): { with: ComponentId; makes: FinishedId }[] {
-  return COMPONENT_IDS.map((other) => ({ with: other, makes: forge(cat, item, other) }));
+  return cat.ids.components.map((other) => ({ with: other, makes: forge(cat, item, other) }));
 }
 
 /** What a component would make with each *other* loose component the party has, without repeats. */
