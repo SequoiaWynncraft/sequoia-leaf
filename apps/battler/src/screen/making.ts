@@ -16,6 +16,7 @@ import {
   halvesOf,
   HOLDS,
   isComponentId,
+  isEmblemId,
   isFinishedId,
   isItemId,
   isToolId,
@@ -168,9 +169,9 @@ export type Drop = { readonly command: PlanningCommand } & (
   | { readonly does: "nothing"; readonly item: RackItem; readonly why: string }
 );
 
-/** How many items the figure at a spot holds. */
+/** How many items the figure at a spot holds that a Whetstone changes: its components and finished items. */
 const pieceHolds = (run: RunView, to: Spot): number =>
-  (to.on === "board" ? run.board[to.at] : run.bench[to.at])?.items.length ?? 0;
+  (to.on === "board" ? run.board[to.at] : run.bench[to.at])?.items.filter((i) => !isEmblemId(i)).length ?? 0;
 
 /** What a tool let go on a figure would do: the Tongs as the rules say on a copy, a Whetstone only how many change. */
 function toolDrop(run: RunView, command: Extract<PlanningCommand, { do: "tongs" | "whetstone" }>): Drop | null {

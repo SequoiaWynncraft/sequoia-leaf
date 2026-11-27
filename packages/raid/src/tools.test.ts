@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { planRoom, SENSIBLE } from "./bot.ts";
 import { isPredicted, legal, readRunCommand } from "./command.ts";
-import { COMPONENT_IDS, EMBLEM_IDS, type ItemId, sortOf } from "./content/items.ts";
+import { COMPONENT_IDS, type ItemId, sortOf } from "./content/items.ts";
 import { LEGACY_ERA } from "./content/releases.ts";
 import { ROOMS } from "./content/rooms.ts";
 import { meltValue, type RackItem, TOOL_IDS } from "./content/tools.ts";
@@ -103,7 +103,7 @@ describe("the Tongs", () => {
 });
 
 describe("the Whetstone", () => {
-  test("turns each item a figure holds into another of its sort, and is gone", () => {
+  test("turns each component and finished item a figure holds into another of its sort, leaves its emblem, and is gone", () => {
     for (let seed = 1; seed <= 40; seed++) {
       const run = planning(["whetstone"], ["thorn", "blackthorn", "crabcharm"], seed);
       run.boons = ["crabcharm"];
@@ -113,9 +113,8 @@ describe("the Whetstone", () => {
       expect(now.map(sortOf)).toEqual(["component", "finished", "emblem"]);
       expect(now[0]).not.toBe("thorn");
       expect(now[1]).not.toBe("blackthorn");
-      expect(now[2]).not.toBe("crabcharm");
-      // The worm is a Burrow: no Burrow emblem, since it carries the trait already.
-      expect(now[2]).not.toBe("burrowcharm");
+      // The emblem is its charm's: it stays.
+      expect(now[2]).toBe("crabcharm");
       expect(run.rack).toEqual({});
       const piece = run.board[3]?.id ?? 0;
       expect(done.notes).toEqual([{ t: "whetted", piece, was: ["thorn", "blackthorn", "crabcharm"], now }]);
@@ -134,13 +133,29 @@ describe("the Whetstone", () => {
     expect(outcomes.size).toBeGreaterThan(5);
     expect(isPredicted({ do: "whetstone", to: WORM })).toBe(false);
   });
-  test("never makes a second of an emblem the run has elsewhere", () => {
-    const rest = EMBLEM_IDS.filter((id) => id !== "embercharm" && id !== "burrowcharm" && id !== "mosscharm");
+  test("leaves the run readable: every emblem stays its charm's, and a charm taken later gives its own", () => {
     for (let seed = 1; seed <= 20; seed++) {
-      const run = planning(["whetstone", ...rest], ["embercharm"], seed);
-      useWhetstone(run, WORM);
-      expect(run.board[3]?.items).toEqual(["mosscharm"]);
+      const run = planning(["whetstone"], ["embercharm", "thorn"], seed);
+      run.boons = ["embercharm"];
+      expect(useWhetstone(run, WORM).ok).toBe(true);
+      // Mosscharm taken later: its emblem is the only Moss one.
+      run.stage = { phase: "plan", picks: [{ kind: "boon", options: ["mosscharm"], redraws: 0 }] };
+      expect(choose(run, 0).ok).toBe(true);
+      const read = checkRun(JSON.parse(JSON.stringify(run)));
+      expect(read.ok ? "" : read.why).toBe("");
     }
+  });
+  test("is refused on a figure holding only emblems, which it would leave as they are", () => {
+    const run = planning(["whetstone"], ["crabcharm"]);
+    run.boons = ["crabcharm"];
+    expect(useWhetstone(run, WORM)).toMatchObject({ ok: false, code: "only_emblems" });
+  });
+  test("an emblem melted stays melted: reading the run again does not put it back", () => {
+    const run = planning(["crabcharm", "thorn"]);
+    run.boons = ["crabcharm"];
+    expect(melt(run, "crabcharm").ok).toBe(true);
+    const read = checkRun(JSON.parse(JSON.stringify(run)));
+    expect(read.ok && read.run.rack).toEqual({ thorn: 1 });
   });
   test("is refused on a figure holding nothing", () => {
     expect(useWhetstone(planning(["whetstone"]), WORM)).toMatchObject({ ok: false, code: "holds_nothing" });

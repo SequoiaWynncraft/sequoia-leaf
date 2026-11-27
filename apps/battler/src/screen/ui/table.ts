@@ -43,6 +43,7 @@ import { stallDrawn, traitsDrawn, twins } from "./drawn.ts";
 import { forgetLight, paintLight } from "./lit.ts";
 import { oddsRow, runTag, waySign } from "./own.ts";
 import { forgetRack, renderRack } from "./rack.ts";
+import { forgetRackPlace, placeRack } from "./rackfold.ts";
 import { chairsTag, chairsTaken, forgetTrack, renderTrack, trackPlaque } from "./rooms.ts";
 import { lineGone } from "./says.ts";
 import { type TallyView, tallyView } from "./tally.ts";
@@ -498,6 +499,7 @@ export function renderTable(): void {
   renderResolve(run);
   renderTraits(run);
   renderRack(run);
+  placeRack(run);
   renderStall(run);
   renderPurseSide(run);
   renderActs(run);
@@ -509,6 +511,7 @@ export function renderTable(): void {
 export function forgetTable(): void {
   stallKey = "";
   forgetRack();
+  forgetRackPlace();
   traitKey = "";
   forgetTrack();
   forgetLight();

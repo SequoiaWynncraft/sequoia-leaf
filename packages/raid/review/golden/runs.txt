@@ -32,7 +32,7 @@ run sensible 030 | trail 1: lost in room 15, WWWWWLWWWWLLWWL, resolve 0, level 7
 run sensible 031 | trail 2: lost in room 7, WWLLWLL, resolve 0, level 5, 123 Coins | draws bfb89e16d51b end 76fd756137ff
 run sensible 032 | trail 3: lost in room 8, WWWLLWLL, resolve 0, level 5, 96 Coins | draws 119348b5fd6e end aa8f3928235d
 run sensible 033 | own figures: won in room 15, WWWWWWWWLWWDWWW, resolve 12, level 7, 478 Coins | draws f70c94810b8f end 780548cf0107
-run sensible 034 | the Wilds: lost in room 26, WWWWWWWLLWWLWWLWWWWWWWWWWL, resolve 0, level 8, 276 Coins | draws fa78f8f12fc4 end a38dab817d9a
+run sensible 034 | the Wilds: lost in room 24, WWWWWWWLLWWLWWLWWWWWWWWL, resolve 0, level 8, 276 Coins | draws 2f058df420c4 end 3b861b36ee3f
 run sensible 035 | the Deep Woods: lost in room 26, WWWWWWWWWWWWWWLWWWWWWWLWWL, resolve 0, level 8, 324 Coins | draws 772983741c26 end 49a5bb6dbe5a
 run sensible 036 | trail 1: lost in room 8, WWLWWLWL, resolve 0, level 5, 130 Coins | draws e7f5e7b313d6 end fd7c5f80e15d
 run sensible 037 | trail 2: lost in room 6, WLLWLL, resolve 0, level 4, 40 Coins | draws bf13da3605d0 end f1cd5b97e1cc

@@ -347,12 +347,12 @@ describe("loading refuses nonsense", () => {
     expect(refused(tampered(run, (raw) => delete raw.seen))).toContain("the almanac notes");
     expect(refused(tampered(run, (raw) => delete raw.record))).toContain("the record");
   });
-  test("an emblem with no charm to give it (kept before a Whetstone could make one), or two of one emblem", () => {
+  test("an emblem with no charm to give it, or two of one emblem", () => {
     const stray = tampered(run, (raw) => (raw.rack = { ...recordIn(raw.rack), crabcharm: 1 }));
     const before = loadBeforeTools(stray);
     expect(!before.ok && before.why).toContain("the emblems");
-    // Since, a Whetstone may have turned a charm's emblem into another's.
-    expect(loadRun(stray).ok).toBe(true);
+    // Nor since: a Whetstone leaves emblems as they are.
+    expect(refused(stray)).toContain("the emblems");
     expect(
       refused(
         tampered(run, (raw) => {

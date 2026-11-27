@@ -25,7 +25,8 @@ export function forgetRack(): void {
  * there is none of is a dim, empty tile that does nothing.
  */
 function rackTile(run: RunView, tile: Stack): HTMLElement {
-  if (tile.count === 0) return el("span", "k-slot item none", {}, pic(itemIcon(tile.item)));
+  // Its kind on it, filled or empty: the same tile, whether there is any of it or none.
+  if (tile.count === 0) return el("span", "k-slot item none", { "data-kind": tile.item }, pic(itemIcon(tile.item)));
   const name = rackName(catalogOf(run), tile.item);
   const slot = el(
     "button",
@@ -33,6 +34,7 @@ function rackTile(run: RunView, tile: Stack): HTMLElement {
     {
       type: "button",
       "data-item": tile.item,
+      "data-kind": tile.item,
       "aria-label": tile.count > 1 ? `${name}, ${tile.count}` : name,
     },
     pic(itemIcon(tile.item)),

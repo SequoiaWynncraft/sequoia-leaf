@@ -185,6 +185,22 @@ describe("what the table shows of the hand", () => {
     });
   });
 
+  test("with two or more of a kind, its own tile tapped again aims it there: Make, two Thorns into a Blackthorn", () => {
+    const run = planning();
+    run.rack = rackOf(["thorn", "thorn", "mosscharm", "mosscharm"]);
+    const tapped = (g: Gesture, on: Parameters<typeof tapOf>[2]): string => tapOf(g, marksOf(g, run).pairs, on);
+    const thorn: Gesture = { at: "picked", held: { what: "item", item: "thorn" } };
+    expect(tapped(thorn, { rack: "thorn" })).toBe("aim");
+    expect(dropOf(run, "thorn", { rack: "thorn" })).toMatchObject({
+      does: "make",
+      item: "blackthorn",
+      command: { do: "forge", item: "thorn", with: "thorn" },
+    });
+    // Two of a kind that make nothing together: its tile still puts it down.
+    const moss: Gesture = { at: "picked", held: { what: "item", item: "mosscharm" } };
+    expect(tapped(moss, { rack: "mosscharm" })).toBe("down");
+  });
+
   test("the fielded figures that want an item are marked: for the one in the hand, or else the one pointed at", () => {
     const run = planning();
     const figure = pieces(run)[0];

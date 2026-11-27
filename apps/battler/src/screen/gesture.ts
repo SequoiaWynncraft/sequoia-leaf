@@ -86,17 +86,18 @@ export function handStep(g: Gesture, ev: HandEvent): Gesture {
 }
 
 /**
- * What a tap means while an item may be in the hand, on a place of the rack or on one of the
- * party's figures (`on`). The item in the hand is put down (tapped again), or aimed: at a figure, or
- * at a component it pairs with, and its tip then says what letting go would do, with the button
- * that does it. Anything else, the thing tapped is picked up.
+ * What a tap means while an item may be in the hand, on a tile of the rack or on one of the party's
+ * figures (`on`). The item in the hand is aimed: at a figure, or at a kind it pairs with (its own,
+ * where there are two of it and they make something), and its tip then says what letting go would
+ * do, with the button that does it. Its own tile, making nothing with itself, puts it down. Anything
+ * else, the thing tapped is picked up.
  */
 export function tapOf(g: Gesture, pairs: readonly RackItem[], on: Aim): "down" | "aim" | "pick" {
   const item = g.at === "picked" && g.held.what === "item" ? g.held : null;
   if (!item) return "pick";
   if ("piece" in on) return "aim";
-  if (on.rack === item.item) return "down";
-  return pairs.includes(on.rack) ? "aim" : "pick";
+  if (pairs.includes(on.rack)) return "aim";
+  return on.rack === item.item ? "down" : "pick";
 }
 
 /** What the table shows of the hand. */

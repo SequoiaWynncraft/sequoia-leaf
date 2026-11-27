@@ -68,6 +68,7 @@ import {
 } from "../src/screen/state.ts";
 import { sheetUp } from "../src/screen/ui/fightsheet.ts";
 import { type PageId, renderPages, showPage } from "../src/screen/ui/pages.ts";
+import { type Box, foldReport, tableBoxes } from "../src/screen/ui/rackfold.ts";
 import { redrawTallies, TV } from "../src/screen/ui/tally.ts";
 
 type Jump = "front" | "boon" | "component" | "spar" | "boss" | "lastboss" | "end";
@@ -153,7 +154,8 @@ export interface Handle {
   pair(item: string, other: string): void;
   /** Carries one of a kind on the rack over the stall, where it melts. */
   melting(item: string): void;
-  hand(item: string, id: number): void;
+  /** Hands one of a kind on the rack to a figure, as the page does; throws when it is not done. */
+  hand(item: string, id: number): string;
   drop(): void;
   page(id: PageId | null): void;
   /** Goes on from a fight's sheet, as "Carry on" does. */
@@ -171,6 +173,10 @@ export interface Handle {
   items(counts: Record<string, number>): Promise<void>;
   /** The page's own copy of the run, to change by hand. */
   copy(): RunView | null;
+  /** Every seat of the board and slot of the bench, as boxes on the page: what the rack must never cover. */
+  tableBoxes(): Box[];
+  /** Each place the folded rack's button might go, and what is in the way there. */
+  foldReport(): string[];
   /** Draws the table again from the copy as it stands. */
   redraw(): void;
   /** Leaf's table as the page last heard it, and whether anything sent is still waiting for an answer. */
@@ -500,7 +506,11 @@ export function openHandle(): void {
     },
     hand(item, id) {
       const spot = spotOfPawn(pawns.get(id));
-      if (spot && isItemId(item)) doNow({ do: "give", item, to: spot });
+      if (!spot) throw new Error(`no figure ${id}`);
+      if (!isItemId(item)) throw new Error(`no item called ${item}`);
+      const done = doNow({ do: "give", item, to: spot });
+      if (!done?.ok) throw new Error(`${item} not handed to ${id}: ${done?.why ?? "held off while Leaf answers"}`);
+      return item;
     },
     drop: unpick,
     page: showPage,
@@ -546,6 +556,8 @@ export function openHandle(): void {
       syncPawns(S.run, true);
       changed();
     },
+    tableBoxes,
+    foldReport,
     leaf: leafView,
     waiting: waitingForLeaf,
     async settled() {

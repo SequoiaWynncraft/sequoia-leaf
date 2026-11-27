@@ -2781,7 +2781,7 @@ sitting 5
   stage.turns
   stage.until
   v
-sitting 6
+sitting 7
   by
   era
   game

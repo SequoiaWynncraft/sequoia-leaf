@@ -40,6 +40,7 @@ import { doNow, doOrAsk, onNotes, S } from "./state.ts";
 import { dropRef, foeRef, itemRef, pieceRef, unitRef } from "./ui/cards.ts";
 import { hearMade, hearRack, paintRack, rackSlot, registerDrop, seenNow } from "./ui/drop.ts";
 import { aimShop, fillMeltHint, fillShopHint, hearFed, shopCommand } from "./ui/feedtarget.ts";
+import { toggleRack } from "./ui/rackfold.ts";
 
 /** One pointer's press: what was under it, where, whether it has moved or asked what the thing is. */
 interface Press {
@@ -155,10 +156,10 @@ function pin(ref: string, box: Box, via: Via, side = false): void {
 }
 
 /**
- * Takes a thing in the hand by a tap. Its card is pinned for a mouse only, beside the rack or the
- * board, never over where the next tap goes: a finger's would be a sheet over the board, and a
- * finger kept on the thing asks for it instead; by keyboard, the card that came with the focus is
- * enough, and a pinned one would keep the keyboard from the next component.
+ * Takes a thing in the hand by a tap. A figure's card is pinned for a mouse only, beside the board;
+ * an item's for a mouse and the keyboard, beside the rack, with its buttons (Melt among them). Never
+ * for a finger: its card would be a sheet over the board, and a finger kept on the thing asks for it
+ * instead.
  */
 function pick(held: Held, via: Via = "touch"): void {
   unpick();
@@ -167,8 +168,9 @@ function pick(held: Held, via: Via = "touch"): void {
     snd.lift();
     if (via === "mouse") pin(pieceRef(held.id), boardBox(), via);
   } else if (held.what === "item") {
+    // By mouse or keyboard its card is pinned beside the rack, with its buttons (Melt among them).
     const box = aimBox({ rack: held.item });
-    if (box && via === "mouse") pin(itemRef(held.item, true), box, via, true);
+    if (box && via !== "touch") pin(itemRef(held.item, true), box, via, true);
     snd.tap();
   }
 }
@@ -204,8 +206,11 @@ function tapItem(held: Extract<Held, { what: "item" }>, via: Via): void {
 function startDrag(run: RunView, held: Held, pointer: number, at: { x: number; y: number }): void {
   close();
   hold(true);
-  if (held.what === "item") fillMeltHint(held.item);
-  else fillShopHint(run, held.what === "pawn" ? placeOfPawn(held.id) : null);
+  // Carried from the folded rack's panel, the panel goes: the stall under it is where an item melts.
+  if (held.what === "item") {
+    toggleRack(false);
+    fillMeltHint(held.item);
+  } else fillShopHint(run, held.what === "pawn" ? placeOfPawn(held.id) : null);
   hand({ e: "clear" });
   hand({ e: "carry", pointer, held, x: at.x, y: at.y });
   snd.lift();

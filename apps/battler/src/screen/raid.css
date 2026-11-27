@@ -265,6 +265,66 @@ body[data-picking="yes"] #foe {
   scrollbar-color: var(--k-gold) transparent;
   box-shadow: inset 0 var(--u) 0 #fff3cf20;
 }
+/*
+ * A swipe in the box scrolls it, along the way it scrolls; a drag the other way (toward the board)
+ * carries the item, and a tap picks it up. The components' row does not scroll: any drag carries.
+ */
+#rack .made .item {
+  touch-action: pan-y;
+}
+/* Folded (`rackfold.ts`): one button where nothing else is, which opens the rack as a panel over the stall. */
+#rackbtn {
+  position: fixed;
+  z-index: 7;
+  display: none;
+  min-width: calc(var(--u) * 32);
+  justify-content: center;
+  white-space: nowrap;
+}
+body.rack-folded #rackbtn {
+  display: inline-flex;
+}
+body.rack-folded #rack {
+  display: none;
+}
+body.rack-folded.rack-open #rack {
+  position: fixed;
+  z-index: 8;
+  right: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  padding: var(--u);
+  box-sizing: border-box;
+  background: #1a0f1ef2;
+}
+body.rack-open #rack .k-plaque.items {
+  flex-direction: column;
+  min-width: 0;
+}
+body.rack-open #rack .parts {
+  grid-template-columns: repeat(5, calc(var(--u) * 18));
+}
+body.rack-open #rack .made,
+body.rack-open #rack .k-plaque.boons {
+  grid-auto-flow: column;
+  grid-template-columns: none;
+  grid-auto-columns: calc(var(--u) * 18);
+  grid-template-rows: calc(var(--u) * 18);
+  width: auto;
+  height: auto;
+  padding: 0;
+  overflow: auto hidden;
+}
+body.rack-open #rack .item,
+body.rack-open #rack .boon {
+  width: calc(var(--u) * 18);
+  height: calc(var(--u) * 18);
+}
+body.rack-open #rack .made .item {
+  touch-action: pan-x;
+}
 /* How many of a kind lie there, over the tile's corner. */
 #rack .item > .n {
   position: absolute;
@@ -935,8 +995,8 @@ body.dragging,
 body.dragging * {
   cursor: grabbing !important;
 }
-body:is([data-mode="front"], [data-mode="over"]) :is(#track, #resolve, #traits, #rack, #foe, #bottom, #door),
-body.no-run :is(#track, #resolve, #traits, #rack, #foe, #bottom, #door) {
+body:is([data-mode="front"], [data-mode="over"]) :is(#track, #resolve, #traits, #rack, #rackbtn, #foe, #bottom, #door),
+body.no-run :is(#track, #resolve, #traits, #rack, #rackbtn, #foe, #bottom, #door) {
   visibility: hidden;
 }
 #rack.empty {

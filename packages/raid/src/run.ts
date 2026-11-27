@@ -23,7 +23,6 @@ import { type BossId, type FigureId, figureIn, type Stars, traitsOf } from "./co
 import type { FinishedId, ItemId } from "./content/items.ts";
 import { holdItem } from "./content/recipes.ts";
 import { ECONOMY, MAX_LEVEL, type RoomKind, sellPrice } from "./content/rooms.ts";
-import type { RackItem } from "./content/tools.ts";
 import { topStep, type TraitId, traitNumber } from "./content/traits.ts";
 import { drawOffer, starters } from "./draws.ts";
 import { lastRoom } from "./endless.ts";
@@ -36,7 +35,7 @@ import { COLS, SEATS } from "./hex.ts";
 import { handOver, takeMade } from "./made.ts";
 import { placedOf } from "./own.ts";
 import { type Party, type TraitState, traitStates, traitSteps } from "./party.ts";
-import { counted, countOn, type Rack, withAll } from "./racks.ts";
+import { counted, countOn, type Rack, type RackNote, withAll } from "./racks.ts";
 import { keepRoom, noRooms, type RoomRecord, type RoomTotals, totalsOf } from "./record.ts";
 import { componentOptions, type ComponentPick, type Pickable, roomPicks } from "./rewards.ts";
 import { closedNow, roomOf, type RoomRun, setupRules } from "./room.ts";
@@ -205,12 +204,8 @@ export type Note =
   | { t: "acorns"; why: AcornsWhy; amount: number }
   /** Items put on the item bench by a boon: A Basket On The Stump's components, or a charm's emblem. */
   | { t: "items"; why: "basket" | "charm"; items: ItemId[] }
-  /** Something on the rack melted for acorns, by the member's hand (`melt`). */
-  | { t: "melted"; item: RackItem; acorns: number }
-  /** Tongs took everything a figure held back to the rack. */
-  | { t: "tongs"; piece: number; items: ItemId[] }
-  /** A Whetstone turned each item a figure held into another of its sort: `was` became `now`, place by place. */
-  | { t: "whetted"; piece: number; was: ItemId[]; now: ItemId[] }
+  /** Something melted, the Tongs or a Whetstone used (`racks.ts`). */
+  | RackNote
   | { t: "resolve"; change: number; left: number }
   /** The fight, locked: both boards and its seed to play it from, and how it came out. */
   | { t: "fight"; room: number; seed: number; setup: FightSetup; outcome: FightSummary }
@@ -258,6 +253,7 @@ export const REFUSALS = {
   greg_on_greg: "Greg does not eat Greg.",
   greg_full: "Greg is full.",
   holds_nothing: "It holds nothing.",
+  only_emblems: "It holds no component or finished item.",
 } as const;
 export type Why = keyof typeof REFUSALS;
 

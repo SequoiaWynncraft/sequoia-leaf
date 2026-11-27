@@ -141,6 +141,72 @@ const rerolls = (at: string, n: number): Step[] => [
 /** What a member pulled, for a raid with their own figures: levels on the stall. */
 const PULLED = { crab7: 3, worm: 1, moth: 2, emberkit: 1, slug: 4, kettle: 2, jay: 1, rock: 2, greg: 5 };
 const onBoard = `r.party().find((x) => x.on === "board")`;
+/**
+ * The rack's checks, wherever it is: it covers no seat of the board, slot of the bench or player's
+ * button (five points of each tried), folded or not, and with its panel open; a swipe in its box
+ * scrolls the way the box does; and Enter on a tile pins its card with Melt on it.
+ */
+const RACK_CLEAR = `(() => {
+  // A player's button counts where the list shows it: one scrolled out of the list is not on the page.
+  const list = document.getElementById("live-players")?.getBoundingClientRect();
+  const shownOf = (r) => { const x = Math.max(r.left, list.left), y = Math.max(r.top, list.top); return { x, y, w: Math.min(r.right, list.right) - x, h: Math.min(r.bottom, list.bottom) - y }; };
+  const players = list ? [...document.querySelectorAll("#live-players button")].map((b) => shownOf(b.getBoundingClientRect())).filter((b) => b.w > 0 && b.h > 0) : [];
+  const boxes = [...window.raid.tableBoxes(), ...players];
+  const covered = [];
+  for (const b of boxes) for (const [fx, fy] of [[0.5, 0.5], [0.25, 0.25], [0.75, 0.25], [0.25, 0.75], [0.75, 0.75]]) {
+    const x = b.x + b.w * fx, y = b.y + b.h * fy;
+    if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) continue;
+    const e = document.elementFromPoint(x, y);
+    if (!e || !e.closest("#rack, #rackbtn")) continue;
+    // Covered only where, with the rack away, the seat (the table's own canvas, #view) or the button would show.
+    const rack = document.getElementById("rack"), btn = document.getElementById("rackbtn");
+    rack.style.visibility = "hidden"; btn.style.visibility = "hidden";
+    const under = document.elementFromPoint(x, y);
+    rack.style.visibility = ""; btn.style.visibility = "";
+    if (under && (under.id === "view" || under.closest("#live-players button"))) covered.push(Math.round(x) + "," + Math.round(y) + " over " + (under.id || under.tagName) + " under " + (e.id || e.className));
+  }
+  const folded = document.body.classList.contains("rack-folded");
+  const shown = document.querySelector(folded ? "#rackbtn" : "#rack").getBoundingClientRect();
+  if (shown.width === 0) return "${FAIL} the rack is not shown";
+  return covered.length ? "${FAIL} the rack covers " + covered.length + " points of the table: " + covered.slice(0, 6).join(" ") + (folded ? "; places: " + window.raid.foldReport().join(" | ") : "") : (folded ? "folded, clear" : "clear");
+})()`;
+const RACK_SWIPE = `(() => {
+  const t = document.querySelector("#rack .made .item");
+  if (!t) return "${FAIL} no tile in the rack's box";
+  const want = document.body.classList.contains("rack-open") ? "pan-x" : "pan-y";
+  const got = getComputedStyle(t).touchAction;
+  return got === want ? "a swipe scrolls: " + got : "${FAIL} touch-action " + got + ", not " + want;
+})()`;
+const RACK_KEY_MELT = `(async () => {
+  const t = document.querySelector("#rack .item[data-item]");
+  if (!t) return "${FAIL} no tile to press";
+  t.focus();
+  t.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 0 }));
+  await new Promise((go) => setTimeout(go, 400));
+  const card = document.querySelector(".k-info.pinned");
+  const melt = card && [...card.querySelectorAll("button")].find((b) => /^Melt/.test(b.textContent.trim()));
+  window.raid.drop();
+  return melt ? "Enter pins the card, with Melt" : "${FAIL} no Melt after Enter: " + (card ? card.innerText.replace(/\\s+/g, " ").slice(0, 80) : "no card pinned");
+})()`;
+const rackChecks = (where: string): Step[] => [
+  ["eval", RACK_CLEAR],
+  ["eval", `document.body.classList.contains("rack-folded") ? "folded" : "inline"`],
+  [
+    "eval",
+    `(document.body.classList.contains("rack-folded") && document.getElementById("rackbtn").click(), "opened if folded")`,
+  ],
+  ["wait", 400],
+  ["eval", RACK_CLEAR],
+  ["eval", RACK_SWIPE],
+  ["eval", RACK_KEY_MELT],
+  ["eval", `(document.body.classList.contains("rack-open") && document.getElementById("rackbtn").click(), "closed")`],
+  ["wait", 400],
+  take(`the rack's checks: ${where}`),
+];
+
+/** A command sent as the page sends it, the step failing when it is refused (or held off) rather than look steady. */
+const sent = (command: string): string =>
+  `const d = await r.send(${command}); if (!d?.ok) throw new Error("refused: " + ${JSON.stringify(command)} + " " + JSON.stringify(d)); return JSON.stringify(d.notes.map((n) => n.t));`;
 
 /**
  * The table while planning, and on through a fight: buying, a star-up, selling, moving and swapping
@@ -163,13 +229,13 @@ function tableWalk(shot: (what: string) => Step): Step[] {
     ["wait", 900],
     ...tap('[data-offer="2"]', "a star-up: three become one", 1500),
     shot("21-star-up"),
-    ...act(`return JSON.stringify(await r.send({ do: "sell", from: { on: "bench", at: 0 } }));`, "sell from the bench"),
+    ...act(sent(`{ do: "sell", from: { on: "bench", at: 0 } }`), "sell from the bench"),
     ...act(
-      `const p = ${onBoard}; return p ? JSON.stringify(await r.send({ do: "move", from: { on: "board", at: p.at }, to: { on: "bench", at: 8 } })) : "nobody on the board";`,
+      `const p = ${onBoard}; if (!p) throw new Error("nobody on the board"); ${sent(`{ do: "move", from: { on: "board", at: p.at }, to: { on: "bench", at: 8 } }`)}`,
       "a figure from the board to the bench",
     ),
     ...act(
-      `return JSON.stringify(await r.send({ do: "move", from: { on: "bench", at: 8 }, to: { on: "bench", at: 1 } }));`,
+      sent(`{ do: "move", from: { on: "bench", at: 8 }, to: { on: "bench", at: 1 } }`),
       "two on the bench change places",
     ),
     ...tap("#levelup", "Buy XP"),
@@ -178,8 +244,17 @@ function tableWalk(shot: (what: string) => Step): Step[] {
     ...tap("#holdbtn", "let the stall go"),
     staged(`await r.item("thorn"); await r.item("plume"); await r.item("bark");`),
     ["wait", 900],
-    ...act(`const p = ${onBoard}; if (p) r.hand(0, p.id); await r.settled(); return "handed";`, "an item handed over"),
-    ...act(`return JSON.stringify(await r.send({ do: "forge", item: 0, with: 1 }));`, "two components forged"),
+    ...act(
+      `const p = r.party()[0]; if (!p) throw new Error("nobody to hand it to"); r.hand("thorn", p.id); await r.settled(); return "handed";`,
+      "an item handed over",
+    ),
+    ...act(sent(`{ do: "forge", item: "plume", with: "bark" }`), "two components forged"),
+    staged(
+      `await r.items({ thorn: 30, plume: 21, glowcap: 12, bark: 9, chestnut: 7, blackthorn: 3, hoard: 2, lichen: 1, stump: 2, tongs: 1, whetstone: 1 });`,
+    ),
+    ["wait", 900],
+    take("a deep rack staged"),
+    ...rackChecks("a solo table"),
     shot("22-items"),
     staged(`await r.acorns(60);`),
     ...rerolls("reroll x12: the first room's board", 12),
@@ -233,6 +308,14 @@ function tableWalk(shot: (what: string) => Step): Step[] {
     ["wait", 2500],
     take("seated at a live table, planning"),
     shot("43-live-table"),
+    // A deep rack at the live table: the page's own copy, as nothing stages a seat's rack.
+    staged(
+      `r.copy().rack = { thorn: 30, plume: 21, glowcap: 12, bark: 9, chestnut: 7, blackthorn: 3, hoard: 2, tongs: 1 }; r.redraw();`,
+    ),
+    ["wait", 900],
+    take("a deep rack at the live table"),
+    shot("44-live-rack"),
+    ...rackChecks("a live table"),
   ];
 }
 

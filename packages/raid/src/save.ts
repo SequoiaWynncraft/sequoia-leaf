@@ -95,9 +95,10 @@ const ROOMY = 999;
 const MOST = Number.MAX_SAFE_INTEGER;
 
 /**
- * The rack, with the emblems on it and held by figures (`held`) checked: one of each. A run kept
- * before tools (`tooled`) has a charm's emblem put back if it has none anywhere, and every emblem is
- * its charm's; since, a Whetstone may have turned one into another.
+ * The rack, with the emblems on it and held by figures (`held`) checked: every emblem is its charm's,
+ * and there is one of it. A run kept before the rack could be melted (`tooled`) has a charm's emblem
+ * put back if it has none anywhere, as it was taken before charms were emblems; since, one melted is
+ * gone for good.
  */
 function readRackOf(
   r: Record<string, unknown>,
@@ -107,21 +108,19 @@ function readRackOf(
 ): Rack {
   let rack = readRack(r);
   const emblems = (): EmblemId[] => [...kindsOn(rack).filter(isEmblemId), ...held.filter(isEmblemId)];
-  if (!tooled) {
-    // A charm taken before a charm was an emblem has none anywhere: it is put on the item bench.
+  // A charm taken before a charm was an emblem has none anywhere: it is put on the item bench.
+  if (!tooled)
     for (const boon of boons)
       if (isEmblemId(boon) && countOn(rack, boon) === 0 && !held.includes(boon)) rack = counted(rack, boon, 1);
-    // Before a Whetstone could turn one into another, every emblem was its charm's.
-    if (emblems().some((emblem) => !boons.includes(emblem))) bad("the emblems");
-  }
-  // There is one of each emblem.
+  // Every emblem is its charm's, and there is one of each.
+  if (emblems().some((emblem) => !boons.includes(emblem))) bad("the emblems");
   if (kindsOn(rack).some((id) => isEmblemId(id) && countOn(rack, id) > 1)) bad("the emblems");
   unique(emblems(), "the emblems");
   return rack;
 }
 
 /**
- * The rack: kept as how many of each kind (`rack`: a table from version 10, a sitting from 6), or
+ * The rack: kept as how many of each kind (`rack`: a table from version 10, a sitting from 7), or
  * before that as a list of what lay on it (`items`), folded into counts.
  */
 function readRack(r: Record<string, unknown>): Rack {
@@ -590,10 +589,9 @@ export type Loaded = { ok: true; run: Run } | { ok: false; why: string };
 /**
  * A run as Leaf keeps it in a table of version 1 (`old`) or since, with Greg's meals (`meals`: kept
  * before he was fed by hand) or not, its record as rows (`rows`: stored since a table of version 9)
- * or as the run holds it, and kept since the rack had tools (`tooled`: a table from version 10, a
- * sitting from 6) or before; or the reason the data is not one. A run kept before tools has a
- * charm's emblem put back if it has none anywhere, and every emblem is its charm's; since, a
- * Whetstone may have turned one into another.
+ * or as the run holds it, and kept since the rack had tools and melting (`tooled`: a table from
+ * version 10, a sitting from 7) or before; or the reason the data is not one. A run kept before has
+ * a charm's emblem put back if it has none anywhere; since, one melted stays melted.
  */
 export function checkRun(v: unknown, old = false, meals = false, rows = false, tooled = true): Loaded {
   try {

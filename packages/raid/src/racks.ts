@@ -6,8 +6,18 @@
  *
  * Everything that puts something on the rack or takes it off goes through `counted`.
  */
-import { isItemId } from "./content/items.ts";
+import { isItemId, type ItemId } from "./content/items.ts";
 import { isToolId, RACK_IDS, type RackItem } from "./content/tools.ts";
+
+/**
+ * What the rack's own commands say happened: something melted for acorns by the member's hand
+ * (`melt`); Tongs took everything a figure held back to the rack; a Whetstone turned each component
+ * and finished item a figure held into another of its sort (`was` became `now`, place by place).
+ */
+export type RackNote =
+  | { t: "melted"; item: RackItem; acorns: number }
+  | { t: "tongs"; piece: number; items: ItemId[] }
+  | { t: "whetted"; piece: number; was: ItemId[]; now: ItemId[] };
 
 /** How many of each kind lie on the rack. */
 export type Rack = Readonly<Partial<Record<RackItem, number>>>;

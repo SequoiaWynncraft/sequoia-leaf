@@ -5,20 +5,19 @@ import { type Catalog, catalogOf } from "./content/catalog.ts";
  * The rack: what nobody is holding, as how many of each kind (`racks.ts`), with no limit. Two on it
  * that a recipe joins (`combine`) make what it makes there: an item, to hand over afterwards, or a
  * boon. Anything on it can be melted for acorns, by the member's hand only. A tool on it is used by
- * dropping it on a figure: Tongs take back everything the figure holds; a Whetstone turns each item
- * it holds into another of its sort. (Handing an item over is `giveItem`, in `run.ts`.)
+ * dropping it on a figure: Tongs take back everything the figure holds; a Whetstone turns each
+ * component and finished item it holds into another of its sort. (Handing an item over is `giveItem`, in `run.ts`.)
  */
 import { carries, grantOf, type ItemId, sortOf } from "./content/items.ts";
 import { combine } from "./content/recipes.ts";
 import { meltValue, type RackItem, type ToolId } from "./content/tools.ts";
 import { takeMade } from "./made.ts";
-import { counted, countOn, kindsOn, withAll } from "./racks.ts";
+import { counted, countOn, withAll } from "./racks.ts";
 import {
   type Done,
   notPlanning,
   type Piece,
   pieceAt,
-  pieces,
   refusal,
   type Refused,
   type Run,
@@ -75,6 +74,8 @@ function toolOn(run: RunView, tool: ToolId, to: Spot): Piece | Refused {
   const piece = pieceAt(run, to);
   if (!piece) return refusal("nobody_there");
   if (piece.items.length === 0) return refusal("holds_nothing");
+  // A Whetstone leaves emblems as they are: on a figure holding nothing else it would do nothing.
+  if (tool === "whetstone" && piece.items.every((i) => sortOf(i) === "emblem")) return refusal("only_emblems");
   return piece;
 }
 
@@ -89,26 +90,24 @@ export function useTongs(run: RunView, to: Spot): Done {
 }
 
 /**
- * What an item a figure holds may become under a Whetstone: another of its sort that the catalogue
- * has open, granting nothing its holder carries by itself or by what else it holds (`rest`). An
- * emblem becomes one the run has nowhere else, so each stays one of its kind.
+ * What an item a figure holds may become under a Whetstone: another component for a component,
+ * another finished item for a finished one, as the catalogue has them open, granting nothing its
+ * holder carries by itself or by what else it holds (`rest`). An emblem stays: it is its charm's.
  */
-function whetted(cat: Catalog, run: RunView, kind: Piece["kind"], item: ItemId, rest: readonly ItemId[]): ItemId[] {
+function whetted(cat: Catalog, kind: Piece["kind"], item: ItemId, rest: readonly ItemId[]): ItemId[] {
   const sort = sortOf(item);
-  const open = sort === "component" ? cat.ids.components : sort === "finished" ? cat.ids.finished : cat.ids.emblems;
-  const anywhere = new Set<string>([...kindsOn(run.rack), ...pieces(run).flatMap((p) => p.items)]);
+  if (sort === "emblem") return [];
+  const open = sort === "component" ? cat.ids.components : cat.ids.finished;
   return open.filter((id) => {
-    if (id === item || (sort === "emblem" && anywhere.has(id))) return false;
     const grants = grantOf(cat, id);
-    return grants === undefined || !carries(cat, kind, rest, grants);
+    return id !== item && (grants === undefined || !carries(cat, kind, rest, grants));
   });
 }
 
 /**
- * A Whetstone dropped on a figure: each item it holds becomes another of its sort, place by place,
- * by the run's dice (a component another component, a finished item another finished item, an
- * emblem another trait's emblem); one with nothing it may become stays. The Whetstone is gone.
- * Leaf's to do: it draws.
+ * A Whetstone dropped on a figure: each component and finished item it holds becomes another of its
+ * sort, place by place, by the run's dice; an emblem stays, as does one with nothing it may become.
+ * The Whetstone is gone. Leaf's to do: it draws.
  */
 export function useWhetstone(run: Run, to: Spot): Done {
   const piece = toolOn(run, "whetstone", to);
@@ -117,7 +116,7 @@ export function useWhetstone(run: Run, to: Spot): Done {
   const was = piece.items.slice();
   const now = was.slice();
   now.forEach((item, i) => {
-    const could = whetted(cat, run, piece.kind, item, now.toSpliced(i, 1));
+    const could = whetted(cat, piece.kind, item, now.toSpliced(i, 1));
     if (could.length > 0) now[i] = pick(run, could);
   });
   run.rack = counted(run.rack, "whetstone", -1);

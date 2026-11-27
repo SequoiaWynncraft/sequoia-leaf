@@ -1,7 +1,7 @@
 /**
  * Tools: things on the rack that no figure holds. Each is used once, by dropping it on a figure, and
- * is gone after. Tongs take back what a figure holds; a Whetstone turns each item it holds into
- * another of the same sort, by the run's dice. What they do is in `rack.ts`; where they come from,
+ * is gone after. Tongs take back what a figure holds; a Whetstone turns each component and finished
+ * item it holds into another of the same sort, by the run's dice, and leaves its emblems as they are. What they do is in `rack.ts`; where they come from,
  * `run.ts` (the picks after a room) and the carousel's ring.
  *
  * And what anything on the rack melts for (`melt`): a sink for surplus, only ever by the member's hand.
@@ -29,7 +29,7 @@ export const TOOLS: Readonly<Record<ToolId, ToolSpec>> = {
   },
   whetstone: {
     name: "Whetstone",
-    text: "Drop on a figure: each item it holds becomes another of the same sort, at random.",
+    text: "Drop on a figure: each component and finished item it holds becomes another of the same sort, at random. Emblems stay.",
     quip: "Same blade, other edge.",
   },
 };
