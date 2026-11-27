@@ -20,7 +20,7 @@ import {
   type PageError,
 } from "@sequoia-leaf/core/page-errors.ts";
 
-import { Scope } from "./scope.ts";
+import { Scope, TAKEN } from "./scope.ts";
 
 /** How long the guard waits after a failure before loading the page again: long enough for an update to finish. */
 export const SETTLE_MS = 2000;
@@ -92,13 +92,17 @@ export function guard(world: GuardWorld): () => void {
     }
     failed.add(url);
   };
+  /** Everything the page opened through the kit's scopes stops before the guard takes it over. */
+  const take = (): void => void world.events.dispatchEvent(new Event(TAKEN));
   const settle = async (): Promise<void> => {
     scope.close();
     if (firstTry(world.tab(), world.path, buildOf(world.assets()))) {
       await Promise.allSettled([...failed].map((url) => world.refetch(url)));
+      take();
       world.reload();
       return;
     }
+    take();
     world.show(UPDATING);
     report(world, [...failed]);
   };
