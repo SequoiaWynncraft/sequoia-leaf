@@ -30,7 +30,7 @@ import { keptOnto, type KeptPiece, packCells, unpackCells } from "./cells.ts";
 import { here } from "./clock.ts";
 import { NODES } from "./content/nodes.ts";
 import { historyOf, stampOf } from "./history.ts";
-import { FIRST_LAND, type KeptLand, keptLandOf, keptOn, piecesOn, tileOn } from "./keptland.ts";
+import { FIRST_LAND, holdsFirst, type KeptLand, keptLandOf, keptOn, piecesOn, tileOn } from "./keptland.ts";
 import { LAND, type Land } from "./land.ts";
 import { counting, fillBoard, giveGoal, ORDER_WAITS, queue, study } from "./orders.ts";
 import { keptOf, packPieces, packWays, type Piece, piecesOf, placed, unpackWays } from "./pieces.ts";
@@ -459,7 +459,8 @@ function parsed(text: string): unknown {
 export function decode(text: string | null | undefined, land: Land = LAND): Yard | null {
   const raw = text ? parsed(text) : null;
   if (!isRec(raw)) return null;
-  if (raw.v === FIRST && Array.isArray(raw.cells)) return fromFirst(raw, land);
+  // A yard of the first design was kept on the first land, and is not read on less (`holdsFirst`).
+  if (raw.v === FIRST && Array.isArray(raw.cells)) return holdsFirst(land) ? fromFirst(raw, land) : null;
   if (typeof raw.cells !== "string" || !READS.has(raw.v)) return null;
   // A yard kept on more land is not read on less (`keptOn`).
   const on = keptOn(raw, land);

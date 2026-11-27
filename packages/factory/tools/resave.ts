@@ -21,6 +21,15 @@ import { RINGED } from "../test/ring.ts";
 type Rec = Record<string, unknown>;
 const isRec = (v: unknown): v is Rec => typeof v === "object" && v !== null && !Array.isArray(v);
 
+/** Text read as JSON, or undefined for text that is not. */
+function parsed(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}
+
 /** A file's kept yard: the record itself, or a save's `text`. */
 function keptText(file: string): string | null {
   const text = readFileSync(file, "utf8");
@@ -82,7 +91,8 @@ function losses(raw: Rec, first: F.Yard): string[] {
 
 /** What differs about one kept yard, as lines, and a note of what it is. */
 function differences(text: string): { lines: string[]; note: string } {
-  const raw: unknown = JSON.parse(text);
+  const raw = parsed(text);
+  if (raw === undefined) return { lines: ["is not a kept yard"], note: "" };
   const note = isRec(raw) ? `v${String(raw.v)}, ${keptPieces(raw)} pieces kept` : "";
   if (F.keptLater(text)) return { lines: ["a newer Leaf's (a later version, or kept on more land): not read"], note };
   const first = F.decode(text);

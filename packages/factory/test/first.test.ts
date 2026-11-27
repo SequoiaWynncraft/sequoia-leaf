@@ -6,7 +6,9 @@
  */
 import { describe, expect, test } from "bun:test";
 
+import { PLOTS } from "../src/content/plots.ts";
 import * as F from "../src/index.ts";
+import { landFrom } from "../src/land.ts";
 import { xy } from "./near.ts";
 
 const ALL_PLOTS = ["yard", "meadow", "bank", "stream", "grove", "hollow", "seam", "quarry", "pond"];
@@ -186,5 +188,11 @@ describe("a yard kept by the first design", () => {
       expect(F.decode(JSON.stringify({ ...raw, [field]: undefined }))).toBeNull();
     }
     expect(F.decode(JSON.stringify({ ...raw, story: -1 }))).toBeNull();
+  });
+
+  test("is not read on less land than the first, which it was kept on", () => {
+    const yardOnly = landFrom(PLOTS.filter((p) => p.id === "yard"));
+    expect(F.decode(first(4, ["yard", "meadow"]), yardOnly)).toBeNull();
+    expect(F.decode(first(4, ["yard", "meadow"]))).not.toBeNull();
   });
 });

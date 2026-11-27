@@ -59,6 +59,9 @@ const reaches = (land: Land, from: KeptLand): boolean =>
   from.w - from.x <= land.w - land.origin[0] &&
   from.h - from.y <= land.h - land.origin[1];
 
+/** Whether a land reaches as far every way as the first land, which every yard of the first design was kept on. */
+export const holdsFirst = (land: Land): boolean => reaches(land, FIRST_LAND);
+
 /** Whether every plot a kept yard says it owns (`names`) is one of a land's. */
 const ownsOnly = (land: Land, names: unknown): boolean =>
   !Array.isArray(names) ||

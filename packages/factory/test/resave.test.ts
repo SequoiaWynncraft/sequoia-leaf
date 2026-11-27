@@ -46,6 +46,11 @@ describe("the dry run of the codec", () => {
     expect(out).toContain("Coins paid back into the till");
   });
 
+  test("goes on past a save whose text is not JSON, and counts it", () => {
+    const { out, code } = resave({ broken: JSON.stringify({ text: "not JSON" }), mid: F.encode(staged("mid")) });
+    expect([code, out.includes("is not a kept yard"), out.includes("2 yards, 1 differ")]).toEqual([1, true, true]);
+  });
+
   test("fails on a yard kept on more land, which it does not read", () => {
     const { out, code } = resave({ outward: F.encode(outward()) });
     expect([code, out.includes("kept on more land")]).toEqual([1, true]);
