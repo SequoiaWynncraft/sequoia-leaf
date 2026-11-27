@@ -54,7 +54,8 @@ export type Access = "shared" | { readonly headliner: Banner["id"] };
  *
  * `everyones`: whether the ways with everyone's figures have it, whoever pulled what: their stall,
  * first pick, regulars, carousel, the boards they meet, and the almanac. Every figure the grove's
- * pulls give is; a banner's headliner is not, until a patch's `change` says it is (`patch.ts`).
+ * pulls give is; a banner's headliner is in an era its banner is open in, and in no other
+ * (`openIn`). The banners' dates are all that says so.
  */
 export interface Figure extends FigureSpec {
   readonly since: ReleaseId;
@@ -142,22 +143,29 @@ const present = <K extends string>(ids: readonly K[], table: Readonly<Partial<Re
   ids.filter((id) => table[id] !== undefined);
 
 /**
+ * Whether a banner is open while an era is live on Leaf's clock: from its release's moment until the
+ * next release's. An era the next opens with is live at no moment, so no banner is open in it: the
+ * base's and the expansion's first, whose stored runs keep a headliner to whoever pulled it.
+ */
+function openIn(banner: Banner, era: Era): boolean {
+  const [from, until] = [RELEASES[era - 1]?.at ?? Infinity, RELEASES[era]?.at ?? Infinity];
+  return banner.from < until && banner.until > from;
+}
+
+/**
  * How a figure a release brings is had, and how it is drawn: from the grove, by the set; or from its
  * banner, as the banner says, if a banner that release opens has it as its headliner. And whether it
- * is one of everyone's: a grove figure always, a headliner as its patches say (`Arrival.everyones`).
+ * is one of everyone's in an era: a grove figure always, a headliner while its banner is open.
  */
 function whoseOf(
   id: FigureId,
   since: ReleaseId,
-  f: Arrival,
+  era: Era,
 ): { readonly access: Access; readonly look: Look; readonly everyones: boolean } {
   const banner = BANNERS.find((b) => b.headliner === id);
-  if (!banner) {
-    if (f.everyones === false) throw new Error(`${id} is the grove's, so it is everyone's`);
-    return { access: "shared", look: "set", everyones: true };
-  }
+  if (!banner) return { access: "shared", look: "set", everyones: true };
   if (banner.opens !== since) throw new Error(`${banner.id}'s headliner comes with ${since}, not with its banner`);
-  return { access: { headliner: banner.id }, look: banner.look, everyones: f.everyones ?? false };
+  return { access: { headliner: banner.id }, look: banner.look, everyones: openIn(banner, era) };
 }
 
 /** Checks every item is of the sort its id's list says: a mistake in the content stops the catalogue being made. */
@@ -195,14 +203,14 @@ export function catalogsOf(patches: readonly Patch[]): readonly Catalog[] {
       boons: fold(BOON_IDS, was.boons, patch?.boons, fields),
     };
     sorted(was.items);
+    const era = eraOf(release);
     const figures: Partial<Record<FigureId, Figure>> = {};
     for (const id of came) {
       const [f, from] = [arrived[id], since[id]];
-      if (f && from) figures[id] = { ...f, since: from, ...whoseOf(id, from, f), chairs: f.chairs ?? 1 };
+      if (f && from) figures[id] = { ...f, since: from, ...whoseOf(id, from, era), chairs: f.chairs ?? 1 };
     }
     const order = [...DRAWN.filter((id) => figures[id]), ...came.filter((id) => !DRAWN.includes(id))];
     banners.push(...BANNERS.filter((b) => b.opens === release));
-    const era = eraOf(release);
     const ids: Open = {
       traits: present(TRAIT_IDS, was.traits),
       components: present(COMPONENT_IDS, was.items),

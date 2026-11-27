@@ -70,7 +70,9 @@ describe("Groot Night opens on Leaf's clock", () => {
     ]);
     expect(available(at, { for: "exchange" }).filter((id) => EVERYONES.includes(id))).toEqual(["clutch"]);
     expect(available(at, { for: "pull", pool: "groot-night", rarity: "Yggdrasil" })).toEqual(["commodore"]);
-    expect(available(at, { for: "regular" })).not.toContain("commodore");
+    // While the banner is open the Commodore is on everyone's stall in gaz's place, and a regular.
+    expect(sold(5).filter((id) => id === "commodore" || id === "banner-1")).toEqual(["commodore"]);
+    expect(available(at, { for: "regular" })).toContain("commodore");
     expect(BANNERS.find((b) => b.id === "groot-night")).toMatchObject({ from: OPENS, until: Date.UTC(2026, 11, 22) });
   });
 });

@@ -1,7 +1,7 @@
 /**
  * A banner's member as a figure of the raid: until `gaz-stall`, never on the main way, whatever a
- * member has pulled; from it, one of everyone's figures at five acorns, with no level. Sold,
- * levelled and merged with the member's own figures only to whoever pulled it; and its ability,
+ * member has pulled; from it, while its banner is open, one of everyone's figures at five acorns,
+ * with no level. Sold, levelled and merged with the member's own figures only to whoever pulled it; and its ability,
  * against its own sentence, at each era's numbers.
  */
 import { describe, expect, test } from "bun:test";
@@ -160,10 +160,10 @@ describe("the main way before gaz-stall, whatever a member has pulled", () => {
   });
 });
 
-/** The catalogue from `gaz-stall` on, where the first banner's headliner is everyone's. */
+/** The catalogue of `gaz-stall`, while the first banner is open: its headliner is everyone's. */
 const GAZ = catalogAt(eraOf("gaz-stall"));
 
-describe("the main way from gaz-stall, whatever a member has pulled", () => {
+describe("the main way while the first banner is open, whatever a member has pulled", () => {
   test("its stall offers a banner's member for five acorns, with no level, to members who pulled it and those who did not", () => {
     for (const awards of [HAS, []]) {
       const run = setOut(awards, false);
@@ -190,7 +190,8 @@ describe("the main way from gaz-stall, whatever a member has pulled", () => {
   });
   test("a live table's carousel has one among its five-acorn figures", () => {
     const player = { id: "10000000-0000-0000-0000-000000000003", name: "A member" };
-    const now = 1_800_000_000_000;
+    // While the first banner is open: gaz-stall's era.
+    const now = Date.UTC(2026, 11, 1);
     const rings = Array.from({ length: 40 }, (_, seed) => {
       const started = command(openSitting({ now, seed, player }), { do: "start" }, { now, seed: seed + 1, player });
       if (!started.ok) throw new Error(started.why);
