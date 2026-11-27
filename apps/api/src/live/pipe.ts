@@ -7,6 +7,12 @@ import type { Connection, Tally } from "./room.ts";
 /** How many frames may wait to go to one connection before it is taken to be stuck and closed. */
 export const MOST_WAITING = 1024;
 
+/**
+ * The codes a connection closed by its page itself ends with: done with it (1000), going (1001: a
+ * reload, a frame put away), or closed with no code given (1005). A drop has no closing at all (1006).
+ */
+const CLOSED_BY_PAGE: ReadonlySet<number> = new Set([CLOSE.done, 1001, 1005]);
+
 type Frame = string | Uint8Array | Socket.CloseEvent;
 
 /**
@@ -64,6 +70,16 @@ export class Pipe implements Connection {
 
   get closed(): boolean {
     return this.closedWith !== null;
+  }
+
+  /** Whether its page closed it itself, done with it or going, before Leaf did. */
+  get closedByPage(): boolean {
+    return this.closedWith === null && this.closedBy !== null && CLOSED_BY_PAGE.has(this.closedBy);
+  }
+
+  /** How it closed, as Live counts it: by Leaf, by its page, or dropped. */
+  get how(): "leaf" | "page" | "drop" {
+    return this.closedWith !== null ? "leaf" : this.closedByPage ? "page" : "drop";
   }
 
   /** Puts a frame in the line, for `pump` to write; says whether it did (not on a connection closed, or closing as stuck). */

@@ -27,6 +27,8 @@
  * In a visit's room (core's `visitRoom`) it hears what Leaf does to the state visited (`did`), and in
  * a camp's (`campRoom`) when the owner changed it (`changed`); what was done while it was not in the
  * room is never told, so a page hears a welcome after a drop as the moment to read the state again.
+ * What Leaf tells the player of their own (core's `Nudge`: a raid sitting they are at moved on) is
+ * heard on the connection whatever room it is in, or none (`nudged`).
  *
  * What it does not do is draw anybody. A page asks it each frame where somebody is to be drawn
  * (`sample`): their motion `INTERP_MS` behind the newest snapshots as they reach this page
@@ -40,9 +42,11 @@ import {
   decodeSnapshot,
   encodeMove,
   type GameId,
+  isNudge,
   type LiveMember,
   livePath,
   type Motion,
+  type Nudge,
   parsePlayerId,
   readToClient,
   reconnects,
@@ -147,6 +151,8 @@ export interface LiveEars {
   did?(rev: number, did: readonly unknown[], after: unknown, ids?: readonly string[]): void;
   /** In a camp's room: the owner changed the camp, as Leaf kept it at `rev` (core's `changed`). */
   changed?(rev: number): void;
+  /** Leaf's word that something the page reads has changed (core's `Nudge`), heard in any room or none. */
+  nudged?(n: Nudge): void;
   status?(s: LiveStatus): void;
 }
 
@@ -436,8 +442,18 @@ const inside = (c: Conn<Link>): Link | null => (c.at === "open" && c.room === "i
 /** The connection on its way or open now, if there is one. */
 const current = (c: Conn<Link>): Link | null => (c.at === "connecting" || c.at === "open" ? c.link : null);
 
+/**
+ * What Leaf said on the connection, but for a welcome and a pong, told to the page's ears: a nudge,
+ * the player's own, whatever room the connection is in; the room's, only while the page is in it
+ * (`shown`: welcomed into it, and not stepped out since).
+ */
+function said(l: Link, m: ToClient, ears: LiveEars, shown: boolean): void {
+  if (isNudge(m)) return ears.nudged?.(m);
+  if (shown) roomSaid(l, m, ears);
+}
+
 /** What the room a page is in said on its connection, but for its welcome and its pongs, told to the page's ears. */
-function roomSaid(l: Link, m: ToClient, ears: LiveEars): void {
+function roomSaid(l: Link, m: Exclude<ToClient, Nudge>, ears: LiveEars): void {
   switch (m.t) {
     case "joined":
       l.people.set(m.member.id, person(m.member));
@@ -627,8 +643,8 @@ export function joinLive(first: string, ears: LiveEars = {}): LiveRoom {
     const m = readToClient(text);
     if (m?.t === "welcome") return welcomed(l, m);
     if (m?.t === "pong") return l.clock?.add(m.c, m.s, outside.now());
-    // Before its welcome, and once the page has left the room it was welcomed into, nothing else counts.
-    if (m && shown() === l) roomSaid(l, m, ears);
+    // Before its welcome, and once the page has left the room it was welcomed into, only a nudge counts.
+    if (m) said(l, m, ears, shown() === l);
   }
 
   function snapshot(l: Link, data: ArrayBuffer): void {

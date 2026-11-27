@@ -39,7 +39,9 @@ async function later(ms: number): Promise<string> {
   });
   // Only the play server moves Leaf's clock: anywhere else, or failing, the tour stops here rather than shoot the wrong stage.
   if (moved.status !== 200) throw new Error(`Leaf's clock did not move (${moved.status}): is this the play server?`);
-  await liveLine()?.read();
+  liveLine()?.read();
+  // oxlint-disable-next-line no-await-in-loop -- waiting on Leaf, a moment at a time
+  for (let i = 0; i < 200 && liveLine()?.owed(); i++) await wait(25);
   await settled();
   return state();
 }

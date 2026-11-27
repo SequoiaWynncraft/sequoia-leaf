@@ -205,7 +205,8 @@ test("a table that closed before it started lets the member go, and says so", as
   takeUp(line);
   const told: (string | null)[] = [];
   onDone((why) => told.push(why));
-  await line.read();
+  line.read();
+  await until(() => liveLine() === null, 500);
   expect(liveLine()).toBeNull();
   expect(told).toEqual([CLOSED_UNSTARTED]);
 });
@@ -223,7 +224,8 @@ test("opened during a fight, the room's takings are told when the table goes on"
   takeUp(line);
   // The page is opened now: the member sits down to the fight already being fought.
   expect(sitAt()).toBe(true);
-  await line.read();
+  line.read();
+  await until(() => liveView()?.stage.at !== "fight", 500);
   const view = liveView();
   if (!view) throw new Error("no sitting");
   const paid = paidFor(view);
@@ -250,7 +252,8 @@ test("left in another tab: the next read shows the member without a seat, and th
   takeUp(line);
   const told: (string | null)[] = [];
   onDone((why) => told.push(why));
-  await line.read();
+  line.read();
+  await until(() => liveLine() === null, 500);
   expect(liveLine()).toBeNull();
   expect(told).toEqual([NOT_SEATED]);
 });

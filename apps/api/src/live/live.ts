@@ -3,6 +3,7 @@ import {
   decodeMove,
   type Device,
   isAct,
+  listensIn,
   LIVE_VERSION,
   type PlayerId,
   roomKind,
@@ -45,8 +46,10 @@ import {
   stopped,
   unlinked,
 } from "./lifecycle.ts";
+import { listenerOf, type Takes } from "./listen.ts";
 import { Pipe } from "./pipe.ts";
 import { NOWHERE, Player } from "./player.ts";
+import { LivePlayers } from "./players.ts";
 import { Rooms } from "./room.ts";
 import { ticking } from "./tick.ts";
 import { Watchers } from "./watchers.ts";
@@ -167,25 +170,43 @@ const FAREWELL_WAIT = Duration.millis(200);
 const FAREWELL_CLOSE = Duration.seconds(1);
 
 /**
- * Every connection's close at once, each as soon as its socket is free; and none waited for past
- * `FAREWELL_CLOSE`, should a socket ever take its time over a write.
+ * Every connection's close at once, presence and listener, each as soon as its socket is free; and
+ * none waited for past `FAREWELL_CLOSE`, should a socket ever take its time over a write.
  */
 const closeAll = (players: readonly Player[]): Effect.Effect<void> =>
-  Effect.forEach(players, (p) => p.pipe?.closeNow(CLOSE.restart, "restart") ?? Effect.void, {
-    concurrency: "unbounded",
-    discard: true,
-  }).pipe(Effect.timeout(FAREWELL_CLOSE), Effect.ignore);
+  Effect.forEach(
+    players.flatMap((p) => [p.pipe, p.listener]),
+    (pipe) => pipe?.closeNow(CLOSE.restart, "restart") ?? Effect.void,
+    { concurrency: "unbounded", discard: true },
+  ).pipe(Effect.timeout(FAREWELL_CLOSE), Effect.ignore);
+
+/** How many players there are, how many connections are open (presence and listeners), and who is in which room. */
+function censusOf(rooms: Rooms, players: ReadonlyMap<string, Player>): Census {
+  const inRooms: Record<string, number> = {};
+  for (const room of rooms.all()) inRooms[room.name] = room.size;
+  let connected = 0;
+  for (const p of players.values()) connected += (p.link.state === "open" ? 1 : 0) + (p.listener ? 1 : 0);
+  return { players: players.size, connected, rooms: inRooms };
+}
+
+/** Everybody in a room of one of the game's places, by place, as their visits write them. */
+function byPlaceOf(players: Iterable<Player>): Map<string, Visitor[]> {
+  const byPlace = new Map<string, Visitor[]>();
+  for (const p of players) {
+    const place = p.place.at === "room" ? placeOf(p.place.room.kindName) : null;
+    if (!place) continue;
+    const those = byPlace.get(place) ?? [];
+    those.push(inRoom(p));
+    byPlace.set(place, those);
+  }
+  return byPlace;
+}
 
 /** The longest text frame Leaf reads, in UTF-16 code units (as JavaScript counts a string's length). Every message the game sends is far shorter. */
 const MOST_TEXT = 512;
 
 /** How soon after a page closed its connection itself an opening of the player's is taken as the next page. */
 const HANDOFF_MS = 5000;
-/**
- * The codes a connection closed by its page itself ends with: done with it (1000), going (1001: a
- * reload, a frame put away), or closed with no code given (1005). A drop has no closing at all (1006).
- */
-const CLOSED_BY_PAGE: ReadonlySet<number> = new Set([CLOSE.done, 1001, 1005]);
 
 /** The most often a player's moves and acts are told to Leaf's count of their time (`Visits.acted`): it counts in half minutes. */
 const ACTED_EVERY = 10_000;
@@ -213,6 +234,8 @@ interface Attached {
   readonly socket: Socket.Socket;
   readonly pipe: Pipe;
   readonly p: Player;
+  /** What it does with what its page sends, for a listener (`listen.ts`); a presence connection's is `take`. */
+  readonly takes?: Takes;
 }
 
 /** What a page opening a connection says of itself: what it is on, and the version of the wire it speaks. */
@@ -240,13 +263,23 @@ export interface Page {
  * (`Watchers`): in a visit's room (`visitRoom`: somebody's yard, from Top yards), each batch done to
  * the state visited; in a camp's (`campRoom`), each that changed what a visitor sees of it. Neither
  * is a place, so nobody's presence there is written: a page in a camp says where it is itself.
+ *
+ * The players it holds are kept by Leaf id in one map (`LivePlayers`), through which the rest of Leaf
+ * tells a player something of their own, on every connection they have: that a raid sitting they are
+ * at moved on (core's `Nudge`).
+ *
+ * A connection opened into a room of a listening kind (core's `RoomKind.listens`: the open tables')
+ * is the player's listener (`listen.ts`), beside their presence connection: in no room, seen by
+ * nobody, neither replacing their presence connection nor replaced by it; a new listener replaces
+ * only the old one. A player is one place among `mostPlayers` whatever connections they have, so
+ * Live holds at most two connections for each.
  */
 export class Live extends Context.Service<
   Live,
   {
     /**
-     * Lets a player open a connection into a room of a kind, unless Live is full (`full`) or they
-     * open them too fast (`busy`). Their place among the players is taken, and held, before
+     * Lets a player open a connection into a room of a kind (into a listening one, their listener:
+     * `listen.ts`), unless Live is full (`full`) or they open them too fast (`busy`). Their place among the players is taken, and held, before
      * `upgrade` opens the socket, so that nobody can slip in between. Once it is open it is theirs,
      * and they are in the room, greeted, in one step. Then it is served until it closes, Leaf stops,
      * or `session` (asked every `recheckMs`) says the player's session has ended. Of the page, what
@@ -283,7 +316,9 @@ export class Live extends Context.Service<
       const watchers = yield* Watchers;
       const tallies = yield* Tallies;
       const rooms = new Rooms();
-      const players = new Map<string, Player>();
+      // By Leaf id, where the rest of Leaf can tell a player something of their own (`LivePlayers`).
+      const livePlayers = yield* LivePlayers;
+      const players = livePlayers.held;
       const counts = new LiveCounts();
       /** Leaf's stop: while it is not running, no connection is let in, and one still opening is told to come back. */
       let stop: Stop = "running";
@@ -379,7 +414,7 @@ export class Live extends Context.Service<
       };
       /** Puts a player in a room of a kind and greets them there (`enter`); says whether it did. */
       const welcome = (p: Player, kindName: string, now: number): boolean => {
-        if (roomKind(kindName) === undefined) {
+        if (roomKind(kindName) === undefined || listensIn(kindName)) {
           p.send(say({ t: "error", code: "unknown_room" }));
           return false;
         }
@@ -493,30 +528,18 @@ export class Live extends Context.Service<
       // Everybody in a room of one of the game's places is there still, as their game would say.
       const stillHere = Effect.flatMap(Clock.currentTimeMillis, (now) =>
         Effect.sync(() => {
-          const byPlace = new Map<string, Visitor[]>();
-          for (const p of players.values()) {
-            const place = p.place.at === "room" ? placeOf(p.place.room.kindName) : null;
-            if (!place) continue;
-            const those = byPlace.get(place) ?? [];
-            those.push(inRoom(p));
-            byPlace.set(place, those);
-          }
-          for (const [place, those] of byPlace)
+          for (const [place, those] of byPlaceOf(players.values()))
             Queue.offerUnsafe(whereabouts, { kind: "in", players: those, place, at: now });
         }),
       );
       yield* Effect.forkScoped(Effect.repeat(stillHere, Schedule.spaced(Duration.millis(tuning.presenceMs))));
 
-      const censusNow = (): Census => {
-        const inRooms: Record<string, number> = {};
-        for (const room of rooms.all()) inRooms[room.name] = room.size;
-        let connected = 0;
-        for (const p of players.values()) if (p.link.state === "open") connected++;
-        return { players: players.size, connected, rooms: inRooms };
-      };
-      const line = yield* reportLive(counts, censusNow, watchers.told);
+      const censusNow = (): Census => censusOf(rooms, players);
+      const line = yield* reportLive(counts, censusNow, () => watchers.told() + livePlayers.told());
 
       // ---- connections ----
+
+      const listener = listenerOf({ counts, watchers, running: () => stop === "running" });
 
       /**
        * Opens a player's connection and makes it theirs, in one step once the socket is open: it
@@ -541,9 +564,8 @@ export class Live extends Context.Service<
             Effect.flatMap(Clock.currentTimeMillis, (now) =>
               Effect.suspend(() => {
                 // Closed by the page itself, done with it or going: what opens next may be its next page.
-                const clean = pipe.closedWith === null && pipe.closedBy !== null && CLOSED_BY_PAGE.has(pipe.closedBy);
-                counts.closed(pipe.closedWith !== null ? "leaf" : clean ? "page" : "drop");
-                const after = unlinked(p.link, pipe, pipe.closedWith === CLOSE.signedOut, now, clean);
+                counts.closed(pipe.how);
+                const after = unlinked(p.link, pipe, pipe.closedWith === CLOSE.signedOut, now, pipe.closedByPage);
                 if (after === null) return Effect.void;
                 // The link and what it means for the room change in this one step: a connection of
                 // theirs that opens next finds them either still here or already gone, never between.
@@ -576,8 +598,8 @@ export class Live extends Context.Service<
           return { socket, pipe, p } satisfies Attached;
         });
 
-      /** Serves an open connection: what goes out, the session's watch, and what comes in. */
-      const serve = (socket: Socket.Socket, pipe: Pipe, p: Player, session: Effect.Effect<boolean>) =>
+      /** Serves an open connection: what goes out, the session's watch, and what comes in (`takes`). */
+      const serve = (socket: Socket.Socket, pipe: Pipe, p: Player, session: Effect.Effect<boolean>, takes: Takes) =>
         Effect.gen(function* () {
           yield* Effect.forkScoped(pipe.pump());
           // The connection lasts only as long as the session: once it has ended, this connection closes.
@@ -594,7 +616,7 @@ export class Live extends Context.Service<
             Effect.flatMap(pull, (frames) =>
               Effect.sync(() => {
                 const now = clock.currentTimeMillisUnsafe();
-                for (const frame of frames) if (!pipe.closed) take(p, frame, now);
+                for (const frame of frames) if (!pipe.closed) takes(p, frame, now);
               }),
             ),
           );
@@ -619,17 +641,22 @@ export class Live extends Context.Service<
           // The player's place is held while the socket opens, however long it takes, and let go
           // once it is theirs or never opened: deciding, taking it and promising to let it go are
           // one step that nothing can come between.
+          const listens = listensIn(kindName);
           const admitted = yield* Effect.acquireUseRelease(
-            Effect.sync(() => admit(identity, now)),
+            Effect.sync(() => admit(identity, now, listens)),
             (a): Effect.Effect<Turned | Attached | null, never, Scope.Scope> =>
-              a instanceof Player ? attach(a, identity, kindName, upgrade, page) : Effect.succeed(a),
+              !(a instanceof Player)
+                ? Effect.succeed(a)
+                : listens
+                  ? listener(a, kindName, upgrade, page.speaks ?? LIVE_VERSION)
+                  : attach(a, identity, kindName, upgrade, page),
             (a) =>
               Effect.sync(() => {
                 if (a instanceof Player) a.opening--;
               }),
           );
           if (typeof admitted === "string") return admitted;
-          if (admitted) yield* serve(admitted.socket, admitted.pipe, admitted.p, session);
+          if (admitted) yield* serve(admitted.socket, admitted.pipe, admitted.p, session, admitted.takes ?? take);
           return "served" as const;
         });
 
@@ -637,16 +664,18 @@ export class Live extends Context.Service<
        * Whether a player may open a connection now, and if so, their place among the players, held
        * (`opening`) for the socket to open: looked for, counted and taken in one step, so that no
        * two can both take the last place. Turned away while Leaf stops, past `mostPlayers`, or for
-       * opening too often; going from one of their pages to another is charged as that.
+       * opening too often; going from one of their pages to another is charged as that, but for a
+       * listener (`listens`), which takes an opening proper and is the player's place as their
+       * presence is.
        */
-      const admit = (identity: Identity, now: number): Player | Turned => {
+      const admit = (identity: Identity, now: number, listens: boolean): Player | Turned => {
         if (stop !== "running") return "stopping";
         const id = identity.playerId;
         const known = players.get(id);
         if (!known && players.size >= tuning.mostPlayers) return "full";
         const p = known ?? new Player(identity, now);
         players.set(id, p);
-        if (handsOver(p.link, now, HANDOFF_MS) && p.handoffs.take(now)) {
+        if (!listens && handsOver(p.link, now, HANDOFF_MS) && p.handoffs.take(now)) {
           p.link = handedOver(p.link);
           counts.handedOver();
         } else if (!p.opens.take(now)) return "busy";

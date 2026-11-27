@@ -15,6 +15,7 @@ import { SqlClient } from "effect/sql";
 import { Coins } from "../play/coins.ts";
 import { PlayStore } from "../play/store.ts";
 import { type Place, type SittingStore, sittingStore, type Writing } from "./store.ts";
+import { sittingsTold } from "./told.ts";
 
 /** What is stored moved on while a job worked from what it read: another job wrote it, or a seat was taken elsewhere. */
 export class Lost extends Data.TaggedError("Lost") {}
@@ -182,13 +183,15 @@ export const sittingWrites = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   const store = yield* sittingStore;
   const { follow, answer } = followsIn(yield* Coins, yield* PlayStore, store);
+  const tell = yield* sittingsTold;
 
   return {
     store,
     /**
      * Keeps `next`, worked out from what was `from`, with what it owed paid off; and with `asked`, the
      * answers to those commands. Written only if it changed; but answers are kept whenever there are
-     * some, at the `rev` stored. Gives back the `rev` it is at and the sitting kept.
+     * some, at the `rev` stored. Once a change is kept, whoever is at the sitting is told (`told.ts`).
+     * Gives back the `rev` it is at and the sitting kept.
      */
     keep: (id: string, from: Loaded, next: Sitting, now: number, asked?: Asked) =>
       Effect.gen(function* () {
@@ -215,12 +218,13 @@ export const sittingWrites = Effect.gen(function* () {
             }),
           )
           .pipe(Effect.catchTag("SqlError", Effect.die));
+        if (changed) tell(id, rev, from.sitting, after);
         return { rev, sitting: after };
       }),
     /**
      * Stores a new sitting, its opener seated and the opening logged, in one transaction that counts
      * the sittings not over first: `Full` at `MOST_NOT_OVER`, `Lost` when the opener is seated at
-     * another. Either way nothing is kept.
+     * another. Either way nothing is kept. Once it is kept, the open tables' room is told (`told.ts`).
      */
     create: (id: string, t: Sitting, now: number) =>
       Effect.gen(function* () {
@@ -235,6 +239,7 @@ export const sittingWrites = Effect.gen(function* () {
             }),
           )
           .pipe(Effect.catchTag("SqlError", Effect.die));
+        tell(id, 0, null, t);
       }),
   };
 });

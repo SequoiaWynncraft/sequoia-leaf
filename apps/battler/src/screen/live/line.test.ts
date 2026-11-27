@@ -39,7 +39,7 @@ async function until(holds: () => boolean, tries = 50): Promise<void> {
 let world: Standin | null = null;
 afterEach(() => world?.done());
 
-test("two reads on their way at once: the older answer, coming last, does not roll the table back", async () => {
+test("one read at a time: an ask during a read makes one more after it, and an older answer never rolls the table back", async () => {
   const [one, two, three] = revisions();
   if (!one || !two || !three) throw new Error("no sitting");
   const answers: ((reply: Reply) => void)[] = [];
@@ -49,22 +49,25 @@ test("two reads on their way at once: the older answer, coming last, does not ro
   const held = scope();
   const line = openLine(held, "s1", "leaf-0", answer(1, one));
   if (!line) throw new Error("no line");
-  // A deadline's read and the page coming back, both on their way.
-  const first = line.read();
-  const second = line.read();
-  await until(() => answers.length >= 2);
-  expect(answers.length).toBe(2);
-  answers[1]?.({ status: 200, body: answer(3, three) });
-  await second;
+  // A deadline's ask and the page coming back: one read on its way, and one owed after it.
+  line.read();
+  await until(() => answers.length >= 1, 500);
+  line.read();
+  await Bun.sleep(150);
+  expect(answers.length).toBe(1);
+  answers[0]?.({ status: 200, body: answer(3, three) });
+  await until(() => answers.length >= 2, 500);
   expect(line.view).toEqual(sittingView(three, "leaf-0"));
-  answers[0]?.({ status: 200, body: answer(2, two) });
-  await first;
+  // The second read is answered with an older revision (as a slow server's might be): it is not taken.
+  answers[1]?.({ status: 200, body: answer(2, two) });
+  await Bun.sleep(150);
+  expect(answers.length).toBe(2);
   expect(line.view).toEqual(sittingView(three, "leaf-0"));
   // A read Leaf answers unchanged changes nothing.
-  const third = line.read();
-  await until(() => answers.length >= 3);
+  line.read();
+  await until(() => answers.length >= 3, 500);
   answers[2]?.({ status: 200, body: { id: "s1", rev: 3, now: new Date(1000).toISOString(), unchanged: true } });
-  await third;
+  await Bun.sleep(150);
   expect(line.view).toEqual(sittingView(three, "leaf-0"));
   line.close();
   held.close();
