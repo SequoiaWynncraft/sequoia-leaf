@@ -16,7 +16,7 @@ import {
   ECONOMY,
   FIGHT,
   type FigureId,
-  finishedIn,
+  halvesOf,
   isMemberId,
   itemName,
   LOOK_KINDS,
@@ -207,7 +207,7 @@ function almanac(): HTMLElement {
     const made = el("div", "tiles small", {});
     for (const id of catalogOf(S).ids.finished) {
       const have = a.forged.includes(id);
-      const [x, y] = finishedIn(catalogOf(S), id).made;
+      const [x, y] = halvesOf(catalogOf(S), id);
       const tile = el(
         "button",
         `k-card tile${have ? "" : " unmet"}`,

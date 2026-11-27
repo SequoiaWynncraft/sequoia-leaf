@@ -6,7 +6,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { abilityNumber, type Stars, type UnitKind } from "../content/figures.ts";
-import { finishedIn, type ItemId, itemStats } from "../content/items.ts";
+import { type ItemId, itemNumber, itemStats } from "../content/items.ts";
 import { FIGHT } from "../content/rooms.ts";
 import { cellAt, cone, distance, line, neighbours, rowOf, within } from "../hex.ts";
 import type { Placed } from "../party.ts";
@@ -794,7 +794,7 @@ describe("an ability in flight keeps the strength it was used with", () => {
   // A Fairy Ring makes its holder's ability power grow the moment its ability is used, before
   // anything the ability sent has landed: the use it grew after keeps the strength it had.
   const RING: ItemId[] = ["fairyring"];
-  const GROW = finishedIn(CAT, "fairyring").n.grow ?? 0;
+  const GROW = itemNumber(CAT, "fairyring", "grow");
   /** The caster's ring went off, and only after that did anything the ability sent arrive. */
   function grewFirst(events: readonly FightEvent[], u: Unit, start: number, arrived: FightEvent["t"]): void {
     const grew = events.findIndex((e) => e.t === "item" && e.id === u.id && e.item === "fairyring");

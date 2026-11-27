@@ -4,23 +4,29 @@ import { readRows } from "@sequoia-leaf/figures/rows.ts";
  * The small pictures: one for every trait, component, finished item and boon, the three kinds of
  * room, the Wilds' rules, and the few signs the buttons carry. Typed as rows of letters like the
  * figures and kept as text (`icons.txt`), baked once with a dark edge, and handed out as fresh little
- * canvases to put on the page. An emblem is its kin's own sign.
+ * canvases to put on the page. An emblem is the sign of the trait it grants.
  */
 import { GOLD, INK, PAPER } from "@sequoia-leaf/kit/palette.ts";
 import { bitmap, outlined } from "@sequoia-leaf/kit/pix.ts";
 import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
 import type { BoonId } from "@sequoia-leaf/raid/content/boons.ts";
 import { catalogAt } from "@sequoia-leaf/raid/content/catalog.ts";
-import { type EmblemId, emblemKin, isComponentId, isEmblemId, type ItemId } from "@sequoia-leaf/raid/content/items.ts";
+import {
+  type EmblemId,
+  emblemTrait,
+  isComponentId,
+  isEmblemId,
+  type ItemId,
+} from "@sequoia-leaf/raid/content/items.ts";
 import { LAST_ERA } from "@sequoia-leaf/raid/content/releases.ts";
 import type { RoomKind } from "@sequoia-leaf/raid/content/rooms.ts";
-import type { KinId, TraitId } from "@sequoia-leaf/raid/content/traits.ts";
+import type { TraitId } from "@sequoia-leaf/raid/content/traits.ts";
 import type { RuleId } from "@sequoia-leaf/raid/content/wilds.ts";
 
 import text from "./icons.txt";
 
-/** An emblem's picture is its kin's sign: as the catalogue with every release open has it, so there is a picture of any emblem any release brings. */
-const kinOf = (id: EmblemId): KinId => emblemKin(catalogAt(LAST_ERA), id);
+/** An emblem's picture is the sign of the trait it grants: as the catalogue with every release open has it, so there is a picture of any emblem any release brings. */
+const grantedOf = (id: EmblemId): TraitId => emblemTrait(catalogAt(LAST_ERA), id);
 
 const ROWS = readRows(text);
 /** A picture's rows from `icons.txt`, by its kind and its id. */
@@ -71,7 +77,7 @@ function copy(src: HTMLCanvasElement): HTMLCanvasElement {
 export const traitPic = (id: TraitId): HTMLCanvasElement => bakedOf(`t:${id}`, rowsOf("trait", id));
 export const traitIcon = (id: TraitId): HTMLCanvasElement => copy(traitPic(id));
 export const itemPic = (id: ItemId): HTMLCanvasElement =>
-  isEmblemId(id) ? traitPic(kinOf(id)) : bakedOf(`i:${id}`, rowsOf("item", id));
+  isEmblemId(id) ? traitPic(grantedOf(id)) : bakedOf(`i:${id}`, rowsOf("item", id));
 export const itemIcon = (id: ItemId): HTMLCanvasElement => copy(itemPic(id));
 export const glyphPic = (id: Glyph): HTMLCanvasElement => bakedOf(`g:${id}`, rowsOf("glyph", id), id !== "hand");
 export const glyph = (id: Glyph): HTMLCanvasElement => copy(glyphPic(id));
@@ -90,7 +96,7 @@ export function boonIcon(id: BoonId): HTMLCanvasElement {
   const rows = ROWS.get(`boon ${id}`);
   if (rows) return copy(bakedOf(`b:${id}`, rows));
   if (!isEmblemId(id)) return copy(glyphPic("acorn"));
-  const sign = traitPic(kinOf(id));
+  const sign = traitPic(grantedOf(id));
   const { c, g } = makeCanvas(sign.width, sign.height + 3);
   g.fillStyle = PAL.c ?? "#e9d8b8";
   g.fillRect(Math.floor(sign.width / 2) - 1, 0, 1, 3);
@@ -142,7 +148,7 @@ export function heldPic(id: ItemId): HTMLCanvasElement {
   const key = `h:${id}`;
   let c = baked.get(key);
   if (!c) {
-    const pic = bitmap(halved(isEmblemId(id) ? rowsOf("trait", kinOf(id)) : rowsOf("item", id)), PAL);
+    const pic = bitmap(halved(isEmblemId(id) ? rowsOf("trait", grantedOf(id)) : rowsOf("item", id)), PAL);
     c = outlined(pic, isComponentId(id) ? INK : GOLD[2]);
     baked.set(key, c);
   }

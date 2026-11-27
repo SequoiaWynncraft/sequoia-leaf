@@ -1,5 +1,3 @@
-import { draw32, type Met, mix, pick, shuffled } from "@sequoia-leaf/core";
-
 /**
  * A run: one little raid, from the first pick to the last room. It is plain data (so it saves as it
  * is) and a set of actions on it. Every action either does something and gives back notes on what
@@ -15,10 +13,15 @@ import { draw32, type Met, mix, pick, shuffled } from "@sequoia-leaf/core";
  * each room, the components and boons on offer, each fight's seed. `seed` is only where the stream
  * started; nothing the run draws is worked out from it after that.
  */
-import { type BoonId, boonIn, boonNumber, boonOr, FIGHT_BOONS } from "./content/boons.ts";
+
+import { draw32, type Met, mix, pick, shuffled } from "@sequoia-leaf/core";
+
+import { chairsOn, overfills } from "./chairs.ts";
+import { type BoonId, boonIn, boonNumber, boonOr, FIGHT_BOONS, giftOf, giftsTrait } from "./content/boons.ts";
 import { type Catalog, catalogOf, type Era } from "./content/catalog.ts";
-import { type BossId, type FigureId, figureIn, type Stars } from "./content/figures.ts";
-import { type ComponentId, emblemKin, type FinishedId, holdItem, isEmblemId, type ItemId } from "./content/items.ts";
+import { type BossId, type FigureId, figureIn, type Stars, traitsOf } from "./content/figures.ts";
+import type { ComponentId, FinishedId, ItemId } from "./content/items.ts";
+import { holdItem } from "./content/recipes.ts";
 import { ECONOMY, MAX_LEVEL, type RoomKind, ROOMS, sellPrice } from "./content/rooms.ts";
 import { topStep, type TraitId, traitNumber } from "./content/traits.ts";
 import { drawOffer, starters } from "./draws.ts";
@@ -28,6 +31,7 @@ import { resolveFight } from "./fight/engine.ts";
 import type { FightResult, FightSetup, FightSummary } from "./fight/types.ts";
 import { across, foeOf } from "./foe.ts";
 import { COLS, SEATS } from "./hex.ts";
+import { handOver, takeMade } from "./made.ts";
 import { placedOf } from "./own.ts";
 import { type Party, type TraitState, traitStates, traitSteps } from "./party.ts";
 import { closedNow, roomOf, type RoomRun, setupRules } from "./room.ts";
@@ -196,9 +200,10 @@ export type Note =
   | { t: "held"; on: boolean }
   | { t: "xp"; gained: number; cost: number }
   | { t: "level"; level: number }
-  | { t: "gave"; item: ItemId; piece: number; forged: FinishedId | null; holds: ItemId[] }
-  /** Two components on the rack became a finished item, which is at this place on it now. */
-  | { t: "made"; item: FinishedId; at: number }
+  /** An item handed over, and the item it made with one held (`combine`), if it made one. */
+  | { t: "gave"; item: ItemId; piece: number; forged: ItemId | null; holds: ItemId[] }
+  /** Two items on the rack made an item (`combine`), which is at this place on it now. */
+  | { t: "made"; item: ItemId; at: number }
   | { t: "acorns"; why: AcornsWhy; amount: number }
   /** Items put on the item bench by a boon: A Basket On The Stump's components, or a charm's emblem. */
   | { t: "items"; why: "basket" | "charm"; items: ItemId[] }
@@ -239,6 +244,7 @@ export const REFUSALS = {
   hands_full: "It is holding all it can.",
   already_kin: "It is of that origin already.",
   two_components: "It takes two components.",
+  boon_held: "You have that boon already.",
   board_empty: "Put somebody on the board first.",
   too_many_fielded: "There are more on the board than you can field.",
   no_fight: "There has been no fight yet.",
@@ -271,7 +277,7 @@ const yes = (notes: Note[]): Done => ({ ok: true, notes });
 export const pieces = (run: Pick<Run, "board" | "bench">): Piece[] =>
   [...run.board, ...run.bench].filter((p) => p !== null);
 export const fielded = (run: Pick<Run, "board">): number => run.board.reduce((n, p) => n + (p ? 1 : 0), 0);
-/** How many figures may be fielded in the room the run is in (`Room.chairs`): the level, one more with An Extra Chair, and an endless run's chairs. */
+/** How many chairs the room the run is in has (`Room.chairs`): the level, one more with An Extra Chair, and an endless run's chairs. */
 export const fieldCap = (run: RoomRun): number => roomOf(run).chairs;
 /** Who is at a spot: null for nobody, undefined for no such spot. */
 export function pieceAt(run: RunView, spot: Spot): Piece | null | undefined {
@@ -346,9 +352,10 @@ function restock(run: Run): void {
 
 /** The boons a run is offered after a room: three of those its catalogue has open (`cat`, its era's), one charm at most. */
 export function boonOptions(run: Run, not: readonly BoonId[], cat = catalogOf(run)): BoonId[] {
-  const kins = new Set(pieces(run).map((p) => figureIn(cat, p.kind).kin));
-  // A charm only for a kin the party owns a figure of.
-  const fits = (id: BoonId) => !run.boons.includes(id) && (!isEmblemId(id) || kins.has(emblemKin(cat, id)));
+  const owned = new Set(pieces(run).flatMap((p) => traitsOf(cat, p.kind)));
+  // A charm only for a trait the party owns a figure of.
+  const owns = (trait: TraitId | undefined): boolean => trait === undefined || owned.has(trait);
+  const fits = (id: BoonId) => !run.boons.includes(id) && owns(giftsTrait(cat, id));
   const all = cat.ids.boons.filter(fits);
   const fresh = all.filter((id) => !not.includes(id));
   const left = fresh.length >= ECONOMY.boonOptions ? fresh : all;
@@ -503,10 +510,10 @@ export function choose(run: Run, option: number): Done {
       while (run.stall.length < stallSize(run)) run.stall.push(drawOffer(run));
     } else if (boon === "regular") {
       run.rustles += boonNumber(cat, boon, "rustles");
-    } else if (isEmblemId(boon)) {
-      // A charm is its emblem, for one figure to hold.
-      run.items.push(boon);
-      notes.push({ t: "items", why: "charm", items: [boon] });
+    } else if (boonIn(cat, boon).gives) {
+      // A charm gives its emblem, for one figure to hold.
+      run.items.push(...giftOf(cat, boon));
+      notes.push({ t: "items", why: "charm", items: giftOf(cat, boon) });
     }
   }
   stage.picks.shift();
@@ -561,15 +568,7 @@ export function merge(run: RunView, loose: Piece | null, notes: Note[]): void {
       if (from?.on === "board") run.board[from.at] = null;
       else if (from) run.bench[from.at] = null;
       else spare = null;
-      for (const item of gone.items) {
-        const got = holdItem(catalogOf(run), keep, item);
-        if ("refused" in got) {
-          spilled.push(item);
-          continue;
-        }
-        keep.items = got.held;
-        if (got.forged) remember(run.seen.forged, got.forged);
-      }
+      for (const item of gone.items) if (!handOver(run, keep, item, notes)) spilled.push(item);
       keep.fed = Math.min(traitNumber(catalogOf(run), "greg", "most", 1), keep.fed + gone.fed);
     }
     keep.stars = keep.stars === 1 ? 2 : 3;
@@ -637,7 +636,7 @@ export function move(run: RunView, from: Spot, to: Spot): Done {
   if (!piece) return no("nobody_there");
   if (from.on === to.on && from.at === to.at) return no("already_there");
   if (to.on === "board" && closedNow(run).has(to.at)) return no("closed_hex");
-  if (!there && to.on === "board" && from.on === "bench" && fielded(run) >= fieldCap(run)) {
+  if (to.on === "board" && from.on === "bench" && overfills(run, piece, there)) {
     return no("field_full", fieldCap(run));
   }
   put(run, to, piece);
@@ -697,8 +696,8 @@ export function buyXp(run: RunView): Done {
   return yes(notes);
 }
 /**
- * Hands an item from the item bench to a figure. Two components on one figure become a finished
- * item; an emblem is not given to a figure of its kin already.
+ * Hands an item from the item bench to a figure. Two items a recipe joins become what they make
+ * (`holdItem`); nothing is given that grants a trait its holder carries already.
  */
 export function giveItem(run: RunView, itemAt: number, to: Spot): Done {
   const stop = notPlanning(run);
@@ -709,10 +708,11 @@ export function giveItem(run: RunView, itemAt: number, to: Spot): Done {
   if (!piece) return no("nobody_there");
   const got = holdItem(catalogOf(run), piece, item);
   if ("refused" in got) return no(got.refused);
+  const made = takeMade(run, got.made);
+  if (!made) return no("boon_held");
   piece.items = got.held;
   run.items.splice(itemAt, 1);
-  if (got.forged) remember(run.seen.forged, got.forged);
-  return yes([{ t: "gave", item, piece: piece.id, forged: got.forged, holds: piece.items.slice() }]);
+  return yes([{ t: "gave", item, piece: piece.id, forged: got.forged, holds: piece.items.slice() }, ...made]);
 }
 
 // ---------- the fight and the takings ----------
@@ -726,7 +726,7 @@ export function beginFight(run: Run): Begun {
   const stop = notPlanning(run);
   if (stop) return no(stop);
   if (fielded(run) === 0) return no("board_empty");
-  if (fielded(run) > fieldCap(run)) return no("too_many_fielded");
+  if (chairsOn(run) > fieldCap(run)) return no("too_many_fielded");
   for (const p of run.board) if (p) remember(run.seen.fielded, p.kind);
   for (const t of traitsNow(run)) if (t.step >= topStep(catalogOf(run), t.trait)) remember(run.seen.topped, t.trait);
   const sides: FightSetup["sides"] = [partyOf(run), structuredClone(run.foe)];

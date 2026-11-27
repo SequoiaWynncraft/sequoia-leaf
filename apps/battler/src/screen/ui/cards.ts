@@ -30,10 +30,10 @@ import {
   drawReach,
   drawTip,
   ECONOMY,
-  emblemKin,
+  emblemTrait,
   type FigureId,
   figureIn,
-  finishedIn,
+  giftsTrait,
   isBoonId,
   isComponentId,
   isEmblemId,
@@ -42,6 +42,7 @@ import {
   isTraitId,
   itemAdds,
   type ItemId,
+  itemIn,
   itemName,
   itemQuip,
   itemShort,
@@ -209,7 +210,7 @@ export function figureDesc(cat: Catalog, kind: UnitKind, stars: Stars, extras: F
   const count = (t: TraitId): TraitCount | null =>
     extras.party ? traitCount(cat, extras.party, t) : extras.run ? ownTraitCount(extras.run, t) : null;
   const items = extras.items ?? u?.items ?? [];
-  // Its own traits, then the kin of any emblem it holds.
+  // Its own traits, then the trait of any emblem it holds.
   const [kin, calling, ...more] = carriedTraits(cat, kind, items);
   const chip = (t: TraitId | undefined, label: string): Chip | null => {
     if (!t) return null;
@@ -394,7 +395,7 @@ const itemBrief = (cat: Catalog, id: ItemId): string =>
   [itemAdds(cat, id).join(" · "), isComponentId(id) ? "" : itemShort(cat, id)].filter((part) => part !== "").join(". ");
 
 /**
- * An item: what it adds and does, and what it is made of or makes (or for an emblem, its kin). A
+ * An item: what it adds and does, and what it is made of or makes (or for an emblem, its trait). A
  * component's "makes" lines put first, lit and tagged "have", the ones whose other half the party
  * already holds. At the end of each line, the fielded figures that want what it makes (`wantedBy`).
  */
@@ -405,14 +406,14 @@ export function itemDesc(cat: Catalog, id: ItemId, run: RunView | null, itemAt =
     blocks.push({ body: el("i", "k-dim quip", { text: itemQuip(cat, id) }) });
   }
   if (isEmblemId(id)) {
-    const kin = emblemKin(cat, id);
+    const trait = emblemTrait(cat, id);
     return {
       name: itemName(cat, id),
       icon: itemIcon(id),
       brief: itemBrief(cat, id),
       tag: "An emblem",
       blocks,
-      chips: [{ label: "Origin", text: traitIn(cat, kin).name, icon: traitIcon(kin), ref: traitRef(kin) }],
+      chips: [{ label: sortWord(trait), text: traitIn(cat, trait).name, icon: traitIcon(trait), ref: traitRef(trait) }],
     };
   }
   return {
@@ -423,7 +424,7 @@ export function itemDesc(cat: Catalog, id: ItemId, run: RunView | null, itemAt =
     blocks,
     rows: isComponentId(id)
       ? [{ label: "With", things: makesLines(cat, id, run, itemAt) }]
-      : [{ label: "Made from", things: finishedIn(cat, id).made.map((c) => ({ ref: itemRef(c) })) }],
+      : [{ label: "Made from", things: (itemIn(cat, id).made ?? []).map((c) => ({ ref: itemRef(c) })) }],
   };
 }
 
@@ -450,7 +451,7 @@ export function makesLines(cat: Catalog, id: ItemId, run: RunView | null, itemAt
 
 export function boonDesc(cat: Catalog, id: BoonId): Description {
   const spec = boonIn(cat, id);
-  const kin = isEmblemId(id) ? emblemKin(cat, id) : undefined;
+  const kin = giftsTrait(cat, id);
   return {
     name: spec.name,
     icon: boonIcon(id),

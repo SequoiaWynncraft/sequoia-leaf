@@ -5,7 +5,6 @@ import { below, draw32, mix, type Stream } from "@sequoia-leaf/core";
 import { planRoom, SENSIBLE } from "../bot.ts";
 import { COMMANDS } from "../command.ts";
 import { type FigureId, figureIn } from "../content/figures.ts";
-import { forge } from "../content/items.ts";
 import { PAYOUT } from "../content/keepsakes.ts";
 import { LEGACY_ERA } from "../content/releases.ts";
 import { BOSS_ROOMS, ECONOMY, ROOM_COUNT } from "../content/rooms.ts";
@@ -571,7 +570,7 @@ describe("the carousel", () => {
       pieces(run)
         .filter((p) => p.kind === twin)
         .map((p) => [p.stars, p.items]),
-    ).toEqual([[2, [forge(CAT, "bark", "bark"), "thorn"]]]);
+    ).toEqual([[2, ["stump", "thorn"]]]);
     expect(pieces(run).length).toBe(ECONOMY.bench);
   });
 });
@@ -657,7 +656,7 @@ describe("what people do", () => {
     expect(readCommand({ ...forging, id: "x" })).toEqual(forging);
     const answer = command(t, forging, call(now, 8, 1));
     if (!answer.ok) throw new Error(answer.code);
-    expect(seat(answer.sitting, 1).run.items).toEqual([forge(CAT, "bark", "thorn")]);
+    expect(seat(answer.sitting, 1).run.items).toEqual(["hedgehog"]);
     expect(predict(sittingView(t, member(1).id), forging)).toEqual({
       view: sittingView(answer.sitting, member(1).id),
       notes: answer.notes,

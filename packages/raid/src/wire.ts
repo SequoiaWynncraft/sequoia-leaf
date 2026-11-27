@@ -214,7 +214,7 @@ function runNote(n: Record<string, unknown>): Note {
         t: "gave",
         item: one(n.item, isItemId, what),
         piece: piece(n.piece),
-        forged: n.forged === null ? null : one(n.forged, isFinishedId, what),
+        forged: n.forged === null ? null : one(n.forged, isItemId, what),
         holds: items(n.holds, what),
       };
     case "acorns":
@@ -282,7 +282,7 @@ function noteOf(v: unknown): RaidNote {
       return id === null ? bad("a note") : { t: "look", kind, id };
     }
     case "made":
-      return { t: "made", item: one(n.item, isFinishedId, "a note"), at: whole(n.at, 0, 399, "a note") };
+      return { t: "made", item: one(n.item, isItemId, "a note"), at: whole(n.at, 0, 399, "a note") };
     case "shifted":
       return { t: "shifted", piece: piece(n.piece), from: whole(n.from, 0, 63, "a note"), to: spot(n.to, "a note") };
     case "ended":

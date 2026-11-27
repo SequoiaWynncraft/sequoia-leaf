@@ -9,6 +9,7 @@ import { el } from "@sequoia-leaf/kit/dom.ts";
 import { member } from "@sequoia-leaf/kit/live.ts";
 import {
   chairsOf,
+  chairsOn,
   ECONOMY,
   ENDLESS,
   fieldCap,
@@ -22,7 +23,7 @@ import {
 } from "@sequoia-leaf/raid";
 import { nowCalled, regularOf } from "@sequoia-leaf/raid/content/rooms.ts";
 
-import { roomIcon } from "../art/icons.ts";
+import { glyph, roomIcon } from "../art/icons.ts";
 import { acrossName } from "../logic.ts";
 import { S } from "../state.ts";
 import { pic } from "./cards.ts";
@@ -104,6 +105,9 @@ export function renderTrack(run: RunView): void {
 /** An endless run's chairs, for the level's plaque: how many figures it may field, once a boss past the fifteenth room has given one (hidden until then). */
 export const chairsTag = (run: RunView): HTMLElement =>
   el("span", "k-leafy chairs", { text: `Chairs: ${fieldCap(run)}`, hidden: chairsOf(run) === 0 });
+/** The chairs the board takes of the room's, for the level's plaque: a Stowaway takes none. */
+export const chairsTaken = (run: RunView): HTMLElement =>
+  el("span", "k-dim fielded", {}, pic(glyph("figure")), `${chairsOn(run)}/${fieldCap(run)}`);
 
 // ---------- a room's card ----------
 

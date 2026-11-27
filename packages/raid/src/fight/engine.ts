@@ -13,7 +13,7 @@ import { chance, mix } from "@sequoia-leaf/core";
 import { boonNumber } from "../content/boons.ts";
 import { catalogOf } from "../content/catalog.ts";
 import { abilityNumber, figureIn, isFigureId, specOf, type Stars, starScale } from "../content/figures.ts";
-import { carries, type FinishedId, finishedNumber, type ItemId, itemStats } from "../content/items.ts";
+import { carries, type ItemId, itemNumber as numberOf, itemStats } from "../content/items.ts";
 import { FIGHT, levelBoost } from "../content/rooms.ts";
 import { traitNumber } from "../content/traits.ts";
 import { backRow, cellAt, colOf, distance, HOME_ROWS, seatCell, type Side, stepToward } from "../hex.ts";
@@ -49,7 +49,7 @@ import type { Fight, FightEvent, FightResult, FightSetup, FightSummary, Pending,
 
 /** What an item does besides its stats, as numbers on whoever holds it. */
 function equip(f: Fight, u: Unit, item: ItemId): void {
-  const itemNumber = (id: FinishedId, name: string): number => finishedNumber(f.cat, id, name);
+  const itemNumber = (id: ItemId, name: string): number => numberOf(f.cat, id, name);
   switch (item) {
     case "blackthorn":
       u.pierce = itemNumber(item, "pierce");
@@ -106,7 +106,7 @@ function equip(f: Fight, u: Unit, item: ItemId): void {
     case "glowcap":
     case "bark":
     case "chestnut":
-    // An emblem's kin is in what its holder carries.
+    // An emblem's trait is in what its holder carries, and its stats are counted with everyone's.
     case "embercharm":
     case "mosscharm":
     case "mistcharm":
@@ -201,15 +201,18 @@ function leaps(f: Fight): void {
   }
 }
 
-/** Seats both parties and switches everything on. What happened is in `opening`; the clock has not started. */
-export function openFight(setup: FightSetup): Fight {
+/**
+ * Seats both parties and switches everything on, by the catalogue of the setup's era (a test may
+ * hand it a made-up one). What happened is in `opening`; the clock has not started.
+ */
+export function openFight(setup: FightSetup, cat = catalogOf(setup)): Fight {
   const [ours, theirs] = setup.sides;
   const seed = setup.seed >>> 0;
   const taken = boardFor(setup);
   const opening: FightEvent[] = [];
   const f: Fight = {
     seed,
-    cat: catalogOf(setup),
+    cat,
     rng: mix(seed, 0x51ed),
     tick: 0,
     units: [],

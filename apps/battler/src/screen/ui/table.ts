@@ -14,7 +14,6 @@ import {
   boonIn,
   catalogOf,
   ECONOMY,
-  fieldCap,
   fielded,
   figureIn,
   type ItemId,
@@ -46,7 +45,7 @@ import { acorns, boonRef, figPic, figureRef, itemRef, pic, traitRef, unitRef } f
 import { rackDrawn, stallDrawn, traitsDrawn, twins } from "./drawn.ts";
 import { forgetLight, paintLight } from "./lit.ts";
 import { oddsRow, runTag, waySign } from "./own.ts";
-import { chairsTag, forgetTrack, renderTrack, trackPlaque } from "./rooms.ts";
+import { chairsTag, chairsTaken, forgetTrack, renderTrack, trackPlaque } from "./rooms.ts";
 import { type TallyView, tallyView } from "./tally.ts";
 
 /** What the buttons ask for. The table only asks; whoever built it answers. */
@@ -416,7 +415,7 @@ function renderPurseSide(run: RunView): void {
     chairsTag(run),
     bar,
     el("span", "k-dim", { text: need > 0 ? `${xp}/${need}` : "top" }),
-    el("span", "k-dim fielded", {}, pic(glyph("figure")), `${fielded(run)}/${fieldCap(run)}`),
+    chairsTaken(run),
     // What a reroll can bring at this level, each tier in its colour, cheapest first.
     oddsRow({ ...run, level: lv }),
   );

@@ -11,7 +11,8 @@ import { pick, type Stream, weighted } from "@sequoia-leaf/core";
  */
 import { available, type Catalog } from "./content/catalog.ts";
 import { type FigureId, figureIn, specOf, type Stars, starScale, traitsOf } from "./content/figures.ts";
-import { type ComponentId, holdItem, type ItemId } from "./content/items.ts";
+import type { ComponentId, ItemId } from "./content/items.ts";
+import { holdItem } from "./content/recipes.ts";
 import { HANDLES, ROOMS, type SparStrength, STALL_ODDS, TRAILS } from "./content/rooms.ts";
 import { type CallingId, isCalling, isKin, type KinId, stepFor, traitIn } from "./content/traits.ts";
 import { arrange } from "./formation.ts";

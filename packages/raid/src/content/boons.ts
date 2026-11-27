@@ -1,15 +1,17 @@
 /**
  * Boons: three times a run the party is offered three and keeps one. Some change the stall and the
- * purse, some change the fight, and seven are charms, each of which gives the emblem of the same id
- * (`items.ts`): an item that makes whoever holds it one of a kin as well. Words and numbers only;
- * `run.ts` and `fight/` read the numbers.
+ * purse, some change the fight, and seven are charms, each of which gives an emblem (`gives`,
+ * `items.ts`): an item whose holder carries a trait as well. A boon may also be made by a recipe
+ * (`made`, `recipes.ts`). Words and numbers only; `run.ts` and `fight/` read the numbers.
  *
  * The boons here are those the base release brought (`releases/base.ts`); later releases bring
  * more and change these in their patches (`releases/`). A boon is read from a catalogue
  * (`catalog.ts`), as its era has it.
  */
 import type { Catalog } from "./catalog.ts";
+import { type ComponentId, grantOf, type ItemId } from "./items.ts";
 import { opened } from "./patch.ts";
+import type { TraitId } from "./traits.ts";
 
 export const BOON_IDS = [
   "deeppockets",
@@ -44,6 +46,13 @@ export interface BoonSpec {
   readonly short: string;
   readonly n: Readonly<Record<string, number>>;
   readonly quip: string;
+  /** For a charm, the item it gives, for one figure to hold. */
+  readonly gives?: ItemId;
+  /**
+   * The two items that make it when they meet (`combine`), held or on the rack. Such a boon is only
+   * held: taking it does nothing else, so making it draws nothing.
+   */
+  readonly made?: readonly [ComponentId, ComponentId];
 }
 
 /** The boons the base release brought: read only by its patch (`releases/base.ts`). */
@@ -155,6 +164,7 @@ export const BASE_BOONS: Readonly<Partial<Record<BoonId, BoonSpec>>> = {
   embercharm: {
     name: "Coal On A String",
     sort: "charm",
+    gives: "embercharm",
     text: "An emblem for one figure to hold: it is an Ember as well, and counts as one more Ember.",
     short: "Gives an emblem. Its holder is an Ember too.",
     n: {},
@@ -163,6 +173,7 @@ export const BASE_BOONS: Readonly<Partial<Record<BoonId, BoonSpec>>> = {
   mosscharm: {
     name: "Pocket Moss",
     sort: "charm",
+    gives: "mosscharm",
     text: "An emblem for one figure to hold: it is a Moss as well, and counts as one more Moss.",
     short: "Gives an emblem. Its holder is a Moss too.",
     n: {},
@@ -171,6 +182,7 @@ export const BASE_BOONS: Readonly<Partial<Record<BoonId, BoonSpec>>> = {
   mistcharm: {
     name: "Jar Of Fog",
     sort: "charm",
+    gives: "mistcharm",
     text: "An emblem for one figure to hold: it is a Mist as well, and counts as one more Mist.",
     short: "Gives an emblem. Its holder is a Mist too.",
     n: {},
@@ -179,6 +191,7 @@ export const BASE_BOONS: Readonly<Partial<Record<BoonId, BoonSpec>>> = {
   burrowcharm: {
     name: "A Small Hole",
     sort: "charm",
+    gives: "burrowcharm",
     text: "An emblem for one figure to hold: it is a Burrow as well, and counts as one more Burrow.",
     short: "Gives an emblem. Its holder is a Burrow too.",
     n: {},
@@ -187,6 +200,7 @@ export const BASE_BOONS: Readonly<Partial<Record<BoonId, BoonSpec>>> = {
   feathercharm: {
     name: "Lucky Feather",
     sort: "charm",
+    gives: "feathercharm",
     text: "An emblem for one figure to hold: it is a Feather as well, and counts as one more Feather.",
     short: "Gives an emblem. Its holder is a Feather too.",
     n: {},
@@ -195,6 +209,7 @@ export const BASE_BOONS: Readonly<Partial<Record<BoonId, BoonSpec>>> = {
   crabcharm: {
     name: "Roll Call Sheet",
     sort: "charm",
+    gives: "crabcharm",
     text: "An emblem for one figure to hold: it is a Crab as well, and counts as one more Crab.",
     short: "Gives an emblem. Its holder is a Crab too.",
     n: {},
@@ -203,6 +218,7 @@ export const BASE_BOONS: Readonly<Partial<Record<BoonId, BoonSpec>>> = {
   gnomecharm: {
     name: "Spare Hat",
     sort: "charm",
+    gives: "gnomecharm",
     text: "An emblem for one figure to hold: it is a Gnome as well, and counts as one more Gnome.",
     short: "Gives an emblem. Its holder is a Gnome too.",
     n: {},
@@ -233,5 +249,13 @@ export const boonNumber = (cat: Catalog, id: BoonId, name: string): number => ca
 /** One of a boon's numbers if it is among the boons held (`has`); else what it is without. */
 export const boonOr = (cat: Catalog, has: readonly BoonId[], id: BoonId, name: string, without: number): number =>
   has.includes(id) ? boonNumber(cat, id, name) : without;
+/** What a boon gives to hold: a charm's emblem; nothing for any other boon. */
+export function giftOf(cat: Catalog, id: BoonId): ItemId[] {
+  const { gives } = boonIn(cat, id);
+  return gives === undefined ? [] : [gives];
+}
+/** The trait what a boon gives grants its holder: a charm's; none for any other boon. */
+export const giftsTrait = (cat: Catalog, id: BoonId): TraitId | undefined =>
+  giftOf(cat, id).flatMap((item) => grantOf(cat, item) ?? [])[0];
 /** Boons that change something inside a fight, and so travel with a party. */
 export const FIGHT_BOONS: readonly BoonId[] = ["secondwind", "headstart", "smallfry", "formation"];

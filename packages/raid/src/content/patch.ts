@@ -7,9 +7,9 @@
 import type { BoonId, BoonSpec } from "./boons.ts";
 import type { Rarity } from "./catalog.ts";
 import type { FigureId, FigureSpec } from "./figures.ts";
-import type { ComponentId, ComponentSpec, EmblemId, FinishedId, FinishedSpec } from "./items.ts";
+import type { ItemId, ItemSpec } from "./items.ts";
 import type { ReleaseId } from "./releases.ts";
-import type { KinId, TraitId, TraitSpec } from "./traits.ts";
+import type { TraitId, TraitSpec } from "./traits.ts";
 
 /** What a release brings of one kind of thing, and what it changes of those already out. */
 export interface Part<K extends string, V> {
@@ -21,16 +21,19 @@ export interface Part<K extends string, V> {
 /** A figure as a release brings it: its words and numbers, and what the pulls give it as. */
 export interface Arrival extends FigureSpec {
   readonly prize: Rarity;
+  /**
+   * The chairs it takes on a board: 1, or 0 for one that takes none of the party's places (a
+   * Stowaway). Only the first copy of it on a board takes none (`chairsUsed`).
+   */
+  readonly chairs?: 0 | 1;
 }
 
 export interface Patch {
   readonly release: ReleaseId;
   readonly figures?: Part<FigureId, Arrival>;
   readonly traits?: Part<TraitId, TraitSpec>;
-  readonly components?: Part<ComponentId, ComponentSpec>;
-  readonly finished?: Part<FinishedId, FinishedSpec>;
-  /** The kin each emblem makes its holder; an emblem's name and words are its charm boon's. */
-  readonly emblems?: Part<EmblemId, KinId>;
+  /** Items of every sort: components, finished items, emblems. */
+  readonly items?: Part<ItemId, ItemSpec>;
   readonly boons?: Part<BoonId, BoonSpec>;
 }
 

@@ -1,5 +1,6 @@
 import { below, mix, pick, type Stream } from "@sequoia-leaf/core";
 
+import { overfills } from "./chairs.ts";
 /**
  * A bot that plays the game through the same actions a member has. It has habits rather than
  * cleverness: what it likes, how much it saves, whether it levels or rolls. It exists to try the
@@ -7,31 +8,23 @@ import { below, mix, pick, type Stream } from "@sequoia-leaf/core";
  * place figures better than it does.
  */
 import { act, type PlanningCommand } from "./command.ts";
-import type { BoonId } from "./content/boons.ts";
+import { type BoonId, giftsTrait } from "./content/boons.ts";
 import { type Catalog, catalogOf } from "./content/catalog.ts";
 import { type FigureId, figureIn, specOf, type Stars, starScale, traitsOf } from "./content/figures.ts";
-import {
-  type ComponentId,
-  emblemKin,
-  type FinishedId,
-  finishedIn,
-  holdItem,
-  isComponentId,
-  isEmblemId,
-} from "./content/items.ts";
+import { type ComponentId, type FinishedId, halvesOf, isComponentId, isEmblemId } from "./content/items.ts";
+import { holdItem } from "./content/recipes.ts";
 import { ECONOMY, MAX_LEVEL } from "./content/rooms.ts";
 import { stepFor, type TraitId, traitNumber } from "./content/traits.ts";
 import type { RuleId } from "./content/wilds.ts";
 import { lastRoom } from "./endless.ts";
 import { arrange } from "./formation.ts";
 import { SEATS } from "./hex.ts";
-import { countTraits } from "./party.ts";
+import { chairsUsed, countTraits } from "./party.ts";
 import { closedNow } from "./room.ts";
 import {
   beginFight,
   type Done,
   fieldCap,
-  fielded,
   picksOf,
   type Piece,
   pieces,
@@ -134,25 +127,26 @@ function partyScore(cat: Catalog, habit: Habit, party: readonly Piece[]): number
   }
   return score;
 }
-/** The best party of a size it can find among some figures: one at a time, whoever adds most. */
-function bestParty(cat: Catalog, habit: Habit, all: readonly Piece[], size: number): Piece[] {
+/** The best party it can find among some figures for so many chairs: one at a time, whoever adds most and still has a chair. */
+function bestParty(cat: Catalog, habit: Habit, all: readonly Piece[], chairs: number): Piece[] {
   const party: Piece[] = [];
   const rest = all.slice();
-  while (party.length < size && rest.length > 0) {
+  while (rest.length > 0) {
     let best = -1;
     let bestScore = -1;
     for (let i = 0; i < rest.length; i++) {
       const p = rest[i];
       if (!p) continue;
       party.push(p);
-      const score = partyScore(cat, habit, party);
+      // Only who still has a chair (the first copy of a Stowaway needs none).
+      const score = chairsUsed(cat, party) > chairs ? -1 : partyScore(cat, habit, party);
       party.pop();
       if (score > bestScore) {
         best = i;
         bestScore = score;
       }
     }
-    const [taken] = rest.splice(best, 1);
+    const [taken] = best < 0 ? [] : rest.splice(best, 1);
     if (!taken) break;
     party.push(taken);
   }
@@ -191,8 +185,9 @@ const BOON_LIKES: Record<BoonId, number> = {
 };
 function likesBoon(run: RunView, habit: Habit, boon: BoonId): number {
   let score = BOON_LIKES[boon];
-  if (isEmblemId(boon)) {
-    const kin = emblemKin(catalogOf(run), boon);
+  // A charm's emblem grants a trait: more if one more of it would put a step on.
+  const kin = giftsTrait(catalogOf(run), boon);
+  if (kin !== undefined) {
     const count =
       countTraits(
         catalogOf(run),
@@ -315,7 +310,7 @@ function shop<R extends RunView>(run: R, habit: Habit, hands: Hands<R>): void {
       const cost = priceOf(run, i);
       if (cost > run.acorns) return;
       const want = wants(run, habit, kind, before);
-      const pressing = want >= 6 || pieces(run).length < fieldCap(run);
+      const pressing = want >= 6 || chairsUsed(catalogOf(run), pieces(run)) < fieldCap(run);
       if (!pressing && (run.acorns - cost < floor || want < 0.3 * cost)) return;
       if (want / Math.max(1, cost) > bestWant) {
         best = i;
@@ -327,7 +322,7 @@ function shop<R extends RunView>(run: R, habit: Habit, hands: Hands<R>): void {
       if (hands(run, { do: "buy", offer: best }).ok) continue;
     }
     // Experience, by its habit.
-    const short = pieces(run).length < fieldCap(run);
+    const short = chairsUsed(catalogOf(run), pieces(run)) < fieldCap(run);
     const par = PAR[Math.min(run.room, PAR.length - 1)] ?? MAX_LEVEL;
     const wantsLevel =
       !short &&
@@ -398,7 +393,7 @@ function seatParty<R extends RunView>(run: R, habit: Habit, hands: Hands<R>): vo
 }
 function seatCarelessly<R extends RunView>(run: R, s: Stream, hands: Hands<R>): void {
   run.bench.forEach((p, slot) => {
-    if (!p || fielded(run) >= fieldCap(run)) return;
+    if (!p || overfills(run, p, null)) return;
     const closed = closedNow(run);
     const free = run.board.flatMap((b, seat) => (b || closed.has(seat) ? [] : [seat]));
     hands(run, { do: "move", from: { on: "bench", at: slot }, to: { on: "board", at: pick(s, free) } });
@@ -407,7 +402,7 @@ function seatCarelessly<R extends RunView>(run: R, s: Stream, hands: Hands<R>): 
 
 type Suits = "hitter" | "caster" | "wall";
 const suitOf = (cat: Catalog, item: ComponentId | FinishedId): Suits => {
-  const part: ComponentId = isComponentId(item) ? item : finishedIn(cat, item).made[0];
+  const part: ComponentId = isComponentId(item) ? item : halvesOf(cat, item)[0];
   return part === "thorn" || part === "plume" ? "hitter" : part === "glowcap" ? "caster" : "wall";
 };
 /** How well a figure suits a kind of item: more is better, 0 is not at all. */

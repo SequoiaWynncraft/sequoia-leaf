@@ -47,7 +47,7 @@ import { CARELESS, type Habit, planRoom, ROLLER, SAVER, SENSIBLE } from "@sequoi
 import { FIGHT_BOONS, isBoonId } from "@sequoia-leaf/raid/content/boons.ts";
 import { catalogAt, everyFigure } from "@sequoia-leaf/raid/content/catalog.ts";
 import { isUnitKind, type Stars, traitsOf, TROUBLE_IDS } from "@sequoia-leaf/raid/content/figures.ts";
-import { COMPONENT_IDS, FINISHED_IDS, isItemId, type ItemId } from "@sequoia-leaf/raid/content/items.ts";
+import { COMPONENT_IDS, FINISHED_IDS, grantOf, isItemId, type ItemId } from "@sequoia-leaf/raid/content/items.ts";
 import { LAST_ERA, LEGACY_ERA } from "@sequoia-leaf/raid/content/releases.ts";
 import { LEVELS } from "@sequoia-leaf/raid/content/rooms.ts";
 import { TRAIT_IDS, traitNumber } from "@sequoia-leaf/raid/content/traits.ts";
@@ -243,7 +243,7 @@ export interface Pool {
   readonly traits: Readonly<Record<string, readonly string[]>>;
   readonly components: readonly string[];
   readonly finished: readonly string[];
-  /** For each emblem, the kin it makes its holder one of. */
+  /** For each emblem, the trait it grants its holder. */
   readonly emblems: Readonly<Record<string, string>>;
   readonly boons: readonly string[];
   /** The highest level a member's figure reaches, and the most times Greg eats. */
@@ -260,7 +260,7 @@ export function poolNow(): Pool {
     traits: Object.fromEntries(TRAIT_IDS.map((t) => [t, everyFigure().filter((f) => traitsOf(cat, f).includes(t))])),
     components: [...COMPONENT_IDS],
     finished: [...FINISHED_IDS],
-    emblems: { ...cat.emblems },
+    emblems: Object.fromEntries(cat.ids.emblems.flatMap((id) => [[id, grantOf(cat, id) ?? ""]])),
     boons: [...FIGHT_BOONS],
     level: LEVELS.most,
     fed: traitNumber(cat, "greg", "most", 1),

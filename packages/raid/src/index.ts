@@ -87,16 +87,13 @@ export {
   carries,
   COMPONENT_IDS,
   type ComponentId,
-  componentIn,
   EMBLEM_IDS,
   type EmblemId,
-  emblemKin,
+  emblemTrait,
   FINISHED_IDS,
   type FinishedId,
-  finishedIn,
-  finishedNumber,
-  forge,
-  holdItem,
+  grantOf,
+  halvesOf,
   HOLDS,
   isComponentId,
   isEmblemId,
@@ -105,14 +102,18 @@ export {
   ITEM_IDS,
   itemAdds,
   type ItemId,
+  itemIn,
   itemName,
+  itemNumber,
   itemQuip,
   itemShort,
+  type ItemSpec,
   type ItemStats,
   itemStats,
   itemText,
-  type NotHeld,
 } from "./content/items.ts";
+export { combine, forgedOf, type Held, holdItem, type Made, type NotHeld } from "./content/recipes.ts";
+export { chairsOn, overfills } from "./chairs.ts";
 export {
   BOON_IDS,
   type BoonId,
@@ -121,6 +122,8 @@ export {
   boonShort,
   type BoonSpec,
   boonText,
+  giftOf,
+  giftsTrait,
   isBoonId,
 } from "./content/boons.ts";
 export {
@@ -170,6 +173,7 @@ export {
 // A party, as plain data.
 export {
   type Carrier,
+  chairsUsed,
   countTraits,
   isParty,
   type Party,

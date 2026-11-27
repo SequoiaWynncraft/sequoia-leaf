@@ -24,17 +24,8 @@ import { mix } from "@sequoia-leaf/core";
 import { BOON_IDS, type BoonId, isBoonId } from "./content/boons.ts";
 import { catalogOf, everyFigure } from "./content/catalog.ts";
 import { type FigureId, isBossId, isFigureId, isStars, isUnitKind } from "./content/figures.ts";
-import {
-  carries,
-  emblemKin,
-  FINISHED_IDS,
-  HOLDS,
-  isComponentId,
-  isEmblemId,
-  isFinishedId,
-  isItemId,
-  type ItemId,
-} from "./content/items.ts";
+import { FINISHED_IDS, isComponentId, isEmblemId, isFinishedId, isItemId, type ItemId } from "./content/items.ts";
+import { holdItem } from "./content/recipes.ts";
 import { type Era, isEra, LEGACY_ERA } from "./content/releases.ts";
 import { ECONOMY, MAX_LEVEL } from "./content/rooms.ts";
 import { type FightRules, ROOM_RULES, ruled } from "./content/rules.ts";
@@ -446,9 +437,9 @@ function readRun(v: unknown, old: boolean, meals: boolean): Run {
  * the level and resolve go no higher than they go now; experience past a level's step makes the
  * levels it makes; the stall is today's size, cut or filled out with empty places; the bench is
  * today's size, its figures past the end moved up into empty places or, with none, sold for what
- * they are worth; a figure holds what a figure may hold now (as many, one loose component, no
- * emblem of a kin it is), and the rest goes to the item bench; Greg has gained no more than he may,
- * and nobody else anything; a pick of boons has no more redraws than one has now.
+ * they are worth; a figure holds what a figure may hold now (as many, no two that make something,
+ * nothing granting a trait it carries), and the rest goes to the item bench; Greg has gained no
+ * more than he may, and nobody else anything; a pick of boons has no more redraws than one has now.
  */
 function settle(run: Run): void {
   run.way = onTrailThere(run.way);
@@ -473,11 +464,9 @@ function settle(run: Run): void {
   for (const piece of pieces(run)) {
     const held: ItemId[] = [];
     for (const item of piece.items) {
-      const fits =
-        held.length < HOLDS &&
-        !(isComponentId(item) && held.some(isComponentId)) &&
-        !(isEmblemId(item) && carries(catalogOf(run), piece.kind, held, emblemKin(catalogOf(run), item)));
-      (fits ? held : run.items).push(item);
+      // It keeps what it could have been handed as it is: with a place, making nothing, granting nothing it carries.
+      const got = holdItem(catalogOf(run), { kind: piece.kind, items: held }, item);
+      (!("refused" in got) && got.made === null ? held : run.items).push(item);
     }
     piece.items = held;
     piece.fed = piece.kind === "greg" ? Math.min(piece.fed, traitNumber(catalogOf(run), "greg", "most", 1)) : 0;

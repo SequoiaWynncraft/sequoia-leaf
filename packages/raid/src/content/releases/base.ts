@@ -7,7 +7,7 @@
 import { BASE_BOONS } from "../boons.ts";
 import type { Rarity } from "../catalog.ts";
 import { BASE_FIGURES, type FigureId } from "../figures.ts";
-import { BASE_COMPONENTS, BASE_EMBLEMS, BASE_FINISHED } from "../items.ts";
+import { BASE_ITEMS } from "../items.ts";
 import type { Arrival, Patch } from "../patch.ts";
 import { BASE_TRAITS } from "../traits.ts";
 
@@ -38,8 +38,6 @@ export const BASE: Patch = {
   release: "base",
   figures: { add: arrivals() },
   traits: { add: BASE_TRAITS },
-  components: { add: BASE_COMPONENTS },
-  finished: { add: BASE_FINISHED },
-  emblems: { add: BASE_EMBLEMS },
+  items: { add: BASE_ITEMS },
   boons: { add: BASE_BOONS },
 };

@@ -10,6 +10,8 @@ import {
   buy,
   type Catalog,
   catalogOf,
+  chairsOn,
+  combine,
   type ComponentId,
   countTraits,
   ECONOMY,
@@ -19,8 +21,6 @@ import {
   type FightResult,
   type FigureId,
   figureIn,
-  type FinishedId,
-  forge,
   holdItem,
   HZ,
   interestCap,
@@ -92,11 +92,10 @@ export function reachOfOffer(run: RunView, offer: number): Reach {
 export const canBuy = (run: RunView, offer: number): boolean => legal(run, { do: "buy", offer });
 
 /**
- * What handing an item to a figure would do: nothing (no room, or an emblem of a kin it is already),
- * hold it, or forge it with a component already held.
+ * What handing an item to a figure would do: nothing (no room, or an emblem of a trait it carries
+ * already), hold it, or make an item with a component already held (`combine`).
  */
-export type Handing =
-  { can: false } | { can: true; forged: null } | { can: true; forged: FinishedId; with: ComponentId };
+export type Handing = { can: false } | { can: true; forged: null } | { can: true; forged: ItemId; with: ComponentId };
 
 export function handing(cat: Catalog, piece: Pick<Piece, "kind" | "items">, item: ItemId): Handing {
   const got = holdItem(cat, piece, item);
@@ -105,17 +104,17 @@ export function handing(cat: Catalog, piece: Pick<Piece, "kind" | "items">, item
   return { can: true, forged: null };
 }
 
-/** What a component makes with each of the five components. */
-export function recipesOf(cat: Catalog, item: ComponentId): { with: ComponentId; makes: FinishedId }[] {
-  return cat.ids.components.map((other) => ({ with: other, makes: forge(cat, item, other) }));
+/** What a component makes with another, by the recipes (`combine`): as a line of what it makes, or none. */
+function makes(cat: Catalog, item: ComponentId, other: ComponentId): { with: ComponentId; makes: ItemId }[] {
+  const made = combine(cat, item, other);
+  return made?.gives === "item" ? [{ with: other, makes: made.id }] : [];
 }
+/** What a component makes with each of the components. */
+export const recipesOf = (cat: Catalog, item: ComponentId): { with: ComponentId; makes: ItemId }[] =>
+  cat.ids.components.flatMap((other) => makes(cat, item, other));
 
 /** What a component would make with each *other* loose component the party has, without repeats. */
-export function combosWithHeld(
-  run: RunView,
-  item: ComponentId,
-  itemAt = -1,
-): { with: ComponentId; makes: FinishedId }[] {
+export function combosWithHeld(run: RunView, item: ComponentId, itemAt = -1): { with: ComponentId; makes: ItemId }[] {
   const others: ComponentId[] = [];
   run.items.forEach((held, at) => {
     if (at !== itemAt && isComponentId(held) && !others.includes(held)) others.push(held);
@@ -123,7 +122,7 @@ export function combosWithHeld(
   for (const p of pieces(run)) {
     for (const held of p.items) if (isComponentId(held) && !others.includes(held)) others.push(held);
   }
-  return others.map((other) => ({ with: other, makes: forge(catalogOf(run), item, other) }));
+  return others.flatMap((other) => makes(catalogOf(run), item, other));
 }
 
 /** The purse as it is counted: whole piles of savings that are earning, loose acorns, and what the piles will pay. */
@@ -248,7 +247,7 @@ export function nudgeFor(run: RunView, doing: Doing, taught: readonly string[]):
   const benched = run.bench.some((p) => p !== null);
   const affordable = run.stall.some((_, i) => canBuy(run, i));
   if (fresh("buy") && owned.length === 1 && affordable) return "buy";
-  if (fresh("field") && benched && fielded(run) < fieldCap(run)) return "field";
+  if (fresh("field") && benched && chairsOn(run) < fieldCap(run)) return "field";
   if (fresh("item") && run.items.length > 0) return "item";
   if (fresh("setout") && run.room === 0 && fielded(run) > 0) return "setout";
   if (fresh("three") && run.room >= 1 && hasPair(owned)) return "three";
