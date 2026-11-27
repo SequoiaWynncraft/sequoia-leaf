@@ -349,7 +349,10 @@ body[data-live] #resolve {
   #live-clock .vs {
     display: none;
   }
+  /* The whole width of the clock, the words centred in it: a new stage's name moves nothing. */
+  #live-clock .label,
   #live-clock .secs {
+    justify-self: stretch;
     text-align: center;
   }
   body[data-live] #live-say:not([hidden]) {

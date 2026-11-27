@@ -1578,6 +1578,38 @@ body[data-rule] #says {
 }
 
 /*
+ * At a live table, whose clock is in the bar too (not a phone): the clock by its stage and seconds on
+ * one line, of one width for every stage ("Carousel", "Planning", "The fight").
+ */
+@media (min-width: 621px) and (max-width: 1139px) and (min-aspect-ratio: 4/5) {
+  body[data-live] #live-clock {
+    width: calc(var(--u) * 72);
+    padding-inline: var(--u);
+    grid-template-areas: "label secs";
+  }
+  body[data-live] #live-clock .vs {
+    display: none;
+  }
+}
+/*
+ * And narrower (not a phone): its track the wing the run is in, sooner than at a table alone; and
+ * every table's purse by its Coins, the same on the front page and at any table.
+ */
+@media (min-width: 621px) and (max-width: 959px) and (min-aspect-ratio: 4/5) {
+  body[data-live] #track {
+    flex: none;
+    width: calc(var(--u) * 58);
+    overflow: hidden;
+  }
+  body[data-live] #track .pip.now ~ .pip.wing,
+  body[data-live] #track .pip.now ~ .pip.wing ~ .pip,
+  body[data-live] #track .pip:has(~ .pip.wing ~ .pip.now),
+  body[data-live] #track .pip:has(~ .pip.wing.now),
+  #purse > .k-cur.leaf {
+    display: none;
+  }
+}
+/*
  * Narrower still (not a phone): the track a box five rooms wide, the wing the run is in (its five
  * rooms, which hold still until the next wing), so that the corner stays in the window down to the
  * narrowest.
@@ -1676,6 +1708,13 @@ body[data-rule] #says {
   }
   #plan .wide-only {
     display: none;
+  }
+  /* At a live table there is no Set out: Buy XP has its place too (more than `live.css`'s own, which is wider). */
+  body[data-live] #shop > #plan {
+    grid-template-areas:
+      "stall stall stall stall"
+      "acorns level level hold"
+      "rustle levelup levelup levelup";
   }
 }
 

@@ -61,14 +61,17 @@ const SLOW = { "/v1/": 700, "/v1/game/raid/held": 4000, "/v1/me/events": 4000 };
 const OTHERS = {
   birchwood: "7e570000-0000-4000-8000-000000000002",
   mossling: "7e570000-0000-4000-8000-000000000003",
+  fernhollow: "7e570000-0000-4000-8000-000000000004",
 } as const;
 
+/** What a step of the walk says when it could not do what it was for: the walk fails on it rather than look steady. */
+const FAIL = "steady:fail";
 /** What has moved since the last one taken, under a name. */
 const take = (at: string): Step => ["eval", `window.shifts.take(${JSON.stringify(at)})`];
 /** Staging on the tours' handle (`r`), with the recorders held: a member reaches what is staged by another page. */
 const staged = (code: string): Step => [
   "eval",
-  `(async () => { const r = window.raid; window.shifts.hold(true); try { ${code} await r.settled(); } finally { window.shifts.hold(false); } return "staged"; })()`,
+  `(async () => { const r = window.raid; window.shifts.hold(true); try { ${code} await r.settled(); } catch (e) { return "${FAIL} staging: " + e; } finally { window.shifts.hold(false); } return "staged"; })()`,
 ];
 /** A button pressed as a member does, brought into view first if it is not. */
 const press = (selector: string, ms: number): Step[] => [
@@ -86,20 +89,22 @@ const reload = (fake: Record<string, unknown> = {}): Step => [
 /** Asks Leaf something as another member: `path` is an expression, the table opened kept in the tab. */
 const asOther = (who: keyof typeof OTHERS, path: string, body: Record<string, unknown>): Step => [
   "eval",
-  `(async () => { const res = await fetch(${path}, { method: "POST", credentials: "omit", headers: { Authorization: "Bearer as-${who}", "Content-Type": "application/json" }, body: JSON.stringify(${JSON.stringify({ player: OTHERS[who], ...body })}) }); const b = await res.json(); if (typeof b.id === "string") sessionStorage.setItem("steady.table", b.id); return res.status; })()`,
+  `(async () => { const res = await fetch(${path}, { method: "POST", credentials: "omit", headers: { Authorization: "Bearer as-${who}", "Content-Type": "application/json" }, body: JSON.stringify(${JSON.stringify({ player: OTHERS[who], ...body })}) }); const b = await res.json().catch(() => null); if (!res.ok) return "${FAIL} ${who} asked " + ${path} + ": " + res.status; if (${path} === "/v1/game/sittings" && typeof b?.id !== "string") return "${FAIL} ${who} opened no table"; if (typeof b?.id === "string") sessionStorage.setItem("steady.table", b.id); return res.status; })()`,
 ];
 const TABLE = "`/v1/game/sittings/${sessionStorage.getItem('steady.table')}`";
-/** The open tables' list as Leaf gives it, with twelve on it: more than the Versus card holds. */
-const TWELVE = {
+/** The open tables' list as Leaf gives it, with `n` on it: twelve are more than the Versus card holds. */
+const tablesListed = (n: number) => ({
   now: "2026-11-27T12:00:00Z",
   yours: null,
-  open: Array.from({ length: 12 }, (_, i) => ({
+  open: Array.from({ length: n }, (_, i) => ({
     id: `steady-${i}`,
     by: { name: `Member ${i + 1}` },
     sat: 1 + (i % 7),
     closes: "2026-11-27T12:30:00Z",
   })),
-};
+});
+const TWELVE = tablesListed(12);
+const OPTS = `document.querySelector("#modal .mode-opts")`;
 
 /** A press on the table as a member makes it, then what moved, under a name. */
 const tap = (selector: string, at: string, ms = 900): Step[] => [
@@ -110,7 +115,7 @@ const tap = (selector: string, at: string, ms = 900): Step[] => [
 ];
 /** Something done on the table through the tours' handle (`r`), as the page's own commands do it; then what moved. */
 const act = (code: string, at: string, ms = 900): Step[] => [
-  ["eval", `(async () => { const r = window.raid; ${code} })()`],
+  ["eval", `(async () => { const r = window.raid; try { ${code} } catch (e) { return "${FAIL} " + e; } })()`],
   ["wait", ms],
   take(at),
 ];
@@ -131,8 +136,9 @@ const onBoard = `r.party().find((x) => x.on === "board")`;
  * The table while planning, and on through a fight: buying, a star-up, selling, moving and swapping
  * figures, Buy XP to a level up, Hold, items handed over and forged; more than fifty rerolls on the
  * first room's board and fuller ones later, the purse crossing 10 and 100 both ways; a fight, its
- * takings and the next room; the chairs of an endless board; the Wilds' rules (`wildsWalk`); and the
- * stall with the member's own figures and their levels.
+ * takings and the next room; the chairs of an endless board; the Wilds' rules (`wildsWalk`); release
+ * 1's feed target, Seqwawa and a tip (`releaseWalk`); and the stall with the member's own figures and
+ * their levels.
  */
 function tableWalk(shot: (what: string) => Step): Step[] {
   return [
@@ -197,12 +203,26 @@ function tableWalk(shot: (what: string) => Step): Step[] {
       shot(`29-chairs-${chairs}`),
     ]),
     ...wildsWalk(shot),
+    ...releaseWalk(shot),
     staged(
       `await r.fresh(); r.taught(); await r.pulled(${JSON.stringify(PULLED)}); await r.start(5, 0, true); await r.plan(); await r.acorns(60);`,
     ),
     ["wait", 1500],
     ...rerolls("reroll x12: the member's own figures, with levels", 12),
     shot("28-own"),
+    // Seated at a live table, planning: its stall without Set out.
+    staged(`await r.fresh(); r.taught(); r.to("front");`),
+    ["wait", 900],
+    ...press("#k-ways-to-play-versus", 1500),
+    ...press("#live-open", 1500),
+    ...press("#live-start", 2500),
+    [
+      "eval",
+      `(async () => { try { window.tables.pick(); await window.tables.to("plan"); return await window.tables.plan(); } catch (e) { return "${FAIL} " + e; } })()`,
+    ],
+    ["wait", 2500],
+    take("seated at a live table, planning"),
+    shot("43-live-table"),
   ];
 }
 
@@ -244,6 +264,60 @@ function wildsWalk(shot: (what: string) => Step): Step[] {
     ...press("#back-carry", 1500),
     take("Carry on from the return card"),
     shot("38-carried-on"),
+  ];
+}
+
+/** Puts a figure of a kind on the bench onto the board, in the place of one already there (they change places). */
+const fieldOne = (kind: string): string =>
+  `{ const p = r.party(); const g = p.find((x) => x.kind === "${kind}" && x.on === "bench"); const q = p.find((x) => x.on === "board"); if (g && q) await r.send({ do: "move", from: { on: "bench", at: g.at }, to: { on: "board", at: q.at } }); }`;
+/** Where a figure of a kind on the bench is on the page; and a point a share of the way across the stall. */
+const benchFigure = (kind: string): string =>
+  `(() => { const p = window.raid.party().find((x) => x.kind === "${kind}" && x.on === "bench"); return p ? window.raid.at(p.id) : null; })()`;
+const overStall = (share: number): string =>
+  `(() => { const s = document.getElementById("stall").getBoundingClientRect(); return { x: s.x + s.width * ${share}, y: s.y + s.height / 2 }; })()`;
+
+/**
+ * Release 1 on the table: a figure from the bench carried over the stall with a Greg fielded (the
+ * stall split into Sell and Feed Greg, each half under the pointer, and the split gone once it is
+ * put back), Seqwawa on the stall and on the board, and a tip opened over the stall.
+ */
+function releaseWalk(shot: (what: string) => Step): Step[] {
+  return [
+    staged(
+      `await r.fresh(); r.taught(); await r.start(11, 0); await r.plan(); await r.acorns(80); await r.give("greg"); ${fieldOne("greg")} await r.give("worm");`,
+    ),
+    ["wait", 1500],
+    take("planning with a Greg fielded"),
+    ["downAt", benchFigure("worm")],
+    ["moveAt", overStall(0.25)],
+    ["wait", 700],
+    take("a bench figure carried over the stall: Sell and Feed Greg"),
+    shot("39-feed-split"),
+    ["moveAt", overStall(0.75)],
+    ["wait", 700],
+    take("over Feed Greg"),
+    ["moveAt", benchFigure("worm")],
+    ["upAt", benchFigure("worm")],
+    ["wait", 900],
+    take("put back on the bench: the split goes"),
+    staged(`await r.offer(0, "seqwawa");`),
+    ["wait", 900],
+    take("Seqwawa on the stall"),
+    shot("40-seqwawa-stall"),
+    staged(`await r.give("seqwawa"); ${fieldOne("seqwawa")}`),
+    ["wait", 1200],
+    take("Seqwawa on the board"),
+    shot("41-seqwawa-board"),
+    [
+      "moveAt",
+      `(() => { const b = document.getElementById("rustle").getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; })()`,
+    ],
+    ["wait", 1200],
+    take("a tip opened over the stall"),
+    shot("42-tip"),
+    ["move", 2, 2],
+    ["wait", 900],
+    take("the tip goes"),
   ];
 }
 
@@ -373,6 +447,18 @@ function frontWalk(shot: (what: string) => Step): Step[] {
     ...press("#k-ways-to-play-versus", 2600),
     take("Versus: twelve open tables"),
     shot("20-twelve-tables"),
+    // The member scrolls down the list; a table opened elsewhere has it read again: the list keeps its place.
+    [
+      "eval",
+      `(${OPTS}.scrollTop = 120, sessionStorage.setItem("steady.top", String(${OPTS}.scrollTop)), sessionStorage.setItem("shifts.fake", ${JSON.stringify(JSON.stringify({ "/v1/game/sittings": tablesListed(13) }))}), "scrolled to " + ${OPTS}.scrollTop)`,
+    ],
+    asOther("fernhollow", `"/v1/game/sittings"`, {}),
+    ["wait", 3000],
+    [
+      "eval",
+      `(() => { const n = document.querySelectorAll("#modal .live-list .board-row").length; const top = ${OPTS}.scrollTop; const was = Number(sessionStorage.getItem("steady.top")); return n === 13 && was > 0 && Math.abs(top - was) <= 1 ? "kept at " + top : "${FAIL} the list read again: " + n + " rows, scrolled to " + top + " from " + was; })()`,
+    ],
+    take("Versus: the list read again, scrolled down"),
   ];
 }
 
@@ -409,7 +495,9 @@ async function run(name: string, w: number, h: number): Promise<{ moments: [stri
   const wanted = steps.filter((s) => s[0] === "eval" && String(s[1]).startsWith("window.shifts.take")).length;
   if (code !== 0 || moments.length !== wanted)
     console.error(`${name}: the walk stopped after ${moments.length} of ${wanted} moments (tour exited ${code}).`);
-  return { moments, ok: code === 0 && moments.length === wanted };
+  const failed = said.split("\n").filter((line) => line.includes(FAIL));
+  for (const line of failed) console.error(`${name}: a step was not done: ${line}`);
+  return { moments, ok: code === 0 && moments.length === wanted && failed.length === 0 };
 }
 
 const report: Record<string, [string, Shift[]][]> = {};

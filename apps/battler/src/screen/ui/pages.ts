@@ -459,15 +459,23 @@ export function renderPages(force = false): void {
 
 /**
  * Puts a page in the box. Drawn again, the same page keeps its body scrolled where it was, so that
- * a choice made, or the front page's minute's reading, does not carry the member back to its top.
+ * a choice made, or the front page's minute's reading, does not carry the member back to its top;
+ * and the list in a mode's card (the Versus card's open tables, read again) its place in it too,
+ * while the same mode is shown.
  */
 function place(box: HTMLElement, id: PageId, node: HTMLElement): void {
-  const top = box.dataset.page === id ? (box.querySelector(".k-body")?.scrollTop ?? 0) : 0;
+  const same = box.dataset.page === id;
+  const top = same ? (box.querySelector(".k-body")?.scrollTop ?? 0) : 0;
+  const card = same ? box.querySelector("section.mode") : null;
+  const list = { mode: card?.getAttribute("aria-label"), top: card?.querySelector(".mode-opts")?.scrollTop ?? 0 };
   box.hidden = false;
   box.dataset.page = id;
   box.replaceChildren(node);
   const body = node.querySelector(".k-body");
   if (body) body.scrollTop = top;
+  const again = node.querySelector("section.mode");
+  const opts = again?.querySelector(".mode-opts");
+  if (opts && list.mode && again?.getAttribute("aria-label") === list.mode) opts.scrollTop = list.top;
 }
 
 /**

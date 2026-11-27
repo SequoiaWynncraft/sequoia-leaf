@@ -190,7 +190,6 @@ const corner = (): Shift[] => {
 /** Reads from Leaf answer late, or are answered here, as the tab's `sessionStorage` says (`shifts.slow`, `shifts.fake`). */
 function slowReads(): void {
   const slow = kept("shifts.slow");
-  const fake = kept("shifts.fake");
   const late = (path: string): number => {
     const best = Object.keys(slow)
       .filter((p) => path.startsWith(p))
@@ -203,6 +202,8 @@ function slowReads(): void {
   outside.fetch = async (path, init) => {
     const at = new URL(path, location.href).pathname;
     const reading = (init?.method ?? "GET") === "GET";
+    // Read on each ask, so that the walk can change an answer while the page is up.
+    const fake = kept("shifts.fake");
     const res = reading && at in fake ? Response.json(fake[at]) : await real(path, init);
     const ms = reading ? late(at) : 0;
     if (ms > 0) await new Promise((r) => setTimeout(r, ms));
@@ -268,8 +269,9 @@ export function recordShifts(): void {
     node !== null &&
     !ROOTS.some((id) => document.getElementById(id)?.contains(node)) &&
     !(pressing() && press.control?.contains(node));
-  new PerformanceObserver((list) => {
-    for (const e of list.getEntries()) {
+  /** The browser's entries, as they are delivered or drained by `take`: each heard once. */
+  const heard = (entries: PerformanceEntryList): void => {
+    for (const e of entries) {
       if (last.held || !("value" in e) || typeof e.value !== "number" || e.value <= 0) continue;
       const all = "sources" in e && Array.isArray(e.sources) ? e.sources.filter(isSource) : [];
       const sources = all.filter((s) => counted(s.node));
@@ -283,16 +285,22 @@ export function recordShifts(): void {
         ),
       });
     }
-  }).observe({ type: "layout-shift", buffered: true });
+  };
+  const observer = new PerformanceObserver((list) => heard(list.getEntries()));
+  observer.observe({ type: "layout-shift", buffered: true });
 
-  /** The stage as fitted (its zoom and where the board is), the window it was fitted to, and when that last changed. */
-  const stage = { fit: "", window: "", resized: -Infinity };
+  /**
+   * The stage as fitted (its zoom and where the board is), the window it was fitted to, and when that
+   * last changed: from the page's load, so that the first window seen is a resize too, settling.
+   */
+  const stage = { fit: "", window: "", resized: performance.now() };
   /** The stage fitted again while the window stayed as it was: the whole table moves. */
   const watchStage = (): void => {
     // From when the page is up (its handle is opened after the stage is first fitted).
     if (!window.raid) return;
     const size = `${innerWidth}x${innerHeight}`;
     const fit = `zoom ${V.z}, board at ${V.bx},${V.by} of ${V.w}x${V.h}`;
+    // A window other than the last (the first one seen too) is a resize: the stage is fitted again within a second.
     if (size !== stage.window) Object.assign(stage, { window: size, resized: performance.now() });
     if (stage.fit && fit !== stage.fit && !last.held && performance.now() - stage.resized > 1000)
       shifts.push({ score: 1, by: "stage", input: recent(), parts: [`${stage.fit} > ${fit}`] });
@@ -357,6 +365,8 @@ export function recordShifts(): void {
   window.shifts = {
     async take(at) {
       await frames(3);
+      // What the browser has seen and not yet delivered, through the same path: nothing is left for the next moment.
+      heard(observer.takeRecords());
       return JSON.stringify({ at, shifts: [...shifts.splice(0), ...corner()] });
     },
     hold(on) {

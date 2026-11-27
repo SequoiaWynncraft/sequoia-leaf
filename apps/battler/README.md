@@ -509,7 +509,8 @@ strips, the Versus card as tables open, fill and go and with twelve open, a room
 End this raid and the end page) and the table (buying, a star-up, selling, moving, Buy XP, Hold, items, more than fifty
 rerolls, the purse crossing 10 and 100, a fight, its takings and the next room, the chairs of an
 endless board, the Wilds' rule pick, boards and fight line under a rule and the card that picks a
-run of the Wilds back up, the member's own figures), with the page's reads from Leaf answered late as over a
+run of the Wilds back up, a bench figure carried with a Greg fielded (Sell and Feed Greg), Seqwawa on
+the stall and the board, a tip over the stall, the member's own figures), with the page's reads from Leaf answered late as over a
 real connection (`review/shifts.ts`, on the tours' page with `?steady`). It fails on a part that
 moved while nothing was scrolled, on the panel along the bottom changing size, and on the table
 being fitted again (its zoom, or where the board sits) while the window stayed the same, and on the
