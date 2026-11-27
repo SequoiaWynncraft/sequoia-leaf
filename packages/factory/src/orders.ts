@@ -27,6 +27,7 @@ import {
   ITEM_INFO,
   itemName,
   locked,
+  makersOf,
   MILLI,
   nextHand,
   NONE,
@@ -34,7 +35,7 @@ import {
   partsOf,
   type Plot,
   ready,
-  RECIPES_N,
+  type Recipe,
   STUDIES,
   workOf,
 } from "./tables.ts";
@@ -264,12 +265,13 @@ export function makeableOn(land: Land, open: Open, plots: readonly Plot[]): Item
     const raw = deposit[i] ?? NONE;
     if (raw !== NONE && owned[plot[i] ?? NONE] === true) can[raw] = 1;
   }
+  // Then each thing a recipe it may make makes from what it can, its own thing or beside it, till none is new.
+  const may = (r: Recipe): boolean => locked(open, { make: r.out }) === null && r.from.every((k) => can[k] === 1);
   for (let grew = true; grew;) {
     grew = false;
-    for (const r of RECIPES_N) {
-      if (can[r.out] === 1 || locked(open, { make: r.out }) !== null) continue;
-      if (!r.from.every((k) => can[k] === 1)) continue;
-      can[r.out] = 1;
+    for (const n of ALL_ITEMS) {
+      if (can[n] === 1 || !makersOf(n).some(may)) continue;
+      can[n] = 1;
       grew = true;
     }
   }

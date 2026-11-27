@@ -5,18 +5,7 @@
  * held up; nothing that moves the yard reads it.
  */
 import { TICKS } from "./content/machines.ts";
-import {
-  ALL_ITEMS,
-  GATHERING,
-  isRaw,
-  type Item,
-  type Kind,
-  PACE,
-  RECIPE,
-  type Recipe,
-  RECIPES_N,
-  WORK_OF,
-} from "./tables.ts";
+import { GATHERING, type Item, type Kind, PACE, type Recipe, recipeFor, WORK_OF } from "./tables.ts";
 
 /** Ticks in a minute. */
 export const MINUTE = 600;
@@ -55,17 +44,13 @@ export function needs(grade: number, r: Recipe): { item: Item; perMinute: number
   return r.from.map((item, p) => ({ item, perMinute: often * (r.need[p] ?? 0) }));
 }
 
-/** For each thing, a recipe that makes it beside what it is for (`Recipe.also`), or null. */
-const BESIDE: readonly (Recipe | null)[] = ALL_ITEMS.map((n) => RECIPES_N.find((r) => r.also === n) ?? null);
-
 /**
- * What makes a thing, and by which recipe: a gatherer, by none, for a thing from the ground; else the
- * machine of the recipe that makes it, or of one that makes it beside its own thing. A recipe makes
- * one of its by-product with each of its own (`Recipe.also`), so the machines a pace of either takes
- * are the same.
+ * What makes a thing, and by which recipe (`recipeFor`): a gatherer, by none, for a thing from the
+ * ground; else the machine of the recipe that makes it, its own thing or beside it. A recipe makes one
+ * of its by-product with each of its own (`Recipe.also`), so the machines a pace of either takes are the same.
  */
 export const makerOf = (n: Item): { kind: Kind; recipe: Recipe | null } => {
-  const r = isRaw(n) ? null : (RECIPE[n] ?? BESIDE[n] ?? null);
+  const r = recipeFor(n);
   return { kind: r ? r.by : GATHERING, recipe: r };
 };
 

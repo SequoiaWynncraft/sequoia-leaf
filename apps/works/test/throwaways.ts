@@ -519,6 +519,7 @@ export const PLAYED_BIG = Object.fromEntries(
  * ground still, is gathered, with nothing under it, though the sifter makes it too.
  */
 export const PLAN_BIG = `import * as F from "./packages/factory/src/index.ts";
+import { bareLand } from "./packages/factory/test/land.ts";
 const clay = F.item("clay");
 const sand = F.item("sand");
 const sifter = F.kindNamed("sifter");
@@ -535,6 +536,23 @@ out.fedStone = fed?.from.length === 1 && stone?.item === F.item("stone") && ston
 out.billed = JSON.stringify(F.bill(pots).map((b) => F.kindName(b.kind))) === JSON.stringify(["sifter", "gatherer"]);
 const glass = F.tree(F.item("glass"), 30).from[0];
 out.groundFirst = F.makerOf(sand).kind === F.GATHERING && F.makerOf(sand).recipe === null && glass?.kind === F.GATHERING && glass.from.length === 0;
+// And everything else that asks what makes a thing asks the same: with stone and no clay in the
+// ground, a yard can make clay and pots; one clay is the sifting's work and the stone's; a pot is made of clay, of stone.
+const y = F.create({ land: bareLand(20, 9, [[3, 3, "stone"]], [15, 4]), tier: 4, seed: 1 });
+y.open.kinds[sifter ?? 0] = 1;
+y.open.recipes[sand] = 1;
+out.makeable = F.makeable(y).includes(clay) && F.makeable(y).includes(F.item("pot"));
+out.work = F.workOf(clay) === (sifting?.ticks ?? 0) + F.workOf(F.item("stone"));
+out.parts = JSON.stringify(F.partsOf(F.item("pot")).map((n) => F.itemName(n))) === JSON.stringify(["pot", "clay", "stone"]);
 console.log(JSON.stringify(out));
 `;
-export const PLANNED_BIG = { byProduct: true, sized: true, fedStone: true, billed: true, groundFirst: true };
+export const PLANNED_BIG = {
+  byProduct: true,
+  sized: true,
+  fedStone: true,
+  billed: true,
+  groundFirst: true,
+  makeable: true,
+  work: true,
+  parts: true,
+};

@@ -253,8 +253,24 @@ export const RECIPES_N: readonly Recipe[] = RECIPES.map((r) => {
   const also = r.also === undefined ? NONE : item(r.also);
   return { out: item(r.out), also, from, need, by: kind(r.by), ticks: r.ticks, work: r.ticks * 2 };
 });
-/** The recipe that makes each thing, or null for things from the ground. */
+/**
+ * The recipe each thing names, the one it is the thing of: what a machine is told to make, and its
+ * lock, are by it. What makes a thing, its by-products too, is `makersOf`.
+ */
 export const RECIPE: readonly (Recipe | null)[] = ALL_ITEMS.map((n) => RECIPES_N.find((r) => r.out === n) ?? null);
+/** Every recipe that makes each thing: the one it is the thing of first, then those that make it beside their own. */
+const MAKING: readonly (readonly Recipe[])[] = ALL_ITEMS.map((n) => [
+  ...RECIPES_N.filter((r) => r.out === n),
+  ...RECIPES_N.filter((r) => r.also === n),
+]);
+/**
+ * The recipes that make a thing: the one it is the thing of first, then each that makes it beside its
+ * own (`Recipe.also`), one with each. The one place what makes a thing is asked: what the yard can make
+ * (`makeableOn`), how a thing is got (`recipeFor`), and so the planner, the work in it and its parts.
+ */
+export const makersOf = (n: number): readonly Recipe[] => MAKING[n] ?? [];
+/** The recipe a thing is got by: none for a thing from the ground, which is gathered; else the first that makes it (`makersOf`). */
+export const recipeFor = (n: Item): Recipe | null => (isRaw(n) ? null : (makersOf(n)[0] ?? null));
 /** The recipes each kind of machine knows, in the table's order. */
 export const MADE_BY: readonly (readonly Recipe[])[] = ALL_KINDS.map((k) => RECIPES_N.filter((r) => r.by === k));
 const MAKERS = Uint8Array.from(MADE_BY, (recipes) => (recipes.length > 0 ? 1 : 0));
@@ -271,12 +287,12 @@ export const holdsMost = (recipes: readonly Recipe[], n: number): number =>
 
 /** Everything that goes into a thing, all the way down to the ground, the thing itself included. */
 export function partsOf(n: Item): Item[] {
-  return [n, ...(RECIPE[n]?.from ?? []).flatMap(partsOf)];
+  return [n, ...(recipeFor(n)?.from ?? []).flatMap(partsOf)];
 }
 
 /** The work in one of a thing: every tick a gatherer and every machine at grade 1 spends on it, all the way down. */
 export function workOf(n: Item): number {
-  const r = RECIPE[n];
+  const r = recipeFor(n);
   if (!r) return TICKS.gather;
   return r.ticks + r.from.reduce((sum, k, p) => sum + (r.need[p] ?? 0) * workOf(k), 0);
 }
