@@ -24,6 +24,7 @@ import {
 import { xy } from "@sequoia-leaf/factory/test/near.ts";
 
 import { PAGES } from "./kinds/index.ts";
+import type { Lamp } from "./lamps.ts";
 import { blockColour } from "./plan.ts";
 import { DRAWN, draws, S } from "./state.ts";
 import { tileRef } from "./ui/card.ts";
@@ -82,10 +83,10 @@ describe("the assembler on the page", () => {
     expect([DRAWN.includes(ASSEMBLER), draws(ASSEMBLER)]).toEqual([true, true]);
     expect(PAGES.assembler.dock).toBe(15);
     expect(blockColour(ASSEMBLER)).toBe(PAGES.assembler.map?.[0]);
-    const out: { x: number; y: number }[] = [];
+    const out: Lamp[] = [];
     const lit = { pace: 1, bright: 1, reach: 1, tall: false, kiln: () => false };
-    PAGES.assembler.lamps?.(S.world, 0, 100, 200, { ...lit, working: () => true }, out as never);
-    PAGES.assembler.lamps?.(S.world, 0, 100, 200, { ...lit, working: () => false }, out as never);
+    PAGES.assembler.lamps?.(S.world, 0, 100, 200, { ...lit, working: () => true }, out);
+    PAGES.assembler.lamps?.(S.world, 0, 100, 200, { ...lit, working: () => false }, out);
     expect(out).toEqual([{ x: 100, y: 188, r: 26, power: 0.6, reach: false }]);
   });
 });

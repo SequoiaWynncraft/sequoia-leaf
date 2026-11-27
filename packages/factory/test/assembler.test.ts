@@ -62,6 +62,10 @@ function made(y: F.Yard, x: number, z: number, out: F.Item, ticks: number): numb
   return n;
 }
 
+/** What a kind of machine makes, by its recipes; and things in their order. */
+const madeBy = (k: F.Kind): F.Item[] => (F.MADE_BY[k] ?? []).map((r) => r.out);
+const byOut = (a: number, b: number): number => a - b;
+
 /** A yard with one machine of a kind and grade at (20, 10) facing east, and power enough for it. */
 function alone(k: F.Kind, grade: number): F.Yard {
   const y = yard();
@@ -94,8 +98,7 @@ describe("the assembler", () => {
   });
 
   test("makes every recipe a bench or a workshop makes, and no other", () => {
-    const of = (k: F.Kind): F.Item[] => (F.MADE_BY[k] ?? []).map((r) => r.out);
-    expect(of(ASSEMBLER).toSorted()).toEqual([...of(F.BENCH), ...of(F.WORKSHOP)].toSorted());
+    expect(madeBy(ASSEMBLER).toSorted(byOut)).toEqual([...madeBy(F.BENCH), ...madeBy(F.WORKSHOP)].toSorted(byOut));
     const y = alone(ASSEMBLER, 1);
     expect(F.setRecipe(y, 20, 10, F.item("plank"))).toBe("That cannot make it");
     expect(F.setRecipe(y, 21, 11, F.item("lantern"))).toBeNull();
@@ -159,20 +162,20 @@ describe("the assembler", () => {
     // Planks on its back and ingots on its north side make tools, which leave by (22, 10), onto belts to the depot;
     // with belts by the other two tiles of its front alone, nothing leaves, and it says so.
     const line = (outs: readonly number[]): F.Yard => {
-      const y = alone(ASSEMBLER, 1);
+      const l = alone(ASSEMBLER, 1);
       for (const [x, z, d, raw] of [
         [17, 10, 0, "plank"],
         [20, 6, 1, "ingot"],
       ] as const) {
-        expect(F.build(y, F.CRATE, x, z, d, Infinity).ok).toBe(true);
-        for (let n = 0; n < 200; n++) F.put(y.holders, F.holderOf(y, tile(y, x, z)), F.item(raw));
+        expect(F.build(l, F.CRATE, x, z, d, Infinity).ok).toBe(true);
+        for (let n = 0; n < 200; n++) F.put(l.holders, F.holderOf(l, tile(l, x, z)), F.item(raw));
       }
-      F.build(y, F.BELT, 18, 10, 0, Infinity);
-      F.build(y, F.BELT, 20, 7, 1, Infinity);
-      F.build(y, F.BELT, 20, 8, 1, Infinity);
-      for (const z of outs) for (let x = 22; x <= 24; x++) F.build(y, F.BELT, x, z, 0, Infinity);
-      for (let t = 0; t < 1200; t++) F.step(y);
-      return y;
+      F.build(l, F.BELT, 18, 10, 0, Infinity);
+      F.build(l, F.BELT, 20, 7, 1, Infinity);
+      F.build(l, F.BELT, 20, 8, 1, Infinity);
+      for (const z of outs) for (let x = 22; x <= 24; x++) F.build(l, F.BELT, x, z, 0, Infinity);
+      for (let t = 0; t < 1200; t++) F.step(l);
+      return l;
     };
     const out = line([10]);
     expect(out.depot[F.item("tool")] ?? 0).toBeGreaterThan(20);
@@ -279,11 +282,18 @@ describe("the assembler", () => {
   });
 });
 
-describe("a yard with the assembler is a later Leaf's", () => {
-  const versionOf = (y: F.Yard): unknown => JSON.parse(F.encode(y)).v;
-  /** A yard of tier 5 with nothing past version 10 in it (no reach research). */
-  const plain = (): F.Yard => beforeReach(F.create({ land, tier: 5, seed: 1 }));
+/** The version a yard is kept as. */
+const versionOf = (y: F.Yard): unknown => JSON.parse(F.encode(y)).v;
+/** A yard of tier 5 with nothing past version 10 in it (no reach research). */
+const plain = (): F.Yard => beforeReach(F.create({ land, tier: 5, seed: 1 }));
+/** A yard with the assembler's research forgotten: what it keeps past 10 is the rest of it alone. */
+function forget(y: F.Yard): F.Yard {
+  y.done = y.done.filter((g) => g !== F.goal("assembler"));
+  F.reopen(y);
+  return y;
+}
 
+describe("a yard with the assembler is a later Leaf's", () => {
   test("its research known, in the line or given folios, or one standing, in a blueprint, in a plan or in Undo: kept as this version", () => {
     const known = plain();
     learn(known, F.goal("assembler"));
@@ -293,12 +303,6 @@ describe("a yard with the assembler is a later Leaf's", () => {
     const given = plain();
     must(given, { do: "study", research: "assembler" });
     F.giveGoal(given, F.goal("assembler"), F.item("timber"), 10);
-    /** One built with its research known, then the research forgotten: what it keeps past 10 is its piece alone. */
-    const forget = (y: F.Yard): F.Yard => {
-      y.done = y.done.filter((g) => g !== F.goal("assembler"));
-      F.reopen(y);
-      return y;
-    };
     const standing = (): F.Yard => {
       const y = plain();
       learn(y, F.goal("assembler"));

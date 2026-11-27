@@ -113,8 +113,8 @@ export function flowOf(w: Yard, i: number, counts: boolean): Flow | null {
   const recipe = aim(w, i);
   if (!recipe) return null;
   const grade = w.grade[i] ?? 0;
-  const by = w.kind[i] ?? recipe.by;
-  const maker = isKind(by) ? by : recipe.by;
+  const here = w.kind[i] ?? recipe.by;
+  const maker = isKind(here) ? here : recipe.by;
   const { share, effective } = machineRate(w, i, recipe);
   const h = w.holders;
   const r = holderOf(w, i);
