@@ -18,6 +18,9 @@
  * after every fight (`meals`: a table before version 5, a sitting before version 2) has each meal
  * counted as the share of health it gave him (`MEAL`). A run kept before it kept its way (a table
  * before version 8, a sitting before version 4) has it read from its trail, roster and endless way.
+ * A run kept before its record kept the last rooms alone (a table before version 9, a sitting before
+ * version 5) kept every room, each as an object; those before the last `KEPT_ROOMS` are folded into
+ * its totals (`record.ts`) as it is read. Since, a run is stored with its record as rows (`roomRow`).
  */
 import { mix } from "@sequoia-leaf/core";
 
@@ -27,7 +30,7 @@ import { type FigureId, isBossId, isFigureId, isStars, isUnitKind } from "./cont
 import { FINISHED_IDS, isComponentId, isEmblemId, isFinishedId, isItemId, type ItemId } from "./content/items.ts";
 import { holdItem } from "./content/recipes.ts";
 import { type Era, isEra, LEGACY_ERA } from "./content/releases.ts";
-import { ECONOMY, MAX_LEVEL, MOST_ROOMS } from "./content/rooms.ts";
+import { ECONOMY, MAX_LEVEL, MOST_ROOMS, ROOM_COUNT } from "./content/rooms.ts";
 import { type FightRules, ROOM_RULES, ruled } from "./content/rules.ts";
 import { isTraitId, renamedTitle, renamedTraits, TRAIT_IDS, traitNumber } from "./content/traits.ts";
 import { isRuleId, RULE_IDS } from "./content/wilds.ts";
@@ -35,6 +38,7 @@ import { lastRoom } from "./endless.ts";
 import type { FightResult, FightSetup, FightSummary, Tally } from "./fight/types.ts";
 import { SEATS } from "./hex.ts";
 import { isParty, type Party } from "./party.ts";
+import { folded, MET_APART, noRooms, type RoomRecord, roomsFought, type RoomTotals } from "./record.ts";
 import { setupRules } from "./room.ts";
 import {
   type Choice,
@@ -45,7 +49,6 @@ import {
   picksOf,
   type Piece,
   pieces,
-  type RoomRecord,
   type Run,
   type RunView,
   sellValue,
@@ -138,8 +141,16 @@ function readChoice(v: unknown): Choice {
   return options.length === 0 ? bad("the boons on offer") : { ...blank, options };
 }
 const isRoomKind = (v: unknown): v is RoomRecord["kind"] => v === "trouble" || v === "spar" || v === "boss";
-function readRecord(v: unknown, room: number): RoomRecord {
-  const r = record(v, "the record");
+/**
+ * How a room went, no later than the room the run is in: as an object, as a run shows it and as one
+ * was kept before records were stored as rows; or (`rows`) as a row of its fields (`roomRow`).
+ */
+function readRecord(v: unknown, room: number, rows: boolean): RoomRecord {
+  const at = rows ? list(v, 7, "the record") : [];
+  const r = rows
+    ? { room: at[0], kind: at[1], result: at[2], standing: [at[3], at[4]], boss: at[5], met: at[6] }
+    : record(v, "the record");
+  if (rows && at.length < 6) bad("the record");
   const result = r.result === "win" || r.result === "loss" || r.result === "draw" ? r.result : bad("the record");
   const standing = list(r.standing, 2, "the record");
   return {
@@ -153,6 +164,41 @@ function readRecord(v: unknown, room: number): RoomRecord {
 }
 /** A member's Leaf id as a record keeps it: a short string. */
 const isMemberRef = (v: unknown): v is string => typeof v === "string" && v.length > 0 && v.length <= 64;
+/** How a run set out, and its record: the last rooms in full (of objects, or `rows`), the rest folded into totals. */
+function readRooms(
+  r: Record<string, unknown>,
+  room: number,
+  rows: boolean,
+): { way: Way; record: RoomRecord[]; before: RoomTotals } {
+  const way = readWayOf(r);
+  const rooms = list(r.record, MOST_ROOMS, "the record").map((x) => readRecord(x, room, rows));
+  return { way, ...folded(way, rooms, readTotals(r.before, room)) };
+}
+/** The rooms a run folded out of its record, as totals no further than the room it is in (none, for a run kept before it folded any). */
+function readTotals(v: unknown, room: number): RoomTotals {
+  if (v === undefined) return noRooms();
+  const t = record(v, "the rooms before");
+  const count = (x: unknown): number => whole(x, 0, MOST_ROOMS, "the rooms before");
+  const totals: RoomTotals = {
+    fought: count(t.fought),
+    won: count(t.won),
+    lost: count(t.lost),
+    furthest: whole(t.furthest, 0, room + 1, "the rooms before"),
+    deepest: count(t.deepest),
+    cleared: unique(
+      list(t.cleared, ROOM_COUNT, "the rooms before").map((x) => whole(x, 0, ROOM_COUNT - 1, "the rooms before")),
+      "the rooms before",
+    ),
+    bosses: unique(each(t.bosses, isBossId, ROOM_COUNT, "the rooms before"), "the rooms before"),
+    bossesPast: count(t.bossesPast),
+    met: each(t.met, isMemberRef, MET_APART, "the rooms before"),
+  };
+  // Rooms won or lost are rooms fought, and every room counted won is a room won.
+  const { fought, won, lost, furthest, deepest, cleared, bosses, bossesPast } = totals;
+  if (won + lost > fought || deepest > furthest || Math.max(cleared.length, bosses.length, bossesPast) > won)
+    bad("the rooms before");
+  return totals;
+}
 
 const isSeat = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0 && v < SEATS;
 /** Seats, each once. */
@@ -294,13 +340,15 @@ function readStage(r: Record<string, unknown>, old: boolean, shown: boolean, dra
 
 /**
  * Everything of a run but its streams. What the run drew and does not read is left to be drawn again
- * (`afresh`), but for a run as the page is shown it, which has no stream to draw it from: that is refused.
+ * (`afresh`), but for a run as the page is shown it, which has no stream to draw it from: that is
+ * refused. Its record is of objects, or (`rows`) of rows; one longer than it keeps is folded.
  */
 function readParts(
   r: Record<string, unknown>,
   old: boolean,
   shown: boolean,
   meals: boolean,
+  rows: boolean,
 ): { run: RunView; afresh: boolean } {
   let afresh = false;
   const drawn: Drawn = (read, otherwise, again = true) => {
@@ -330,9 +378,10 @@ function readParts(
   unique(emblems, "the emblems");
   // A run saved while some figures were locked lists the ones its stall could offer; every figure can now.
   const seen = record(r.seen, "the almanac notes");
+  const rooms = readRooms(r, room, rows);
   const run: RunView = {
     era: readEra(r.era, "the era"),
-    way: readWayOf(r),
+    way: rooms.way,
     room,
     stage: readStage(r, old, shown, drawn),
     resolve: whole(r.resolve, 0, ROOMY, "the resolve"),
@@ -356,7 +405,8 @@ function readParts(
     bought: whole(r.bought, 0, 10_000, "the figures bought"),
     boons,
     foe: drawn(() => readFoe(r.foe), { who: "", title: "", figures: [], boons: [], might: 100 }),
-    record: list(r.record, MOST_ROOMS, "the record").map((x) => readRecord(x, room)),
+    record: rooms.record,
+    before: rooms.before,
     nextId,
     last: drawn(() => readLast(r.last), null, false),
     wing: readWing(r.wing, shown),
@@ -381,7 +431,7 @@ function readParts(
   if (picks.some((c, i) => c.kind === "starter" && (i > 0 || ids.length > 0))) bad("the choices");
   // A streak is no longer than the rooms fought, and runs the way the last one went.
   const lastResult = run.record.at(-1)?.result;
-  if (Math.abs(run.streak) > run.record.length) bad("the streak");
+  if (Math.abs(run.streak) > roomsFought(run)) bad("the streak");
   if (run.streak > 0 && lastResult !== "win") bad("the streak");
   if (run.streak < 0 && lastResult !== "loss") bad("the streak");
   return { run, afresh };
@@ -414,10 +464,10 @@ function partiesAsShare(run: RunView, meals: boolean): void {
   }
 }
 
-/** A run as Leaf keeps it, of table version 1 (`old`) or since, kept as meals or not: with its streams, under today's numbers. */
-function readRun(v: unknown, old: boolean, meals: boolean): Run {
+/** A run as Leaf keeps it, of table version 1 (`old`) or since, kept as meals or not, its record as rows or not: with its streams, under today's numbers. */
+function readRun(v: unknown, old: boolean, meals: boolean, rows: boolean): Run {
   const r = record(v, "the run");
-  const { run: parts, afresh } = readParts(r, old, false, meals);
+  const { run: parts, afresh } = readParts(r, old, false, meals, rows);
   partiesAsShare(parts, meals);
   const run: Run = {
     seed: whole(r.seed, 0, UINT, "the seed"),
@@ -479,12 +529,13 @@ function settle(run: Run): void {
 export type Loaded = { ok: true; run: Run } | { ok: false; why: string };
 
 /**
- * A run as Leaf keeps it in a table of version 1 (`old`) or since, and with Greg's meals (`meals`:
- * kept before he was fed by hand) or not; or the reason the data is not one.
+ * A run as Leaf keeps it in a table of version 1 (`old`) or since, with Greg's meals (`meals`: kept
+ * before he was fed by hand) or not, and its record as rows (`rows`: stored since a table of version
+ * 9) or as the run holds it; or the reason the data is not one.
  */
-export function checkRun(v: unknown, old = false, meals = false): Loaded {
+export function checkRun(v: unknown, old = false, meals = false, rows = false): Loaded {
   try {
-    return { ok: true, run: readRun(v, old, meals) };
+    return { ok: true, run: readRun(v, old, meals, rows) };
   } catch (err) {
     if (err instanceof Nonsense) return { ok: false, why: `That raid does not add up: ${err.message} is wrong.` };
     throw err;
@@ -494,7 +545,7 @@ export function checkRun(v: unknown, old = false, meals = false): Loaded {
 /** A run as the page is shown it (no streams, only the first pick's options), or null for one these rules could not have made. */
 export function readRunView(v: unknown): RunView | null {
   try {
-    return readParts(record(v, "the run"), false, true, false).run;
+    return readParts(record(v, "the run"), false, true, false, false).run;
   } catch (err) {
     if (err instanceof Nonsense) return null;
     throw err;

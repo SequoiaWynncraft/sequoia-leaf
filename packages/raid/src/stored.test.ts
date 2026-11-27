@@ -10,6 +10,7 @@ import { LEGACY_ERA } from "./content/releases.ts";
 import { ECONOMY, MAX_LEVEL, TRAIL_COUNT } from "./content/rooms.ts";
 import { traitNumber } from "./content/traits.ts";
 import { RAID, type Table, TABLE_VERSION } from "./game.ts";
+import { addRoom, KEPT_ROOMS, noRooms, type RoomRecord, roomsFought, totalsOf } from "./record.ts";
 import { type Choice, type Fought, foughtOf, type Phase, picksOf, type Piece, type Run } from "./run.ts";
 import { CAT } from "./testkit.ts";
 import { wayOn } from "./way.ts";
@@ -107,21 +108,79 @@ describe("a table kept with an endless run", () => {
 
 /** The table as the page reads what Leaf shows of it, through JSON as it goes. */
 const shown = (table: Table) => readView(JSON.parse(JSON.stringify(RAID.view(table, ctx()))));
+/** A table's endless run, fought on a room and taken: its fight, then its takings. */
+function playedOn(table: Table): Table {
+  let now = table;
+  for (const c of ["fight", "take"] as const) {
+    const done = RAID.apply(now, { do: c, slot: "endless" }, ctx());
+    if (isRefused(done)) throw new Error(`${c} was refused: ${done.refused}`);
+    now = done.state;
+  }
+  return now;
+}
+/** The text of a stored table's endless run, as Leaf stores it. */
+const storedEndless = (table: Table): string => JSON.stringify(JSON.parse(RAID.encode(table)).held.endless);
+
 describe("a table kept with an endless run past its four hundredth room", () => {
-  test("keeps the run, the page reads it, and it plays on to the next room", () => {
+  test("keeps the run, its rooms before the last hundred folded, the page reads it, and it plays on to the next room", () => {
     const table = read(fixture("wilds-past-room-400.json"));
-    expect(table.held.endless).toMatchObject({ way: wayOn({ id: "wilds" }), room: 401, streak: 401 });
-    expect(table.held.endless?.record).toHaveLength(401);
+    const run = table.held.endless;
+    expect(run).toMatchObject({ way: wayOn({ id: "wilds" }), room: 401, streak: 401 });
+    expect(run?.record).toHaveLength(KEPT_ROOMS);
+    expect(run?.record[0]?.room).toBe(401 - KEPT_ROOMS);
+    expect(run?.before).toMatchObject({ fought: 401 - KEPT_ROOMS, won: 401 - KEPT_ROOMS, lost: 0 });
     expect(shown(table)?.held.endless).toMatchObject({ room: 401, streak: 401 });
-    let now = table;
-    for (const c of ["fight", "take"] as const) {
-      const done = RAID.apply(now, { do: c, slot: "endless" }, ctx());
-      if (isRefused(done)) throw new Error(`${c} was refused: ${done.refused}`);
-      now = done.state;
-    }
+    const now = playedOn(table);
     expect(now.held.endless?.room).toBe(402);
+    expect(now.held.endless && roomsFought(now.held.endless)).toBe(402);
     expect(shown(now)?.held.endless?.room).toBe(402);
     expect(read(RAID.encode(now)).held.endless?.room).toBe(402);
+  });
+});
+
+/** The run past room 400, gone on to its 2,000th room, every room won, as a table of version 8 kept it: every room in full. */
+function deep(): { text: string; record: RoomRecord[] } {
+  const raw = JSON.parse(fixture("wilds-past-room-400.json"));
+  const kept: RoomRecord[] = raw.held.endless.record;
+  // Past room 400 the rooms come round as they did: room 386 to 400 again, and again.
+  const record = Array.from({ length: 2000 }, (_, room): RoomRecord => {
+    const like = kept[room < kept.length ? room : 386 + ((room - 386) % 15)];
+    if (!like) throw new Error("the fixture's record is short");
+    return { ...like, room };
+  });
+  raw.held.endless = { ...raw.held.endless, room: 2000, streak: 2000, record };
+  return { text: JSON.stringify(raw), record };
+}
+
+describe("a table kept with an endless run of 2,000 rooms", () => {
+  test("reads, every room it fought counted as its whole record counts them, and keeps the last hundred in full", () => {
+    const { text, record } = deep();
+    expect(text.length).toBeGreaterThan(150_000);
+    const run = read(text).held.endless;
+    if (!run) throw new Error("the run was let go of");
+    expect(run.record).toEqual(record.slice(-KEPT_ROOMS));
+    expect(roomsFought(run)).toBe(2000);
+    expect(totalsOf(run)).toEqual(record.reduce((t, r) => addRoom(t, r, run.way), noRooms()));
+    expect(shown(read(text))?.held.endless).toMatchObject({ room: 2000, streak: 2000, record: run.record });
+  });
+
+  test("plays a room, and is stored in under 12 KB", () => {
+    const now = playedOn(read(deep().text));
+    const run = now.held.endless;
+    expect(run?.room).toBe(2001);
+    expect(run && roomsFought(run)).toBe(2001);
+    expect(run?.record).toHaveLength(KEPT_ROOMS);
+    expect(storedEndless(now).length).toBeLessThan(12 * 1024);
+    expect(read(RAID.encode(now))).toEqual(now);
+  });
+
+  test("goes on to a room as high as a whole number goes, and no higher", () => {
+    const raw = JSON.parse(fixture("wilds-past-room-400.json"));
+    const at = (room: unknown) =>
+      RAID.decode(JSON.stringify({ ...raw, held: { ...raw.held, endless: { ...raw.held.endless, room } } }))?.held
+        .endless?.room;
+    expect(at(Number.MAX_SAFE_INTEGER)).toBe(Number.MAX_SAFE_INTEGER);
+    for (const room of [Number.MAX_SAFE_INTEGER + 1, -1, 401.5, "401"]) expect(at(room)).toBeUndefined();
   });
 });
 

@@ -1,0 +1,380 @@
+{
+  "game": "little-raid-table",
+  "v": 9,
+  "rng": 3006817934,
+  "era": 2,
+  "begun": { "main": 2, "endless": 1 },
+  "held": {
+    "main": null,
+    "endless": {
+      "seed": 3989521811,
+      "rng": 3512442840,
+      "era": 2,
+      "way": { "course": { "id": "deep" }, "figures": { "pool": "fair" } },
+      "room": 15,
+      "stage": {
+        "phase": "fight",
+        "fight": {
+          "setup": {
+            "seed": 862198844,
+            "era": 2,
+            "sides": [
+              {
+                "who": "You",
+                "title": "",
+                "figures": [
+                  { "kind": "crab7", "stars": 2, "seat": 1, "items": [], "fed": 0 },
+                  {
+                    "kind": "emberkit",
+                    "stars": 3,
+                    "seat": 2,
+                    "items": ["wasptail", "blackthorn", "blackthorn"],
+                    "fed": 0
+                  },
+                  { "kind": "greg", "stars": 1, "seat": 3, "items": [], "fed": 8 },
+                  { "kind": "whitefox", "stars": 1, "seat": 4, "items": ["fairyring"], "fed": 0 },
+                  { "kind": "cindernewt", "stars": 1, "seat": 10, "items": [], "fed": 0 },
+                  { "kind": "drizzlefrog", "stars": 1, "seat": 23, "items": [], "fed": 0 },
+                  { "kind": "crab12", "stars": 2, "seat": 24, "items": ["wasptail"], "fed": 0 },
+                  { "kind": "heron", "stars": 1, "seat": 25, "items": ["wasptail"], "fed": 0 }
+                ],
+                "boons": [],
+                "might": 100
+              },
+              {
+                "who": "The forest",
+                "title": "Gnats, in no particular order",
+                "figures": [
+                  { "kind": "gnat", "stars": 1, "seat": 3, "items": [], "fed": 0 },
+                  { "kind": "gnat", "stars": 1, "seat": 12, "items": [], "fed": 0 }
+                ],
+                "boons": [],
+                "might": 105
+              }
+            ]
+          },
+          "outcome": {
+            "result": "win",
+            "ticks": 11,
+            "seconds": 0.55,
+            "standing": [9, 0],
+            "dusk": false,
+            "units": [
+              {
+                "id": 0,
+                "side": 0,
+                "kind": "crab7",
+                "stars": 2,
+                "summoned": false,
+                "alive": true,
+                "hp": 528,
+                "maxHp": 540,
+                "dealt": 53,
+                "taken": 12,
+                "healed": 0,
+                "casts": 0
+              },
+              {
+                "id": 1,
+                "side": 1,
+                "kind": "gnat",
+                "stars": 1,
+                "summoned": false,
+                "alive": false,
+                "hp": 0,
+                "maxHp": 116,
+                "dealt": 10,
+                "taken": 116,
+                "healed": 0,
+                "casts": 0
+              },
+              {
+                "id": 2,
+                "side": 0,
+                "kind": "emberkit",
+                "stars": 3,
+                "summoned": false,
+                "alive": true,
+                "hp": 875,
+                "maxHp": 875,
+                "dealt": 0,
+                "taken": 0,
+                "healed": 0,
+                "casts": 0
+              },
+              {
+                "id": 3,
+                "side": 1,
+                "kind": "gnat",
+                "stars": 1,
+                "summoned": false,
+                "alive": false,
+                "hp": 0,
+                "maxHp": 116,
+                "dealt": 12,
+                "taken": 147,
+                "healed": 0,
+                "casts": 0
+              },
+              {
+                "id": 4,
+                "side": 0,
+                "kind": "greg",
+                "stars": 1,
+                "summoned": false,
+                "alive": true,
+                "hp": 940,
+                "maxHp": 950,
+                "dealt": 54,
+                "taken": 10,
+                "healed": 0,
+                "casts": 0
+              },
+              {
+                "id": 5,
+                "side": 0,
+                "kind": "whitefox",
+                "stars": 1,
+                "summoned": false,
+                "alive": true,
+                "hp": 700,
+                "maxHp": 700,
+                "dealt": 62,
+                "taken": 0,
+                "healed": 0,
+                "casts": 0
+              },
+              {
+                "id": 6,
+                "side": 0,
+                "kind": "cindernewt",
+                "stars": 1,
+                "summoned": false,
+                "alive": true,
+                "hp": 440,
+                "maxHp": 440,
+                "dealt": 0,
+                "taken": 0,
+                "healed": 0,
+                "casts": 0
+              },
+              {
+                "id": 7,
+                "side": 0,
+                "kind": "drizzlefrog",
+                "stars": 1,
+                "summoned": false,
+                "alive": true,
+                "hp": 370,
+                "maxHp": 370,
+                "dealt": 44,
+                "taken": 0,
+                "healed": 0,
+                "casts": 0
+              },
+              {
+                "id": 8,
+                "side": 0,
+                "kind": "crab12",
+                "stars": 2,
+                "summoned": false,
+                "alive": true,
+                "hp": 504,
+                "maxHp": 504,
+                "dealt": 0,
+                "taken": 0,
+                "healed": 0,
+                "casts": 0
+              },
+              {
+                "id": 9,
+                "side": 0,
+                "kind": "heron",
+                "stars": 1,
+                "summoned": false,
+                "alive": true,
+                "hp": 500,
+                "maxHp": 500,
+                "dealt": 0,
+                "taken": 0,
+                "healed": 0,
+                "casts": 0
+              },
+              {
+                "id": 10,
+                "side": 0,
+                "kind": "uncounted",
+                "stars": 2,
+                "summoned": true,
+                "alive": true,
+                "hp": 540,
+                "maxHp": 540,
+                "dealt": 50,
+                "taken": 0,
+                "healed": 0,
+                "casts": 0
+              }
+            ]
+          }
+        }
+      },
+      "resolve": 13,
+      "acorns": 23,
+      "streak": 2,
+      "level": 7,
+      "xp": 28,
+      "board": [
+        null,
+        { "id": 1, "kind": "crab7", "stars": 2, "items": [], "fed": 0 },
+        { "id": 3, "kind": "emberkit", "stars": 3, "items": ["wasptail", "blackthorn", "blackthorn"], "fed": 0 },
+        { "id": 31, "kind": "greg", "stars": 1, "items": [], "fed": 8 },
+        { "id": 30, "kind": "whitefox", "stars": 1, "items": ["fairyring"], "fed": 0 },
+        null,
+        null,
+        null,
+        null,
+        null,
+        { "id": 17, "kind": "cindernewt", "stars": 1, "items": [], "fed": 0 },
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        { "id": 29, "kind": "drizzlefrog", "stars": 1, "items": [], "fed": 0 },
+        { "id": 7, "kind": "crab12", "stars": 2, "items": ["wasptail"], "fed": 0 },
+        { "id": 18, "kind": "heron", "stars": 1, "items": ["wasptail"], "fed": 0 },
+        null,
+        null
+      ],
+      "bench": [null, null, null, null, null, null, null, null, null],
+      "items": [],
+      "stall": ["badger", "barrowgnome", "drizzlefrog", "kettle", "glorp"],
+      "held": false,
+      "rustles": 0,
+      "bought": 1,
+      "boons": ["extrachair", "windfall", "basket"],
+      "foe": {
+        "who": "The forest",
+        "title": "Gnats, in no particular order",
+        "figures": [
+          { "kind": "gnat", "stars": 1, "seat": 3, "items": [], "fed": 0 },
+          { "kind": "gnat", "stars": 1, "seat": 12, "items": [], "fed": 0 }
+        ],
+        "boons": [],
+        "might": 105
+      },
+      "record": [
+        [0, "trouble", "win", 1, 0, null],
+        [1, "trouble", "win", 2, 0, null],
+        [2, "spar", "win", 5, 0, null],
+        [3, "spar", "win", 5, 0, null],
+        [4, "boss", "win", 6, 0, "oldbramble"],
+        [5, "spar", "win", 6, 0, null],
+        [6, "trouble", "win", 5, 0, null],
+        [7, "spar", "win", 2, 0, null],
+        [8, "spar", "win", 2, 0, null],
+        [9, "boss", "win", 7, 0, "hoardmagpie"],
+        [10, "spar", "win", 4, 0, null],
+        [11, "spar", "win", 3, 0, null],
+        [12, "trouble", "loss", 0, 5, null],
+        [13, "spar", "win", 5, 0, null],
+        [14, "boss", "win", 2, 0, "bigcrab"]
+      ],
+      "before": {
+        "fought": 0,
+        "won": 0,
+        "lost": 0,
+        "furthest": 0,
+        "deepest": 0,
+        "cleared": [],
+        "bosses": [],
+        "bossesPast": 0,
+        "met": []
+      },
+      "nextId": 33,
+      "last": {
+        "seed": 820183825,
+        "era": 2,
+        "sides": [
+          {
+            "who": "You",
+            "title": "",
+            "figures": [
+              { "kind": "crab7", "stars": 2, "seat": 1, "items": [], "fed": 0 },
+              {
+                "kind": "emberkit",
+                "stars": 3,
+                "seat": 2,
+                "items": ["wasptail", "blackthorn", "blackthorn"],
+                "fed": 0
+              },
+              { "kind": "greg", "stars": 1, "seat": 3, "items": [], "fed": 6 },
+              { "kind": "whitefox", "stars": 1, "seat": 4, "items": [], "fed": 0 },
+              { "kind": "cindernewt", "stars": 1, "seat": 10, "items": [], "fed": 0 },
+              { "kind": "drizzlefrog", "stars": 1, "seat": 23, "items": [], "fed": 0 },
+              { "kind": "crab12", "stars": 2, "seat": 24, "items": ["wasptail"], "fed": 0 },
+              { "kind": "heron", "stars": 1, "seat": 25, "items": ["wasptail"], "fed": 0 }
+            ],
+            "boons": [],
+            "might": 100
+          },
+          {
+            "who": "The forest",
+            "title": "The Crab Nobody Counted",
+            "figures": [
+              { "kind": "bigcrab", "stars": 1, "seat": 3, "items": [], "fed": 0 },
+              { "kind": "crab", "stars": 3, "seat": 1, "items": [], "fed": 0 },
+              { "kind": "crab", "stars": 3, "seat": 5, "items": [], "fed": 0 },
+              { "kind": "crab", "stars": 2, "seat": 9, "items": [], "fed": 0 },
+              { "kind": "crab", "stars": 2, "seat": 11, "items": [], "fed": 0 },
+              { "kind": "toadstool", "stars": 3, "seat": 17, "items": [], "fed": 0 },
+              { "kind": "wasp", "stars": 3, "seat": 7, "items": [], "fed": 0 },
+              { "kind": "wasp", "stars": 3, "seat": 13, "items": [], "fed": 0 }
+            ],
+            "boons": [],
+            "might": 100
+          }
+        ]
+      },
+      "wing": null,
+      "seen": {
+        "fielded": [
+          "crab7",
+          "emberkit",
+          "crab12",
+          "cindernewt",
+          "finch",
+          "heron",
+          "leafling",
+          "drizzlefrog",
+          "whitefox",
+          "greg"
+        ],
+        "threeStars": ["emberkit"],
+        "forged": ["wasptail", "blackthorn", "fairyring"],
+        "topped": ["slinger", "greg"]
+      }
+    }
+  },
+  "almanac": {
+    "fielded": [],
+    "threeStars": [],
+    "forged": [],
+    "topped": [],
+    "bosses": [["bigcrab"], ["bigcrab"], []],
+    "best": [15, 15, 0],
+    "runs": 2,
+    "deepest": { "wilds": 0, "deep": 16 }
+  },
+  "trail": 0,
+  "looks": { "place": "clearing", "cloth": "bare", "lantern": "iron", "bases": "plain", "owned": [] },
+  "week": { "at": 1795392000000, "deepest": { "wilds": 0, "deep": 16 } },
+  "apart": { "deepest": { "wilds": 0, "deep": 0 }, "week": { "at": 0, "deepest": { "wilds": 0, "deep": 0 } } }
+}

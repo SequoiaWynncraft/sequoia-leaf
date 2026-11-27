@@ -16,15 +16,16 @@ export interface Row {
 }
 
 /**
- * Each fight in the database, oldest first, as a JSON line (`line`): the row, with its party and the
- * party against it as JSON. A row's empty `course`, `pool` and `era` (one kept before there were
- * any, or written by an older Leaf) are `null`, read back as its `way` and `at` say (`rowOf`).
+ * Each fight in the database, oldest first, as a JSON line (`line`): the row, with its party, the
+ * party against it and its setup as JSON. A row's empty `course`, `pool` and `era` (one kept before
+ * there were any, or written by an older Leaf) are `null`, read back as its `way` and `at` say
+ * (`rowOf`); its empty `setup` is `null`, a fight that cannot be played again.
  */
 export const fightLines = (sql: SqlClient.SqlClient) => sql`
   SELECT json_object('at', at, 'player', player_id, 'rules', rules, 'run', run, 'way', way, 'course', course,
     'trail', trail, 'pool', pool, 'era', era, 'room', room, 'kind', kind, 'across', across, 'result', result,
     'margin', margin, 'seconds', seconds, 'resolve', resolve, 'level', level, 'acorns', acorns,
-    'party', json(party), 'against', json(against)) AS line
+    'party', json(party), 'against', json(against), 'setup', json(setup)) AS line
   FROM raid_fights ORDER BY id
 `;
 

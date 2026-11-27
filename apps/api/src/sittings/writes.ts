@@ -6,6 +6,7 @@
  * sitting, it fails `Lost` and writes nothing, and the job is done again from what is stored.
  */
 import { type Logged, parsePlayerId } from "@sequoia-leaf/core";
+import { roomsFought } from "@sequoia-leaf/raid/record.ts";
 import { paidOff } from "@sequoia-leaf/raid/sitting/commands.ts";
 import { encodeSitting } from "@sequoia-leaf/raid/sitting/keep.ts";
 import { CHAIRS, type Owed, type Sitting } from "@sequoia-leaf/raid/sitting/sitting.ts";
@@ -91,8 +92,8 @@ export function placesOf(before: Sitting | null, after: Sitting): Place[] {
   return placesAt(after).filter((p) => !had.has(p.player));
 }
 
-/** How many rooms a sitting fought: as many as the seat that fought the most has a record of. */
-const roomsOf = (t: Sitting): number => Math.max(0, ...t.seats.map((seat) => seat.run.record.length));
+/** How many rooms a sitting fought: as many as the seat that fought the most. */
+const roomsOf = (t: Sitting): number => Math.max(0, ...t.seats.map((seat) => roomsFought(seat.run)));
 
 /** What a write logs, from how the sitting stood before it (null: a new one) to after it. */
 export function loggedOf(id: string, before: Sitting | null, after: Sitting): Logged[] {

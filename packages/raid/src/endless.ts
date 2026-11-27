@@ -13,7 +13,8 @@ import { catalogOf } from "./content/catalog.ts";
 import { ENDLESS } from "./content/endless.ts";
 import { MAX_LEVEL, ROOM_COUNT, type SparStrength } from "./content/rooms.ts";
 import { roomAt } from "./content/ways.ts";
-import type { RoomRecord, Run } from "./run.ts";
+import { type Recorded, totalsOf } from "./record.ts";
+import type { Run } from "./run.ts";
 import { courseOf, type Way } from "./way.ts";
 
 export type { EndlessWay } from "./content/endless.ts";
@@ -35,8 +36,7 @@ function bossesBefore(room: number): number {
 }
 
 /** The chairs a run has earned, as its course gives them: on an endless run a boss beaten after the fifteenth room, each, `ENDLESS.chairs` at most. */
-export const chairsOf = (run: OnWay & { readonly record: readonly RoomRecord[] }): number =>
-  courseOf(run.way).chairs(run.record);
+export const chairsOf = (run: Recorded): number => courseOf(run.way).chairs(totalsOf(run));
 
 /**
  * A regular's strength in a room: the room's own to the fifteenth; after it the top level and a
@@ -62,5 +62,5 @@ export function isHeld(run: OnWay, room: number): boolean {
 }
 
 /** How many figures a run's chairs add to what may be fielded, beside An Extra Chair's. */
-export const extraChairs = (run: Pick<Run, "boons" | "record" | "era"> & OnWay): number =>
+export const extraChairs = (run: Pick<Run, "boons" | "era"> & Recorded): number =>
   (run.boons.includes("extrachair") ? boonNumber(catalogOf(run), "extrachair", "more") : 0) + chairsOf(run);

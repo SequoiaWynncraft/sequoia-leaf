@@ -187,8 +187,24 @@ export const EVERY_PLANNING = Object.values(EVERY_COMMAND).flatMap((each) =>
   isPlanning(each.c) ? [{ c: each.c, ready: each.ready }] : [],
 );
 
+/** A room as a run's record kept it before rooms were stored as rows (`roomRow`): an object. */
+function roomWhole(row: unknown): unknown {
+  if (!Array.isArray(row)) return row;
+  const [room, kind, result, ours, theirs, boss, met] = row;
+  return { room, kind, result, standing: [ours, theirs], boss, ...(met === undefined ? {} : { met }) };
+}
+/**
+ * A run as a table before version 9 (or a sitting before version 5) kept it: every room of its record
+ * as an object, and none folded (a run of a test has fought too few rooms to fold any).
+ */
+export function runKeptWhole(run: unknown): unknown {
+  if (typeof run !== "object" || run === null || !("record" in run) || !Array.isArray(run.record)) return run;
+  const rest = Object.entries(run).filter(([key]) => key !== "before" && key !== "record");
+  return { ...Object.fromEntries(rest), record: run.record.map(roomWhole) };
+}
 /** A run as a table before version 8 (or a sitting before version 4) kept it: its way as its trail, its roster (`own`) and its endless way. */
-export function runKeptBefore(run: unknown): unknown {
+export function runKeptBefore(kept: unknown): unknown {
+  const run = runKeptWhole(kept);
   if (typeof run !== "object" || run === null || !("way" in run)) return run;
   const { way, ...rest } = run;
   const read = readWay(way);

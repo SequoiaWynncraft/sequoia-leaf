@@ -22,7 +22,7 @@ import { type Catalog, catalogOf, type Era } from "./content/catalog.ts";
 import { type BossId, type FigureId, figureIn, type Stars, traitsOf } from "./content/figures.ts";
 import type { ComponentId, FinishedId, ItemId } from "./content/items.ts";
 import { holdItem } from "./content/recipes.ts";
-import { ECONOMY, MAX_LEVEL, type RoomKind, ROOMS, sellPrice } from "./content/rooms.ts";
+import { ECONOMY, MAX_LEVEL, type RoomKind, sellPrice } from "./content/rooms.ts";
 import { topStep, type TraitId, traitNumber } from "./content/traits.ts";
 import { drawOffer, starters } from "./draws.ts";
 import { lastRoom } from "./endless.ts";
@@ -34,6 +34,7 @@ import { COLS, SEATS } from "./hex.ts";
 import { handOver, takeMade } from "./made.ts";
 import { placedOf } from "./own.ts";
 import { type Party, type TraitState, traitStates, traitSteps } from "./party.ts";
+import { keepRoom, noRooms, type RoomRecord, type RoomTotals, totalsOf } from "./record.ts";
 import { closedNow, roomOf, type RoomRun, setupRules } from "./room.ts";
 import { courseOf, onTrail, onTrailThere, trailOf, type Way } from "./way.ts";
 import { enterRoom, ruleOptions, rulePicks, takeRule } from "./wilds.ts";
@@ -71,17 +72,7 @@ export type Ending = "won" | "lost" | "left";
 export type Stage =
   { phase: "plan"; picks: Choice[] } | { phase: "fight"; fight: Fought } | { phase: "over"; ending: Ending };
 export type Phase = Stage["phase"];
-/** How one room went. */
-export interface RoomRecord {
-  room: number;
-  kind: RoomKind;
-  result: FightResult;
-  standing: [number, number];
-  /** The boss that was in it, beaten or not. */
-  boss: BossId | null;
-  /** Whose board it was, when it was another member's: their Leaf id. */
-  met?: string;
-}
+export type { RoomRecord, RoomTotals } from "./record.ts";
 export interface Run {
   /** Where the stream started. The bot's own habits are drawn from it; the run's draws never are. */
   seed: number;
@@ -117,7 +108,9 @@ export interface Run {
   boons: BoonId[];
   /** Who is waiting in the room. */
   foe: Party;
+  /** The last rooms fought, `KEPT_ROOMS` at most (`record.ts`), and every room before them as totals. */
   record: RoomRecord[];
+  before: RoomTotals;
   nextId: number;
   /** The last fight fought, as it was set up, so that it can be played again to be looked back on. */
   last: FightSetup | null;
@@ -413,6 +406,7 @@ export function startRun(seed: number, options: RunOptions): Run {
     boons: [],
     foe: { who: "", title: "", figures: [], boons: [], might: 100 },
     record: [],
+    before: noRooms(),
     nextId: 1,
     last: null,
     wing: null,
@@ -775,7 +769,7 @@ export function takeTakings(run: Run, met?: Met, more?: boolean): Taken {
   const won = fight.result === "win";
   const last = run.room >= lastRoom(run);
   const notes: Note[] = [{ t: "result", room: run.room, result: fight.result, standing: fight.standing }];
-  run.record.push({ room: run.room, kind: room.kind, ...across(run.foe, fight) });
+  keepRoom(run, { room: run.room, kind: room.kind, ...across(run.foe, fight) });
   run.streak = nextStreak(run.streak, fight.result);
   run.last = setup;
 
@@ -857,21 +851,15 @@ export interface RunSummary {
   topped: TraitId[];
 }
 export function summariseRun(run: RunView): RunSummary {
-  // A room is cleared only as the room it is: a sitting's rooms past the fifteenth are kept as the last, as sparring.
-  const wonRooms = new Set(
-    run.record.flatMap((r) => (r.result === "win" && r.kind === ROOMS[r.room]?.kind ? [r.room] : [])),
-  );
-  // Bosses and the furthest room count only as far as the course's rooms pay.
+  // Bosses and the furthest room count only as far as the course's rooms pay (`RoomTotals`).
   const { paysThrough } = courseOf(run.way);
-  const bosses: BossId[] = [];
-  for (const r of run.record)
-    if (r.result === "win" && r.boss && r.room < paysThrough && !bosses.includes(r.boss)) bosses.push(r.boss);
+  const rooms = totalsOf(run);
   return {
     trail: trailOf(run.way),
     ending: endingOf(run),
-    cleared: wonRooms.size,
-    reached: Math.min(paysThrough, Math.max(run.room, ...run.record.map((r) => r.room)) + 1),
-    bosses,
+    cleared: rooms.cleared.length,
+    reached: Math.min(paysThrough, Math.max(run.room + 1, rooms.furthest)),
+    bosses: rooms.bosses.slice(),
     fielded: run.seen.fielded.slice(),
     threeStars: run.seen.threeStars.slice(),
     forged: run.seen.forged.slice(),

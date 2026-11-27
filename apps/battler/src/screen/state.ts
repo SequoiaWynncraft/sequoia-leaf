@@ -39,6 +39,7 @@ import {
   readNotes,
   readView,
   refusalText,
+  roomsFought,
   type Roster,
   type RunView,
   type Slot,
@@ -195,7 +196,7 @@ export const pagesKey = (id: string | null): string =>
 
 /** Where both runs laid out stand, as text: what their strips on the front page say. */
 export const laidKey = (): string =>
-  [S.laid.run, S.laid.endless].map((r) => (r ? `${r.room}.${r.record.length}.${r.resolve}` : "-")).join(":");
+  [S.laid.run, S.laid.endless].map((r) => (r ? `${r.room}.${roomsFought(r)}.${r.resolve}` : "-")).join(":");
 
 /** Has the table play the run in a slot, from the front page. */
 export function playSlot(slot: Slot): void {

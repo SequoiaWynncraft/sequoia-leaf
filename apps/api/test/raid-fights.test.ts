@@ -3,16 +3,18 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { type PlayerId, playerId } from "@sequoia-leaf/core";
 import {
   eraAt,
+  type FightSetup,
   figureIn,
   LEGACY_ERA,
   planCommands,
   type RaidCommand,
   readNotes,
   readView,
+  resolveFight,
   SENSIBLE,
   type TableView,
 } from "@sequoia-leaf/raid";
-import { type FightRecord, readFight } from "@sequoia-leaf/raid/fought.ts";
+import { type FightRecord, margin, readFight, replayOf } from "@sequoia-leaf/raid/fought.ts";
 import { CAT, EVERYONES } from "@sequoia-leaf/raid/testkit.ts";
 import { Schema } from "effect";
 
@@ -65,15 +67,22 @@ async function planned(table: TableView, player: PlayerId = alice): Promise<Tabl
 const ready = async (player: PlayerId = alice, own = false): Promise<TableView> =>
   planned((await send([own ? { do: "start", trail: 0, own } : { do: "start", trail: 0 }], player)).view, player);
 
-/** The party a fight was decided with, as its answer's note says. */
-function partyOf(results: readonly unknown[]) {
+/** What a fight was decided from, as its answer's note says. */
+function setupOf(results: readonly unknown[]): FightSetup {
   const notes = results.flatMap((r) =>
     typeof r === "object" && r !== null && "notes" in r ? (readNotes(r.notes) ?? []) : [],
   );
   const fight = notes.find((n) => n.t === "fight");
   if (fight?.t !== "fight") throw new Error("no fight");
-  return fight.setup.sides[0];
+  return fight.setup;
 }
+/** The party a fight was decided with, as its answer's note says. */
+const partyOf = (results: readonly unknown[]) => setupOf(results).sides[0];
+/** Each fight as the fight report exports it, a JSON line each, oldest first. */
+const exported = async () =>
+  Schema.decodeUnknownSync(Schema.Array(Schema.Struct({ line: Schema.String })))(await services.query(fightLines)).map(
+    ({ line }) => line,
+  );
 
 const Row = Schema.Struct({
   playerId: Schema.String,
@@ -140,6 +149,21 @@ describe("each fight decided", () => {
     expect(row).toMatchObject({ playerId: bob, way: "own", party: { figures: party.figures } });
   });
 
+  it("keeps what it was decided from, which plays it again to the end Leaf decided", async () => {
+    await ready();
+    const { results } = await send([{ do: "fight" }]);
+    const [line = ""] = await exported();
+    expect(rowOf(line)?.fight.setup).toEqual(setupOf(results));
+    const setup = replayOf(JSON.parse(line));
+    if (!setup) throw new Error("the fight does not play again");
+    const again = resolveFight(setup);
+    expect(rowOf(line)?.fight).toMatchObject({
+      result: again.result,
+      seconds: Math.round(again.seconds * 10) / 10,
+      margin: Math.round(margin(again) * 1000) / 1000,
+    });
+  });
+
   it("is exported for the fight report with how its run set out and its era, and read back the same; a row an older Leaf wrote, as its way and moment say", async () => {
     const tier1 = EVERYONES.filter((id) => figureIn(CAT, id).tier === 1);
     await services.run(
@@ -156,16 +180,17 @@ describe("each fight decided", () => {
     await ready(bob, true);
     await send([{ do: "fight" }], bob);
     await old(clock.now + 1);
-    const lines = Schema.decodeUnknownSync(Schema.Array(Schema.Struct({ line: Schema.String })))(
-      await services.query(fightLines),
-    );
-    const read = lines.map(({ line }) => rowOf(line));
+    const lines = await exported();
+    const read = lines.map((line) => rowOf(line));
     expect(read.map((r) => r && [r.player, r.fight.way, r.fight.course, r.fight.pool, r.fight.era])).toEqual([
       [alice, "main", "trail", "fair", eraAt(T0)],
       [bob, "own", "trail", "own", eraAt(T0)],
       // Written without them: its course and pool as its way says, its era the one live when it was written.
       [bob, "main", "trail", "fair", eraAt(clock.now + 1)],
     ]);
+    // Written without its setup: it says it has none, and does not play again.
+    expect(read.map((r) => r?.fight.setup === null)).toEqual([false, false, true]);
+    expect(lines.map((line) => replayOf(JSON.parse(line)) === null)).toEqual([false, false, true]);
     // The line says what the row keeps: the same line read again is the same fight.
     expect(
       read.map((r) => r && rowOf(JSON.stringify({ ...r.fight, at: r.at, player: r.player, rules: r.rules }))),
@@ -213,6 +238,7 @@ describe("the fights a player's day takes", () => {
     acorns: 2,
     party: { figures: [{ kind: "crab7", stars: 1, seat: 3, items: [], fed: 0 }], traits: {}, boons: [] },
     against: null,
+    setup: null,
   };
   const fights = (n: number, data: Readonly<Record<string, unknown>> = record) =>
     Array.from({ length: n }, () => ({ kind: "raid_fight", data }));

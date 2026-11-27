@@ -192,12 +192,12 @@ export type Shape = (typeof SHAPES)[number];
 /**
  * Each shape's version. A fight (a row of `raid_fights`), a board and a depth (pieces left in
  * `play_kept`) are kept with no version of their own: the number here stands for one, and moves
- * when their keys do, in the PR that says why.
+ * when their keys do, in the PR that says why. Fight 3: a row keeps its fight's setup.
  */
 export const VERSIONS: Readonly<Record<Shape, number>> = {
   table: TABLE_VERSION,
   sitting: SITTING_VERSION,
-  fight: 2,
+  fight: 3,
   board: 1,
   depth: 1,
 };
@@ -377,8 +377,8 @@ export function goldenSetup(pool: Pool, n: number): FightSetup {
   return { seed: draw32(s), era: LEGACY_ERA, sides: [home, away] };
 }
 
-export function fightLine(pool: Pool, n: number): Line {
-  const setup = goldenSetup(pool, n);
+/** The `n`th golden fight's line, played from its setup (`setup`: as the pool sets it up, unless given one kept). */
+export function fightLine(pool: Pool, n: number, setup = goldenSetup(pool, n)): Line {
   const { opening, steps, summary } = recordFight(setup);
   const events = opening.length + steps.reduce((a, step) => a + step.length, 0);
   const sizes = setup.sides.map((p) => p.figures.length).join(" on ");

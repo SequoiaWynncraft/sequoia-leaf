@@ -4,16 +4,18 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { type Ctx, isRefused } from "@sequoia-leaf/core";
 import type { Habit } from "@sequoia-leaf/raid/bot.ts";
 import { ENDLESS } from "@sequoia-leaf/raid/content/endless.ts";
+import { resolveFight } from "@sequoia-leaf/raid/fight/engine.ts";
 import { boardMet } from "@sequoia-leaf/raid/foe.ts";
-import { readFight } from "@sequoia-leaf/raid/fought.ts";
+import { fightRecord, readFight, replayOf } from "@sequoia-leaf/raid/fought.ts";
 import { RAID, type Table } from "@sequoia-leaf/raid/game.ts";
-import { picksOf } from "@sequoia-leaf/raid/run.ts";
+import { picksOf, startRun } from "@sequoia-leaf/raid/run.ts";
 import { advance } from "@sequoia-leaf/raid/sitting/clock.ts";
 import { decodeSitting, encodeSitting } from "@sequoia-leaf/raid/sitting/keep.ts";
 import { CAT } from "@sequoia-leaf/raid/testkit.ts";
 
 import {
   differences,
+  fightLine,
   fightLines,
   goldenSetup,
   HABITS,
@@ -55,6 +57,17 @@ const sittingsNow = (): Line[] => {
 describe("the golden fights", () => {
   test("each plays as written, its setup and every event", () => {
     expect(differences(written("fights"), fightLines(pool))).toEqual([]);
+  });
+  test("each kept as a fight's row, as Leaf writes and stores one, plays again from it to every event", () => {
+    const run = startRun(1, { era: CAT.era });
+    const replayed = Array.from({ length: 500 }, (_, n) => {
+      const setup = goldenSetup(pool, n);
+      const row: unknown = JSON.parse(JSON.stringify(fightRecord(1, run, { setup, outcome: resolveFight(setup) })));
+      const kept = replayOf(row);
+      if (!kept) throw new Error(`golden fight ${n} kept as a row does not play again`);
+      return fightLine(pool, n, kept);
+    });
+    expect(differences(written("fights"), replayed)).toEqual([]);
   });
   test("between them field every figure, trouble, item and fight boon of the pool", () => {
     const setups = Array.from({ length: 500 }, (_, n) => goldenSetup(pool, n));
@@ -176,12 +189,15 @@ describe("every row the goldens keep", () => {
     },
   );
   test.each(rows("fight"))(
-    "%s reads as Leaf reads a fight, and the same; one kept before records said their course, pool and era, with those its way said",
+    "%s reads as Leaf reads a fight, and the same; one kept before records said their course, pool and era, with those its way said; one kept before they kept their setup, with none",
     (_, text) => {
       const row: Record<string, unknown> = JSON.parse(text);
       const said = { main: ["trail", "fair"], own: ["trail", "own"], wilds: ["wilds", "fair"], deep: ["deep", "fair"] };
       const [course, whose] = Object.entries(said).find(([way]) => way === row.way)?.[1] ?? [];
-      const older = row.course === undefined ? { course, pool: whose, era: CAT.era } : {};
+      const older = {
+        ...(row.course === undefined && { course, pool: whose, era: CAT.era }),
+        ...(row.setup === undefined && { setup: null }),
+      };
       const kept: unknown = readFight(row);
       expect(kept).toEqual({ ...row, ...older });
     },

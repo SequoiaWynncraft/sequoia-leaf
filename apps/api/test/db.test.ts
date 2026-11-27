@@ -46,15 +46,21 @@ function onFile<A, E>(path: string, program: Effect.Effect<A, E, SqlClient.SqlCl
 }
 
 /** Runs SQL against the database file at `path`. */
-/** Undoes migration 47: no fight's course, pool or era kept beside its way. */
-const beforeFightsWay = (sql: SqlClient.SqlClient) =>
-  Effect.all([
-    sql`ALTER TABLE raid_fights DROP COLUMN course`,
-    sql`ALTER TABLE raid_fights DROP COLUMN pool`,
-    sql`ALTER TABLE raid_fights DROP COLUMN era`,
-  ]);
+/** Undoes migration 48: no fight's setup kept. */
+const beforeFightSetups = (sql: SqlClient.SqlClient) => sql`ALTER TABLE raid_fights DROP COLUMN setup`;
 
-/** Undoes migrations 47 and 46: none of the raid's sittings kept. */
+/** Undoes migrations 48 and 47: no fight's setup, nor its course, pool or era kept beside its way. */
+const beforeFightsWay = (sql: SqlClient.SqlClient) =>
+  Effect.andThen(
+    beforeFightSetups(sql),
+    Effect.all([
+      sql`ALTER TABLE raid_fights DROP COLUMN course`,
+      sql`ALTER TABLE raid_fights DROP COLUMN pool`,
+      sql`ALTER TABLE raid_fights DROP COLUMN era`,
+    ]),
+  );
+
+/** Undoes migrations 48 to 46: none of the raid's sittings kept. */
 const beforeRaidSittings = (sql: SqlClient.SqlClient) =>
   Effect.andThen(
     beforeFightsWay(sql),
@@ -65,7 +71,7 @@ const beforeRaidSittings = (sql: SqlClient.SqlClient) =>
     ]),
   );
 
-/** Undoes migrations 47 to 45: no raid fights kept. */
+/** Undoes migrations 48 to 45: no raid fights kept. */
 const beforeRaidFights = (sql: SqlClient.SqlClient) =>
   Effect.andThen(beforeRaidSittings(sql), sql`DROP TABLE raid_fights`);
 
@@ -294,6 +300,7 @@ describe("the database", () => {
       { migration_id: 45, name: "raid_fights" },
       { migration_id: 46, name: "raid_sittings" },
       { migration_id: 47, name: "raid_fights_way" },
+      { migration_id: 48, name: "raid_fights_setup" },
     ]);
     // Each feed has its own lease and cursor, not started yet.
     expect(await query(path, (sql) => sql`SELECT name, started_at, cursor FROM sync_state ORDER BY name`)).toEqual([
@@ -368,7 +375,7 @@ describe("the database", () => {
 
     expect(account.balance).toBe(110);
     expect(await query(path, (sql) => sql`SELECT max(migration_id) AS latest FROM effect_sql_migrations`)).toEqual([
-      { latest: 47 },
+      { latest: 48 },
     ]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM announcements`)).toEqual([{ n: 0 }]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM saves`)).toEqual([{ n: 0 }]);
@@ -803,7 +810,7 @@ describe("the database", () => {
     ).toEqual([...given(pulled), ...given(guest)]);
   });
 
-  it("rewrites no raid fight kept before it, nor one an older Leaf writes after: each is read as its way and its moment say", async () => {
+  it("rewrites no raid fight kept before it, nor one an older Leaf writes after: each is read as its way and its moment say, with no setup", async () => {
     const path = join(directory, "leaf.db");
     await onFile(
       path,
@@ -822,8 +829,8 @@ describe("the database", () => {
         for (const [n, way] of ["wilds", "deep"].entries()) yield* insertFight(sql, LATER + n, way);
       }),
     );
-    expect(await query(path, (sql) => sql`SELECT way, course, pool, era FROM raid_fights ORDER BY at`)).toEqual(
-      ["main", "own", "wilds", "deep"].map((way) => ({ way, course: null, pool: null, era: null })),
+    expect(await query(path, (sql) => sql`SELECT way, course, pool, era, setup FROM raid_fights ORDER BY at`)).toEqual(
+      ["main", "own", "wilds", "deep"].map((way) => ({ way, course: null, pool: null, era: null, setup: null })),
     );
     const lines = Schema.decodeUnknownSync(Schema.Array(Schema.Struct({ line: Schema.String })))(
       await query(path, fightLines),
@@ -831,11 +838,11 @@ describe("the database", () => {
     const read = lines.map(({ line }) => rowOf(line)?.fight);
     // Each of the era live when it was written: the later two of the release that opened between.
     expect(Number(eraAt(LATER))).toBe(eraAt(FOUGHT_AT) + 1);
-    expect(read.map((f) => f && [f.way, f.course, f.trail, f.pool, f.era])).toEqual([
-      ["main", "trail", 2, "fair", eraAt(FOUGHT_AT)],
-      ["own", "trail", 0, "own", eraAt(FOUGHT_AT)],
-      ["wilds", "wilds", 0, "fair", eraAt(LATER)],
-      ["deep", "deep", 0, "fair", eraAt(LATER)],
+    expect(read.map((f) => f && [f.way, f.course, f.trail, f.pool, f.era, f.setup])).toEqual([
+      ["main", "trail", 2, "fair", eraAt(FOUGHT_AT), null],
+      ["own", "trail", 0, "own", eraAt(FOUGHT_AT), null],
+      ["wilds", "wilds", 0, "fair", eraAt(LATER), null],
+      ["deep", "deep", 0, "fair", eraAt(LATER), null],
     ]);
   });
 

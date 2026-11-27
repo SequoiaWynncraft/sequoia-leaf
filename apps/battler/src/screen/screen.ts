@@ -19,6 +19,7 @@ import {
   playsAsKept,
   type RaidNote,
   resolveFight,
+  roomsFought,
   type RunSummary,
   type RunView,
 } from "@sequoia-leaf/raid";
@@ -133,7 +134,7 @@ export function againOf(run: RunView, runs: number): Playback | null {
   if (!setup || room === undefined || !watchable(run)) return null;
   const fought: Fought = { setup, outcome: resolveFight(setup) };
   return {
-    key: `again:${runs}:${run.record.length}`,
+    key: `again:${runs}:${roomsFought(run)}`,
     fought,
     kept: true,
     room,

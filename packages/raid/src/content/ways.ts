@@ -9,7 +9,7 @@
  */
 import type { Figures } from "./catalog.ts";
 import { CYCLE, ENDLESS } from "./endless.ts";
-import { ROOM_COUNT, type RoomKind, ROOMS, type RoomSpec, TRAILS } from "./rooms.ts";
+import { ROOM_COUNT, ROOMS, type RoomSpec, TRAILS } from "./rooms.ts";
 
 /** Where a table keeps a run: the run in hand, or the endless run beside it. */
 export type Slot = "main" | "endless";
@@ -31,11 +31,10 @@ export interface Way {
  */
 export type Across = "met" | "regular" | { readonly held: { readonly from: number } };
 
-/** A room fought, as much as the chairs a course gives read of it. */
+/** The rooms a run fought, as much as the chairs a course gives read of them (the raid's `RoomTotals`). */
 interface Fought {
-  readonly room: number;
-  readonly kind: RoomKind;
-  readonly result: "win" | "loss" | "draw";
+  /** Boss rooms won past the fifteenth. */
+  readonly bossesPast: number;
 }
 
 export interface CourseSpec {
@@ -48,7 +47,7 @@ export interface CourseSpec {
   /** How strong the forest is in a room, in percent. */
   readonly grows: (at: number) => number;
   /** The chairs a run has earned by the rooms it fought: more figures it may field. */
-  readonly chairs: (record: readonly Fought[]) => number;
+  readonly chairs: (fought: Fought) => number;
   /** Whether the member picks a rule for each wing (`wilds.ts`). */
   readonly binds: "none" | "wing";
   readonly across: Across;
@@ -70,11 +69,7 @@ export const grownAt = (room: number): number =>
   room < ROOM_COUNT ? 100 : 100 * (1 + ENDLESS.grows / 100) ** (room - ROOM_COUNT + 1);
 
 /** The chairs bosses beaten after the fifteenth room give: one each, `ENDLESS.chairs` at most. */
-const bossChairs = (record: readonly Fought[]): number =>
-  Math.min(
-    ENDLESS.chairs,
-    record.filter((r) => r.room >= ROOM_COUNT && r.kind === "boss" && r.result === "win").length,
-  );
+const bossChairs = (fought: Fought): number => Math.min(ENDLESS.chairs, fought.bossesPast);
 
 /** The endless ways' rooms, forest and chairs, which the two share. */
 const ENDLESS_ROOMS = { slot: "endless", rooms: roomAt, last: Infinity, grows: grownAt, chairs: bossChairs } as const;

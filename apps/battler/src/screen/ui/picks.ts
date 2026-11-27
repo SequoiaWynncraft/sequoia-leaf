@@ -23,6 +23,7 @@ import {
   picksOf,
   pieces,
   roleLine,
+  roomsFought,
   type RunView,
   traitIn,
   traitsOf,
@@ -203,7 +204,7 @@ export function renderPicks(): void {
   const held = `${run.items.join()}|${pieces(run)
     .map((p) => p.items.join())
     .join(";")}`;
-  const now = `${S.runs}:${run.record.length}:${picksOf(run).length}:${choice.kind}:${choice.options.join()}:${held}`;
+  const now = `${S.runs}:${roomsFought(run)}:${picksOf(run).length}:${choice.kind}:${choice.options.join()}:${held}`;
   if (now === key) return;
   key = now;
   box.hidden = false;

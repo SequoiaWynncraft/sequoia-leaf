@@ -20,7 +20,7 @@ export const FIGHTS_KEPT_MS = 365 * DAY_MS;
 /**
  * `PlayStore.log`: each thing a player did in `activity`; but each raid fight (`raid_fight`) in
  * `raid_fights`, checked as the raid reads one (`readFight`), with the version of the rules Leaf
- * plays it by. Each table takes `LOGGED_A_DAY` of a player's a UTC day, and lets go of what is older
+ * plays it by, its parties and its setup as JSON. Each table takes `LOGGED_A_DAY` of a player's a UTC day, and lets go of what is older
  * than it keeps (`ACTIVITY_KEPT_MS` of the game's, `FIGHTS_KEPT_MS`). The Tally counts each thing it
  * counts, however much was written down. A fight that does not read is a fault in the rules, not
  * the player's: it is logged and let go, and the command stands.
@@ -47,9 +47,13 @@ export function loggingIn(sql: SqlClient.SqlClient) {
     const fight = readFight(one.data);
     if (fight === null)
       return Effect.annotateLogs(Effect.logWarning("A raid fight Leaf does not keep"), { player: playerId });
-    const { party, against, ...record } = fight;
+    const { party, against, setup, ...record } = fight;
     const rules = GAMES.raid.rules;
-    const sides = { party: JSON.stringify(party), against: against && JSON.stringify(against) };
+    const sides = {
+      party: JSON.stringify(party),
+      against: against && JSON.stringify(against),
+      setup: setup && JSON.stringify(setup),
+    };
     return sql`INSERT INTO raid_fights ${sql.insert({ playerId, at: now, rules, ...record, ...sides })}`;
   };
   return {

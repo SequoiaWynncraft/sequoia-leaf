@@ -72,7 +72,7 @@ export function depthBoard(title: string, board: DepthBoard | null, own: number)
 }
 
 /** What an endless run's chairs add, for the level's card: nothing for a run with none. */
-export function chairsSaid(run: Pick<RunView, "way" | "record">): string[] {
+export function chairsSaid(run: Pick<RunView, "way" | "record" | "before">): string[] {
   const n = chairsOf(run);
   if (n === 0) return [];
   return [
