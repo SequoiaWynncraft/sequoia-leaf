@@ -72,17 +72,23 @@ const WAYS: readonly Choice<"all" | "own">[] = [
 export const unshown = (shown: boolean): Record<string, string> => (shown ? {} : { "aria-hidden": "true", inert: "" });
 
 /**
- * The front page's part on how to set out, under the trails: for a member who has pulled a figure,
- * the two ways to choose from and what the chosen one is (both held in one place, so that choosing
+ * The front page's part on how to set out: for a member who has pulled a figure, the two ways to
+ * choose from (`choice`) and what the chosen one is (`said`, both held in one place, so that choosing
  * moves nothing); for anyone else the one line about the one way there is. While the raid laid out
  * has fought no room (`keep`), nothing is chosen. The same choice is on the trails' card and the
- * endless ways' (`endless`: what a run with the member's own figures counts for there).
+ * endless ways' (`endless`: what a run with the member's own figures counts for there). Apart, so a
+ * card holds the choice first, in the same place on each, and the words last, where the room kept
+ * for the longer is no gap.
  */
-export function waysOf(keep: boolean, redraw: () => void, endless = false): (HTMLElement | null)[] {
+export function waysOf(
+  keep: boolean,
+  redraw: () => void,
+  endless = false,
+): { choice: HTMLElement | null; said: HTMLElement | null } {
   const fair = (shown = true): HTMLElement =>
     el("p", "k-read fair", { text: "Everyone plays with the same figures here.", ...unshown(shown) });
-  if (keep) return [pulled() > 0 ? null : fair()];
-  if (pulled() === 0) return [fair()];
+  if (keep) return { choice: null, said: pulled() > 0 ? null : fair() };
+  if (pulled() === 0) return { choice: null, said: fair() };
   const ways = choices(WAYS, {
     kind: "radio",
     name: "Figures",
@@ -103,7 +109,7 @@ export function waysOf(keep: boolean, redraw: () => void, endless = false): (HTM
     }),
     el("span", "", { text: countedLine(endless) }),
   );
-  return [ways.el, el("div", "stack", {}, fair(!setsOutOwn()), about)];
+  return { choice: ways.el, said: el("div", "stack", {}, fair(!setsOutOwn()), about) };
 }
 
 /** Which way a raid is, before the line about it on the front page: said to a member who has both ways. */

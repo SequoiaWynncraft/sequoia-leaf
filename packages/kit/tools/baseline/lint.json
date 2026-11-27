@@ -86,7 +86,7 @@
   },
   "max-lines": {
     "apps/api/src/play/service.ts": 621,
-    "apps/battler/src/screen/ui/table.ts": 507,
+    "apps/battler/src/screen/ui/table.ts": 506,
     "apps/town/src/campart.ts": 1389,
     "apps/town/src/campscene.ts": 1354,
     "apps/town/src/camptouch.ts": 697,

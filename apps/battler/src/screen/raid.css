@@ -1502,6 +1502,10 @@ body[data-rule] #says {
   flex-direction: column;
   gap: calc(var(--u) * 3);
 }
+/* The rooms held this week keep their line while they are fetched, or when none are: what is under them stays where it is. */
+.mode-opts .held:empty::before {
+  content: "\a0";
+}
 .k-card.trail.chosen {
   border-image-source: var(--k-f-card-chosen);
 }
@@ -1559,6 +1563,10 @@ body[data-rule] #says {
 }
 .board > .spans {
   padding-inline: 0;
+}
+/* Whose figures a board counts, its line held on every board for a member who can choose, unseen where a board does not count by them. */
+.board > .figures[aria-hidden="true"] {
+  visibility: hidden;
 }
 .menu-foot > .k-btn {
   flex: 1;
@@ -1982,7 +1990,7 @@ body[data-rule] #says {
   }
   /*
    * The mode's card of one height whichever is chosen, its options taking what its head leaves: the
-   * head holds the words of its own category's modes only, as the others' would leave a hole here.
+   * head holds the words of the cards like its own only (front.ts), as the others' would leave a hole here.
    */
   #modal[data-page="front"] .mode {
     height: calc(var(--u) * 278);

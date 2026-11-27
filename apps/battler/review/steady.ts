@@ -469,6 +469,28 @@ function frontWalk(shot: (what: string) => Step): Step[] {
       `(() => { const n = document.querySelectorAll("#modal .live-list .board-row").length; const top = ${OPTS}.scrollTop; const was = Number(sessionStorage.getItem("steady.top")); return n === 13 && was > 0 && Math.abs(top - was) <= 1 ? "kept at " + top : "${FAIL} the list read again: " + n + " rows, scrolled to " + top + " from " + was; })()`,
     ],
     take("Versus: the list read again, scrolled down"),
+    // A member who has pulled figures: the choice of whose figures on each card, and the boards' line for it.
+    staged(`await r.fresh(); r.taught(); await r.pulled(${JSON.stringify(PULLED)}); r.to("front");`),
+    ["wait", 1200],
+    ...press("#k-ways-to-play-normal", 1200),
+    take("Normal, for a member with figures"),
+    ...press("#k-figures-own", 1500),
+    take("the trails with your figures"),
+    ...press("#k-ways-to-play-endless", 1500),
+    take("Endless, for a member with figures: whose figures"),
+    shot("21-wilds-own"),
+    ...press("#mode-deep", 1800),
+    take("the Deep Woods with your figures"),
+    ...press("#k-figures-all", 1500),
+    take("the Deep Woods with all figures"),
+    ...press("#mode-endless", 1500),
+    take("the Wilds with all figures"),
+    ...press("#k-figures-own", 1500),
+    take("the Wilds with your figures"),
+    ...press("#k-ways-to-play-normal", 1200),
+    take("back to Normal, the board's line held"),
+    ...press("#k-ways-to-play-endless", 1200),
+    take("Endless again"),
   ];
 }
 

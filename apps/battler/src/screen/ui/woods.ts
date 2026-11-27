@@ -206,6 +206,6 @@ export function woodsOpts(mode: Mode, at: At): HTMLElement[] {
     : null;
   return [
     ...RULES.map((text) => el("p", "k-d", { text })),
-    el("div", "stack", {}, el("div", "k-col tight", unshown(deep), el("p", "k-d", { text: held }), met)),
+    el("div", "stack", {}, el("div", "k-col tight", unshown(deep), el("p", "k-d held", { text: held }), met)),
   ];
 }

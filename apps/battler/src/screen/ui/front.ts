@@ -356,25 +356,30 @@ function footOfCard(go: FrontAsks, mode: Mode, at: At): HTMLElement {
 }
 
 /**
+ * A way to set out on's options: whose figures first, in the same place on every card, so going
+ * between them moves nothing; then the card's own; then what the figures chosen are, last.
+ */
+function setOutOpts(go: FrontAsks, mode: Mode, at: At, keep: boolean): (HTMLElement | null)[] {
+  const trails = mode.id === "trails";
+  const { choice, said } = waysOf(keep, go.redraw, !trails);
+  const own = trails
+    ? [keep ? el("div", "k-label", { text: "Which way, next time?" }) : null, ...trailsOf(go, at)]
+    : woodsOpts(mode, at);
+  return [choice, ...own, said];
+}
+
+/**
  * The chosen mode: its name, what it is, a picture of the table, its options, and its foot. The
  * words of every mode shown are laid in one place, the others hidden, so the card's head is the
- * same height whichever is chosen and choosing moves nothing (a phone holds only the category's,
- * in a card of one height: `other`, raid.css).
+ * same height whichever is chosen and choosing moves nothing (a phone holds only the words of cards
+ * like this one, in a card of one height: `other`, raid.css). Like it: every way set out on, whose
+ * figures chosen under the head on each, or else Versus alone.
  */
 function card(go: FrontAsks, mode: Mode, at: At, shown: readonly Mode[]): HTMLElement {
   const run = mode.run(at);
   // The raid laid out, while it has fought no room, stays the one set out on: what is chosen is for the next.
   const keep = run !== null && unfought(run);
-  const options =
-    mode.id === "trails"
-      ? [
-          keep ? el("div", "k-label", { text: "Which way, next time?" }) : null,
-          ...trailsOf(go, at),
-          ...waysOf(keep, go.redraw),
-        ]
-      : mode.tables
-        ? tablesBody(go.redraw)
-        : [...woodsOpts(mode, at), ...waysOf(keep, go.redraw, true)];
+  const options = mode.tables ? tablesBody(go.redraw) : setOutOpts(go, mode, at, keep);
   return el(
     "section",
     "k-card mode",
@@ -391,7 +396,7 @@ function card(go: FrontAsks, mode: Mode, at: At, shown: readonly Mode[]): HTMLEl
         ...shown.map((m) =>
           el(
             "div",
-            m.category === mode.category ? "k-col tight" : "k-col tight other",
+            m.category === mode.category || (!m.tables && !mode.tables) ? "k-col tight" : "k-col tight other",
             unshown(m === mode),
             el("h2", "k-title big", { text: m.name }),
             el("p", "k-d", { text: m.text }),
@@ -399,7 +404,8 @@ function card(go: FrontAsks, mode: Mode, at: At, shown: readonly Mode[]): HTMLEl
         ),
       ),
     ),
-    el("div", "mode-opts k-scroll", {}, ...options),
+    // A category's own options (`data-category`): another category's are another box, not these moved.
+    el("div", "mode-opts k-scroll", { "data-category": mode.category }, ...options),
     mode.tables ? tablesFoot() : footOfCard(go, mode, at),
   );
 }
