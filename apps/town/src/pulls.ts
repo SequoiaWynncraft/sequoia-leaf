@@ -71,20 +71,6 @@ export function showing(
   return null;
 }
 
-/** What the Grove knows of the banners' people, by banner: each as Leaf last said it, a later word replacing an earlier. */
-export const heardPeople = (known: readonly BannerPerson[], said: readonly BannerPerson[]): BannerPerson[] => [
-  ...new Map([...known, ...said].map((b) => [b.id, b])).values(),
-];
-/** Whether Leaf is to be asked who the banners' people are: an open banner drawn from a member's skin has no headliner known. */
-export const missingPeople = (
-  view: Pick<PullsView, "open">,
-  people: readonly BannerPerson[],
-  rows: readonly Banner[] = BANNERS,
-): boolean =>
-  view.open.some(
-    ({ id }) => rows.find((b) => b.id === id)?.look === "skin" && !people.find((b) => b.id === id)?.headliner,
-  );
-
 /**
  * A banner's headliner's name: the set's own figure's, as the catalogue with every release open has
  * it (a pool or a prize of any banner, open or past), or the member's as Leaf says it; null for one

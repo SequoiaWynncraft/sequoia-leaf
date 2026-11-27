@@ -8,9 +8,11 @@ name: News
 # Each channel keeps its own record: a note it took is marked on the commit that added the note, as
 # the commit status `news/<channel>/<note id>`. Each run, on a merge and twice an hour, posts every
 # note that is out, in the last week, and not yet marked for that channel, and marks only what the
-# channel took: a 429, a 5xx or no answer is tried again on the next run. Which notes is `toPost`'s
-# to say and what counts as taken `deliver`'s (apps/town/src/notes.ts, tested there);
-# apps/town/review/news.ts runs them. A note changed after it was posted is not posted again.
+# channel took (posted with ?wait=true, so a 2xx means Discord saved it): a 429, a 5xx or no answer
+# is tried again on the next run. A mark that cannot be written fails the job once the rest are
+# posted. Which notes is `toPost`'s to say and what counts as taken `deliver`'s
+# (apps/town/src/notes.ts, tested there); apps/town/review/news.ts runs them. A note changed after
+# it was posted is not posted again.
 on:
   push:
     branches: [main]

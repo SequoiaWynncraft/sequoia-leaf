@@ -12,6 +12,7 @@
  * `copy()` is the page's own copy of the run, to change by hand and see that Leaf's next answer
  * puts it back.
  */
+import { PEOPLE } from "@sequoia-leaf/figures/people.ts";
 import { ask as askLeaf } from "@sequoia-leaf/kit/net.ts";
 import { balance } from "@sequoia-leaf/kit/purse.ts";
 import {
@@ -62,7 +63,6 @@ import {
   waitingForLeaf,
 } from "../src/screen/state.ts";
 import { sheetUp } from "../src/screen/ui/fightsheet.ts";
-import { meetMember } from "../src/screen/ui/own.ts";
 import { type PageId, renderPages, showPage } from "../src/screen/ui/pages.ts";
 import { redrawTallies, TV } from "../src/screen/ui/tally.ts";
 
@@ -333,7 +333,7 @@ export function openHandle(): void {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ stage: [{ headliner: n }] }),
       });
-      await meetMember();
+      await PEOPLE.again();
     },
     async fresh() {
       await staged({ fresh: true });

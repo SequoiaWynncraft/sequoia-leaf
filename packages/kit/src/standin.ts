@@ -468,3 +468,32 @@ export function aPage(): { body: Part; done: () => void } {
     },
   };
 }
+
+/**
+ * Stands in for drawing with no page: a canvas that takes any drawing and gives back blank pixels,
+ * and a picture (a skin) that never loads. `noCanvas` takes them away again.
+ */
+export function blankCanvas(): void {
+  const pen: object = new Proxy(
+    {},
+    {
+      get: (_, name) =>
+        name === "getImageData"
+          ? (_x: number, _y: number, w: number, h: number) => ({ data: new Uint8ClampedArray(w * h * 4) })
+          : () => undefined,
+      set: () => true,
+    },
+  );
+  class Picture {
+    src = "";
+    addEventListener(): void {}
+  }
+  Object.assign(globalThis, {
+    document: { createElement: () => ({ width: 1, height: 1, getContext: () => pen }) },
+    Image: Picture,
+    HTMLImageElement: Picture,
+  });
+}
+/** Takes away what `blankCanvas` stood in. */
+export const noCanvas = (): void =>
+  void Object.assign(globalThis, { document: undefined, Image: undefined, HTMLImageElement: undefined });

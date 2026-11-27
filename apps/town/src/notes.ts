@@ -58,11 +58,10 @@ export const noteAt = (n: Pick<Note, "at">): number => Date.parse(n.at);
 export const notesAt = (now: number): readonly Note[] => NOTES.filter((n) => noteAt(n) <= now);
 /**
  * The moment the News tab shows notes at: Leaf's clock once the page has it (`known`, from a room's
- * first sample or an answer); until then no later than the page's start-up by its own clock
- * (`started`), so a note dated after that waits for Leaf's word.
+ * first sample or an answer); until then the moment the page was built (`built`), so a note dated
+ * after that waits for Leaf's word. The device's own clock never decides.
  */
-export const newsMoment = (leaf: number, known: boolean, started: number): number =>
-  known ? leaf : Math.min(leaf, started);
+export const newsMoment = (leaf: number, known: boolean, built: number): number => (known ? leaf : built);
 /** The newest notes out at a moment of Leaf's clock, as many as the News tab shows. */
 export const newestAt = (now: number, count = 10): readonly Note[] => notesAt(now).slice(0, count);
 
@@ -102,16 +101,18 @@ export function toPost(notes: readonly Note[], run: Posting): Note[] {
 
 /**
  * Posts each note to a channel (`send` gives back what it answered, 0 for no answer) and records
- * each one it took (`keep`): only a 2xx is taking it. A 429, a 5xx or no answer leaves it for the
- * next run. Gives back what it took and what it left, by id.
+ * each one it took (`keep`, true once written): only a 2xx is taking it. A 429, a 5xx or no answer
+ * leaves it for the next run. Gives back, by id, what it took, what it left, and what it took but
+ * could not record (`unmarked`): the rest are still posted, and the run is to fail.
  */
 export async function deliver(
   notes: readonly Note[],
   send: (n: Note) => Promise<number>,
-  keep: (n: Note) => Promise<void>,
-): Promise<{ took: string[]; left: string[] }> {
+  keep: (n: Note) => Promise<boolean>,
+): Promise<{ took: string[]; left: string[]; unmarked: string[] }> {
   const took: string[] = [];
   const left: string[] = [];
+  const unmarked: string[] = [];
   for (const n of notes) {
     // One after another, as Discord asks of a webhook.
     // oxlint-disable-next-line no-await-in-loop -- in order
@@ -120,11 +121,25 @@ export async function deliver(
       left.push(n.id);
       continue;
     }
-    // oxlint-disable-next-line no-await-in-loop -- in order
-    await keep(n);
     took.push(n.id);
+    // oxlint-disable-next-line no-await-in-loop -- in order
+    if (!(await keep(n))) unmarked.push(n.id);
   }
-  return { took, left };
+  return { took, left, unmarked };
+}
+
+/** Every item of a list read a page at a time (`read`, pages from 1 of `size` each), until a page comes back short. */
+export async function everyPage<T>(read: (page: number) => Promise<readonly T[]>, size: number): Promise<T[]> {
+  const all: T[] = [];
+  const at = { page: 1, got: size };
+  while (at.got >= size) {
+    // oxlint-disable-next-line no-await-in-loop -- each page says whether there is another
+    const got = await read(at.page);
+    all.push(...got);
+    at.got = got.length;
+    at.page += 1;
+  }
+  return all;
 }
 
 /** A note as a Discord message: its title, its lines and full notes, linked to the town, at its moment. */

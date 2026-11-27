@@ -2,15 +2,17 @@
  * The Discord poster, for one channel (`.github/workflows/news.yml`): posts each note that is out and
  * that the channel has not taken (`toPost`, `deliver` in `src/notes.ts`), and marks each note it took
  * on the commit that added it, as a commit status `news/<channel>/<note id>`: the channel's record.
- * A note the channel did not take (a 429, a 5xx, no answer) stays unmarked and is tried on the next
- * run. Run in the repository with its history:
+ * It posts with `?wait=true`, so a 2xx is Discord saying the message is saved. A note the channel
+ * did not take (a 429, a 5xx, no answer) stays unmarked and is tried on the next run; a note taken
+ * whose mark could not be written fails the run once the rest are posted, and may be posted again
+ * by the next. Run in the repository with its history:
  *
  *     NAME=<channel> WEBHOOK=<url> GH_TOKEN=<token> GITHUB_REPOSITORY=<owner/repo> bun apps/town/review/news.ts
  *
  * The record began with the first commit whose workflow asks to write statuses: the poster before it
  * posted every note merged earlier.
  */
-import { deliver, messageOf, type Note, NOTES, toPost } from "../src/notes.ts";
+import { deliver, everyPage, messageOf, type Note, NOTES, toPost } from "../src/notes.ts";
 
 const FILE = "apps/town/src/notes.json";
 const WORKFLOW = ".github/workflows/news.yml";
@@ -63,20 +65,27 @@ const HEADERS = {
   "X-GitHub-Api-Version": "2022-11-28",
 };
 const CHANNEL = env("NAME");
-const WEBHOOK = env("WEBHOOK");
+/** The channel's webhook, asked to answer only once the message is saved. */
+const WEBHOOK = new URL(env("WEBHOOK"));
+WEBHOOK.searchParams.set("wait", "true");
+/** Statuses to a page, the most GitHub gives. */
+const PAGE = 100;
 const contextOf = (id: string): string => `news/${CHANNEL}/${id}`;
 
-/** The contexts marked taken on a commit. A record that cannot be read stops the run: nothing is posted twice. */
+/** One page of a commit's statuses. One that cannot be read stops the run: nothing is posted twice. */
+async function statusesOf(sha: string, page: number): Promise<readonly unknown[]> {
+  const res = await fetch(`${API}/commits/${sha}/statuses?per_page=${PAGE}&page=${page}`, { headers: HEADERS });
+  const list: unknown = res.ok ? await res.json() : null;
+  if (!Array.isArray(list)) throw new Error(`news.ts: the statuses of ${sha} did not read (${res.status})`);
+  return list;
+}
+/** The contexts marked taken on a commit, from every page of its statuses. */
 async function marked(sha: string): Promise<ReadonlySet<string>> {
-  const res = await fetch(`${API}/commits/${sha}/statuses?per_page=100`, { headers: HEADERS });
-  if (!res.ok) throw new Error(`news.ts: the statuses of ${sha} did not read (${res.status})`);
-  const list: unknown = await res.json();
+  const list = await everyPage((page) => statusesOf(sha, page), PAGE);
   return new Set(
-    Array.isArray(list)
-      ? list.flatMap((s: unknown) =>
-          isRecord(s) && s.state === "success" && typeof s.context === "string" ? [s.context] : [],
-        )
-      : [],
+    list.flatMap((s: unknown) =>
+      isRecord(s) && s.state === "success" && typeof s.context === "string" ? [s.context] : [],
+    ),
   );
 }
 
@@ -106,18 +115,20 @@ async function send(n: Note): Promise<number> {
   await Bun.sleep(1000);
   return answer;
 }
-/** Marks a note taken by this channel on the commit that added it. */
-async function keep(n: Note): Promise<void> {
+/** Marks a note taken by this channel on the commit that added it: whether the mark was written. */
+async function keep(n: Note): Promise<boolean> {
   const sha = added.get(n.id)?.sha;
   const res = await fetch(`${API}/statuses/${sha}`, {
     method: "POST",
     headers: HEADERS,
     body: JSON.stringify({ state: "success", context: contextOf(n.id), description: "Posted to Discord" }),
-  });
-  if (!res.ok) console.log(`::error::${CHANNEL} took "${n.title}", but it could not be marked (${res.status}).`);
+  }).catch(() => null);
+  return res?.ok === true;
 }
 
-const { took, left } = await deliver(untaken, send, keep);
+const { took, left, unmarked } = await deliver(untaken, send, keep);
 console.log(`${CHANNEL}: took ${took.length} (${took.join(", ") || "none"}); left ${left.length} for the next run.`);
 for (const id of left) console.log(`::error::${CHANNEL} did not take the note ${id}; the next run tries it again.`);
-process.exitCode = left.length > 0 ? 1 : 0;
+for (const id of unmarked)
+  console.log(`::error::${CHANNEL} took the note ${id}, but it could not be marked; the next run may post it again.`);
+process.exitCode = left.length + unmarked.length > 0 ? 1 : 0;

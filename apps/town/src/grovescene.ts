@@ -13,14 +13,14 @@
  * buttons over the picture are `groveui.ts`.
  */
 
+import { bannersIn, PEOPLE } from "@sequoia-leaf/figures/people.ts";
 import { member } from "@sequoia-leaf/kit/live.ts";
-import { ask as askLeaf } from "@sequoia-leaf/kit/net.ts";
 import { openPlay, type Play, type Trouble, waitingLook } from "@sequoia-leaf/kit/play.ts";
 import { bake, type Body, lookFor, paintSkin, skinOf } from "@sequoia-leaf/kit/skin.ts";
 import { noise, note, penta, sfx, tone } from "@sequoia-leaf/kit/sound.ts";
 import { must } from "@sequoia-leaf/kit/util.ts";
 import { BANNERS, type PullsCommand, type PullsNote, type PullsView, RARITIES } from "@sequoia-leaf/pulls";
-import { type BannerPerson, readBanners, readNotes, readView } from "@sequoia-leaf/pulls/wire.ts";
+import { readNotes, readView } from "@sequoia-leaf/pulls/wire.ts";
 import { catalogOf } from "@sequoia-leaf/raid/content/catalog.ts";
 
 import type { CampArt } from "./campart.ts";
@@ -55,8 +55,6 @@ import {
   GROVE,
   type GroveState,
   groveState,
-  heardPeople,
-  missingPeople,
   onward,
   refusedLine,
   revealOf,
@@ -195,19 +193,17 @@ export function makeGrove(sprites: Sprites, art: CampArt, stage: Stage): Grove {
   // ---------------------------------------------------------------- Leaf
 
   let play: PullsPlay | null = null;
-  let banners: BannerPerson[] = [];
   /** The headliner's figure: a look of their own at once, and their own skin once it has come. */
   let person: { id: string; body: Body } | null = null;
   /** The pool on show. */
   let pool = GROVE;
   /** Leaf is answering a pull or an exchange. */
   let sent = false;
-  /** When Leaf was last asked for the pulls, and for the banners' headliners, while nothing told the page to. */
+  /** When Leaf was last asked for the pulls while nothing told the page to. */
   let asked = 0;
-  let metAt = 0;
 
   const view = (): PullsView => must(play, "the pulls").state;
-  const banner = (): ReturnType<typeof showing> => showing(view(), banners, BANNERS);
+  const banner = (): ReturnType<typeof showing> => showing(view(), PEOPLE.people(), BANNERS);
   /** The Grove's one state: what may be pressed in it, and whether a command may be sent (`takesCommand`). */
   const state = (): GroveState => {
     // On the way out, or not here at all: the stage says.
@@ -239,19 +235,10 @@ export function makeGrove(sprites: Sprites, art: CampArt, stage: Stage): Grove {
     if (b?.person) meet(b.person);
     if (pool !== GROVE && pool !== b?.id) pool = GROVE;
   }
-
-  /**
-   * Asks Leaf who the banners' people are, before the pulls are open and while an open banner has no
-   * headliner known: at once, or `every` milliseconds apart at most. Each banner is kept as Leaf last
-   * said it.
-   */
-  async function meetBanners(every = 60_000): Promise<void> {
-    const now = Date.now();
-    if ((play !== null && !missingPeople(play.state, banners)) || now - metAt < every) return;
-    metAt = now;
-    const said = await askLeaf("/v1/game/banners");
-    banners = heardPeople(banners, (said.status === 200 ? readBanners(said.body) : null) ?? []);
-  }
+  // Leaf has said who a banner's people are: the headliner on show may be one of them.
+  PEOPLE.onChange(() => {
+    if (play) settle();
+  });
 
   async function open(): Promise<Trouble | null> {
     const me = member();
@@ -265,11 +252,15 @@ export function makeGrove(sprites: Sprites, art: CampArt, stage: Stage): Grove {
           { player: me.id, away: () => G.where !== "grove" },
         ),
       play?.refresh(),
-      meetBanners(0),
     ]);
     if ("trouble" in opened) return opened.trouble;
-    if (!play) opened.onTrouble(troubleCard);
+    if (!play) {
+      opened.onTrouble(troubleCard);
+      // Each of Leaf's answers says which banners are open; the page's store asks who their people are.
+      opened.onState((v) => PEOPLE.see(bannersIn(catalogOf(v))));
+    }
     play = opened;
+    PEOPLE.see(bannersIn(catalogOf(opened.state)));
     settle();
     return null;
   }
@@ -283,7 +274,7 @@ export function makeGrove(sprites: Sprites, art: CampArt, stage: Stage): Grove {
     const now = Date.now();
     if (!asksNow(play?.state ?? null, now, asked)) return;
     asked = now;
-    void (play ? Promise.all([play.refresh(), meetBanners()]).then(settle) : open());
+    void (play ? play.refresh().then(settle) : open());
   }
 
   /**
@@ -291,16 +282,15 @@ export function makeGrove(sprites: Sprites, art: CampArt, stage: Stage): Grove {
    * Leaf's to say: the pulls are asked for here, and again as `asksNow` says, in town as in the Grove.
    */
   hooks.groveBanner = (): string | null => {
-    void meetBanners();
     keepFresh();
-    return play ? bannerLine(showing(play.state, banners, BANNERS)) : null;
+    return play ? bannerLine(showing(play.state, PEOPLE.people(), BANNERS)) : null;
   };
 
   // ---------------------------------------------------------------- the page
 
   const ui = makeGroveUi({
     view,
-    banners: () => banners,
+    banners: () => PEOPLE.people(),
     banner,
     pool: () => pool,
     choose(id) {
@@ -341,7 +331,7 @@ export function makeGrove(sprites: Sprites, art: CampArt, stage: Stage): Grove {
 
   const shownOf = (drawn: PullsNote): Shown => ({
     note: drawn,
-    says: revealOf(catalogOf(view()), drawn, banners),
+    says: revealOf(catalogOf(view()), drawn, PEOPLE.people()),
     finish: FINISH[tierOf(drawn.rarity)],
     tones: tonesOf(RARITIES[drawn.rarity].colour),
     pic: pic.picture(drawn.prize),

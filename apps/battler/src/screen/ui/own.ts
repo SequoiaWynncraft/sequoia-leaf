@@ -4,7 +4,8 @@
  * in hand is, and a figure's level wherever it is written. A level is always a small green "Lv 3",
  * never a star.
  */
-import { meetMembers } from "@sequoia-leaf/figures/member.ts";
+import { wearPeople } from "@sequoia-leaf/figures/member.ts";
+import { PEOPLE } from "@sequoia-leaf/figures/people.ts";
 import type { Block } from "@sequoia-leaf/kit/card.ts";
 import { type Choice, choices } from "@sequoia-leaf/kit/choices.ts";
 import { el } from "@sequoia-leaf/kit/dom.ts";
@@ -56,8 +57,8 @@ export const figuresAt = (run: Pick<RunView, "era"> | null): readonly FigureId[]
 export const traitsHere = (): readonly TraitId[] => catalogOf(S).ids.traits;
 /** Everyone's figures, as Leaf's era has them: what the almanac counts fielded among. */
 export const everyonesFigures = (): readonly FigureId[] => available(catalogOf(S), { for: "almanac", roster: {} });
-/** Asks who each banner's member is, and draws the page again each time one is better known. */
-export const meetMember = (): Promise<void> => meetMembers(changed);
+/** Wears each banner's people as the page's store hears who they are, and draws the page again each time one is better known. */
+export const meetMember = (): void => wearPeople(PEOPLE, changed);
 /** Whether the member can choose whose figures to set out with: once they have pulled one. */
 export const choosesFigures = (): boolean => pulled() > 0;
 /** Whether the front page sets out with the member's own figures: never for a member who has pulled none. */

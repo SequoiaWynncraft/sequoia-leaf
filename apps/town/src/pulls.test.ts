@@ -1,7 +1,9 @@
 import { expect, test } from "bun:test";
 
 import { type Ctx, isRefused } from "@sequoia-leaf/core";
+import { bannersIn, makePeople } from "@sequoia-leaf/figures/people.ts";
 import { pressedTwice } from "@sequoia-leaf/kit/dom.ts";
+import type { Answer } from "@sequoia-leaf/kit/net.ts";
 import { scope } from "@sequoia-leaf/kit/scope.ts";
 import { press } from "@sequoia-leaf/kit/standin.ts";
 import {
@@ -12,11 +14,12 @@ import {
   headliner,
   prizesOf,
   PULLS,
+  type PullsView,
   type Rarity,
   RATES,
 } from "@sequoia-leaf/pulls";
 import type { BannerPerson } from "@sequoia-leaf/pulls/wire.ts";
-import { catalogAt } from "@sequoia-leaf/raid/content/catalog.ts";
+import { catalogAt, catalogOf } from "@sequoia-leaf/raid/content/catalog.ts";
 import { eraAt, RELEASES } from "@sequoia-leaf/raid/content/releases.ts";
 import { CAT } from "@sequoia-leaf/raid/testkit.ts";
 
@@ -30,8 +33,6 @@ import {
   clearing,
   GROVE,
   groveState,
-  heardPeople,
-  missingPeople,
   nextFree,
   offers,
   onward,
@@ -438,6 +439,39 @@ test("a view of a new era draws the Grove's words again, and the page asks Leaf 
   expect(askAgain({ ...view, free: { waiting: 1, next: Infinity } }, night)).toBe(true);
 });
 
+test("an open Grove crossing 8 December 00:00 shows Groot Night as the Commodore once Leaf's next answer opens it, with no reload", async () => {
+  const night = Date.UTC(2026, 11, 8);
+  const answers: ((a: Answer) => void)[] = [];
+  const store = makePeople(
+    () => new Promise<Answer>((done) => answers.push(done)),
+    () => night,
+  );
+  const answer = async (banners: object[]): Promise<void> => {
+    answers.shift()?.({ status: 200, body: { banners } });
+    await Bun.sleep(0);
+  };
+  const moss = { id: "banner-1", headliner: { id: "mossback", name: "Mossback" } };
+  // What the Grove does with each of Leaf's answers: tells the page's store the banners its era has open.
+  const answered = (now: number): PullsView => {
+    const view = PULLS.view(PULLS.create(ctxAt(night - 60_000)), ctxAt(now));
+    store.see(bannersIn(catalogOf(view)));
+    return view;
+  };
+  const eve = answered(night - 1);
+  await answer([moss]);
+  expect(showing(eve, store.people(), BANNERS)?.id).not.toBe("groot-night");
+  // The idle tab's next answer is after midnight: the store asks Leaf at once, and the Grove shows its word.
+  const view = answered(night);
+  expect(answers).toHaveLength(1);
+  await answer([moss, { id: "groot-night", headliner: { id: "p-gaz", name: "Gazzy" } }]);
+  expect(showing(view, store.people(), BANNERS)).toMatchObject({
+    id: "groot-night",
+    name: "Commodore",
+    title: "Groot Night",
+    person: { id: "p-gaz", name: "Gazzy" },
+  });
+});
+
 test("the clearing: the always-open pool's first three Treants on their stands, or a banner's own headliner the set draws", () => {
   const night = Date.UTC(2026, 11, 8);
   const view = PULLS.view(PULLS.create(ctxAt(night)), ctxAt(night));
@@ -467,32 +501,4 @@ test("a town left open across a banner's closing asks Leaf again once it is due,
   expect(card(PULLS.view(state, ctxAt(ends)))).toBeNull();
   // With no pulls yet the card asks, a minute apart at most.
   expect([asksNow(null, ends, ends - 60_000), asksNow(null, ends, ends - 59_999)]).toEqual([true, false]);
-});
-
-test("the Grove keeps each banner's people by banner, and asks again while an open banner's headliner is not known", () => {
-  const first = WITH[0];
-  if (!first) throw new Error("no banner");
-  const later = { id: "groot-night", from: 0, until: 1, headliner: null, called: [] };
-  // Leaf has named banner-1's headliner; a later banner opens and nobody is named for it yet.
-  const known = heardPeople([], [first]);
-  const both = {
-    open: [
-      { id: banner.id, until: banner.until },
-      { id: "groot-night", until: 1 },
-    ],
-  };
-  expect(missingPeople(both, known)).toBe(true);
-  expect(missingPeople({ open: [{ id: banner.id, until: banner.until }] }, known)).toBe(false);
-  // Leaf's next word names the later one: kept beside the first, each by its own banner.
-  const named = { ...later, headliner: { id: "mossway", name: "Mossway" } };
-  const heard = heardPeople(known, [named]);
-  expect(heard.map((b) => [b.id, b.headliner?.name])).toEqual([
-    ["banner-1", "Mossback"],
-    ["groot-night", "Mossway"],
-  ]);
-  expect(missingPeople(both, heard)).toBe(false);
-  // A banner the set draws needs nobody named.
-  expect(
-    missingPeople({ open: [{ id: "the-sets-own", until: 1 }] }, [], [{ ...banner, id: "the-sets-own", look: "set" }]),
-  ).toBe(false);
 });

@@ -177,7 +177,7 @@ async function boot(): Promise<void> {
   const menu = startSettings(scope(), () => letGo());
   initHud(menu.gear());
   const art = makeCampArt(sprites);
-  void nameMembers(art);
+  nameMembers(art);
   const town = makeTown(sprites, art, stage);
   const campUi = makeCampUi(art);
   const camp = makeCamp(sprites, art, stage, town.backdrop, campUi);

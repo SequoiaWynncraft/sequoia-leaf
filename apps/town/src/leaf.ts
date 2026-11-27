@@ -24,6 +24,7 @@
  * its room hears the owner changed it (`campChanged`).
  */
 
+import { bannersIn, PEOPLE } from "@sequoia-leaf/figures/people.ts";
 import { pageCard, troubleCard as kitTroubleCard } from "@sequoia-leaf/kit/live.ts";
 import { outside } from "@sequoia-leaf/kit/net.ts";
 import { askPerson } from "@sequoia-leaf/kit/person.ts";
@@ -93,6 +94,15 @@ const tell = (differs: boolean): void => {
 };
 
 /**
+ * What a view of the town from Leaf says beyond the town: the raid's names as its era has them, and
+ * the banners open in it, whose people the page's store asks for as one opens.
+ */
+function heard(view: TownView): void {
+  nameCarvings(catalogOf(view));
+  PEOPLE.see(bannersIn(catalogOf(view)));
+}
+
+/**
  * Opens the town from Leaf, for the member the page is signed in as (`player`). Says why it could
  * not; after that, whatever stops the page sending is told to `trouble`.
  */
@@ -109,10 +119,10 @@ export async function openTown(player: string, trouble: (why: Trouble) => void):
   me = player;
   leaf = opened;
   troubled = trouble;
-  nameCarvings(catalogOf(opened.state));
+  heard(opened.state);
   opened.onTrouble(trouble);
   opened.onState((view, differs) => {
-    nameCarvings(catalogOf(view));
+    heard(view);
     tell(differs);
   });
   return null;

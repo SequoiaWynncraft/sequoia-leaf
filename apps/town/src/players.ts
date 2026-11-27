@@ -23,6 +23,7 @@
  */
 
 import { away } from "@sequoia-leaf/core";
+import { builtAt } from "@sequoia-leaf/core/build/moment.ts" with { type: "macro" };
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { type Emote, EMOTES } from "@sequoia-leaf/kit/emotes.ts";
 import { type LetGo, letGoCard, member, where } from "@sequoia-leaf/kit/live.ts";
@@ -265,10 +266,10 @@ export function inRoom(): boolean {
 
 /** Leaf's clock now, as far as this page can tell: out of a room, as it last heard. */
 export const leafNow = (): number => room?.serverNow() ?? leafClock(Date.now());
-/** This page's start-up, by its own clock. */
-const STARTED = Date.now();
-/** The moment the News tab shows notes at (`newsMoment`): Leaf's clock once known, never later than start-up before. */
-export const newsNow = (): number => newsMoment(leafNow(), leafKnown(), STARTED);
+/** The moment this page was built, written into it then. */
+const BUILT = builtAt();
+/** The moment the News tab shows notes at (`newsMoment`): Leaf's clock once known, the page's build before. */
+export const newsNow = (): number => newsMoment(leafNow(), leafKnown(), BUILT);
 /** Whether there is news out by that moment the member has not opened. */
 export const unreadNow = (): boolean => unread(newsNow());
 
