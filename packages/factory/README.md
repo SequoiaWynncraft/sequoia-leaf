@@ -14,6 +14,7 @@ page (`apps/works`) holds a copy and draws it; the town reads its standing's wor
 | what a kind of piece is and how it plays (and adding one)                    | `src/kinds/<kind>.ts`, numbered in `src/kinds/list.ts`; `src/kinds/kind.ts`   |
 | how a name becomes a number; what is open once some goals are done; `locked` | `src/tables.ts`                                                               |
 | what a yard holds, and its side tables                                       | `src/yard.ts`, then `src/land.ts`                                             |
+| a piece of more than one tile: its tiles, its ports, where it may stand      | `src/sizes.ts`, `src/kinds/ports.ts`, `src/footprint.ts`                      |
 | one tick                                                                     | `src/tick.ts`, `src/wire.ts` (who hands to whom, the kit), `src/power.ts`     |
 | building, raising, removing, turning, setting pieces, plots                  | `src/build.ts`; many pieces at once: `src/pieces.ts`; colours: `src/lines.ts` |
 | a plan of the whole yard: kept, and put back over the yard                   | `src/whole.ts`                                                                |
@@ -51,8 +52,8 @@ has room for, its step in the tick, its checks where it is set down, how it stan
 what it does a minute, and what it keeps and is put back with. `src/kinds/list.ts` numbers them in
 kind order (a save's numbers: a new kind goes at the end) and fills in what a module leaves out. The
 loops (`tick.ts`, `wire.ts`, `status.ts`, `build.ts`, `cells.ts`, `pieces.ts` and the rest) ask each
-piece's kind and name none, but the router, which lays belts and tunnels, and the yard, which puts
-the depot down as land. A kind's page module is beside it in `apps/works/src/kinds/`.
+piece's kind and name none, but the router, which lays belts and tunnels. A kind's page module is
+beside it in `apps/works/src/kinds/`.
 
 A kind's module imports nothing of the rules at run time, only their types: the tables number the
 kinds from their modules, so a kind that imported them would be a loop. Each hook is handed the kit
@@ -64,8 +65,18 @@ their own names, so that one call site for every kind's step does not slow the t
 
 Adding a kind is its module and its line in `list.ts`, and its page module and its line in the
 page's `kinds/index.ts`: `apps/works/src/kinds/new-kind.test.ts` does exactly that to a copy of the
-repository and fails if anything else has to change. A save keeps a kind in 4 bits, so a 17th kind is
-refused there until the kind field is widened.
+repository and fails if anything else has to change. A kind past 15 is kept in a save, an Undo entry
+and the check by a part of its own (`cells.ts`), so a yard of none has the bytes and the check it had.
+
+A kind may cover more than one tile (`KindDef.size`, `src/sizes.ts`): every tile it covers holds its
+kind, its own tile (the middle, or the middle's top left) holds everything else about it once, and
+each other tile where its own tile is (`Yard.part`, 0 for a piece of one tile). Its ports are data on
+the kind (`KindDef.ports`, `src/kinds/ports.ts`): the tile-sides it takes things in by, and each output,
+which may send a recipe's by-product (`RecipeInfo.also`). Every rule takes it as one piece: where it
+may stand (`src/footprint.ts`), the plumbing (which hands to it on any tile and wakes every tile round
+it), power (any of its tiles), Select, Move, Copy, blueprints, Undo, the save, the check and the
+planner. The depot is one of three by three. The throwaway kinds in `new-kind.test.ts` include one of
+two by two and one of three by three.
 
 ## The yard
 
