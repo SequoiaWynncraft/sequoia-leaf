@@ -14,7 +14,7 @@
     "apps/town/src/hud.ts apps/works/src/ui/notes.ts": 1,
     "apps/town/src/hud.ts apps/works/src/ui/parts.ts": 71,
     "apps/town/src/sheet.ts apps/works/review/sheet.ts": 65,
-    "apps/town/src/sprites.ts apps/works/src/art/machines.ts": 207,
+    "apps/town/src/sprites.ts apps/works/src/art/machines.ts": 11,
     "apps/town/src/sprites.ts apps/works/src/art/nature.ts": 177,
     "packages/pulls/src/stored.test.ts packages/raid/src/stored.test.ts": 19
   }

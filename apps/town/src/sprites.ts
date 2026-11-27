@@ -1,7 +1,7 @@
 /** Everything in the town that is drawn once and kept: the shops, the stalls, the small things, the icons. */
 
 import { BARK, CREAM, GOLD, GREEN, INK, PAPER, SKY, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
-import { bitmap, ell, outlined, paint, R } from "@sequoia-leaf/kit/pix.ts";
+import { bitmap, ell, outlined, paint, R, shingles } from "@sequoia-leaf/kit/pix.ts";
 import { clamp, type Ctx, hash, makeCanvas, vnoise } from "@sequoia-leaf/kit/util.ts";
 import { BOARD } from "@sequoia-leaf/town/clock.ts";
 import type { PlaceId } from "@sequoia-leaf/town/map/rows.ts";
@@ -88,32 +88,6 @@ function planksIn(g: Ctx, x: number, y: number, w: number, h: number, seed: numb
     R(g, bx, y, 4, h, v > 0.55 ? BARK[3] : BARK[2]);
     R(g, bx + 4, y, 1, h, BARK[1]);
     if (v > 0.6) R(g, bx + 1, y + 5 + Math.floor(v * (h - 10)), 2, 1, BARK[1]);
-  }
-}
-
-/** Rows of shingles on a roof that narrows towards its ridge. `cols`: shadow, two body tones, light. */
-export function shingles(
-  g: Ctx,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  inset: (row: number) => number,
-  cols: readonly [string, string, string, string],
-  seed: number,
-): void {
-  for (let r = 0; r * 4 < h; r++) {
-    const by = y + r * 4;
-    const bh = Math.min(4, y + h - by);
-    const ins = inset(by - y);
-    const bx = x + ins;
-    const bw = w - ins * 2;
-    R(g, bx, by, bw, bh, r % 2 ? cols[1] : cols[2]);
-    R(g, bx, by + bh - 1, bw, 1, cols[0]);
-    for (let sx = bx + (r % 2 ? 3 : 0); sx < bx + bw - 1; sx += 6) {
-      R(g, sx, by, 1, bh - 1, cols[0]);
-      if (hash(sx, r, seed) > 0.55 && sx + 4 < bx + bw) R(g, sx + 1, by, 3, 1, cols[3]);
-    }
   }
 }
 

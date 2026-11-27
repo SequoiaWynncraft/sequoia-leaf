@@ -5,7 +5,7 @@
  */
 
 import { BARK, CREAM, GOLD, GREEN, INK, PAPER, SKY, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
-import { bitmap, ell, flipped, outlined, paint, R, rgb } from "@sequoia-leaf/kit/pix.ts";
+import { bitmap, ell, flipped, outlined, paint, R, rgb, shingles } from "@sequoia-leaf/kit/pix.ts";
 import { type Ctx, hash, makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
 import { bm, CLAY, DARK, IRON, PAL, spr, type Sprite } from "./pal.ts";
@@ -21,7 +21,7 @@ function tile(h: number, draw: (g: Ctx) => void, w = 16): Sprite {
 
 // ---------- surfaces, as the town draws them ----------
 
-export function planks(g: Ctx, x: number, y: number, w: number, h: number, seed: number): void {
+function planks(g: Ctx, x: number, y: number, w: number, h: number, seed: number): void {
   for (let bx = x; bx < x + w; bx += 4) {
     const v = hash(bx, 7, seed);
     const bw = Math.min(3, x + w - bx);
@@ -50,32 +50,6 @@ function stones(g: Ctx, x: number, y: number, w: number, h: number, seed: number
 }
 
 export const PURPLE = [SKY[0], SKY[1], SKY[2], SKY[3]] as const;
-
-/** Rows of shingles on a roof that narrows towards its ridge. `cols`: shadow, two body tones, light. */
-export function shingles(
-  g: Ctx,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  inset: (row: number) => number,
-  cols: readonly [string, string, string, string],
-  seed: number,
-): void {
-  for (let r = 0; r * 4 < h; r++) {
-    const by = y + r * 4;
-    const bh = Math.min(4, y + h - by);
-    const ins = inset(by - y);
-    const bx = x + ins;
-    const bw = w - ins * 2;
-    R(g, bx, by, bw, bh, r % 2 ? cols[1] : cols[2]);
-    R(g, bx, by + bh - 1, bw, 1, cols[0]);
-    for (let sx = bx + (r % 2 ? 3 : 0); sx < bx + bw - 1; sx += 6) {
-      R(g, sx, by, 1, bh - 1, cols[0]);
-      if (hash(sx, r, seed) > 0.55 && sx + 4 < bx + bw) R(g, sx + 1, by, 3, 1, cols[3]);
-    }
-  }
-}
 
 /** A doorway with a rounded head. */
 export function arch(g: Ctx, x: number, y: number, w: number, h: number, col: string): void {

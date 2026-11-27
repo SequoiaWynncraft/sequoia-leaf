@@ -8,10 +8,10 @@
  * and grade III is iron where the timber was, as every machine.
  */
 import { BARK, CREAM, GOLD, INK, PAPER, SKY, STONE } from "@sequoia-leaf/kit/palette.ts";
-import { R } from "@sequoia-leaf/kit/pix.ts";
+import { R, shingles } from "@sequoia-leaf/kit/pix.ts";
 import { type Ctx, hash, makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
-import { arch, fitted, gear, ironClad, PURPLE, shingles } from "./machines.ts";
+import { arch, fitted, gear, ironClad, PURPLE } from "./machines.ts";
 import { CLAY, DARK, IRON, spr, type Sprite } from "./pal.ts";
 
 /** The picture's size: three tiles across, rising a little over half a tile above its box. */

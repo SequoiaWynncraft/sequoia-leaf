@@ -1,6 +1,6 @@
 /** Pixel-art tools: flat rectangles, pictures typed out as rows of letters, outlines, and painting a pixel at a time. */
 
-import { type Ctx, makeCanvas } from "./util.ts";
+import { type Ctx, hash, makeCanvas } from "./util.ts";
 
 export function R(g: Ctx, x: number, y: number, w: number, h: number, c: string): void {
   g.fillStyle = c;
@@ -109,5 +109,31 @@ export function ell(g: Ctx, cx: number, cy: number, rx: number, ry: number, c: s
     const x0 = Math.round(cx - half);
     const x1 = Math.round(cx + half);
     if (x1 > x0) g.fillRect(x0, Math.round(cy + dy), x1 - x0, 1);
+  }
+}
+
+/** Rows of shingles on a roof that narrows towards its ridge. `cols`: shadow, two body tones, light. */
+export function shingles(
+  g: Ctx,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  inset: (row: number) => number,
+  cols: readonly [string, string, string, string],
+  seed: number,
+): void {
+  for (let r = 0; r * 4 < h; r++) {
+    const by = y + r * 4;
+    const bh = Math.min(4, y + h - by);
+    const ins = inset(by - y);
+    const bx = x + ins;
+    const bw = w - ins * 2;
+    R(g, bx, by, bw, bh, r % 2 ? cols[1] : cols[2]);
+    R(g, bx, by + bh - 1, bw, 1, cols[0]);
+    for (let sx = bx + (r % 2 ? 3 : 0); sx < bx + bw - 1; sx += 6) {
+      R(g, sx, by, 1, bh - 1, cols[0]);
+      if (hash(sx, r, seed) > 0.55 && sx + 4 < bx + bw) R(g, sx + 1, by, 3, 1, cols[3]);
+    }
   }
 }
