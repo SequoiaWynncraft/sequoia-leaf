@@ -213,15 +213,20 @@ const Seen = Schema.Struct({
 
 /**
  * Everyone seen in the game in the last 90 seconds who has not left a live room since, the caller
- * included, at most the 50 seen most recently, each with when they last did something as far as
- * Leaf knows (null for not yet: away); and those gone since (seen between 90 seconds and a day ago,
- * or who left a room), in two lists, newest first, at most 24 each: those happy to be left in town,
- * and the rest. Each says whether they play as a guest, and when they were last seen.
+ * included, at most the 50 seen most recently. Each says where they are, since when (`since`: a
+ * deploy does not begin a stay again), whether a live room of that place has them (`live`: the
+ * town's or a camp's, where the others in it see them, and Leaf hears what they do; false where
+ * only their page says they are there), and when they last did something as far as Leaf knows
+ * (`acted_at`; null for not since Leaf began hearing). And those gone since (seen between 90 seconds and a day ago, or who left a room), in
+ * two lists, newest first, at most 24 each: those happy to be left in town, and the rest; for each,
+ * `seen_at` is when they left. Each says whether they play as a guest. Nobody is in two lists.
  */
 export const Present = Schema.Struct({
   /** Leaf's clock when the lists were made: of two, the later is newer. */
   at: Time,
-  present: Schema.Array(Schema.Struct({ ...Seen.fields, acted_at: Schema.NullOr(Time) })),
+  present: Schema.Array(
+    Schema.Struct({ ...Seen.fields, live: Schema.Boolean, since: Time, acted_at: Schema.NullOr(Time) }),
+  ),
   resting: Schema.Array(Seen),
   gone: Schema.Array(Seen),
 });

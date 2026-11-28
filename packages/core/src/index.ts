@@ -151,6 +151,7 @@ export {
 } from "./visits.ts";
 export {
   ACTS,
+  campOwnerOf,
   campRoom,
   CLIENT_HZ,
   CLOSE,

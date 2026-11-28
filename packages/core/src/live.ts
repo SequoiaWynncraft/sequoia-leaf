@@ -409,6 +409,9 @@ export const campRoom = (player: PlayerId): string => `camp:${player}`;
 const CAMP: RoomKind = { width: 432, height: 320, capacity: 32, speed: 160 };
 const CAMP_ROOM = /^camp:(.{36})$/;
 
+/** Whose camp a room's name says it is (`campRoom`), or undefined for any other room's. */
+export const campOwnerOf = (name: string): PlayerId | undefined => parsePlayerId(CAMP_ROOM.exec(name)?.[1] ?? "");
+
 /** Whether a connection into the room a name asks for is a listener (`RoomKind.listens`). */
 export const listensIn = (name: string): boolean => roomKind(name)?.listens === true;
 

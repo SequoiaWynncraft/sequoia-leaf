@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { type Motion, playerId } from "@sequoia-leaf/core";
+import { applyAbout, campRoom, type Motion, playerId, readWho, type Who } from "@sequoia-leaf/core";
 import { type Duration, Schema } from "effect";
 
 import { Live, type LiveTuning, TICK } from "../src/live/live.ts";
@@ -61,8 +61,8 @@ afterEach(async () => {
   directory = null;
 });
 
-async function connect(sent: Opening, to: Served | null = server): Promise<LiveClient> {
-  const client = await LiveClient.open(to?.origin ?? "", sent);
+async function connect(sent: Opening, to: Served | null = server, room?: string): Promise<LiveClient> {
+  const client = await LiveClient.open(to?.origin ?? "", sent, room);
   open.push(client);
   return client;
 }
@@ -238,8 +238,149 @@ describe("time in the town's room", () => {
   });
 });
 
+/** Those here, as a page is given them: who, where, and whether a live room has them. */
+const Listed = Schema.Struct({
+  present: Schema.Array(Schema.Struct({ username: Schema.String, place: Schema.String, live: Schema.Boolean })),
+});
+async function listedHere(token: string, from: Served | null = server): Promise<(string | boolean)[][]> {
+  const answer = await fetch(`${from?.origin ?? ""}/v1/game/presence`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return Schema.decodeUnknownSync(Listed)(await answer.json()).present.map((p) => [p.username, p.place, p.live]);
+}
+
+/** Who is about as a page in the town's room has it: the lists it was given, with each change told since made to them. */
+function aboutOf(c: LiveClient): Who | null {
+  let who: Who | null = null;
+  for (const m of c.texts) {
+    if (m.t === "about" && m.who !== undefined) who = readWho(m.who);
+    else if (m.t === "aboutChanged" && who !== null) who = applyAbout(who, m);
+  }
+  return who;
+}
+/** Each of a list's people as the page has them: who, and where. */
+const placed = (rows: readonly Who["present"][number][] | undefined) => (rows ?? []).map((r) => [r.id, r["place"]]);
+
+describe("one place a player, the one their live connection is in", () => {
+  it("keeps a player in the town's room there, live, while another page of theirs calls from the Works: everybody reads the same", async () => {
+    await start();
+    const a = await connect({ bearer: "alice-token" });
+    await a.welcome();
+    const b = await connect({ bearer: "bob-token" });
+    await b.welcome();
+    await visitsWhen((r) => r.length === 2);
+    // Alice's other page, with no room, says the Works, as it does every half minute.
+    expect((await sayHere("alice-token", "works")).status).toBe(200);
+    await pass("30 seconds");
+    expect((await sayHere("alice-token", "works")).status).toBe(200);
+    await pass("1 second");
+
+    expect((await visits()).map((v) => [v.player_id, v.place, v.source, v.left_at])).toEqual([
+      [alice, "town", "room", null],
+      [bob, "town", "room", null],
+    ]);
+    // As a page asks Leaf, and as Bob's page in the room with her is told.
+    expect(await listedHere("bob-token")).toEqual([
+      ["Alice", "town", true],
+      ["Bob", "town", true],
+    ]);
+    expect(placed(aboutOf(b)?.present)).toEqual([
+      [alice, "town"],
+      [bob, "town"],
+    ]);
+  });
+
+  it("has a visitor at a camp there by the camp's room, live, whose camp it is", async () => {
+    await start();
+    const a = await connect({ bearer: "alice-token" }, server, campRoom(bob));
+    await a.welcome();
+    const [camp] = await visitsWhen((r) => r.length === 1);
+    expect(camp).toMatchObject({ place: "camp", source: "room", left_at: null });
+    expect(await services?.query((sql) => sql`SELECT camp_owner FROM visits`)).toEqual([{ camp_owner: bob }]);
+    expect(await listedHere("bob-token")).toEqual([["Alice", "camp", true]]);
+
+    // Her page's own word of the camp is the same place: one visit, the room's still.
+    const said = await fetch(`${server?.origin ?? ""}/v1/game/presence`, {
+      method: "PUT",
+      headers: { Authorization: "Bearer alice-token", "Content-Type": "application/json" },
+      body: JSON.stringify({ place: "camp", camp_owner: alice }),
+    });
+    expect(said.status).toBe(200);
+    expect(await visits()).toMatchObject([{ place: "camp", source: "room", left_at: null }]);
+
+    a.send({ t: "leave" });
+    const [left] = await visitsWhen((r) => closed(r[0]));
+    expect(left).toMatchObject({ place: "camp", source: "room" });
+  });
+});
+
+describe("every page hears what Leaf's records say within a minute, whichever Leaf wrote it", () => {
+  it("in a deploy, a page on one Leaf is told of somebody who comes into the other's town and leaves it", async () => {
+    const { old, next } = await deploying();
+    const b = await connect({ bearer: "bob-token" }, next);
+    await b.welcome();
+    const a = await connect({ bearer: "alice-token" }, old);
+    await a.welcome();
+    await visitsWhen((r) => r.length === 2);
+    await pass("31 seconds");
+    expect(placed(aboutOf(b)?.present)).toEqual([
+      [alice, "town"],
+      [bob, "town"],
+    ]);
+
+    // She leaves the old Leaf's room, which tells only its own pages.
+    a.send({ t: "leave" });
+    await visitsWhen((r) => closed(r.find((v) => v.player_id === alice)));
+    await pass("31 seconds");
+    const now = aboutOf(b);
+    expect([placed(now?.present), placed(now?.resting)]).toEqual([[[bob, "town"]], [[alice, "town"]]]);
+  });
+});
+
+describe("who a live room has", () => {
+  it("is said of everybody here: live in the town's room, and not for a page that only says it is in town", async () => {
+    await start();
+    const a = await connect({ bearer: "alice-token" });
+    await a.welcome();
+    expect((await sayHere("bob-token", "town")).status).toBe(200);
+    await visitsWhen((r) => r.length === 2);
+    expect(await listedHere("bob-token")).toEqual([
+      ["Alice", "town", true],
+      ["Bob", "town", false],
+    ]);
+
+    // Bob's page comes into the room: live, in the visit he had.
+    const b = await connect({ bearer: "bob-token" });
+    await b.welcome();
+    const both = await visitsWhen((r) => r.every((v) => v.source === "room"));
+    expect(both.length).toBe(2);
+    await pass("2 seconds");
+    expect(await listedHere("bob-token")).toEqual([
+      ["Alice", "town", true],
+      ["Bob", "town", true],
+    ]);
+  });
+
+  it("tells everybody in town when a page that only said so comes into the room", async () => {
+    await start();
+    const a = await connect({ bearer: "alice-token" });
+    await a.welcome();
+    expect((await sayHere("bob-token", "town")).status).toBe(200);
+    await visitsWhen((r) => r.length === 2);
+    await pass("1 second");
+    const told = a.texts.length;
+    const b = await connect({ bearer: "bob-token" });
+    await b.welcome();
+    await visitsWhen((r) => r.every((v) => v.source === "room"));
+    await pass("1 second");
+
+    const since = a.texts.slice(told).filter((m) => m.t === "aboutChanged" || m.t === "about");
+    expect(JSON.stringify(since)).toContain('"live":true');
+  });
+});
+
 describe("when Leaf stops", () => {
-  it("closes every open visit at that moment, the rooms' and the calls', before any connection", async () => {
+  it("closes no visit: each stays open for the next Leaf, a room's heard of at that moment and no room's from then, before any connection", async () => {
     await start();
     const a = await connect({ bearer: "alice-token" });
     await a.welcome();
@@ -250,11 +391,9 @@ describe("when Leaf stops", () => {
     await server?.close();
 
     const after = await visits();
-    expect(
-      after.map((v) => [v.place, v.left_at !== null && v.left_at >= stopping && v.left_at < stopping + 1000]),
-    ).toEqual([
-      ["town", true],
-      ["camp", true],
+    expect(after.map((v) => [v.place, v.source, v.left_at, v.heard_at >= stopping])).toEqual([
+      ["town", "call", null, true],
+      ["camp", "call", null, false],
     ]);
     expect((await a.ended()).code).toBe(1012);
   });
@@ -285,27 +424,37 @@ describe("when Leaf stops", () => {
     ).toEqual([{ game: "works", played: 1, afk_ms: 0 }]);
   });
 
-  it("in a deploy, closes only the visits the new Leaf has not heard of since, and leaves the others open as they began", async () => {
+  it("in a deploy nobody leaves: whoever comes back goes on in the visit they had, and whoever does not is gone from when they were last heard of", async () => {
     const { old, next } = await deploying();
     // Alice in the old Leaf's town, Bob's page in the camp: both heard of by the old Leaf alone.
     const a = await connect({ bearer: "alice-token" }, old);
     await a.welcome();
     expect((await sayHere("bob-token", "camp", old)).status).toBe(200);
-    const came = (await visitsWhen((r) => r.length === 2)).find((v) => v.player_id === alice);
+    const before = await visitsWhen((r) => r.length === 2);
+    const began = (who: string): number => before.find((v) => v.player_id === who)?.entered_at ?? Number.NaN;
+    const bobHeard = before.find((v) => v.player_id === bob)?.heard_at ?? Number.NaN;
     await pass("20 seconds");
-    // Alice's game comes into the new Leaf's town as well; Bob's page still talks to the old one.
+    await old.close();
+    expect((await a.ended()).code).toBe(1012);
+    // Alice's page comes back, to the next Leaf's town; Bob's never does.
     const again = await connect({ bearer: "alice-token" }, next);
     await again.welcome();
-    await visitsWhen((r) => r.some((v) => v.player_id === alice && v.heard_at >= (came?.entered_at ?? 0) + 20_000));
-    await pass("10 seconds");
-    await old.close();
+    const after = await visitsWhen((r) => r.some((v) => v.player_id === alice && v.source === "room"));
+    expect(after.map((v) => [v.player_id, v.place, v.source, v.entered_at, v.left_at])).toEqual([
+      [alice, "town", "room", began(alice), null],
+      [bob, "camp", "call", began(bob), null],
+    ]);
+    expect(await listedHere("alice-token", next)).toEqual([
+      ["Alice", "town", true],
+      ["Bob", "camp", false],
+    ]);
 
-    const after = await visits();
-    expect(after.find((v) => v.player_id === alice)).toMatchObject({
-      place: "town",
-      entered_at: came?.entered_at,
-      left_at: null,
-    });
-    expect(closed(after.find((v) => v.player_id === bob))).toBe(true);
+    await pass("2 minutes");
+    const later = await visitsWhen((r) => r.some((v) => v.player_id === bob && v.left_at !== null));
+    // Gone from his page's last call, which was before the deploy; and Alice's one visit goes on.
+    expect(later.map((v) => [v.player_id, v.entered_at, v.left_at])).toEqual([
+      [alice, began(alice), null],
+      [bob, began(bob), bobHeard],
+    ]);
   });
 });

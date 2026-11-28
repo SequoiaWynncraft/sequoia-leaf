@@ -42,7 +42,7 @@ import type {
   Tone,
 } from "./guild.ts";
 import { likedLine, type Line, lineFor, makePace } from "./news.ts";
-import { type Listed, resters, standing, type Where, whereabouts } from "./where.ts";
+import { type Gone, type Here, resters, standing, type Where, whereabouts } from "./where.ts";
 
 /** How the guild's news is asked for again when Leaf did not answer: three seconds, doubling. */
 const NEWS_BACKOFF: Backoff = { first: 3000, most: 24_000, jitter: 0.25 };
@@ -382,24 +382,19 @@ export const RESTING_MOST = 12;
 const listedRank = (guest: boolean, rank: string | null): string | null =>
   guest ? GUEST : rank === null ? null : rankName(rank);
 
-/** Somebody Leaf lists as gone, as the town reads them (`where.ts`); or in the game, as far as the two are read alike. */
-export const listedGone = (r: Resting | Present): Listed => ({
-  id: r.id,
-  name: r.name,
-  rank: listedRank(r.guest, null),
-  at: r.place,
-  camp: r.camp,
-  seen: r.seen,
+/** Somebody Leaf lists as gone, as the town reads them (`where.ts`): where they were last, and when they left. */
+export const listedGone = ({ place, guest, ...r }: Resting): Gone => ({
+  ...r,
+  rank: listedRank(guest, null),
+  at: place,
 });
 
-/** Somebody Leaf lists as in the game, as the town reads them: with their rank, and when they last did something. */
-export const listedHere = (p: Present): Listed => ({
-  ...listedGone(p),
-  rank: listedRank(p.guest, p.rank),
-  acted: p.acted,
+/** Somebody Leaf lists as in the game, as the town reads them: with their rank, and each thing Leaf says of them there. */
+export const listedHere = ({ place, guest, ...p }: Present): Here => ({
+  ...p,
+  rank: listedRank(guest, p.rank),
+  at: place,
 });
-
-// ---------- before the town opens ----------
 
 /** What the town needs from the server before it opens. */
 export interface Prepared {
@@ -479,7 +474,7 @@ export function makeLive(p: Prepared): Guild {
   let quests = p.quests;
   let told = p.mark;
   /** Leaf's list of who is about, as last heard; and what the town's live room says, once it is followed. */
-  let listed: { present: Listed[]; resting: Listed[]; gone: Listed[] } = { present: [], resting: [], gone: [] };
+  let listed: { present: Here[]; resting: Gone[]; gone: Gone[] } = { present: [], resting: [], gone: [] };
   let room: RoomSays = { room: () => null, ranks: new Map(), stirred: new Map() };
   // The one account of where everybody is, worked out at most once a frame, however many ask in it
   // (the figures, the visitors, Who is about, a card), and at once when Leaf's lists come.
@@ -493,7 +488,6 @@ export function makeLive(p: Prepared): Guild {
       ...listed,
       ranks: room.ranks,
       stirred: room.stirred,
-      now: leafClock(made),
     });
     snapshot = { made, listed, where };
     return where;
@@ -636,13 +630,13 @@ export function makeLive(p: Prepared): Guild {
     },
     deeds: () => news.deeds(),
     visitors: () =>
-      standing(whereNow(), VISITORS_MOST).map(({ id, name, rank, at, acted }) => ({
+      standing(whereNow(), VISITORS_MOST).map(({ id, name, rank, at, acted, since }) => ({
         id,
         name,
         rank,
         at,
         skin: skinOf(id),
-        acted,
+        acted: acted ?? since,
       })),
     resting: () =>
       resters(whereNow(), RESTING_MOST).map(({ id, name, rank, at, seen, stays }) => ({

@@ -814,7 +814,7 @@ describe("where players are, from the room", () => {
     const changes = [
       () => sayHere("carol-token", "works"),
       () => sayHere("carol-token", "camp", false),
-      () => sayHere("alice-2-token", "works"),
+      () => sayHere("carol-token", "table"),
       () => sayHere("carol-token", "town", true),
     ];
     for (const change of changes) {

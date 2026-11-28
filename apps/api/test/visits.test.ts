@@ -47,6 +47,9 @@ type Who = "alice" | "bob" | "carol" | "dave";
 
 /** Alice, as a room or her page has her. */
 const inTownAlice = { playerId: alice, username: "Alice", guest: false, device: null };
+const inTownBob = { playerId: bob, username: "Bob", guest: false, device: null };
+/** The town, as its live room says where its players are. */
+const TOWN = { place: "town", camp: null };
 
 /** A player's page saying where they are, at the clock's time. */
 async function call(who: Who, place: string, device?: string) {
@@ -241,23 +244,32 @@ describe("visits from the presence calls", () => {
     expect((await visits())[0]).toMatchObject({ place: "camp", left_at: T0 + 60 * SECOND, seconds: 60 });
   });
 
-  it("never moves a player back on word older than what Leaf heard since: a room's heartbeat written late", async () => {
-    // Alice is in the town's live room; her page then says the Works, and the room's heartbeat from
-    // before it, which Live had waiting, is written after.
+  it("never moves a player back on word older than what Leaf heard since: a room's heartbeat and leaving written late", async () => {
+    // Alice is in the town's live room; her page then says the Works, and the room's heartbeat and
+    // her leaving it from before that, which Live had waiting, are written after.
     const inTown = { playerId: alice, username: "Alice", guest: false, device: null };
-    await services.run(Visits.use((v) => v.inRoom([inTown], "town", T0)));
+    await services.run(Visits.use((v) => v.inRoom([inTown], TOWN, T0)));
     clock.now = T0 + 20 * SECOND;
     await call("alice", "works");
-    await services.run(Visits.use((v) => v.inRoom([inTown], "town", T0 + 10 * SECOND)));
-    await services.run(Visits.use((v) => v.leftRoom(alice, "town", T0 + 15 * SECOND)));
+    await services.run(Visits.use((v) => v.inRoom([inTown], TOWN, T0 + 10 * SECOND)));
+    await services.run(Visits.use((v) => v.leftRoom(alice, TOWN, T0 + 15 * SECOND)));
 
     expect(await visits()).toMatchObject([
-      { place: "town", source: "room", entered_at: T0, left_at: T0 + 20 * SECOND },
+      { place: "town", source: "room", entered_at: T0, left_at: T0 + 15 * SECOND },
       { place: "works", source: "call", entered_at: T0 + 20 * SECOND, left_at: null },
     ]);
     const about = await services.run(Visits.use((v) => v.about(T0 + 21 * SECOND)));
     expect(about.present).toEqual([
-      { playerId: alice, username: "Alice", place: "works", camp: null, guest: false, seenAt: T0 + 20 * SECOND },
+      {
+        playerId: alice,
+        username: "Alice",
+        place: "works",
+        camp: null,
+        guest: false,
+        seenAt: T0 + 20 * SECOND,
+        live: false,
+        since: T0 + 20 * SECOND,
+      },
     ]);
   });
 
@@ -272,18 +284,73 @@ describe("visits from the presence calls", () => {
         (v) => v.instance,
       );
     try {
-      await old.run(Visits.use((v) => v.inRoom([inTown], "town", T0)));
-      await next.run(Visits.use((v) => v.inRoom([inTown], "town", T0 + 20 * SECOND)));
+      await old.run(Visits.use((v) => v.inRoom([inTown], TOWN, T0)));
+      await next.run(Visits.use((v) => v.inRoom([inTown], TOWN, T0 + 20 * SECOND)));
       // The old Leaf's room word from before, written late, as it stops.
-      await old.run(Visits.use((v) => v.inRoom([inTown], "town", T0 + 10 * SECOND)));
+      await old.run(Visits.use((v) => v.inRoom([inTown], TOWN, T0 + 10 * SECOND)));
       const afterLate = await instance();
-      await old.run(Visits.use((v) => v.closeAll(T0 + 30 * SECOND)));
+      await old.run(Visits.use((v) => v.handOver(T0 + 30 * SECOND)));
 
       expect(afterLate).toEqual(["new"]);
       expect(await instance()).toEqual(["new"]);
       expect(
         await next.query((sql) => sql`SELECT entered_at, heard_at FROM visits WHERE player_id = ${alice}`),
       ).toEqual([{ entered_at: T0, heard_at: T0 + 20 * SECOND }]);
+    } finally {
+      await old.dispose();
+      await next.dispose();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("in a deploy, what a player last did is never lost nor set back, whichever Leaf writes it", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "leaf-visits-"));
+    const databasePath = join(directory, "leaf.db");
+    const old = testLeaf(clock, noNetwork, { databasePath }, { instance: "old" });
+    const next = testLeaf(clock, noNetwork, { databasePath }, { instance: "new" });
+    const row = () =>
+      next.query((sql) => sql`SELECT instance, source, heard_at, acted_at FROM visits WHERE player_id = ${alice}`);
+    try {
+      await old.run(Visits.use((v) => v.inRoom([inTownAlice], TOWN, T0)));
+      // She moves, which the old Leaf alone hears, and has not written yet.
+      await old.run(Visits.use((v) => v.acted(alice, T0 + 5 * SECOND)));
+      // The new Leaf takes her visit first, and then the old one stops.
+      await next.run(Visits.use((v) => v.inRoom([inTownAlice], TOWN, T0 + 10 * SECOND)));
+      await old.run(Visits.use((v) => v.handOver(T0 + 20 * SECOND)));
+      expect(await row()).toEqual([
+        { instance: "new", source: "room", heard_at: T0 + 10 * SECOND, acted_at: T0 + 5 * SECOND },
+      ]);
+      const about = await next.run(Visits.use((v) => v.lists(T0 + 21 * SECOND)));
+      expect(about.acted.get(alice)).toBe(T0 + 5 * SECOND);
+
+      // What the new Leaf hears her do later is not set back by an older word of the old one's.
+      await next.run(Visits.use((v) => v.acted(alice, T0 + 30 * SECOND)));
+      await next.run(Visits.use((v) => v.inRoom([inTownAlice], TOWN, T0 + 40 * SECOND)));
+      await old.run(Visits.use((v) => v.inRoom([inTownAlice], TOWN, T0 + 45 * SECOND)));
+      await old.run(Visits.use((v) => v.handOver(T0 + 50 * SECOND)));
+      expect((await row()).map((r) => r["acted_at"])).toEqual([T0 + 30 * SECOND]);
+    } finally {
+      await old.dispose();
+      await next.dispose();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("a player who leaves and comes back, to another Leaf, takes what they last did with them", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "leaf-visits-"));
+    const databasePath = join(directory, "leaf.db");
+    const old = testLeaf(clock, noNetwork, { databasePath }, { instance: "old" });
+    const next = testLeaf(clock, noNetwork, { databasePath }, { instance: "new" });
+    try {
+      await old.run(Visits.use((v) => v.inRoom([inTownAlice], TOWN, T0)));
+      await old.run(Visits.use((v) => v.acted(alice, T0 + 5 * SECOND)));
+      await old.run(Visits.use((v) => v.leftRoom(alice, TOWN, T0 + 10 * SECOND)));
+      await next.run(Visits.use((v) => v.called(inTownAlice, { place: "camp", camp: null }, null, T0 + 20 * SECOND)));
+
+      expect(await next.query((sql) => sql`SELECT place, acted_at FROM visits ORDER BY id`)).toEqual([
+        { place: "town", acted_at: T0 + 5 * SECOND },
+        { place: "camp", acted_at: T0 + 5 * SECOND },
+      ]);
     } finally {
       await old.dispose();
       await next.dispose();
@@ -298,8 +365,8 @@ describe("visits from the presence calls", () => {
     const next = testLeaf(clock, noNetwork, { databasePath }, { instance: "new" });
     const inTown = { playerId: alice, username: "Alice", guest: false, device: null };
     try {
-      await next.run(Visits.use((v) => v.inRoom([inTown], "town", T0)));
-      await old.run(Visits.use((v) => v.inRoom([inTown], "town", T0 + 10 * SECOND)));
+      await next.run(Visits.use((v) => v.inRoom([inTown], TOWN, T0)));
+      await old.run(Visits.use((v) => v.inRoom([inTown], TOWN, T0 + 10 * SECOND)));
 
       expect(await next.query((sql) => sql`SELECT instance, heard_at FROM visits`)).toEqual([
         { instance: "old", heard_at: T0 + 10 * SECOND },
@@ -315,7 +382,7 @@ describe("visits from the presence calls", () => {
   // the other Leaf had waiting, comes after, from the town's room or from a page in the camp; the
   // other Leaf then stops at 31 seconds. Their one stay was 30 seconds, and stays so.
   for (const [said, word] of [
-    ["the room they left", (v: Visits["Service"]) => v.inRoom([inTownAlice], "town", T0 + 10 * SECOND)],
+    ["the room they left", (v: Visits["Service"]) => v.inRoom([inTownAlice], TOWN, T0 + 10 * SECOND)],
     [
       "a page in another place",
       (v: Visits["Service"]) => v.called(inTownAlice, { place: "camp", camp: null }, null, T0 + 10 * SECOND),
@@ -327,10 +394,10 @@ describe("visits from the presence calls", () => {
       const here = testLeaf(clock, noNetwork, { databasePath }, { instance: "here" });
       const other = testLeaf(clock, noNetwork, { databasePath }, { instance: "other" });
       try {
-        await here.run(Visits.use((v) => v.inRoom([inTownAlice], "town", T0)));
-        await here.run(Visits.use((v) => v.leftRoom(alice, "town", T0 + 30 * SECOND)));
+        await here.run(Visits.use((v) => v.inRoom([inTownAlice], TOWN, T0)));
+        await here.run(Visits.use((v) => v.leftRoom(alice, TOWN, T0 + 30 * SECOND)));
         await other.run(Visits.use(word));
-        await other.run(Visits.use((v) => v.closeAll(T0 + 31 * SECOND)));
+        await other.run(Visits.use((v) => v.handOver(T0 + 31 * SECOND)));
 
         expect(await here.query((sql) => sql`SELECT place, entered_at, left_at, seconds FROM visits`)).toEqual([
           { place: "town", entered_at: T0, left_at: T0 + 30 * SECOND, seconds: 30 },
@@ -347,45 +414,87 @@ describe("visits from the presence calls", () => {
     });
   }
 
-  it("keeps a player in the game their page calls from while a town room on another page says the town; a call moves them", async () => {
-    // Alice has the Works open, and the town open on her phone, whose room says so now and then.
-    const inTown = { playerId: alice, username: "Alice", guest: false, device: null };
-    const room = (at: number) => services.run(Visits.use((v) => v.inRoom([inTown], "town", at)));
+  it("keeps a player where a live room has them while a page of theirs with no room calls from somewhere else, for everybody alike", async () => {
+    // Alice is in the town's room, live; the Works is open on another page of hers, which only calls.
+    const room = (at: number) => services.run(Visits.use((v) => v.inRoom([inTownAlice], TOWN, at)));
+    await room(T0);
+    clock.now = T0 + 10 * SECOND;
     await call("alice", "works");
-    await room(T0 + 10 * SECOND);
-    clock.now = T0 + 30 * SECOND;
+    await room(T0 + 30 * SECOND);
+    clock.now = T0 + 40 * SECOND;
     await call("alice", "works");
-    await room(T0 + 40 * SECOND);
-    expect(await visits()).toMatchObject([{ place: "works", source: "call", entered_at: T0, left_at: null }]);
-    const about = await services.run(Visits.use((v) => v.about(T0 + 41 * SECOND)));
-    expect(about.present.map((p) => p.place)).toEqual(["works"]);
 
-    // Out of the Works, the town's page says so itself, at once.
-    clock.now = T0 + 50 * SECOND;
-    await call("alice", "town");
+    expect(await visits()).toMatchObject([{ place: "town", source: "room", entered_at: T0, left_at: null }]);
+    const about = await services.run(Visits.use((v) => v.about(T0 + 41 * SECOND)));
+    expect(about.present.map((p) => [p.place, p.live])).toEqual([["town", true]]);
+
+    // Out of the room, she is where that page says, from then.
+    await services.run(Visits.use((v) => v.leftRoom(alice, TOWN, T0 + 50 * SECOND)));
     expect(await visits()).toMatchObject([
-      { place: "works", left_at: T0 + 50 * SECOND },
-      { place: "town", source: "call", entered_at: T0 + 50 * SECOND, left_at: null },
+      { place: "town", left_at: T0 + 50 * SECOND },
+      { place: "works", source: "call", entered_at: T0 + 50 * SECOND, left_at: null },
     ]);
   });
 
-  it("lets a town room have a player whose game's page has gone silent, and one in their camp at once", async () => {
+  it("takes a player a page's call has in a game as a live room hears of them, and the page's calls do not take them back", async () => {
+    await call("alice", "works");
+    await services.run(Visits.use((v) => v.inRoom([inTownAlice], TOWN, T0 + 10 * SECOND)));
+    clock.now = T0 + 30 * SECOND;
+    await call("alice", "works");
+
+    expect(await visits()).toMatchObject([
+      { place: "works", left_at: T0 + 10 * SECOND },
+      { place: "town", source: "room", entered_at: T0 + 10 * SECOND, left_at: null },
+    ]);
+  });
+
+  it("leaves a player nowhere as they leave their room when their other page last called over 90 seconds before", async () => {
+    await services.run(Visits.use((v) => v.inRoom([inTownAlice], TOWN, T0)));
+    clock.now = T0 + 10 * SECOND;
+    await call("alice", "works");
+    for (const at of [30, 60, 90]) {
+      // oxlint-disable-next-line no-await-in-loop -- one word of the room after another
+      await services.run(Visits.use((v) => v.inRoom([inTownAlice], TOWN, T0 + at * SECOND)));
+    }
+    await services.run(Visits.use((v) => v.leftRoom(alice, TOWN, T0 + 100 * SECOND)));
+
+    expect((await visits()).map((v) => [v.place, v.left_at])).toEqual([["town", T0 + 100 * SECOND]]);
+  });
+
+  it("moves a player whose page says where it is going before its room hears it has left, in either order, with no time nowhere", async () => {
+    // The page's call comes first, then the room's word that they left.
+    await services.run(Visits.use((v) => v.inRoom([inTownAlice], TOWN, T0)));
+    clock.now = T0 + 20 * SECOND;
+    await call("alice", "grove");
+    await services.run(Visits.use((v) => v.leftRoom(alice, TOWN, T0 + 20 * SECOND)));
+    // The room's word first, then the page's call.
+    await services.run(Visits.use((v) => v.inRoom([inTownBob], TOWN, T0)));
+    await services.run(Visits.use((v) => v.leftRoom(bob, TOWN, T0 + 20 * SECOND)));
+    await call("bob", "grove");
+
+    expect((await visits()).map((v) => [v.player_id, v.place, v.entered_at, v.left_at])).toEqual([
+      [alice, "town", T0, T0 + 20 * SECOND],
+      [alice, "grove", T0 + 20 * SECOND, null],
+      [bob, "town", T0, T0 + 20 * SECOND],
+      [bob, "grove", T0 + 20 * SECOND, null],
+    ]);
+  });
+
+  it("lets a town room have a player whose game's page has gone silent, and keeps them from a page that calls from a camp", async () => {
     const inTown = { playerId: alice, username: "Alice", guest: false, device: null };
     await call("alice", "works");
     // 90 seconds on, the Works' visit is closed at its last call, and the room has her.
-    await services.run(Visits.use((v) => v.inRoom([inTown], "town", T0 + 90 * SECOND)));
+    await services.run(Visits.use((v) => v.inRoom([inTown], TOWN, T0 + 90 * SECOND)));
     expect(await visits()).toMatchObject([
       { place: "works", left_at: T0 },
       { place: "town", source: "room", entered_at: T0 + 90 * SECOND, left_at: null },
     ]);
-    // A camp is the town's own page, not a game: the room takes her from it.
+    // Another page of hers calls from a camp: the room has her, and she stays.
     clock.now = T0 + 100 * SECOND;
     await call("alice", "camp");
-    await services.run(Visits.use((v) => v.inRoom([inTown], "town", T0 + 110 * SECOND)));
+    await services.run(Visits.use((v) => v.inRoom([inTown], TOWN, T0 + 110 * SECOND)));
     expect((await visits()).map((v) => [v.place, v.left_at])).toEqual([
       ["works", T0],
-      ["town", T0 + 100 * SECOND],
-      ["camp", T0 + 110 * SECOND],
       ["town", null],
     ]);
   });
@@ -407,49 +516,97 @@ describe("visits from the presence calls", () => {
 
   it("closes a room's visit gone silent at the last time it was heard of, when the player leaves the room after", async () => {
     const inTown = { playerId: alice, username: "Alice", guest: false, device: null };
-    await services.run(Visits.use((v) => v.inRoom([inTown], "town", T0)));
-    await services.run(Visits.use((v) => v.leftRoom(alice, "town", T0 + 100 * SECOND)));
+    await services.run(Visits.use((v) => v.inRoom([inTown], TOWN, T0)));
+    await services.run(Visits.use((v) => v.leftRoom(alice, TOWN, T0 + 100 * SECOND)));
 
     expect(await visits()).toMatchObject([{ place: "town", source: "room", left_at: T0, seconds: 0 }]);
   });
 
-  it("closes a visit gone silent at its last call when Leaf stops, and the others then", async () => {
-    await call("alice", "town");
-    clock.now = T0 + 60 * SECOND;
+  it("closes no visit when Leaf stops: a room's is heard of then, its time counted, and is no room's; a page's stays as it was last heard of", async () => {
+    const inTown = { playerId: alice, username: "Alice", guest: false, device: null };
+    await services.run(Visits.use((v) => v.inRoom([inTown], TOWN, T0)));
+    await services.run(Visits.use((v) => v.acted(alice, T0 + 5 * SECOND)));
+    clock.now = T0 + 20 * SECOND;
     await call("bob", "works");
-    await services.run(Visits.use((v) => v.closeAll(T0 + 100 * SECOND)));
+    await services.run(Visits.use((v) => v.handOver(T0 + 50 * SECOND)));
 
-    expect((await visits()).map((v) => [v.player_id, v.left_at])).toEqual([
-      [alice, T0],
-      [bob, T0 + 100 * SECOND],
+    expect(
+      await services.query(
+        (sql) => sql`SELECT player_id, source, entered_at, heard_at, acted_at, left_at FROM visits ORDER BY id`,
+      ),
+    ).toEqual([
+      // What she last did, which this Leaf alone had heard, is written for the next.
+      {
+        player_id: alice,
+        source: "call",
+        entered_at: T0,
+        heard_at: T0 + 50 * SECOND,
+        acted_at: T0 + 5 * SECOND,
+        left_at: null,
+      },
+      {
+        player_id: bob,
+        source: "call",
+        entered_at: T0 + 20 * SECOND,
+        heard_at: T0 + 20 * SECOND,
+        acted_at: null,
+        left_at: null,
+      },
     ]);
+    expect(await timeIn()).toEqual([{ player_id: alice, game: "town", played: 50 * SECOND, afk: 0 }]);
+    // Handed over again (a stop told twice), nothing is counted twice.
+    await services.run(Visits.use((v) => v.handOver(T0 + 50 * SECOND)));
+    expect(await timeIn()).toEqual([{ player_id: alice, game: "town", played: 50 * SECOND, afk: 0 }]);
   });
 
-  it("hears a room's word of many players at once as it would each alone, a game's player staying in the game", async () => {
+  it("a visit gone silent before Leaf stops is closed by the next at the last time it was heard of, not when Leaf stopped", async () => {
+    const inTown = { playerId: alice, username: "Alice", guest: false, device: null };
+    await services.run(Visits.use((v) => v.inRoom([inTown], TOWN, T0)));
+    await services.run(Visits.use((v) => v.handOver(T0 + 100 * SECOND)));
+    await services.run(Visits.use((v) => v.closeSilent(T0 + 101 * SECOND)));
+
+    expect((await visits()).map((v) => [v.player_id, v.left_at])).toEqual([[alice, T0]]);
+  });
+
+  it("hands over more visits than one transaction writes, each once", async () => {
+    const many = Array.from({ length: 250 }, (_, n) => ({
+      playerId: playerId(`30000000-0000-0000-0000-${String(n).padStart(12, "0")}`),
+      username: `Member${n}`,
+      guest: false,
+      device: null,
+    }));
+    await services.run(Visits.use((v) => v.inRoom(many, TOWN, T0)));
+    await services.run(Visits.use((v) => v.handOver(T0 + 30 * SECOND)));
+
+    expect(
+      await services.query(
+        (sql) => sql`SELECT source, heard_at, left_at, count(*) AS n FROM visits GROUP BY source, heard_at, left_at`,
+      ),
+    ).toEqual([{ source: "call", heard_at: T0 + 30 * SECOND, left_at: null, n: 250 }]);
+  });
+
+  it("hears a room's word of many players at once as it would each alone, one whose page called from a game coming with the rest", async () => {
     const many = Array.from({ length: 250 }, (_, n) => ({
       playerId: playerId(`20000000-0000-0000-0000-${String(n).padStart(12, "0")}`),
       username: `Member${n}`,
       guest: false,
       device: null,
     }));
-    // One of them has the Works open, which says so; the room has them in town on another page.
+    // One of them has the Works open on another page, which says so; the room has them in town.
     const gamer = many[137];
     if (gamer === undefined) throw new Error("No player 137");
     await services.run(Visits.use((v) => v.called(gamer, { place: "works", camp: null }, null, T0)));
-    await services.run(Visits.use((v) => v.inRoom(many, "town", T0)));
-    await services.run(Visits.use((v) => v.inRoom(many, "town", T0 + 30 * SECOND)));
+    await services.run(Visits.use((v) => v.inRoom(many, TOWN, T0)));
+    await services.run(Visits.use((v) => v.inRoom(many, TOWN, T0 + 30 * SECOND)));
 
     const open = await services.query(
       (sql) => sql`SELECT place, heard_at, count(*) AS n FROM visits WHERE left_at IS NULL GROUP BY 1, 2 ORDER BY 1`,
     );
-    expect(open).toEqual([
-      { place: "town", heard_at: T0 + 30 * SECOND, n: 249 },
-      { place: "works", heard_at: T0, n: 1 },
-    ]);
+    expect(open).toEqual([{ place: "town", heard_at: T0 + 30 * SECOND, n: 250 }]);
     const time = await services.query(
       (sql) => sql`SELECT game, count(*) AS n, sum(played_ms) AS played, sum(afk_ms) AS afk FROM time_in GROUP BY 1`,
     );
-    expect(time).toEqual([{ game: "town", n: 249, played: 0, afk: 249 * 30 * SECOND }]);
+    expect(time).toEqual([{ game: "town", n: 250, played: 0, afk: 250 * 30 * SECOND }]);
   });
 
   it("closes the visit in one place when the player comes to another, in the same session", async () => {
@@ -600,7 +757,7 @@ describe("visits from the presence calls", () => {
     // Each comes into the town's room a tenth of a second after the one before, and none is heard of again.
     for (const [n, who] of many.entries()) {
       // oxlint-disable-next-line no-await-in-loop -- one after another
-      await services.run(Visits.use((v) => v.inRoom([who], "town", T0 + n * 100)));
+      await services.run(Visits.use((v) => v.inRoom([who], TOWN, T0 + n * 100)));
     }
     clock.now = T0 + HOUR;
     await call("alice", "town");
@@ -906,6 +1063,8 @@ const Newest = Schema.Struct({
   guest: Schema.BooleanFromBit,
   heardAt: Schema.Number,
   leftAt: Schema.NullOr(Schema.Number),
+  source: Schema.Literals(["room", "call"]),
+  enteredAt: Schema.Int,
   stay: Schema.BooleanFromBit,
 });
 const newestOfTheDay = async (now: number) =>
@@ -913,7 +1072,7 @@ const newestOfTheDay = async (now: number) =>
     await services.query(
       (sql) => sql`
         SELECT v.player_id AS playerId, p.name AS username, v.place, v.camp_owner AS campOwner, o.name AS campOwnerName,
-               v.guest, v.heard_at AS heardAt, v.left_at AS leftAt, p.stay
+               v.guest, v.heard_at AS heardAt, v.left_at AS leftAt, v.source, v.entered_at AS enteredAt, p.stay
         FROM visits AS v JOIN players_seen AS p ON p.player_id = v.player_id
           LEFT JOIN players_seen AS o ON o.player_id = v.camp_owner
         WHERE v.id IN (SELECT max(id) FROM visits WHERE heard_at >= ${now - DAY} GROUP BY player_id)

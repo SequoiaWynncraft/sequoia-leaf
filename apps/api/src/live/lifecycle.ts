@@ -61,14 +61,14 @@ export const handedOver = <P>(link: Link<P>): Link<P> => (link.state === "grace"
 export const graceRunsOut = <P>(link: Link<P>, grace: Grace): boolean => link.state === "grace" && link.grace === grace;
 
 /**
- * Live as it stops: running; then its farewell begun, every open visit being closed, no connection
- * let in; then with every open visit closed, nothing more of visits written, as a player who left
- * may be back in the next Leaf already, in a visit of its own.
+ * Live as it stops: running; then its farewell begun, every open visit being handed over to the
+ * next Leaf, no connection let in; then with every open visit handed over, nothing more of visits
+ * written: they are the next Leaf's, and a connection closing here is nobody's leaving.
  */
-export type Stop = "running" | "closing visits" | "visits closed";
+export type Stop = "running" | "handing over" | "handed over";
 
 /** Live's stop moved on by what happened; anything out of order changes nothing. */
-export function stopped(stop: Stop, event: "farewell" | "visits closed"): Stop {
-  if (event === "farewell") return stop === "running" ? "closing visits" : stop;
-  return stop === "closing visits" ? "visits closed" : stop;
+export function stopped(stop: Stop, event: "farewell" | "handed over"): Stop {
+  if (event === "farewell") return stop === "running" ? "handing over" : stop;
+  return stop === "handing over" ? "handed over" : stop;
 }
