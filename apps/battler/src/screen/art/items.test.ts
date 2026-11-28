@@ -1,7 +1,8 @@
 /**
  * The items' pictures (`RAID-BOARD.md` section 10), read as grids of colours with no canvas: their
- * sizes, the frames that say what a finished item is made of, a finished drawing's own colours, the
- * six components told apart by shape alone, and An Extra Chair framed only from Penguin Month.
+ * sizes, the frames that say what a finished item is made of, a finished drawing's own colours (and
+ * the five kept from today), the six components told apart by shape alone, and An Extra Chair framed
+ * only from Penguin Month.
  */
 import { describe, expect, test } from "bun:test";
 
@@ -15,12 +16,13 @@ import {
   EMBLEM_IDS,
   emblemTrait,
   FINISHED_IDS,
+  type FinishedId,
   halvesOf,
 } from "@sequoia-leaf/raid/content/items.ts";
 import { LAST_ERA } from "@sequoia-leaf/raid/content/releases.ts";
 
 import { stacksOf } from "../stacks.ts";
-import { boonGrid, FRAMED, type Grid, heldEdge, heldGrid, itemGrid } from "./icons.ts";
+import { boonGrid, FRAME_GROUND, FRAMED, type Grid, heldEdge, heldGrid, itemGrid } from "./icons.ts";
 import { COMPONENT_TONE, TRAIT_COLOUR } from "./pal.ts";
 
 const NOW = catalogAt(LAST_ERA);
@@ -40,6 +42,29 @@ const FAMILY: Readonly<Record<Exclude<ComponentId, "knife">, readonly string[]>>
 };
 const familyOf = (tone: string): string =>
   Object.entries(FAMILY).find(([, tones]) => tones.includes(tone))?.[0] ?? tone;
+
+/**
+ * The finished items that keep today's drawing in their new frame, each read better than its redraw in
+ * its components' colours (the lead's call, 2026-11-28). The frame carries their two colours. A
+ * redraw in their colours fails the colour test until its item leaves this list.
+ */
+const KEPT: Readonly<Partial<Record<FinishedId, string>>> = {
+  blackthorn: "A red fork read as a slingshot; the dark twig with white blossoms is blackthorn.",
+  hummingbird: "The green bird is the hummingbird.",
+  stump: "The orange rings read as the stump; in browns it sank.",
+  hoard: "A green heap read as grapes.",
+  fairyring: "A blue ring read as snowflakes; the ring of red caps reads as mushrooms.",
+};
+/** Whether a finished drawing's two largest colours are its two components' (one in three steps, for two of the same). */
+function inItsColours(id: FinishedId): boolean {
+  const [a, b] = halvesOf(NOW, id);
+  const inside = insideOf(itemGrid(id)).filter((t): t is string => t !== null && t !== FRAME_GROUND);
+  const counts = new Map<string, number>();
+  for (const tone of inside) counts.set(familyOf(tone), (counts.get(familyOf(tone)) ?? 0) + 1);
+  const largest = [...counts].toSorted((p, q) => q[1] - p[1]).map(([family]) => family);
+  if (a !== b) return largest.slice(0, 2).toSorted().join() === [a, b].toSorted().join();
+  return largest[0] === a && new Set(inside.filter((t) => familyOf(t) === a)).size >= 3;
+}
 
 /** Where a picture has a pixel. */
 const silhouette = (g: Grid): Set<string> =>
@@ -86,19 +111,9 @@ describe("items' pictures", () => {
     }
   });
 
-  test("a finished drawing's two largest colours are its two components'; two of the same, one colour in three steps", () => {
-    for (const id of FINISHED_IDS) {
-      const [a, b] = halvesOf(NOW, id);
-      const counts = new Map<string, number>();
-      for (const tone of insideOf(itemGrid(id))) {
-        if (tone && tone !== "#211228") counts.set(familyOf(tone), (counts.get(familyOf(tone)) ?? 0) + 1);
-      }
-      const largest = [...counts].toSorted((p, q) => q[1] - p[1]).map(([family]) => family);
-      if (a === b) {
-        const steps = new Set(insideOf(itemGrid(id)).filter((t) => t !== null && familyOf(t) === a));
-        expect([id, largest[0], steps.size >= 3]).toEqual([id, a, true]);
-      } else expect([id, new Set(largest.slice(0, 2))]).toEqual([id, new Set([a, b])]);
-    }
+  test("a finished drawing's two largest colours are its two components'; two of the same, one colour in three steps; but the five kept from today", () => {
+    const wrong: string[] = FINISHED_IDS.filter((id) => !inItsColours(id));
+    expect(wrong.toSorted()).toEqual(Object.keys(KEPT).toSorted());
   });
 
   test("in grey, the six components are told apart by shape alone, and so is how a figure holds each", () => {

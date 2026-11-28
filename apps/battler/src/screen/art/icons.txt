@@ -396,16 +396,16 @@ BBSw.
 .....
 
 item blackthorn
-.h......h.
-.rh....hr.
-..Rh..hR..
-..RRhhRR..
-.w.RRRR...
-wcw.RR....
-.w..RRh...
-....RRrh..
-....RR....
-...RRRR...
+..w....m..
+.wWw..m...
+..w..mm.w.
+....mm.wWw
+.m.mm...w.
+..mmm.....
+.w.mm.m...
+wWw.mm....
+.w...mm...
+......mm..
 
 item wasptail
 .......YY.
@@ -456,16 +456,16 @@ lgGGRRGGgl
 ..ggggggl.
 
 item hummingbird
-......YY..
-.....YyyY.
-..oo.Yyy..
-.oyyoyy...
-kkoyYyo...
-..oyyyyo..
-...oyyyyo.
-....ooyyo.
-.....oooyo
-........oo
+..........
+...ll.....
+..lLLl....
+kklkLl....
+..lLLll...
+...lhLLl..
+...hhlLLl.
+....hllLLl
+.....l.lll
+..........
 
 item mothlantern
 ....oo....
@@ -504,15 +504,15 @@ lGGGGGGGGl
 ..llllll..
 
 item fairyring
-...uu.uu..
-..uUu.uuu.
-...a...a..
-uu......uu
-uUu....uUu
-.a......a.
-...uu.uu..
-..uuu.uUu.
-...a...a..
+...rr.rr..
+..rwr.rrr.
+...c...c..
+rr......rr
+rwr....rwr
+.c......c.
+...rr.rr..
+..rrr.rwr.
+...c...c..
 ..........
 
 item lichen
@@ -540,16 +540,16 @@ AaGGGGGGaA
 ..a....a..
 
 item stump
-..mmmmmm..
-.mEEEEEEm.
-mEffffffEm
-mEfeeeefEm
-mEfeEfefEm
-mEfeffefEm
-mEfeeeefEm
-mEffffffEm
-.mEEEEEEm.
-..mmmmmm..
+..nnnnnn..
+.nooooooN.
+nooNNNNooN
+noNooooNoN
+noNoNNoNoN
+noNoNNoNoN
+noNooooNoN
+nooNNNNooN
+.nooooooN.
+..NNNNNN..
 
 item hollowlog
 ..........
@@ -564,16 +564,16 @@ fmmfEEEfEe
 ..........
 
 item hoard
-....gg....
-...gGGg...
-...gGLg...
-.gg.gg.gg.
-gGGggggGGg
-gGLgGGgGLg
-.ggggLggg.
-gGGggggGGg
-gGLg..gGLg
-.gg....gg.
+....BB....
+...BnnB...
+...BncB...
+.BB.BB.BB.
+BnnBBBBnnB
+BncBnnBncB
+.BBBncBBB.
+BnnBBBBnnB
+BncB..BncB
+.BB....BB.
 
 # ---------- tools: used once, dropped on a figure ----------
 
