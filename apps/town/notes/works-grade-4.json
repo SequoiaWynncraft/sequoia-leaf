@@ -1,0 +1,35 @@
+{
+  "id": "works-grade-4",
+  "at": "TBD",
+  "title": "The Works: grade 4 belts and gatherers",
+  "lines": [
+    "Grade 4 belts carry 600 items a minute. Research them in tier 7.",
+    "Grade 4 gatherers work 2.5 times as fast as grade 1."
+  ],
+  "more": [
+    {
+      "head": "Lines",
+      "points": [
+        "Tunnels, splitters, joiners and sorters get grade 4 too. Each carries 600 items a minute.",
+        "That is twice grade 3. A line still runs at the pace of its slowest piece.",
+        "Fourth-grade lines costs 20,000 Star folios. It needs The Star folio first.",
+        "A grade 4 piece costs 40 times grade 1. A belt tile costs 40 Coins."
+      ]
+    },
+    {
+      "head": "Gatherers",
+      "points": [
+        "Fourth-grade gatherers costs 10,000 Star folios. It needs The Star folio first.",
+        "A grade 4 gatherer gathers 1 star crystal a minute. It costs 200 Coins and draws 3 power.",
+        "There are no grade 4 machines."
+      ]
+    },
+    {
+      "head": "How it looks",
+      "points": [
+        "Grade 4 lines are dark iron with a lilac light. Grade 4 gatherers wear an iron hat and push an iron cart.",
+        "Grade 4 pieces have 3 brass studs in the corner."
+      ]
+    }
+  ]
+}
