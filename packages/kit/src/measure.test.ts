@@ -6,7 +6,7 @@ import { describe, expect, test } from "bun:test";
 
 import { fitHead } from "./measure.ts";
 
-/** A card whose head is `need` wide as laid out, `room` wide to lay it out in, less what each class takes out of it. */
+/** A card whose close button's right edge is at `need` (less what each class takes out of the row), in a head whose right edge is at `room`. */
 function cardOf(
   need: number,
   room: number,
@@ -14,12 +14,12 @@ function cardOf(
   saves: Readonly<Record<string, number>>,
 ): [HTMLElement, Set<string>] {
   const classes = new Set<string>();
+  const right = (): number => need - [...classes].reduce((n, c) => n + (saves[c] ?? 0), 0);
+  const close = { getBoundingClientRect: () => ({ right: right() }) };
   const head = {
-    get scrollWidth() {
-      return need - [...classes].reduce((n, c) => n + (saves[c] ?? 0), 0);
-    },
-    clientWidth: room,
-    classList: { add: (c: string) => classes.add(c), contains: (c: string) => classes.has(c) },
+    lastElementChild: close,
+    getBoundingClientRect: () => ({ right: room }),
+    classList: { add: (c: string) => classes.add(c) },
     querySelector: (q: string) => (q === ".k-info-back" && back ? {} : null),
   };
   const card: HTMLElement = Object.assign(Object.create(null), {

@@ -31,8 +31,10 @@ export function length(name: string): number {
  */
 export function fitHead(card: HTMLElement): boolean {
   const head = card.querySelector<HTMLElement>(".k-info-head");
-  if (!head) return false;
-  const cramped = (): boolean => head.scrollWidth > head.clientWidth + 1;
+  const last = head?.lastElementChild;
+  if (!head || !last) return false;
+  // Its last part (the close button) past the head's right edge: what is beside the name did not fit.
+  const cramped = (): boolean => last.getBoundingClientRect().right > head.getBoundingClientRect().right + 1;
   if (!cramped()) return false;
   head.classList.add("tight");
   if (cramped() && head.querySelector(".k-info-back")) head.classList.add("tighter");
