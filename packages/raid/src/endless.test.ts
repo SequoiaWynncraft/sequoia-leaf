@@ -331,12 +331,14 @@ describe("what a room won in an endless run leaves", () => {
     const f = fought(run);
     const s = { ever: { wilds: 0, deep: 12 }, week: weekAt({ at: 0, deepest: { wilds: 0, deep: 0 } }, NOW) };
     expect(reached(s, run, f, false)).toEqual([
-      { slot: "deep:17", data: f.setup.sides[0], held: true },
+      { slot: "deep:17", data: { ...f.setup.sides[0], era: f.setup.era }, held: true },
       { slot: "depth:deep:ever", data: { room: 18 } },
       { slot: "depth:deep:week", data: { room: 18 } },
     ]);
     expect(s.ever.deep).toBe(18);
-    expect(reached(s, run, f, false)).toEqual([{ slot: "deep:17", data: f.setup.sides[0], held: true }]);
+    expect(reached(s, run, f, false)).toEqual([
+      { slot: "deep:17", data: { ...f.setup.sides[0], era: f.setup.era }, held: true },
+    ]);
   });
   test("a guest's deepest are written down, and nothing is left", () => {
     const run = strong(startRun(4, { era: LEGACY_ERA, way: wayOn({ id: "wilds" }) }), 20);

@@ -152,7 +152,8 @@ function figureTile(id: FigureId, retired = false): HTMLElement {
     starred ? pic(starsPic(3), 1, "badge") : null,
     pulledTag(id),
   );
-  if (met) link(tile, `figure:${id}/${starred ? 3 : 1}/lore`);
+  // From the collection, in the member's own terms: every step of its traits.
+  if (met) link(tile, `figure:${id}/${starred ? 3 : 1}/lore${retired ? "/own" : ""}`);
   return tile;
 }
 

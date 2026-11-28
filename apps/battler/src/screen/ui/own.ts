@@ -11,7 +11,6 @@ import { type Choice, choices } from "@sequoia-leaf/kit/choices.ts";
 import { el } from "@sequoia-leaf/kit/dom.ts";
 import {
   available,
-  type Catalog,
   catalogAt,
   catalogOf,
   type Era,
@@ -21,15 +20,15 @@ import {
   levelOf,
   LEVELS,
   type RunView,
+  shownInNormal,
   stallOdds,
-  stepsShown,
   type TraitId,
-  traitIn,
   type UnitKind,
   wayOn,
   wayWords,
 } from "@sequoia-leaf/raid";
 
+import { ownWay } from "../logic.ts";
 import { snd } from "../sounds.ts";
 import { changed, onChange, S } from "../state.ts";
 
@@ -37,8 +36,6 @@ import { changed, onChange, S } from "../state.ts";
 const wayName = (own: boolean): string => wayWords(wayOn({ id: "trail", trail: 0 }, own ? {} : null)).figures;
 /** What the two ways are called, as to their figures. */
 export const [ALL_FIGURES, YOUR_FIGURES] = [wayName(false), wayName(true)];
-/** Whether a run set out with the member's own figures. */
-const isOwn = (run: RunView): boolean => run.way.figures.pool === "own";
 const NOT_COUNTED = "Not counted for the board or the almanac.";
 /** What a run with the member's own figures off a trail counts for. */
 const OWN_BOARDS = "Not counted for the almanac. Your deepest room goes on the boards for your figures.";
@@ -49,33 +46,33 @@ export const countedLine = (endless: boolean): string => (endless ? OWN_BOARDS :
 const picked = { own: false };
 /** How many figures the member has pulled. */
 const pulled = (): number => Object.keys(S.roster).length;
+/** The era's set, as Leaf's era has it (or another): the almanac's tiles, and what it counts fielded among. */
+export const figuresHere = (era: Era = S.era): readonly FigureId[] => available(catalogAt(era), { for: "almanac" });
 /**
- * The figures there are for this member, as Leaf's era has them: the set, and each banner's
- * headliner they have pulled. The almanac's tiles, and who a trait's card lists.
+ * The member's own figures out of normal mode in an era, a retired one or a headliner whose banner
+ * is closed: the almanac's "In your collection".
  */
-export const figuresHere = (era: Era = S.era): readonly FigureId[] =>
-  available(catalogAt(era), { for: "almanac", roster: S.roster });
-/** The member's own figures out of normal mode in an era: the almanac's "In your collection". */
 export const collectionHere = (era: Era = S.era): readonly FigureId[] =>
   available(catalogAt(era), { for: "collection", roster: S.roster });
 /**
- * The figures for the table on screen: in the era of its run (a seat's is its sitting's), or of
- * Leaf's view with none; a run with the member's own figures has their collection too.
+ * Who a trait's card lists for the table on screen, in the era of its run (a seat's is its
+ * sitting's), or of Leaf's view with none: the set, and every figure the run holds; with the
+ * member's own figures (`own`: a raid with them, or their collection), their collection too.
  */
-export const figuresAt = (run: (Pick<RunView, "era"> & Partial<Pick<RunView, "way">>) | null): readonly FigureId[] =>
-  run?.way?.figures.pool === "own" ? [...figuresHere(run.era), ...collectionHere(run.era)] : figuresHere(run?.era);
-/**
- * A trait's steps as the table shows them: every one in a raid with the member's own figures; else
- * as far as the era's set reaches, and one a party has lit (`lit`) past that (`stepsShown`).
- */
-export const stepsHere = (cat: Catalog, id: TraitId, run: Pick<RunView, "way"> | null, lit = 0): readonly number[] => {
-  const steps = traitIn(cat, id).steps;
-  return run?.way.figures.pool === "own" ? steps : steps.slice(0, stepsShown(cat, id, lit));
-};
-/** The almanac's traits: those open in the era of Leaf's view, in their own order. */
-export const traitsHere = (): readonly TraitId[] => catalogOf(S).ids.traits;
+export function figuresAt(
+  run: (Pick<RunView, "era"> & Partial<Pick<RunView, "way" | "board" | "bench">>) | null,
+  own = run?.way?.figures.pool === "own",
+): readonly FigureId[] {
+  const cat = catalogAt(run?.era ?? S.era);
+  const held = new Set([...(run?.board ?? []), ...(run?.bench ?? [])].flatMap((p) => (p ? [p.kind] : [])));
+  const more = own ? collectionHere(cat.era) : [];
+  return cat.order.filter((id) => cat.figures[id]?.everyones === true || held.has(id) || more.includes(id));
+}
+/** The almanac's traits: those normal mode shows in the era of Leaf's view (`shownInNormal`), in their own order. */
+export const traitsHere = (): readonly TraitId[] =>
+  catalogOf(S).ids.traits.filter((t) => shownInNormal(catalogOf(S), t));
 /** Everyone's figures, as Leaf's era has them: what the almanac counts fielded among. */
-export const everyonesFigures = (): readonly FigureId[] => available(catalogOf(S), { for: "almanac", roster: {} });
+export const everyonesFigures = (): readonly FigureId[] => figuresHere();
 /** Wears each banner's people as the page's store hears who they are, and draws the page again each time one is better known. */
 export const meetMember = (): void => wearPeople(PEOPLE, changed);
 /** Whether the member can choose whose figures to set out with: once they have pulled one. */
@@ -133,12 +130,12 @@ export function waysOf(
 }
 
 /** Which way a raid is, before the line about it on the front page: said to a member who has both ways. */
-export const wayPrefix = (run: RunView): string => (isOwn(run) || pulled() > 0 ? `${wayName(isOwn(run))}. ` : "");
+export const wayPrefix = (run: RunView): string => (ownWay(run) || pulled() > 0 ? `${wayName(ownWay(run))}. ` : "");
 
 /** The end page's second column when a run brought nothing new: for a run with the member's own figures, why. */
 export const nothingNew = (run: RunView): HTMLElement[] => [
-  el("div", "k-label", { text: isOwn(run) ? wayName(true) : "New in the almanac" }),
-  el("span", "k-dim", { text: isOwn(run) ? countedLine(run.way.course.id !== "trail") : "Nothing this time." }),
+  el("div", "k-label", { text: ownWay(run) ? wayName(true) : "New in the almanac" }),
+  el("span", "k-dim", { text: ownWay(run) ? countedLine(run.way.course.id !== "trail") : "Nothing this time." }),
 ];
 
 /** After the almanac's count of figures met: how many the member has pulled, if any. */
@@ -149,8 +146,8 @@ export function waySign(): HTMLElement {
   const sign = el("span", "k-plaque hung k-leafy", { id: "way", hidden: true });
   onChange(() => {
     const run = S.run;
-    sign.hidden = !run || (!isOwn(run) && pulled() === 0);
-    if (run) sign.textContent = wayName(isOwn(run));
+    sign.hidden = !run || (!ownWay(run) && pulled() === 0);
+    if (run) sign.textContent = wayName(ownWay(run));
   });
   return sign;
 }

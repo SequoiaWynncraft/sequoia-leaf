@@ -11,6 +11,12 @@ export const pieceRef = (id: number): string => `piece:${id}`;
 export const foeRef = (seat: number): string => `foe:${seat}`;
 export const unitRef = (id: number): string => `unit:${id}`;
 export const traitRef = (id: TraitId): string => `trait:${id}`;
+/**
+ * A trait's card from a figure's card: the table's; from the almanac a lore card in Leaf's era,
+ * never an idle run's (`lore`); from the member's collection, in their own terms, every step (`own`).
+ */
+export const traitRefFrom = (id: TraitId, lore: boolean | undefined, own: boolean): string =>
+  lore === true ? `${traitRef(id)}/lore${own ? "/own" : ""}` : traitRef(id);
 /** An item or a tool; `@rack` for its tile on the rack. */
 export const itemRef = (id: RackItem, onRack = false): string => (onRack ? `item:${id}@rack` : `item:${id}`);
 export const boonRef = (id: BoonId): string => `boon:${id}`;

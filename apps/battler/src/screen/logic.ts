@@ -44,9 +44,9 @@ import {
   type Spot,
   type Stars,
   starScale,
-  stepFor,
   type TraitId,
-  traitIn,
+  type TraitShown,
+  traitShown,
   traitsNow,
   traitsOf,
   type UnitKind,
@@ -335,22 +335,21 @@ export function pieceNumbers(run: RunView, spot: Spot): Numbers | null {
   return startNumbers(run.era, alone, 7);
 }
 
-/** How a trait stands for a party: how many it fields, and how many the next step needs. */
-export interface TraitCount {
-  count: number;
-  /** The next step's need; the top step's when it is all the way on. */
-  next: number;
-  step: number;
-}
-export function traitCount(cat: Catalog, party: Pick<Party, "figures">, trait: TraitId): TraitCount {
-  const counts = countTraits(cat, party.figures);
-  const count = counts[trait] ?? 0;
-  const { steps } = traitIn(cat, trait);
-  return { count, next: steps.find((need) => need > count) ?? steps.at(-1) ?? 1, step: stepFor(cat, trait, count) };
-}
+/**
+ * How a trait stands for a party: how many it fields, and the steps shown with the one it counts to
+ * (`traitShown`, the one place that says what a view shows): every step with the member's own
+ * figures (`own`), as far as the set reaches otherwise.
+ */
+export const traitCount = (cat: Catalog, party: Pick<Party, "figures">, trait: TraitId, own: boolean): TraitShown =>
+  traitShown(cat, trait, countTraits(cat, party.figures)[trait] ?? 0, own);
+/** Whether a run set out with the member's own figures, whose views show every step. */
+export const ownWay = (run: Pick<RunView, "way"> | null | undefined): boolean => run?.way.figures.pool === "own";
 /** The same for the member's party as it is fielded now. */
-export const ownTraitCount = (run: RunView, trait: TraitId): TraitCount =>
-  traitCount(catalogOf(run), partyOf(run), trait);
+export const ownTraitCount = (run: RunView, trait: TraitId): TraitShown =>
+  traitCount(catalogOf(run), partyOf(run), trait, ownWay(run));
+/** A trait's count as every view writes it: "3/4", or "3" with no step shown. */
+export const countWords = (c: Pick<TraitShown, "count" | "next">): string =>
+  c.next === null ? String(c.count) : `${c.count}/${c.next}`;
 
 /** Where the member has a figure just now: fielded, on the bench, on the stall, or nowhere. */
 export function whereIs(run: RunView, kind: FigureId): "board" | "bench" | "stall" | null {

@@ -69,6 +69,7 @@ import {
   type TableView,
 } from "@sequoia-leaf/raid";
 import { regularOf } from "@sequoia-leaf/raid/content/rooms.ts";
+import { keptBoard } from "@sequoia-leaf/raid/foe.ts";
 import { decodeTown, readView as readTownView, type TownView } from "@sequoia-leaf/town";
 import { Effect, Exit, Fiber, Logger, Option, References, Schema } from "effect";
 import { SqlClient } from "effect/sql";
@@ -1406,7 +1407,11 @@ async function setOutTo(table: Table, room: number): Promise<TableView> {
   return view;
 }
 /** The party a fight was decided from, on the table's side, as the view after it shows it. */
-const sideOf = (view: TableView) => (view.held.main ? foughtOf(view.held.main)?.setup.sides[0] : undefined);
+/** The member's board as the rules keep it from the fight in hand (`keptBoard`): its party, and the era it was fought in. */
+function sideOf(view: TableView) {
+  const fought = view.held.main ? foughtOf(view.held.main) : null;
+  return fought ? keptBoard(fought.setup) : undefined;
+}
 
 describe("a member's board at a sparring room of the Little Raid", () => {
   it("is kept as fought there, the newest over the older, and nothing of a command refused", async () => {

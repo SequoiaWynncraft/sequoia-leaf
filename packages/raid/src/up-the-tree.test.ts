@@ -52,8 +52,7 @@ describe("Up The Tree opens on Leaf's clock", () => {
       (rarity) =>
         [`Up The Tree's ${rarity}`, { for: "pull", pool: "up-the-tree", rarity }, [...EVERYONES, "leetanns"]] as const,
     ),
-    ["the almanac", { for: "almanac", roster: {} }, EVERYONES],
-    ["the almanac, Leetanns pulled", { for: "almanac", roster: ALL }, [...EVERYONES, "leetanns"]],
+    ["the almanac", { for: "almanac" }, EVERYONES],
   ];
   test.each(PURPOSES.map(([name, purpose, among]) => [name, purpose, among] as const))(
     "%s: none of it a millisecond before, and what suits it at the moment",

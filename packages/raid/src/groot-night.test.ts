@@ -49,8 +49,7 @@ describe("Groot Night opens on Leaf's clock", () => {
         [`Groot Night's ${rarity}`, { for: "pull", pool: "groot-night", rarity }, [...EVERYONES, "commodore"]] as const,
     ),
     ["the exchange", { for: "exchange" }, EVERYONES],
-    ["the almanac", { for: "almanac", roster: {} }, EVERYONES],
-    ["the almanac, the Commodore pulled", { for: "almanac", roster: ALL }, [...EVERYONES, "commodore"]],
+    ["the almanac", { for: "almanac" }, EVERYONES],
   ];
   test.each(PURPOSES.map(([name, purpose, among]) => [name, purpose, among] as const))(
     "%s: none of it a millisecond before, and what suits it at the moment",

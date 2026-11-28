@@ -20,8 +20,9 @@
  * is a gauge: the bots are rough players, and every board here was built without the figure.
  */
 import { fondOf, type Habit, planRoom, ROLLER, SAVER, SENSIBLE } from "@sequoia-leaf/raid/bot.ts";
-import { available, catalogAt, reachedByFigures } from "@sequoia-leaf/raid/content/catalog.ts";
+import { available, catalogAt } from "@sequoia-leaf/raid/content/catalog.ts";
 import { type FigureId, figureIn, isFigureId, type Stars } from "@sequoia-leaf/raid/content/figures.ts";
+import { reachedByFigures } from "@sequoia-leaf/raid/content/reach.ts";
 import { eraOf, LAST_ERA, RELEASES } from "@sequoia-leaf/raid/content/releases.ts";
 import { ROOM_COUNT, worth } from "@sequoia-leaf/raid/content/rooms.ts";
 import { isCalling, isKin } from "@sequoia-leaf/raid/content/traits.ts";

@@ -1,0 +1,12 @@
+{
+  "who": "You",
+  "title": "",
+  "figures": [
+    { "kind": "emberkit", "stars": 1, "seat": 2, "items": [], "fed": 0 },
+    { "kind": "crab7", "stars": 2, "seat": 3, "items": ["blackthorn"], "fed": 0 },
+    { "kind": "kettle", "stars": 1, "seat": 24, "items": [], "fed": 0 }
+  ],
+  "boons": [],
+  "might": 100,
+  "era": 3
+}

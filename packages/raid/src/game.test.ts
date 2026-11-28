@@ -936,7 +936,8 @@ describe("another member's board in a sparring room", () => {
     const done = must(planned(reach(started(5), 2)), { do: "fight" });
     const side = fought(done.state)?.setup.sides[0];
     expect(side?.figures.length).toBeGreaterThan(0);
-    expect(done.keep).toEqual([{ slot: "board:0:2", data: side }]);
+    // Kept with the era it was fought in: only a run of that era meets it.
+    expect(done.keep).toEqual([{ slot: "board:0:2", data: { ...side, era: fought(done.state)?.setup.era } }]);
     expect(SLOT.test("board:0:2")).toBe(true);
     // Its takings keep nothing more.
     expect(must(done.state, { do: "take" }).keep).toEqual([]);

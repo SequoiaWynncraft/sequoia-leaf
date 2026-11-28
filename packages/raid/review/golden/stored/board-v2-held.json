@@ -1,0 +1,18 @@
+{
+  "who": "You",
+  "title": "",
+  "figures": [
+    { "kind": "slug", "stars": 2, "seat": 1, "items": [], "fed": 0 },
+    { "kind": "greg", "stars": 1, "seat": 2, "items": [], "fed": 12 },
+    { "kind": "greg", "stars": 1, "seat": 3, "items": ["hummingbird"], "fed": 0 },
+    { "kind": "rock", "stars": 1, "seat": 4, "items": [], "fed": 0 },
+    { "kind": "glorp", "stars": 2, "seat": 5, "items": [], "fed": 0 },
+    { "kind": "apothecary", "stars": 1, "seat": 10, "items": [], "fed": 0 },
+    { "kind": "lanterngnome", "stars": 2, "seat": 23, "items": ["fairyring", "fairyring"], "fed": 0 },
+    { "kind": "seqwawa", "stars": 1, "seat": 24, "items": ["glowcap"], "fed": 0 },
+    { "kind": "moth", "stars": 2, "seat": 25, "items": [], "fed": 0 }
+  ],
+  "boons": ["headstart"],
+  "might": 100,
+  "era": 3
+}

@@ -17,9 +17,10 @@ import { CARELESS, fondOf, type Habit, planWith, ROLLER, SAVER, SENSIBLE } from 
 import { act } from "@sequoia-leaf/raid/command.ts";
 import { GOOD_WITH } from "@sequoia-leaf/raid/content/advice.ts";
 import { type BoonId, boonIn } from "@sequoia-leaf/raid/content/boons.ts";
-import { available, catalogAt, reachedByFigures } from "@sequoia-leaf/raid/content/catalog.ts";
+import { available, catalogAt } from "@sequoia-leaf/raid/content/catalog.ts";
 import { type FigureId, figureIn, isFigureId } from "@sequoia-leaf/raid/content/figures.ts";
 import { FINISHED_IDS, type FinishedId, isFinishedId, itemName } from "@sequoia-leaf/raid/content/items.ts";
+import { reachedByFigures } from "@sequoia-leaf/raid/content/reach.ts";
 import { holdItem } from "@sequoia-leaf/raid/content/recipes.ts";
 import { eraOf, LAST_ERA, RELEASES } from "@sequoia-leaf/raid/content/releases.ts";
 import { ROOM_COUNT, ROOMS, TRAILS } from "@sequoia-leaf/raid/content/rooms.ts";

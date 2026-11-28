@@ -10,7 +10,7 @@
 import { abilityNumber, type UnitKind } from "../content/figures.ts";
 import { FIGHT } from "../content/rooms.ts";
 import { CELLS, distance } from "../hex.ts";
-import { foesOf, later, order, otherSide, secs, targetable } from "./core.ts";
+import { foesOf, later, order, otherSide, risenAt, secs, targetable } from "./core.ts";
 import { lastFallen } from "./enter.ts";
 import { attackReach } from "./rules.ts";
 import type { DamageKind, Fight, Unit } from "./types.ts";
@@ -25,7 +25,8 @@ const landsAs = (o: Unit, raw: number, kind: DamageKind): number =>
  * its way to the figure. Healing thrown at somebody is thrown with no damage.
  */
 export function fly(f: Fight, target: Unit, raw: number, kind: DamageKind, ticks: number, land: () => void): void {
-  const harm = landsAs(target, raw, kind);
+  // As it will land: risen by then, late in a fight (`risenAt`).
+  const harm = landsAs(target, risenAt(f, raw, f.tick + ticks), kind);
   target.incoming += harm;
   later(f, ticks, () => {
     target.incoming -= harm;

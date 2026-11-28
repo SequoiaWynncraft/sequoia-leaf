@@ -15,6 +15,7 @@ import { onCell, partyOfFigures, stillSide, unitOf } from "../testkit.ts";
 import { secs } from "./clock.ts";
 import { heal, hurt, poolUp, shieldUp } from "./core.ts";
 import { openFight, stepFight } from "./engine.ts";
+import { fly } from "./mind.ts";
 import type { DamageKind, DamageSource, Fight, FightEvent, HealSource } from "./types.ts";
 
 const NIGHT = eraOf("groot-night");
@@ -107,6 +108,47 @@ describe("late in a fight, from Groot Night: healing and shields wane, damage ri
         }
     // Dusk's own hurt grows by its own count, and is left as it is.
     expect(lands(secs(AT + 15), 0, "true", "dusk")).toBe(100);
+  });
+
+  test("Mender's overflow: the heal is cut once, and what is past full health turns into a shield as it is", () => {
+    const f = quiet(NIGHT);
+    const [target, by] = [unitOf(f, "worm"), unitOf(f, "moth")];
+    Object.assign(by, { mending: 25, overheal: 100, overhealFor: 4 });
+    const overflowed = (tick: number): number => {
+      f.tick = tick;
+      Object.assign(target, { maxHp: 1000, hp: 1000, shield: 0, shields: [] });
+      heal(f, target, 100, "ability", by);
+      return target.shield;
+    };
+    // 100, 25% more for Mender: 125 past full; at 20 seconds a fifth less, 100, and no fifth off that again.
+    expect([overflowed(secs(AT) - 1), overflowed(secs(AT))]).toEqual([125, 100]);
+  });
+
+  test("a figure picking a target counts damage on its way as it will land: risen by then", () => {
+    const f = quiet(NIGHT);
+    const target = unitOf(f, "worm", 1);
+    const counted = (tick: number, ticks: number): number => {
+      f.tick = tick;
+      target.incoming = 0;
+      fly(f, target, 100, "true", ticks, () => {});
+      return target.incoming;
+    };
+    // Thrown a tick before 20 seconds, landing at 20: 5% more. Thrown at 23, landing a tick later: 20% more.
+    expect([counted(secs(AT) - 2, 1), counted(secs(AT) - 1, 1), counted(secs(AT + 3), 1)]).toEqual([100, 105, 120]);
+  });
+
+  test("the fight sheet counts what armour stopped against the risen damage", () => {
+    const f = quiet(NIGHT);
+    const [target, by] = [unitOf(f, "worm", 1), unitOf(f, "worm", 0)];
+    Object.assign(target, { armour: 100, hp: 100_000, shield: 0, shields: [] });
+    f.tick = secs(AT + 1);
+    const hits: FightEvent[] = [];
+    const was = f.out;
+    f.out = hits;
+    hurt(f, target, 100, "physical", "attack", by);
+    f.out = was;
+    // 110 thrown, risen; armour 100 halves it to 55: 55 stopped, of 110.
+    expect(hits.find((ev) => ev.t === "hit")).toMatchObject({ amount: 55, before: 110 });
   });
 
   test("in the base era nothing changes, however late", () => {

@@ -8,10 +8,12 @@
 import { draw32, pick, shuffled } from "@sequoia-leaf/core";
 
 import { fondOf, planRoom } from "../bot.ts";
-import { available, catalogOf } from "../content/catalog.ts";
-import { traitsOf } from "../content/figures.ts";
+import { available, type Catalog, catalogOf } from "../content/catalog.ts";
+import { type FigureId, traitsOf } from "../content/figures.ts";
+import { favourites } from "../content/reach.ts";
 import { eraAt } from "../content/releases.ts";
 import { BOSS_ROOMS, ROOM_COUNT } from "../content/rooms.ts";
+import type { TraitId } from "../content/traits.ts";
 import { resolveFight } from "../fight/engine.ts";
 import type { FightSetup } from "../fight/types.ts";
 import { opposition } from "../foe.ts";
@@ -59,12 +61,18 @@ import {
  * regulars the rest (each one of the raid's figures, no two alike, fond of one of its own traits),
  * every seat gets a run of its own, and the first carousel is laid out.
  */
+/** The traits a regular may be fond of: its own the set reaches by figures, or all its own if none is. */
+function fondOfAny(cat: Catalog, figure: FigureId): readonly TraitId[] {
+  const mine = favourites(cat, traitsOf(cat, figure));
+  return mine.length > 0 ? mine : traitsOf(cat, figure);
+}
 export function begin(t: Sitting, sat: readonly Member[], at: number): void {
   t.era = eraAt(at);
   const regulars = shuffled(t, available(catalogOf(t), { for: "regular" })).slice(0, CHAIRS - sat.length);
   const whos: Who[] = [
     ...sat.map((member): Who => ({ is: "member", id: member.id, name: member.name })),
-    ...regulars.map((figure): Who => ({ is: "regular", figure, habit: pick(t, traitsOf(catalogOf(t), figure)) })),
+    // Fond of one of its traits the set reaches by figures (`favourites`), as a sparring room's regular is.
+    ...regulars.map((figure): Who => ({ is: "regular", figure, habit: pick(t, fondOfAny(catalogOf(t), figure)) })),
   ];
   t.seats = whos.map((who) => {
     const run = startRun(draw32(t), { era: t.era, way: onTrail(TRAIL) });

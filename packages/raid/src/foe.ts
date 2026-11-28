@@ -9,12 +9,13 @@ import { boonNumber, FIGHT_BOONS } from "./content/boons.ts";
 import { type Catalog, catalogOf } from "./content/catalog.ts";
 import { ENDLESS } from "./content/endless.ts";
 import { type BossId, isBossId, isFigureId } from "./content/figures.ts";
+import { type Era, eraOf, isEra } from "./content/releases.ts";
 import { LEVELS, MAX_LEVEL, ROOMS, type RoomSpec, type SparStrength, TRAILS } from "./content/rooms.ts";
 import { shut } from "./content/rules.ts";
 import { isHeld, sparAt } from "./endless.ts";
-import type { FightResult, FightSummary } from "./fight/types.ts";
+import type { FightResult, FightSetup, FightSummary } from "./fight/types.ts";
 import { COLS } from "./hex.ts";
-import { chairsUsed, isParty, type Party, type Placed } from "./party.ts";
+import { chairsUsed, isParty, isRecord, type Party, type Placed } from "./party.ts";
 import { roomOf, type RoomRun } from "./room.ts";
 import type { Run } from "./run.ts";
 import { sparParty } from "./spar.ts";
@@ -41,16 +42,35 @@ function asMet(p: Placed, levels: boolean): Placed {
 }
 
 /**
+ * A member's board as it is left with Leaf for others to meet (`Kept`): the party a fight was
+ * decided from, with the era it was fought in. A run meets only boards kept in its own era.
+ */
+export const keptBoard = (setup: Pick<FightSetup, "era" | "sides">): Party & { readonly era: Era } => ({
+  ...setup.sides[0],
+  era: setup.era,
+});
+/** The era a kept board was fought in, as it says; null for one kept before boards said. */
+export const keptEra = (data: unknown): Era | null => (isRecord(data) && isEra(data.era) ? data.era : null);
+/**
+ * Whether a run of an era meets a kept board: one kept in that era; one kept before boards said, by
+ * a run of an era up to gaz-stall's, which every board was kept in until then.
+ */
+function keptFor(data: unknown, era: Era): boolean {
+  const kept = keptEra(data);
+  return kept === null ? era <= eraOf("gaz-stall") : kept === era;
+}
+
+/**
  * Another member's board as Leaf hands it over (`Ctx.met`), as the party across the table: only one
  * a member could have fielded (of the stall's own figures, taking one chair to `mostFielded`, and
  * `chairs` more for a board of an endless run), every figure of it open in the era of the run that
- * meets it (`cat`), signed with the member's name and id. A figure that is not one of everyone's
+ * meets it (`cat`), kept in that era (`keptBoard`), signed with the member's name and id. A figure that is not one of everyone's
  * (`Figure.everyones`) stands only on a board met by a run with the member's own figures (`levels`).
  * Null for anything else: the regular stays.
  */
 export function boardMet(cat: Catalog, met: Met, levels = false, chairs = 0): Party | null {
   const { data } = met;
-  if (!isParty(data) || data.figures.length === 0) return null;
+  if (!isParty(data) || data.figures.length === 0 || !keptFor(data, cat.era)) return null;
   const fits = (kind: string): boolean =>
     isFigureId(kind) && cat.figures[kind] !== undefined && (levels || cat.figures[kind].everyones);
   if (!data.figures.every((p) => fits(p.kind))) return null;

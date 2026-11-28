@@ -6,8 +6,9 @@
  */
 import { describe, expect, test } from "bun:test";
 
-import { boardMet } from "../foe.ts";
+import { boardMet, keptBoard } from "../foe.ts";
 import { heldOf, type Holding } from "../own.ts";
+import type { Placed } from "../party.ts";
 import { at as placed, partyOfFigures } from "../testkit.ts";
 import { GROVE } from "./banners.ts";
 import { available, type Catalog, catalogAt, catalogsOf, PATCHES, type Purpose, type Roster } from "./catalog.ts";
@@ -70,6 +71,13 @@ const out = (release: ReleaseId): FigureId[] => {
   const c = catalogAt(eraOf(release));
   return c.order.filter((id) => c.figures[id]?.retired).toSorted();
 };
+/** A board kept from a fight in a catalogue's era. */
+const keptIn = (c: Catalog, figures: Placed[]) =>
+  keptBoard({ era: c.era, sides: [partyOfFigures(figures), partyOfFigures([])] });
+/** A board as Leaf hands it over to a run that meets it. */
+const met = (data: unknown) => ({ player: "p", name: "A member", of: 1, data });
+/** A Vesta's board, kept in a catalogue's era. */
+const board = (c: Catalog) => met(keptIn(c, [placed("hearthcat", 3, 0)]));
 const tierOf = (c: Catalog, id: FigureId) => c.figures[id]?.tier ?? 1;
 
 describe("a release that retires", () => {
@@ -82,8 +90,8 @@ describe("a release that retires", () => {
     ],
     ["a regular, a live table's seats too", () => ({ for: "regular" })],
     ["the carousel", (id) => ({ for: "carousel", tier: tierOf(then, id) })],
-    ["the almanac for everyone", () => ({ for: "almanac", roster: {} })],
-    ["the almanac, the member's own", () => ({ for: "almanac", roster: OWN })],
+    ["the almanac for everyone", () => ({ for: "almanac" })],
+    ["the almanac, the member's own", () => ({ for: "almanac" })],
   ];
   test.each(EVERYONES)("%s: has them a millisecond before, and none at it", (_name, purpose) => {
     for (const id of NIGHT) {
@@ -112,11 +120,10 @@ describe("a release that retires", () => {
       true,
     ]);
     // A board of them stands for a run with the member's own figures, and for none with everyone's.
-    const board = { player: "p", name: "A member", of: 1, data: partyOfFigures([placed("hearthcat", 3, 0)]) };
     expect([
-      boardMet(before, board) !== null,
-      boardMet(then, board) !== null,
-      boardMet(then, board, true) !== null,
+      boardMet(before, board(before)) !== null,
+      boardMet(then, board(then)) !== null,
+      boardMet(then, board(then), true) !== null,
     ]).toEqual([true, false, true]);
   });
 
@@ -142,10 +149,7 @@ describe("a release that retires", () => {
     ]).toEqual([[], [...NIGHT]]);
     expect(available(then, { for: "collection", roster: {} })).toEqual([]);
     // Each figure is in one of the two or neither, never both.
-    const [set, kept] = [
-      available(then, { for: "almanac", roster: OWN }),
-      available(then, { for: "collection", roster: OWN }),
-    ];
+    const [set, kept] = [available(then, { for: "almanac" }), available(then, { for: "collection", roster: OWN })];
     expect(set.filter((id) => kept.includes(id))).toEqual([]);
   });
 
@@ -183,10 +187,26 @@ describe("a release that retires", () => {
       { for: "starter" },
       { for: "regular" },
       { for: "carousel", tier: 1 },
-      { for: "almanac", roster: {} },
+      { for: "almanac" },
     ] as const) {
       expect(available(then, purpose)).not.toContain("worm");
     }
+  });
+});
+
+describe("a kept board keeps the era it was fought in", () => {
+  test("a run meets only boards kept in its own era; one kept before boards said so is gaz-stall's", () => {
+    const [gaz, night] = [catalogAt(eraOf("gaz-stall")), catalogAt(eraOf("groot-night"))];
+    const crab = [placed("crab7", 3, 0)];
+    expect(keptIn(night, crab).era).toBe(night.era);
+    expect([
+      boardMet(night, met(keptIn(night, crab))) !== null,
+      boardMet(night, met(keptIn(gaz, crab))) !== null,
+      boardMet(gaz, met(keptIn(gaz, crab))) !== null,
+      boardMet(gaz, met(keptIn(night, crab))) !== null,
+    ]).toEqual([true, false, true, false]);
+    const before = partyOfFigures(crab);
+    expect([boardMet(gaz, met(before)) !== null, boardMet(night, met(before)) !== null]).toEqual([true, false]);
   });
 });
 
@@ -206,7 +226,7 @@ describe("a release that brings one back", () => {
       "rock",
       "hearthcat",
     ]);
-    expect(available(then, { for: "almanac", roster: OWN })).toContain("heron");
+    expect(available(then, { for: "almanac" })).toContain("heron");
     // Those Groot Night retired and nobody brought back stay out.
     expect(among(then, { for: "regular" }, NIGHT)).toEqual(["heron"]);
   });

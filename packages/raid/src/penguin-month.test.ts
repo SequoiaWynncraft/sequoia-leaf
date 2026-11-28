@@ -56,7 +56,7 @@ describe("Penguin Month opens on Leaf's clock", () => {
         [`Penguin Month's ${rarity}`, { for: "pull", pool: "penguin-month", rarity }, [...EVERYONES, "yule"]] as const,
     ),
     ["the exchange", { for: "exchange" }, EVERYONES],
-    ["the almanac", { for: "almanac", roster: {} }, [...EVERYONES, "yule"]],
+    ["the almanac", { for: "almanac" }, [...EVERYONES, "yule"]],
   ];
   test.each(PURPOSES.map(([name, purpose, among]) => [name, purpose, among] as const))(
     "%s: none of it a millisecond before, and what suits it at the moment",

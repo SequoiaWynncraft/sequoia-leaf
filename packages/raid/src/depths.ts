@@ -9,6 +9,7 @@ import { type Kept, utcWeekStart } from "@sequoia-leaf/core";
 
 import { ENDLESS_WAYS, type EndlessWay, isEndlessWay } from "./content/endless.ts";
 import { isHeld } from "./endless.ts";
+import { keptBoard } from "./foe.ts";
 import { type Recorded, totalsOf } from "./record.ts";
 import type { Fought, Run, RunSummary } from "./run.ts";
 import { counts, courseOf, lanes } from "./way.ts";
@@ -82,7 +83,7 @@ export function reached(
   const deepest: Deepest = { room: run.room + 1 };
   const kept: Kept[] = [];
   const held = isHeld(run, run.room) ? lane.held(run.room) : null;
-  if (held !== null) kept.push({ slot: held, data: setup.sides[0], held: true });
+  if (held !== null) kept.push({ slot: held, data: keptBoard(setup), held: true });
   const ever = lane.depth("ever");
   if (ever !== null && deepest.room > s.ever[course]) {
     s.ever[course] = deepest.room;

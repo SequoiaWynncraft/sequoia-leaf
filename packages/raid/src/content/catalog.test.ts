@@ -200,17 +200,11 @@ const CASES: readonly Case[] = [
     suits: (f) => shared(f) && (f.prize === "Dryad" || f.prize === "Druid"),
     from: joins,
   },
-  { name: "the almanac", purpose: { for: "almanac", roster: {} }, suits: everyones, from: opens },
-  {
-    name: "the almanac, every figure pulled",
-    purpose: { for: "almanac", roster: EVERYTHING },
-    suits: (f, t, id) => !(shared(f) && retiredAt(id, t)),
-    from: opens,
-  },
+  { name: "the almanac", purpose: { for: "almanac" }, suits: everyones, from: opens },
   {
     name: "the almanac's collection, every figure pulled",
     purpose: { for: "collection", roster: EVERYTHING },
-    suits: (f, t, id) => shared(f) && retiredAt(id, t),
+    suits: (f, t, id) => !everyones(f, t, id),
     from: opens,
   },
 ];
@@ -268,13 +262,18 @@ function everyonesWays(cat: Catalog): Record<string, FigureId[]> {
   const of = (ids: readonly FigureId[]): FigureId[] => ids.filter((id) => HEADLINERS.includes(id));
   const met = (id: FigureId): boolean =>
     cat.figures[id] !== undefined &&
-    boardMet(cat, { player: "p", name: "A member", of: 1, data: partyOfFigures([placed(id, 3, 0)]) }) !== null;
+    boardMet(cat, {
+      player: "p",
+      name: "A member",
+      of: 1,
+      data: { ...partyOfFigures([placed(id, 3, 0)]), era: cat.era },
+    }) !== null;
   return {
     stall: of(available(cat, { for: "stall", holds: [], figures: { pool: "fair" }, tier: 5 })),
     regular: of(available(cat, { for: "regular" })),
     carousel: of(available(cat, { for: "carousel", tier: 5 })),
     starter: of(available(cat, { for: "starter" })),
-    almanac: of(available(cat, { for: "almanac", roster: {} })),
+    almanac: of(available(cat, { for: "almanac" })),
     met: HEADLINERS.filter(met),
   };
 }
@@ -327,8 +326,14 @@ describe("a headliner is everyone's only while its banner is open", () => {
       const own = (roster: Roster): readonly FigureId[] =>
         available(cat, { for: "stall", holds: [], figures: { pool: "own", roster }, tier: 5 });
       expect([own({ "banner-1": 2 }), own({ greg: 0 })]).toEqual([["banner-1"], ["greg"]]);
-      expect(available(cat, { for: "almanac", roster: { "banner-1": 2 } })).toContain("banner-1");
-      const board = { player: "p", name: "A member", of: 1, data: partyOfFigures([placed("banner-1", 3, 0, 1)]) };
+      // Its owner's, in the almanac's set while its banner is open and in their collection otherwise.
+      const kept = [
+        available(cat, { for: "almanac" }),
+        available(cat, { for: "collection", roster: { "banner-1": 2 } }),
+      ];
+      expect(kept.flat().filter((id) => id === "banner-1")).toEqual(["banner-1"]);
+      const data = { ...partyOfFigures([placed("banner-1", 3, 0, 1)]), era: cat.era };
+      const board = { player: "p", name: "A member", of: 1, data };
       expect(boardMet(cat, board, true)).not.toBeNull();
       // It is still its banner's prize, and nothing else's.
       expect(cat.figures["banner-1"]?.access).toEqual({ headliner: "banner-1" });

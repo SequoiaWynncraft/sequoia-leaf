@@ -319,13 +319,14 @@ export function hide(f: Fight, u: Unit, ticks: number, by: Unit = u): void {
 const waned = (f: Fight, amount: number): number =>
   f.tick >= secs(f.wilds.wanes) ? (amount * (100 - f.wilds.wane)) / 100 : amount;
 /**
- * Damage as it lands: from the same moment, `rises` percent more for each second begun since, up to
- * `risesMost`. Dusk's own hurt grows by its own count, and is left as it is.
+ * Damage as it lands at a step (`at`): from the same moment, `rises` percent more for each second
+ * begun since, up to `risesMost`. What a hit does (`hurt`) and what a figure picking a target
+ * counts on its way (`fly`) both read it. Dusk's own hurt grows by its own count, and is left as it is.
  */
-function risen(f: Fight, amount: number, source: DamageSource): number {
+export function risenAt(f: Pick<Fight, "wilds">, amount: number, at: number, source?: DamageSource): number {
   const from = secs(f.wilds.wanes);
-  if (f.tick < from || f.wilds.rises <= 0 || source === "dusk") return amount;
-  const seconds = Math.floor((f.tick - from) / HZ) + 1;
+  if (at < from || f.wilds.rises <= 0 || source === "dusk") return amount;
+  const seconds = Math.floor((at - from) / HZ) + 1;
   return (amount * (100 + Math.min(f.wilds.risesMost, f.wilds.rises * seconds))) / 100;
 }
 
@@ -358,11 +359,13 @@ export function shieldUp(f: Fight, target: Unit, raw: number, seconds: number, b
   if (!reaches(f, target, by)) return 0;
   let amount = raw;
   if (by && by.mending > 0) amount *= 1 + by.mending / 100;
-  return shieldOn(f, target, Math.round(amount), seconds, by);
+  return shieldOn(f, target, Math.round(waned(f, amount)), seconds, by);
 }
-/** Puts a shield of `n` up as it is, given by `by` (nobody for one a figure has of itself), on its own clock, and says so. */
-function shieldOn(f: Fight, target: Unit, raw: number, seconds: number, by: Unit | null): number {
-  const n = Math.round(waned(f, raw));
+/**
+ * Puts a shield of `n` up as it is, given by `by` (nobody for one a figure has of itself), on its own
+ * clock, and says so. Waned already where it waned: a shield's own, or the heal Mender turns into one.
+ */
+function shieldOn(f: Fight, target: Unit, n: number, seconds: number, by: Unit | null): number {
   if (n <= 0) return 0;
   const ticks = secs(seconds);
   target.shields.push({ left: n, until: ticks <= 0 ? FOREVER : f.tick + ticks });
@@ -451,14 +454,15 @@ export function hurt(
   if (!targetable(f, target) || raw <= 0) return 0;
   if (source === "ability" && blocks(f, target, by)) return 0;
   const direct = source === "attack" || source === "ability";
-  let amount = raw;
+  // Risen first, as it is thrown: what armour and ward stop is counted against it (`before`).
+  const thrown = risenAt(f, raw, f.tick, source);
+  let amount = thrown;
   if (kind === "physical") {
     amount = (amount * 100) / (100 + Math.max(0, armourAgainst(target, by, source)));
   } else if (kind === "magic") {
     amount = (amount * 100) / (100 + Math.max(0, target.ward));
   }
   if (direct && target.bracedUntil > f.tick) amount *= 1 - target.bracedBy / 100;
-  amount = risen(f, amount, source);
   const n = Math.max(1, Math.round(amount));
   let soaked = 0;
   const shielded = target.shield > 0;
@@ -476,7 +480,7 @@ export function hurt(
     amount: n,
     soaked,
     lost: Math.min(n - soaked, had),
-    before: Math.max(n, Math.round(raw)),
+    before: Math.max(n, Math.round(thrown)),
     kind,
     source,
     hard,

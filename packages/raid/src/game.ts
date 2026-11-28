@@ -54,6 +54,7 @@ import { type Era, eraAt } from "./content/releases.ts";
 import { TRAIL_COUNT } from "./content/rooms.ts";
 import { type Apart, type Depths, noApart, paidFor, reached, readWeek, type Week, weekAt } from "./depths.ts";
 import { isHeld } from "./endless.ts";
+import { keptBoard } from "./foe.ts";
 import { fightRecord } from "./fought.ts";
 import { decodeTable, encodeTable } from "./keep.ts";
 import {
@@ -346,7 +347,7 @@ function kept(s: Table, run: Run, decided: Fought, ctx: Ctx): Kept[] {
   if (counts(run.way).deepest) return reached(deepestOf(s, run.way, ctx.now), run, decided, ctx.player.guest);
   const slot = lanes(run.way).board(run.room);
   if (ctx.player.guest || slot === null || courseOf(run.way).rooms(run.room)?.kind !== "spar") return [];
-  return [{ slot, data: decided.setup.sides[0] }];
+  return [{ slot, data: keptBoard(decided.setup) }];
 }
 
 function play(s: Table, c: Aimed, ctx: Ctx): Answer {

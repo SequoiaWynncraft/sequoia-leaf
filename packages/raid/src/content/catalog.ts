@@ -323,9 +323,12 @@ export type Purpose =
   | { readonly for: "pull"; readonly pool: string; readonly rarity: Rarity }
   /** What Seeds buy, had or not. */
   | { readonly for: "exchange" }
-  /** The almanac's figures: the set, and each headliner of the roster. */
-  | { readonly for: "almanac"; readonly roster: Roster }
-  /** The almanac's figures apart, "In your collection": those of the roster out of normal mode. */
+  /** The almanac's figures: the set. */
+  | { readonly for: "almanac" }
+  /**
+   * The almanac's figures apart, "In your collection": those of the roster out of normal mode, a
+   * retired one or a headliner whose banner is closed.
+   */
   | { readonly for: "collection"; readonly roster: Roster };
 
 /**
@@ -360,7 +363,6 @@ function prizes(cat: Catalog, pool: string, rarity: Rarity): FigureId[] {
 /** The figures open at a catalogue's era that a draw may draw from, in the catalogue's order. */
 export function available(cat: Catalog, p: Purpose): readonly FigureId[] {
   const everyones = (id: FigureId): boolean => cat.figures[id]?.everyones === true;
-  const retired = (id: FigureId): boolean => cat.figures[id]?.retired === true;
   const costs = (tier: Tier) => (id: FigureId) => everyones(id) && cat.figures[id]?.tier === tier;
   switch (p.for) {
     case "stall":
@@ -376,39 +378,10 @@ export function available(cat: Catalog, p: Purpose): readonly FigureId[] {
     case "exchange":
       return [...prizes(cat, GROVE, "Dryad"), ...prizes(cat, GROVE, "Druid")];
     case "almanac":
-      return cat.order.filter((id) => everyones(id) || (p.roster[id] !== undefined && !retired(id)));
+      return cat.order.filter(everyones);
     case "collection":
-      return cat.order.filter((id) => retired(id) && p.roster[id] !== undefined);
+      return cat.order.filter((id) => !everyones(id) && p.roster[id] !== undefined);
   }
-}
-
-// ---------- how far the set reaches a trait ----------
-
-/**
- * How far normal mode reaches a trait in a catalogue's era: the set's figures that carry it, and one
- * more for an emblem the era has that grants it (`emblems`). No list is kept of it: it is the set's
- * and the era's emblems, as they are.
- */
-export function reachOf(cat: Catalog, trait: TraitId, emblems = true): number {
-  const members = cat.order.filter((id) => {
-    const f = cat.figures[id];
-    return f?.everyones === true && (f.kin === trait || f.calling === trait || f.extra.includes(trait));
-  }).length;
-  const emblem = emblems && cat.ids.emblems.some((e) => cat.items[e]?.grants === trait);
-  return members + (emblem ? 1 : 0);
-}
-/** Whether the set's figures alone reach a trait's first step: what a regular's favourites and a fond bot are of. */
-export const reachedByFigures = (cat: Catalog, trait: TraitId): boolean =>
-  reachOf(cat, trait, false) >= (cat.traits[trait]?.steps[0] ?? Infinity);
-/**
- * How many of a trait's steps normal mode shows, on its chip and in the almanac: those the set
- * reaches (`reachOf`), and any further one a party has lit (`lit`); the first always, so a chip has
- * a step to count to. The rules keep every step, and a raid with the member's own figures shows them all.
- */
-export function stepsShown(cat: Catalog, trait: TraitId, lit = 0): number {
-  const steps = cat.traits[trait]?.steps ?? [];
-  const reach = reachOf(cat, trait);
-  return Math.min(steps.length, Math.max(1, lit, steps.filter((need) => need <= reach).length));
 }
 
 // ---------- figures as prizes ----------
