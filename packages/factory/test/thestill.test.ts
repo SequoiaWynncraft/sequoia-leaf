@@ -302,7 +302,7 @@ describe("the still", () => {
     expect(F.status(y, i)?.trouble).toBe(false);
   });
 
-  test("waiting at a full crate ahead, it says which thing has no room and by which way out, and is not in trouble", () => {
+  test("at a full crate ahead, it says which thing has no room and by which way out: stopped while the crate is shut, waiting once it is open", () => {
     const y = yard();
     const i = piece(y, "still", 4, 4);
     bin(y, 6, 3);
@@ -311,9 +311,11 @@ describe("the still", () => {
     for (let k = 0; k < y.open.crate; k++) F.put(y.holders, full, CREOSOTE);
     fill(y, i, TAR, 8);
     for (let k = 0; k < 60 && F.status(y, i)?.state === "working"; k++) F.step(y);
-    expect([F.status(y, i)?.line, F.status(y, i)?.trouble]).toEqual([
-      "Waiting: no room ahead for its creosote, by its middle way out.",
-      false,
+    const shut = [F.status(y, i)?.line, F.status(y, i)?.trouble];
+    must(y, { do: "crate", x: 6, y: 4, open: true });
+    expect([shut, [F.status(y, i)?.line, F.status(y, i)?.trouble]]).toEqual([
+      ["Stopped: its creosote cannot leave by its middle way out. It makes nothing else until it does.", true],
+      ["Waiting: no room ahead for its creosote, by its middle way out.", false],
     ]);
   });
 

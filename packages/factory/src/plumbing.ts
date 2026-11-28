@@ -7,26 +7,33 @@ import type { Recipe } from "./tables.ts";
 
 /**
  * The rings in the plumbing: parts of it where things handed on can come back round, each tile
- * handing to the next on a side that takes from it (a tunnel passes under), worked out by Tarjan's
- * walk (`walk.ts`). Round a ring no order puts each tile after the tile it hands to, so a ring takes
- * its turn as one (`round.ts`): over and over, each piece handing on at most once, until nothing on it
- * moves. So a full ring with a way off it moves as one at the belt's pace, as a full belt does, and a
- * full ring with none stays still.
+ * handing to the next as it stands now, on a side that takes from it (a tunnel passes under), worked
+ * out by Tarjan's walk (`walk.ts`, `rings.ts`). Round a ring no order puts each tile after the tile it
+ * hands to, so a ring takes its turn as one (`round.ts`): its tiles backward from where things leave
+ * it, twice at most, each thing moving at most once. So a full ring with a way off it moves as one at
+ * the belt's pace, as a full belt does, and a full ring with none stays still.
  */
 export interface Rings {
   readonly count: number;
-  /** Each ring's tiles, ring by ring, each ring's in the handing order: ring `k`'s from `starts[k]` to `starts[k + 1]`. */
+  /** Each ring's tiles, ring by ring, in the order its turn tries them: ring `k`'s from `starts[k]` to `starts[k + 1]`. */
   readonly tiles: Int32Array;
   readonly starts: Int32Array;
   /** 1 for each ring tile (as `tiles`) that carries on its own tile alone: what carries, but a tunnel's way-in mouth. */
   readonly plain: Uint8Array;
-  /** 1 for each ring with a way off it: a tile of it hands to a tile off it, on a side that takes from it. */
-  readonly exits: Uint8Array;
+  /** The ring tiles that hold things (crates, growers), as places in `tiles`, ring by ring: ring `k`'s from `holderStarts[k]`. */
+  readonly holders: Int32Array;
+  readonly holderStarts: Int32Array;
   /** The ring tiles by tile, ascending, and each one's ring (`ringAt`). */
   readonly sorted: Int32Array;
   readonly ringOf: Int32Array;
-  /** For each ring tile, the last tick it was done handing on in (`round.ts`): this tick's, once it is. */
-  readonly done: Int32Array;
+  /** For each ring tile (as `tiles`), the last tick it was done in its ring's turn (`round.ts`). */
+  readonly done: Float64Array;
+  /** For each ring, where its last turn began (a place in `tiles`: `round.ts`). */
+  readonly begin: Int32Array;
+  /** For each ring, the last tick its turn moved nothing (`ringFull`). */
+  readonly still: Float64Array;
+  /** How many ring tiles the turns have looked at, all told: for the tests and the bench. */
+  readonly looked: Float64Array;
 }
 
 /** The yard's plumbing, worked out from what stands where (`wire.ts`). */

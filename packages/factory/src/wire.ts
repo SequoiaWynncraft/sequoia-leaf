@@ -32,6 +32,7 @@ import {
 } from "./planner.ts";
 import type { Rings } from "./plumbing.ts";
 import { litAt, litOf } from "./power.ts";
+import { NO_RINGS, ringAt, ringFull as fullRing, ringsFound } from "./rings.ts";
 import { lit as litBig, outsOf, OWN, pieceOf, roomRound, sendsThing, takesAt } from "./sizes.ts";
 import { smogged, smogPace } from "./smog.ts";
 import {
@@ -91,7 +92,7 @@ import {
   wayIn,
   wayTo,
 } from "./tiles.ts";
-import { NO_RINGS, orderAround, type Plumbing, ringAt, ringsFound, ringStopped, walk } from "./walk.ts";
+import { orderAround, type Plumbing, walk } from "./walk.ts";
 import {
   changed,
   counts,
@@ -431,47 +432,71 @@ const hands = (k: number): boolean => (RULES[k]?.hands ?? null) !== null;
 
 /**
  * The yard's plumbing walked (`walk.ts`): the tiles that hand things on, each after the tiles it hands
- * to, so that a full belt moves as one, by every way a piece hands by, as before rings had a turn of
- * their own; and the rings in it (`Rings`), by only the ways things can really go, each ring's tiles
- * taken out of the order for its turn as one where its last stood. The rings are looked for only where
- * the first walk found the plumbing come back round, which most yards' never does.
+ * to, so that a full belt moves as one. A yard whose plumbing never comes back round is walked by every
+ * way a piece hands by, as before rings had a turn of their own, and so is one whose plumbing comes
+ * back round only by ways nothing can go (two belts facing): it plays as it did. One with rings
+ * (`Rings`) is walked by only the ways things can go (`realTo`), each ring taken out of the order for
+ * its turn as one where its last tile stood: after all it hands to, before all that hands to it.
  */
 function handingOrder(y: Yard): { readonly order: Int32Array; readonly rings: Rings } {
   const all = walk(plumbingOf(y, false));
   if (all.rings.length === 0) return { order: Int32Array.from(all.order), rings: NO_RINGS };
   const real = plumbingOf(y, true);
-  const rings = ringsFound(
-    all.order,
-    walk(real).rings,
-    real,
-    (i) => carries(y.kind[i] ?? NONE) && (y.span[i] ?? 0) <= 0,
-  );
-  if (rings.count === 0) return { order: Int32Array.from(all.order), rings };
-  return { order: orderAround(all.order, (i) => ringAt(rings, i), rings.count), rings };
+  const walked = walk(real);
+  if (walked.rings.length === 0) return { order: Int32Array.from(all.order), rings: NO_RINGS };
+  const rings = ringsFound(walked.order, walked.rings, real, {
+    plain: (i) => carries(y.kind[i] ?? NONE) && (y.span[i] ?? 0) <= 0,
+    holds: (i) => holderOf(y, i) >= 0,
+  });
+  return { order: orderAround(walked.order, (i) => ringAt(rings, i), rings.count), rings };
 }
 
-/**
- * The plumbing as a walk reads it (`Plumbing`): with `real`, by only the ways things can really go, a
- * tile handing to one that takes things from that side (`takes`), or under the ground to a tunnel's far
- * mouth. Two belts facing each other, a gatherer a line runs into, a splitter beside a splitter that
- * takes nothing from it, hand nothing round.
- */
+/** The plumbing as a walk reads it (`Plumbing`): by every way a piece hands by, or with `real`, by only those things can go (`realTo`). */
 function plumbingOf(y: Yard, real: boolean): Plumbing {
-  const outsAt = (i: number): number => (y.part[i] === 0 ? 0 : outsOf(y, i).length);
-  const tileTo = (i: number, c: number): number => {
-    const outs = outsAt(i);
-    return outs > 0 ? portTo(y, i, c) : waysOf(y.kind[i] ?? NONE) > 0 ? wayOut(y, i, c) : nextOf(y, i);
-  };
   return {
     tiles: y.kind.length,
     own: (t) => (t < 0 ? t : pieceOf(y, t)),
-    ways: (i) => outsAt(i) || waysOf(y.kind[i] ?? NONE),
+    ways: (i) => waysAt(y, i),
     to: (i, c) => {
-      const t = tileTo(i, c);
-      return t < 0 || (real && !goesTo(y, i, c, t)) ? -1 : pieceOf(y, t);
+      if (real) return realTo(y, i, c);
+      const t = tileTo(y, i, c);
+      return t < 0 ? t : pieceOf(y, t);
     },
     hands: (i) => hands(y.kind[i] ?? NONE),
   };
+}
+
+/** How many ways out a piece is walked by: its ways out (a piece of more than one tile), its ways (a splitter's), or 0 for one that hands to one tile. */
+export const waysAt = (y: Yard, i: number): number =>
+  (y.part[i] === 0 ? 0 : outsOf(y, i).length) || waysOf(y.kind[i] ?? NONE);
+
+/** The tile a piece hands to by its way out `c`, whatever stands there: -1 for none. */
+function tileTo(y: Yard, i: number, c: number): number {
+  if (y.part[i] !== 0 && outsOf(y, i).length > 0) return portTo(y, i, c);
+  return waysOf(y.kind[i] ?? NONE) > 0 ? wayOut(y, i, c) : nextOf(y, i);
+}
+
+/**
+ * The own tile of what a piece (its own tile `i`) can hand a thing to by its way out `c`, as it stands
+ * now: one that takes things from the side it comes from, or under the ground a tunnel's far mouth; -1
+ * for none. A shut crate hands nothing on; a splitter nothing by a shut way, nor by a way whose tile
+ * takes nothing from it; a sorter by its side only while it is set to a thing, and to the side it is
+ * set to. Every setting that changes this works the plumbing out again (`changed`).
+ */
+export function realTo(y: Yard, i: number, c: number): number {
+  const t = tileTo(y, i, c);
+  if (t < 0) return -1;
+  const r = holderOf(y, i);
+  if (r >= 0 && y.holders.open[r] === 0) return -1;
+  if (waysOf(y.kind[i] ?? NONE) > 0 && ((mayGo(y, i) >> c) & 1) === 0) return -1;
+  return goesTo(y, i, c, t) ? pieceOf(y, t) : -1;
+}
+
+/** The ways out (a bit each: 1 ahead, 2 left, 4 right) something may go by from a piece with ways: what any thing goes by (`sendsOf`). */
+function mayGo(y: Yard, i: number): number {
+  let ways = 0;
+  for (const n of ALL_ITEMS) ways |= sendsOf(y, i, n);
+  return ways;
 }
 
 /** Whether a thing a piece (its own tile `i`) hands by its way `c` goes onto the tile `t`: taken from the tile it leaves by, or under the ground. */
@@ -490,17 +515,20 @@ export function ringsOf(y: Yard): { readonly rings: number; readonly tiles: numb
   return { rings: rings.count, tiles: rings.tiles.length };
 }
 
-/**
- * Whether the ring the piece on a tile stands on has stopped for good (`ringStopped`): nothing takes
- * things off it, and it is full. Null where the piece is on no ring. The one answer the words read
- * (`kinds/say.ts`), from the rings the tick moves.
- */
-export function ringHalted(y: Yard, i: number): boolean | null {
+/** The ring the piece on a tile stands on, or -1 (`Rings`). */
+export const ringOn = (y: Yard, i: number): number => {
   const { rings } = wireOf(y);
-  if (rings.count === 0) return null;
-  const k = ringAt(rings, pieceOf(y, i));
-  return k < 0 ? null : ringStopped(y, rings, k);
-}
+  return rings.count === 0 || i < 0 ? -1 : ringAt(rings, pieceOf(y, i));
+};
+
+/** Whether ring `k` is full and its last turn moved nothing (`rings.ts`). */
+export const ringFull = (y: Yard, k: number): boolean => fullRing(y, wireOf(y).rings, k);
+
+/** Ring `k`'s tiles. */
+export const ringTiles = (y: Yard, k: number): Int32Array => {
+  const { rings } = wireOf(y);
+  return rings.tiles.subarray(rings.starts[k] ?? 0, rings.starts[k + 1] ?? 0);
+};
 
 /** The tile a piece of more than one tile's way out `port` sends to, or -1. */
 export function portTo(y: Yard, i: number, port: number): number {
@@ -644,7 +672,11 @@ export const KIT: Kit = {
   refused,
   roomBeside: roomAt,
   wireOf,
-  ringHalted,
+  waysAt,
+  realTo,
+  ringOn,
+  ringFull,
+  ringTiles,
   // What reaches the depot and the research; power.
   deliver,
   giveGoal,

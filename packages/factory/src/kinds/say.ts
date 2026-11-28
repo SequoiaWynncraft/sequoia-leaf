@@ -103,26 +103,79 @@ export const stuckAs = (k: Kit, y: Yard, i: number, n: Item, also = false): numb
   takenAhead(k, y, i, n, also) === "yes" ? as("waiting") : as("blocked", true);
 
 /**
- * Whether the line a piece sends a thing into (with `also`, its by-product) has stopped: every tile of
- * it ahead holds a thing at the end of its tile, waiting, up to one that is blocked (in trouble), or up
- * to a ring of the plumbing that has stopped for good, full with nothing taking things off it, as the
- * rings the tick moves say (`ringHalted`). A line with room on any tile, that runs into a piece that is
- * not a line, or into a ring that still moves, still moves. Each line is followed no further than the
- * land has tiles.
+ * Whether the line a piece sends a thing into (with `also`, its by-product) has stopped, as the tick
+ * left it: everything a thing handed onto it could go on to has stopped (`stopsFrom`). One answer, read
+ * by its status, its Trouble and its picture alike.
  */
 export function jammedAhead(k: Kit, y: Yard, i: number, n: Item, also = false): boolean {
-  for (const { to } of sendings(k, y, i, n, also)) {
-    let t = to;
-    for (let step = 0; step < y.kind.length && t >= 0 && k.carries(y.kind[t] ?? k.NONE); step++) {
-      const ring = k.ringHalted(y, t);
-      if (ring !== null) return ring;
-      const held = y.item[t] ?? k.NONE;
-      if (!k.isItem(held) || (y.prog[t] ?? 0) < 8 || k.tunnelOf(y, t) >= 0) break;
-      if (stuckAs(k, y, t, held) !== as("waiting")) return true;
-      t = k.nextOf(y, t);
-    }
+  return sendings(k, y, i, n, also).some(({ to }) => to >= 0 && stopsFrom(k, y, to));
+}
+
+/** What a tile says of a line through it (`stopsFrom`): it still moves, it ends there stopped, or it goes on by its ways. */
+const MOVES = 0;
+const ENDS = 1;
+const ON = 2;
+
+/**
+ * Whether everything a thing handed onto the tile `start` could go on to has stopped: by every way
+ * things can go from each tile (`realTo`), a splitter's and a sorter's alike, each line of things that
+ * have crossed their tiles and wait ends at one in trouble, at a crate that is full and shut, or at a
+ * ring that is full, moved nothing in its turn, and whose ways off it have all stopped too. A tile with
+ * room on the way, one whose thing has not crossed it, or a piece that takes things and is not shut,
+ * still moves. Each tile is looked at once.
+ */
+function stopsFrom(k: Kit, y: Yard, start: number): boolean {
+  const seen = new Set<number>();
+  const next = [start];
+  for (let t = next.pop(); t !== undefined; t = next.pop()) {
+    const ring = k.ringOn(y, t);
+    const key = ring >= 0 ? -1 - ring : t;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if ((ring >= 0 ? ringEnd(k, y, ring, next) : lineEnd(k, y, t, next)) === MOVES) return false;
   }
-  return false;
+  return true;
+}
+
+/** A ring a line runs into: it moves unless full and still; then its ways off it go on (`next`). */
+function ringEnd(k: Kit, y: Yard, ring: number, next: number[]): number {
+  if (!k.ringFull(y, ring)) return MOVES;
+  for (const i of k.ringTiles(y, ring)) onward(k, y, i, next, ring);
+  return ON;
+}
+
+/** A tile of a line off any ring (`stopsFrom`): what it says, and where it goes on (`next`). */
+function lineEnd(k: Kit, y: Yard, t: number, next: number[]): number {
+  const kind = y.kind[t] ?? k.NONE;
+  if (!k.carries(kind)) return fullAndShut(k, y, t) ? ENDS : MOVES;
+  const held = y.item[t] ?? k.NONE;
+  if (!k.isItem(held) || (y.prog[t] ?? 0) < 8 || !fullUnder(k, y, t)) return MOVES;
+  if (stuckAs(k, y, t, held) !== as("waiting")) return ENDS;
+  onward(k, y, t, next, -1);
+  return ON;
+}
+
+/** Puts every tile the piece on `i` can hand to (`realTo`) on the way, but those of the ring `ring` it stands on. */
+function onward(k: Kit, y: Yard, i: number, next: number[], ring: number): void {
+  for (let c = 0; c < Math.max(1, k.waysAt(y, i)); c++) {
+    const to = k.realTo(y, i, c);
+    if (to >= 0 && (ring < 0 || k.ringOn(y, to) !== ring)) next.push(to);
+  }
+}
+
+/** Whether a tunnel's way-in mouth is full under the ground, everything across its tile; anything else is. */
+function fullUnder(k: Kit, y: Yard, i: number): boolean {
+  const span = y.span[i] ?? 0;
+  const at = k.tunnelOf(y, i) * k.SPAN_MOST;
+  for (let u = at; u < at + span; u++) if (y.tunnels.under[u] === k.NONE || (y.tunnels.along[u] ?? 0) < 8) return false;
+  return true;
+}
+
+/** Whether the piece on a tile holds things, is shut and can take no more: a crate, which alone shuts. */
+function fullAndShut(k: Kit, y: Yard, i: number): boolean {
+  const r = k.holderOf(y, i);
+  const h = y.holders;
+  return r >= 0 && h.open[r] === 0 && (h.count[r] ?? 0) + (h.out[r] === k.NONE ? 0 : 1) >= y.open.crate;
 }
 
 /** The name of the way out of a piece of more than one tile that sends a thing it holds ready (`Out.name`): "left", "middle", "right". */

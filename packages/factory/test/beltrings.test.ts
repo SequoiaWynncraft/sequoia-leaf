@@ -10,76 +10,8 @@ import { describe, expect, test } from "bun:test";
 
 import * as F from "../src/index.ts";
 import { bareLand } from "./land.ts";
+import { bare, drain, drained, DX, DZ, fill, PLANK, ring, stock, STOPPED } from "./ringyard.ts";
 import { must } from "./yards.ts";
-
-const PLANK = F.item("plank");
-
-/** A bare yard with tier 7 done, the depot far to the east. */
-const bare = (): F.Yard => F.create({ land: bareLand(40, 30, [], [35, 5]), tier: 8, seed: 1 });
-
-/** A ring of belts round a box `w` by `h` with its corner at (x0, z0), clockwise from that corner: its tiles in order. */
-function ring(y: F.Yard, x0: number, z0: number, w: number, h: number, grade = 1): number[] {
-  const tiles: number[] = [];
-  const lay = (x: number, z: number, dir: number): void => {
-    must(y, { do: "build", kind: "belt", x, y: z, dir, ...(grade > 1 ? { grade } : {}) });
-    tiles.push(F.at(y, x, z));
-  };
-  for (let x = x0; x < x0 + w - 1; x++) lay(x, z0, 0);
-  for (let z = z0; z < z0 + h - 1; z++) lay(x0 + w - 1, z, 1);
-  for (let x = x0 + w - 1; x > x0; x--) lay(x, z0 + h - 1, 2);
-  for (let z = z0 + h - 1; z > z0; z--) lay(x0, z, 3);
-  return tiles;
-}
-
-/** Ways east, south, west and north, as tiles across and down. */
-const DX = [1, 0, -1, 0];
-const DZ = [0, 1, 0, -1];
-
-/**
- * A splitter at (x, z), facing `dir`, that sends what it can to its left first, onto a belt into a
- * shut crate: the crate's row, which counts what the drain took.
- */
-function drain(y: F.Yard, x: number, z: number, dir: number, grade = 1): number {
-  const left = (dir + 3) & 3;
-  const [bx, bz] = [x + (DX[left] ?? 0), z + (DZ[left] ?? 0)];
-  const [cx, cz] = [bx + (DX[left] ?? 0), bz + (DZ[left] ?? 0)];
-  must(y, { do: "build", kind: "splitter", x, y: z, dir, grade });
-  must(y, { do: "build", kind: "belt", x: bx, y: bz, dir: left, grade });
-  must(y, { do: "build", kind: "crate", x: cx, y: cz, dir: left });
-  must(y, { do: "crate", x: cx, y: cz, open: false });
-  must(y, { do: "first", x, y: z, way: 1 });
-  return F.holderOf(y, F.at(y, cx, cz));
-}
-
-/** Puts `n` planks into the crate on a tile. */
-function stock(y: F.Yard, i: number, n: number): void {
-  for (let k = 0; k < n; k++) F.put(y.holders, F.holderOf(y, i), PLANK);
-}
-
-/** How many planks the drain's crate (its row) has taken between second `from` and second `to`. */
-function drained(y: F.Yard, bin: number, from: number, to: number): number {
-  while (y.tick < from * 10) F.step(y);
-  const was = F.held(y.holders, bin, PLANK);
-  while (y.tick < to * 10) F.step(y);
-  return F.held(y.holders, bin, PLANK) - was;
-}
-
-/** Puts a plank on every tile, at the end of its tile, as a ring that has filled stands. */
-function fill(y: F.Yard, tiles: readonly number[]): void {
-  for (const i of tiles) {
-    y.item[i] = PLANK;
-    y.prog[i] = 8;
-  }
-  F.changed(y);
-}
-
-/** A grower's status, stopped with star crystals it cannot send on. */
-const STOPPED: F.Status = {
-  state: "blocked",
-  trouble: true,
-  line: "Stopped: its star crystals cannot leave by its middle way out. It grows nothing more until they do.",
-  stuck: F.item("crystal"),
-};
 
 /** What is on each tile and how far across it, in order. */
 const where = (y: F.Yard, tiles: readonly number[]): string => tiles.map((i) => `${y.item[i]}:${y.prog[i]}`).join(" ");
@@ -122,7 +54,9 @@ describe("a ring of belts", () => {
     const y = bare();
     const tiles = ring(y, 2, 2, 11, 11);
     fill(y, tiles.slice(1));
-    // Where the free tile is every 4 ticks: the whole ring has moved on one tile, so it has too.
+    // Where the free tile is every 4 ticks: the whole ring has moved on one tile, so it has too. A full
+    // belt moves as one, each thing as soon as the tile ahead of it is freed, and a ring is a belt that
+    // closes on itself; SPEC-2 0.5's "one item a tick" was how the old cut through it played.
     const free: number[] = [];
     for (let k = 1; k <= 120; k++) {
       F.step(y);

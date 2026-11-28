@@ -283,7 +283,7 @@ describe("the grower", () => {
     expect(room(CRYSTAL)).toBe(false);
   });
 
-  test("says what it waits for: star crystals, in trouble once it has grown any; feed; room ahead, by its middle way out", () => {
+  test("says what it waits for: star crystals, in trouble once it has grown any; feed; room ahead, by its middle way out, unless a full crate there is shut", () => {
     const y = yard();
     const { g, out } = growerIntoBin(y);
     const said = (): [string, boolean] => [F.status(y, g)?.line ?? "", F.status(y, g)?.trouble ?? false];
@@ -301,11 +301,17 @@ describe("the grower", () => {
     fill(fed, other, CRYSTAL, 2);
     F.step(fed);
     expect(F.status(fed, other)?.line).toBe("Waiting for crystal feed.");
-    // A full crate ahead takes star crystals, but has no room: waiting, not in trouble.
+    // A full crate ahead that is shut will never take more: stopped, in trouble. Opened, it lets things
+    // out onto nothing and still has no room, but may: waiting, not in trouble.
     fill(y, F.at(y, 8, 5), CRYSTAL, y.open.crate - 1);
     fill(y, g, CRYSTAL, 2);
     until(y, 400);
-    expect(said()).toEqual(["Waiting: no room ahead for its star crystals, by its middle way out.", false]);
+    const shut = said();
+    must(y, { do: "crate", x: 8, y: 5, open: true });
+    expect([shut, said()]).toEqual([
+      ["Stopped: its star crystals cannot leave by its middle way out. It grows nothing more until they do.", true],
+      ["Waiting: no room ahead for its star crystals, by its middle way out.", false],
+    ]);
   });
 
   test("holds what it grew with nowhere ahead: stopped, in trouble, by its middle way out; the one reading of it agrees", () => {

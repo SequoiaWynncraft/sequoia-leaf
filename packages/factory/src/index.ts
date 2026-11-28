@@ -82,12 +82,14 @@ export {
   portTo,
   type Power,
   power,
+  realTo,
   rewire,
   ringsOf,
   sortWay,
   takes,
   wants,
   wayOut,
+  waysAt,
   waysOf,
 } from "./wire.ts";
 export { KIND_DEFS, type KindRules, RULES } from "./kinds/list.ts";

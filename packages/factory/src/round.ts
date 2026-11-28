@@ -5,19 +5,19 @@
  * where its last tile stood (`Wire.order`): after every tile it hands to off the ring, before every
  * tile that hands to it from off the ring.
  *
- * A ring's turn: its tiles in turn, in the handing order, hand on, and then again, as long as one of
- * them moved a thing. So every tile freed lets the one behind it move in the same turn, whatever
- * stands on the ring and wherever the order breaks round it, and a ring moves as one at the belt's
- * pace while something takes things off it, as a full line does. A full ring with no way off stays
- * still: nothing on it moves, and its turn ends after the first time round.
+ * A ring's turn: what holds things on it tries first, then its tiles backward along the ways things go
+ * round it, from where things leave it (`rings.ts`), each tile after the tile it hands to has tried and
+ * made room; then once more, the tiles not done, where something moved after the first of them. Two
+ * times round at most, so a turn costs a few looks a tile however the ring is built. A ring of belts
+ * moves as one at the belt's pace while something takes things off it, wherever its free tiles are, as
+ * a full line does; a full ring with no way off stays still. Where ways off and back onto a ring cross
+ * it many times, a thing may move a tick late, the same on Leaf and on the page.
  *
  * Each thing moves at most once a tick, as anywhere. A thing handed onto what carries comes onto its
- * tile less than across it, and is not handed on until it has crossed it; under the ground the same.
- * A holder (a crate, a grower) hands on once a turn, and only what it held ready before anything came
- * into it: one with nothing to hand on when it tried is done, whatever comes into it after.
- *
- * So the turn ends: each time round in which something moves, a carrier holds one fewer thing that
- * has crossed its tile, or a holder hands on, which it does once; neither comes back in a turn.
+ * tile less than across it (a thing moves at most 4 eighths a tick, and comes on past the edge by what
+ * it had over), and is not handed on until it has crossed it; under the ground the same. A holder (a
+ * crate, a grower) hands on at most once a turn, and tries first, before anything on the ring moves:
+ * it hands on only what it held when the tick began.
  */
 import { handOut } from "./kinds/holder.ts";
 import { carryOn } from "./kinds/line.ts";
@@ -65,23 +65,105 @@ export function handOnRings(y: Yard, wire: Wire, waiting: Uint8Array): void {
 }
 
 /**
- * Ring `k` takes its turn (as the module says): its tiles hand on, time and again, until a time round
- * in which nothing moved. Another time round is needed only where something moved after a tile that
- * was not done, which may have room now, and begins there: every tile before it is done.
+ * Ring `k` takes its turn (as the module says): what holds things on it tries first, then every tile
+ * in the order its turn tries them (`Rings.tiles`), begun at its first free tile (`beginAt`) and round
+ * to it, then those not done once more if anything moved after the first of them; its turn notes
+ * whether anything moved (`Rings.still`).
  */
 function turnRing(y: Yard, wire: Wire, k: number, waiting: Uint8Array): void {
-  const to = wire.rings.starts[k + 1] ?? 0;
-  for (let t = wire.rings.starts[k] ?? 0; t >= 0;) t = roundOnce(y, wire, t, to, waiting);
+  const { starts, still } = wire.rings;
+  const from = starts[k] ?? 0;
+  const end = starts[k + 1] ?? 0;
+  const held = holdersFirst(y, wire, k, waiting);
+  const at = beginAt(y, wire, k);
+  const head = sweep(y, wire, at, end, waiting);
+  const tail = sweep(y, wire, from, at, waiting);
+  // The first tile not done and the last that moved, in the order begun at `at`: the tail comes after the head.
+  const open = openOf(head) >= 0 ? openOf(head) - at : openOf(tail) - from + (end - at);
+  const last = lastOf(tail) >= 0 ? lastOf(tail) - from + (end - at) : lastOf(head) - at;
+  if (openOf(head) < 0 && openOf(tail) < 0) {
+    if (!held && last < 0) still[k] = y.tick;
+    return;
+  }
+  if (open < last) {
+    if (openOf(head) >= 0) {
+      sweep(y, wire, openOf(head), end, waiting);
+      sweep(y, wire, from, at, waiting);
+    } else sweep(y, wire, openOf(tail), at, waiting);
+  }
+  if (!held && last < 0) still[k] = y.tick;
+}
+
+/** The place in `Rings.tiles` of the first tile a sweep left not done, or -1 (`sweep`). */
+const openOf = (swept: number): number => Math.floor(swept / SPAN) - 1;
+/** The place in `Rings.tiles` of the last tile a sweep saw move, or -1 (`sweep`). */
+const lastOf = (swept: number): number => (swept % SPAN) - 1;
+/** More places than any yard has ring tiles: a sweep's two places are kept in one number by it. */
+const SPAN = 2 ** 24;
+
+/**
+ * Where ring `k`'s turn begins (a place in `Rings.tiles`): at a tile of it that carries nothing, which
+ * needs nothing of the ring to have room, so the tiles behind it all move in the turn; looked for from
+ * where the last turn began, round the ring, as a free tile goes on round it as the ring moves. With
+ * none, at the first that holds things, else where its order begins: a tile with a way off it.
+ */
+function beginAt(y: Yard, wire: Wire, k: number): number {
+  const { tiles, starts, begin, looked } = wire.rings;
+  const from = starts[k] ?? 0;
+  const len = (starts[k + 1] ?? 0) - from;
+  const was = begin[k] ?? from;
+  for (let n = 0; n < len; n++) {
+    const t = was + n < from + len ? was + n : was + n - len;
+    const i = tiles[t] ?? 0;
+    if (y.item[i] === NONE && CARRIES[y.kind[i] ?? NONE] === 1) {
+      looked[0] = (looked[0] ?? 0) + n + 1;
+      begin[k] = t;
+      return t;
+    }
+  }
+  looked[0] = (looked[0] ?? 0) + len;
+  return firstHolder(wire, k);
+}
+
+/** Where ring `k`'s first holder is (a place in `Rings.tiles`), or where its order begins. */
+function firstHolder(wire: Wire, k: number): number {
+  const { holders, holderStarts, starts } = wire.rings;
+  const h = holderStarts[k] ?? 0;
+  return h < (holderStarts[k + 1] ?? 0) ? (holders[h] ?? 0) : (starts[k] ?? 0);
 }
 
 /**
- * One time round a ring, from its tile `from` (in `Rings.tiles`) to `to`: where the next must begin,
- * the first tile not done if something moved after it, or -1.
+ * Each holder on ring `k` tries to hand on what it holds, before anything on the ring has moved: so it
+ * hands on only what it held when the tick began, and one that held nothing is done for the tick,
+ * whatever comes into it. Says whether one did.
  */
-function roundOnce(y: Yard, wire: Wire, from: number, to: number, waiting: Uint8Array): number {
+function holdersFirst(y: Yard, wire: Wire, k: number, waiting: Uint8Array): boolean {
+  const { tiles, holders, holderStarts, done, looked } = wire.rings;
+  const from = holderStarts[k] ?? 0;
+  const to = holderStarts[k + 1] ?? 0;
+  let moved = false;
+  for (let h = from; h < to; h++) {
+    const t = holders[h] ?? 0;
+    const i = tiles[t] ?? 0;
+    // One that waits holds a thing it could not hand on: it may yet, once it is woken.
+    if (waiting[i] === 1) continue;
+    const did = tryHolder(y, wire, i, y.kind[i] ?? NONE);
+    if ((did & MOVED) !== 0) moved = true;
+    if ((did & HELD) === 0) done[t] = y.tick;
+  }
+  looked[0] = (looked[0] ?? 0) + (to - from);
+  return moved;
+}
+
+/**
+ * Ring tiles from `from` to `to` (places in `Rings.tiles`), each not done trying to hand on: where the
+ * first left not done is and where the last that moved is, each plus 1 (0 for none), the first over
+ * the second, as `openOf` and `lastOf` read them.
+ */
+function sweep(y: Yard, wire: Wire, from: number, to: number, waiting: Uint8Array): number {
   const { tick, prog } = y;
-  const { tiles, done, plain } = wire.rings;
-  let open = to;
+  const { tiles, done, plain, looked } = wire.rings;
+  let open = -1;
   let last = -1;
   for (let t = from; t < to; t++) {
     if (done[t] === tick) continue;
@@ -93,9 +175,10 @@ function roundOnce(y: Yard, wire: Wire, from: number, to: number, waiting: Uint8
       did = plain[t] !== 1 ? tryOn(y, wire, i, waiting) : (prog[i] ?? 0) < 8 ? 0 : tryPlain(y, wire, i);
     if ((did & MOVED) !== 0) last = t;
     if ((did & HELD) === 0) done[t] = tick;
-    else if (t < open) open = t;
+    else if (open < 0) open = t;
   }
-  return open < last ? open : -1;
+  looked[0] = (looked[0] ?? 0) + (to - from);
+  return (open + 1) * SPAN + (last + 1);
 }
 
 /** A ring tile's try at handing on but a plain carrier's (`tryPlain`): what it did (`MOVED`, `HELD`). */
