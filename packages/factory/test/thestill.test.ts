@@ -302,21 +302,26 @@ describe("the powerhouse", () => {
     expect(F.status(y, i)?.trouble).toBe(false);
   });
 
-  test("the yard counts what it needs a minute: 60 pitch while it burns pitch, 30 spirit while it burns spirit", () => {
+  test("the yard counts what it needs a minute, and the smog card what it makes: 60 pitch and 240 smog on pitch, 30 spirit and 30 smog on spirit", () => {
     const y = yard();
     const i = piece(y, "powerhouse", 4, 4);
     fill(y, i, PITCH, 2);
     F.step(y);
-    const need = (): [number, number] => {
+    const need = (): [number, number, number] => {
       const needed = F.counts();
       F.flow(y, F.counts(), needed);
-      return [needed[PITCH] ?? 0, needed[SPIRIT] ?? 0];
+      return [needed[PITCH] ?? 0, needed[SPIRIT] ?? 0, F.madeOn(y, 0)];
     };
-    expect(need()).toEqual([60, 0]);
+    expect(need()).toEqual([60, 0, 240]);
     for (let k = 0; k < 30; k++) F.step(y);
     fill(y, i, SPIRIT, 2);
     F.step(y);
-    expect(need()).toEqual([0, 30]);
+    expect(need()).toEqual([0, 30, 30]);
+    // A still III beside it adds its 240 things a minute, 1 smog each; one power does not reach adds nothing.
+    piece(y, "still", 10, 4, 3);
+    const far = piece(y, "powerhouse", 20, 0);
+    fill(y, far, PITCH, 2);
+    expect([F.litAt(y, far), F.smogRate(y, far), F.madeOn(y, 0)]).toEqual([false, 0, 270]);
   });
 });
 
