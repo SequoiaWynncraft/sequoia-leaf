@@ -19,7 +19,9 @@ export const cameFrom = (y: Yard, i: number): number => {
 /**
  * Whether a thing on a tunnel's mouth, so far across its tile (`prog`), is under the mouth's hood:
  * the half of the tile toward the other mouth, where it goes in or comes up. Drawn there, it would
- * show past the hood, between the mouths.
+ * show past the hood, between the mouths. A thing handed into a far mouth from its left or right
+ * rides in along that side, never under the hood.
  */
 export const hooded = (y: Yard, i: number, prog: number): boolean =>
-  SPANS[y.kind[i] ?? NONE] === 1 && ((y.span[i] ?? 0) > 0 ? prog > 0.5 : prog < 0.5);
+  SPANS[y.kind[i] ?? NONE] === 1 &&
+  ((y.span[i] ?? 0) > 0 ? prog > 0.5 : prog < 0.5 && cameFrom(y, i) === BACK[dirAt(y, i)]);

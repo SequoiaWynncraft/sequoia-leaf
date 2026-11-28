@@ -236,7 +236,7 @@ export const RESEARCH: readonly ResearchInfo[] = [
     id: "widemouths",
     tier: 5,
     name: "Wide mouths",
-    what: "A tunnel takes items in from the left and right of its way in, as well as from behind.",
+    what: "A tunnel takes items in from the left and right of both mouths, as well as from behind its way in.",
     cost: { timber: 6000, brass: 6000 },
     needs: ["deepculvert"],
     unlocks: { mouths: true },

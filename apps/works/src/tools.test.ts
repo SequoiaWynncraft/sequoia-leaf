@@ -418,25 +418,59 @@ describe("a tunnel through a deep culvert", () => {
   });
 });
 
-/** A way in at (-6, -5) facing east, fed from behind and from the north, in a yard with tier 5's research to `tier`. */
-function fed(tier: number): { y: Yard; i: number } {
+/** A tunnel from (-6, -5) to (-3, -5) facing east, fed as asked, in a yard with tier 5's research to `tier`. */
+function fed(
+  tier: number,
+  belts: readonly (readonly [number, number, 0 | 1 | 2 | 3])[] = [
+    [-7, -5, 0],
+    [-6, -6, 1],
+  ],
+): { y: Yard; i: number; far: number } {
   const y = create({ seed: 5, tier });
-  expect(build(y, BELT, ...xy(-7, -5), 0, Infinity).ok).toBe(true);
-  expect(build(y, BELT, ...xy(-6, -6), 1, Infinity).ok).toBe(true);
+  for (const [x, z, d] of belts) expect(build(y, BELT, ...xy(x, z), d, Infinity).ok).toBe(true);
   expect(build(y, kind("tunnel"), ...xy(-6, -5), 0, Infinity, { span: 2 }).ok).toBe(true);
-  return { y, i: at(y, ...xy(-6, -5)) };
+  return { y, i: at(y, ...xy(-6, -5)), far: at(y, ...xy(-3, -5)) };
 }
 /** Its arms east, south, west and north: 1 in, 2 out, 0 none. */
 const armsOf = (y: Yard, i: number): number[] => [0, 1, 2, 3].map((side) => (armsAt(y, i) >> (side * 2)) & 3);
 
-describe("a tunnel's way in, drawn", () => {
-  test("takes in from the north with wide mouths and is drawn so; without them, from behind alone, and drawn so", () => {
+describe("a tunnel's mouths, drawn", () => {
+  test("a way in takes from the north with wide mouths and is drawn so; without them, from behind alone, and drawn so", () => {
     const wide = fed(6);
     expect([takes(wide.y, wide.i, at(wide.y, ...xy(-6, -6))), armsOf(wide.y, wide.i)]).toEqual([true, [0, 0, 1, 1]]);
     const narrow = fed(5);
     expect([takes(narrow.y, narrow.i, at(narrow.y, ...xy(-6, -6))), armsOf(narrow.y, narrow.i)]).toEqual([
       false,
       [0, 0, 1, 0],
+    ]);
+  });
+
+  test("a way in fed only from a side has no back arm; unfed, it keeps its back arm", () => {
+    const sideOnly = fed(6, [[-6, -6, 1]]);
+    expect(armsOf(sideOnly.y, sideOnly.i)).toEqual([0, 0, 0, 1]);
+    // Without wide mouths, nothing feeds it, so it stays drawn from behind.
+    const narrowSideOnly = fed(5, [[-6, -6, 1]]);
+    expect(armsOf(narrowSideOnly.y, narrowSideOnly.i)).toEqual([0, 0, 1, 0]);
+    const bare = fed(6, []);
+    expect(armsOf(bare.y, bare.i)).toEqual([0, 0, 1, 0]);
+  });
+
+  test("a far mouth is drawn with a side arm where something feeds its side with wide mouths, never from behind", () => {
+    const wide = fed(6, [
+      [-3, -6, 1],
+      [-4, -5, 0],
+    ]);
+    expect([takes(wide.y, wide.far, at(wide.y, ...xy(-3, -6))), armsOf(wide.y, wide.far)]).toEqual([
+      true,
+      [2, 0, 0, 1],
+    ]);
+    const narrow = fed(5, [
+      [-3, -6, 1],
+      [-4, -5, 0],
+    ]);
+    expect([takes(narrow.y, narrow.far, at(narrow.y, ...xy(-3, -6))), armsOf(narrow.y, narrow.far)]).toEqual([
+      false,
+      [2, 0, 0, 0],
     ]);
   });
 });
