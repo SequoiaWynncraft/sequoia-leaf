@@ -169,6 +169,8 @@ function pawnStanding(g: Ctx, p: Pawn, ox: number, oy: number): Standing {
       const foot = y - 3 - hover - f.tall;
       const up = grew ? { pop: { up: Math.round(Math.sin((pop / 0.7) * Math.PI) * 3) } } : {};
       drawPlate(g, x, foot, { ...plate, ...up });
+      // Tapped and waiting to be told where to go: an arrow bobbing over its plate.
+      if (handMarks().picked === p.id && !fightOn()) drawPicked(g, x, plateAt(plate, x, foot).peak);
       // A component in the hand: what it would make with the one this figure holds, faint, over its plate.
       const forging = handMarks().forging;
       const would = forging && piece ? handing(catalogFor(S.run), piece, forging) : null;
@@ -181,6 +183,17 @@ function pawnStanding(g: Ctx, p: Pawn, ox: number, oy: number): Standing {
       }
     },
   };
+}
+
+/** The arrow over a figure tapped and waiting to be told where to go, 2 rows clear of `peak`, the top of its plate. */
+function drawPicked(g: Ctx, cx: number, peak: number): void {
+  const x = Math.round(cx);
+  const y = Math.round(peak) - 6 + Math.round(Math.sin(V.t * 6));
+  R(g, x - 2, y, 5, 2, INK);
+  R(g, x - 1, y + 2, 3, 1, INK);
+  R(g, x, y + 3, 1, 1, INK);
+  R(g, x - 1, y, 3, 2, GOLD[2]);
+  R(g, x, y + 2, 1, 1, GOLD[2]);
 }
 
 /** One of the far party's figures, waiting on its hex while the member plans. */
@@ -446,19 +459,6 @@ function drawTable(g: Ctx): void {
   list.push(...alsoStanding.flatMap((also) => also(g)));
   list.sort((a, b) => a.y - b.y || a.x - b.x);
   for (const s of list) s.draw();
-  // A ring under the figure that has been tapped and is waiting to be told where to go.
-  const picked = pawns.get(marks.picked);
-  if (picked && !fighting) {
-    const bob = Math.round(Math.sin(V.t * 6));
-    const f = framesOf(picked.kind);
-    const x = Math.round(V.bx + picked.x);
-    const y = Math.round(V.by + picked.y) - f.tall - 12 + bob;
-    R(g, x - 2, y, 5, 2, INK);
-    R(g, x - 1, y + 2, 3, 1, INK);
-    R(g, x, y + 3, 1, 1, INK);
-    R(g, x - 1, y, 3, 2, GOLD[2]);
-    R(g, x, y + 2, 1, 1, GOLD[2]);
-  }
   for (const s of list) s.top();
   if (!fighting) drawItemMarks(g, marks);
   if (fighting) drawFightAir(g);
