@@ -19,6 +19,8 @@ export const TRAIT_COLOUR: Readonly<Record<TraitId, string>> = {
   huddle: WATER[2],
   // Russet: a red panda's, up the tree.
   canopy: BARK[3],
+  // The badge's enamel: the town's blue glorp's, which no other trait wears.
+  lhz: "#6fb0e8",
   bulwark: STONE[3],
   fang: "#f4a08c",
   slinger: GOLD[0],
