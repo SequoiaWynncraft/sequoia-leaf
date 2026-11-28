@@ -2,8 +2,9 @@
  * Reach research and a card's Upgrade. Long reach and Longer reach raise how many plots out from the
  * one you stand on you build (`Open.range`: 1, then 2, then 3), and sit on no goal's way: on every
  * staged yard and save the tier and what every goal waits on are as they were. A card's Upgrade is
- * the grade command for its one piece, raised one grade (`{ do: "upgrade", tiles, grade, kind, from }`, naming the piece as the card saw it): it
- * needs no tool, and charges, and its Undo gives back, exactly what a build over the piece did.
+ * the grade command for its one piece, raised one grade (`{ do: "upgrade", tiles, grade, kind, from,
+ * price }`, naming the piece and its price as the card saw them): it needs no tool, and charges, and
+ * its Undo gives back, exactly what a build over the piece did.
  */
 import { describe, expect, test } from "bun:test";
 
