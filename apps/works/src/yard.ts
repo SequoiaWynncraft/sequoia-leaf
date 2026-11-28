@@ -89,7 +89,7 @@ import { balance } from "@sequoia-leaf/kit/purse.ts";
 import { joinVisit, type LiveRoom } from "@sequoia-leaf/kit/realtime.ts";
 
 import { beyondReach } from "./figure/reach.ts";
-import { counting, keepCounts, noteGrowers } from "./grown.ts";
+import { commanded, counting, keepCounts, noteGrowers } from "./grown.ts";
 import { S } from "./state.ts";
 import { askDue, leafOf, type Link, type LinkEvent, type Room, type RoomEvent, roomStep, step } from "./sync.ts";
 import { ZOOM } from "./zoom.ts";
@@ -348,6 +348,7 @@ function followTo(f: Follow, w: Yard, to: number): boolean {
       if (c.tick < w.tick) return late(f, w.tick - c.tick);
       f.upTo = batch.rev;
       if ("refused" in play(w, c)) return unlike(f);
+      commanded(w);
     }
     const { after } = batch;
     if (after.tick > to) return true;
@@ -521,6 +522,7 @@ export function doNow(act: Act): Did {
   const command: Command = { ...act, tick: S.world.tick, id };
   const done = play(S.world, command, balance().coins);
   if ("refused" in done) return done;
+  commanded(S.world);
   // A review page's own yard (`S.alone`) sends nothing: what is done is all there is.
   if (link.is !== "inStep") return done;
   const sending = writeCommand(command);

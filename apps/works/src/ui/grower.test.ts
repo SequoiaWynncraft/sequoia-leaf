@@ -16,6 +16,7 @@ import {
   item,
   kind,
   locked,
+  NONE,
   portTo,
   put,
   type Yard,
@@ -25,11 +26,12 @@ import { perMinute } from "@sequoia-leaf/kit/say.ts";
 
 import { ctx, opened, useFakeLeaf } from "../../test/fake-leaf.ts";
 import { countedAt } from "../grown.ts";
+import { poseOf } from "../kinds/gatherer.ts";
 import { grower } from "../kinds/grower.ts";
 import { S } from "../state.ts";
 import { setTool } from "../tools.ts";
 import { runOut } from "../ways.ts";
-import { runYard } from "../yard.ts";
+import { doNow, runYard } from "../yard.ts";
 import { ownPace } from "./flow.ts";
 import { madeRows } from "./made.ts";
 import { printOf } from "./prints.ts";
@@ -145,6 +147,32 @@ test("standing, its card says what it took in and gave out of star crystals in t
   ]);
 });
 
+test("a grower built where one stood is counted afresh: it does not take on the minute of the one before", async () => {
+  const y = yard();
+  const i = growerAt(y, 3, 3);
+  const [x0, z0] = corner(y);
+  build(y, kind("crate"), x0 + 5, z0 + 3, 0, Infinity);
+  y.holders.open[holderOf(y, at(y, x0 + 5, z0 + 3))] = 0;
+  fill(y, i, CRYSTAL, 4);
+  fill(y, i, FEED, 4);
+  await opened(y, 1_000);
+  const t0 = 1000;
+  for (let s = 1; s <= 70; s++) {
+    if (s % 6 === 0) {
+      fill(S.world, i, CRYSTAL, 1);
+      fill(S.world, i, FEED, 1);
+    }
+    runYard(t0 + s * 1000);
+  }
+  const before = countedAt(S.world, i);
+  // Taken up and another built on its tile, with nothing in it: five seconds on, it has taken in and given out nothing.
+  expect(doNow({ do: "remove", x: x0 + 3, y: z0 + 3 })).not.toHaveProperty("refused");
+  expect(doNow({ do: "build", kind: GROWER, x: x0 + 3, y: z0 + 3, dir: 0, grade: 1 })).not.toHaveProperty("refused");
+  for (let s = 71; s <= 75; s++) runYard(t0 + s * 1000);
+  const after = countedAt(S.world, i);
+  expect([(before?.took ?? 0) > 0, after?.took, after?.gave, (after?.seconds ?? 60) <= 6]).toEqual([true, 0, 0, true]);
+});
+
 test("its map's middle and its picture's points read what it holds, as its status does: an empty dome where it holds none", () => {
   const y = yard();
   const i = growerAt(y, 3, 3);
@@ -162,6 +190,21 @@ test("a run of belt tapped from any of its tiles begins at its one way out, the 
   expect(out).toBe(at(y, x0 + 5, z0 + 3));
   for (let x = x0 + 2; x <= x0 + 4; x++)
     for (let z = z0 + 2; z <= z0 + 4; z++) expect([x, z, runOut(y, at(y, x, z))]).toEqual([x, z, out]);
+});
+
+test("a gatherer on star crystal stands as far through his work as star crystal's own time says, one on ore as he did", () => {
+  const y = yard();
+  const on = (n: number): number => y.land.deposit.indexOf(n);
+  const [crystal, ore] = [on(CRYSTAL), on(item("ore"))];
+  const pose = (i: number, work: number): number => poseOf(y, { i, work, powered: true, out: NONE, working: true });
+  // Half way: 1,500 of star crystal's 3,000 half-ticks, 15 of ore's 30; and all but done.
+  expect([crystal >= 0 && ore >= 0, pose(crystal, 1500), pose(crystal, 2900), pose(ore, 15), pose(ore, 29)]).toEqual([
+    true,
+    2,
+    3,
+    2,
+    3,
+  ]);
 });
 
 test("star crystal's card names the grower before it is known, from crystal feed, and the gatherer at star crystal's own pace", async () => {
