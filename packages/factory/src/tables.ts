@@ -7,7 +7,7 @@
  * Each kind of number has a type of its own, so the checker keeps a thing apart from a kind or a
  * tile. A number becomes one only through its guard (`isItem`, `isKind`, ...), which checks it.
  */
-import { GROW } from "./content/grow.ts";
+import { GROW, type GrowInfo } from "./content/grow.ts";
 import { ITEM, type ItemName, ITEMS, type Wants } from "./content/items.ts";
 import { BLUEPRINT, BUFFER, GRADES, TICKS } from "./content/machines.ts";
 import { MIXES } from "./content/mixes.ts";
@@ -209,35 +209,8 @@ export const HALF = 2;
 export const DRAWN: readonly number[] = [HALF, ...halves((g) => g.draw)];
 /** The power a piece of a kind at a grade draws where power reaches it, in halves: its kind's, once for each half its grade draws. */
 export const drawnAt = (k: number, grade: number): number => (DRAW[k] ?? 0) * (DRAWN[isGraded(k) ? grade : 0] ?? HALF);
-/**
- * For each kind that burns for power (`KindDef.burns`): what it burns, in the order it takes them, each
- * a thing, the ticks a piece of it burns and the smog a piece taken adds to its plot; how many pieces
- * of each it holds; and the power it gives while it burns, in halves.
- */
-export interface Burns {
-  readonly fuels: readonly { readonly fuel: Item; readonly ticks: number; readonly smog: number }[];
-  readonly holds: number;
-  readonly halves: number;
-}
-export type Fuel = Burns["fuels"][number];
-export const BURNS: readonly (Burns | null)[] = KIND_DEFS.map((d: KindDef) => {
-  const b = d.burns;
-  if (!b) return null;
-  const fuels = b.fuels.map((f): Fuel => ({
-    fuel: item(f.fuel),
-    ticks: f.ticks,
-    smog: f.smog ?? 0,
-  }));
-  return { fuels, holds: b.holds, halves: d.info.gives * HALF };
-});
-
 /** The work in gathering one thing and in studying one folio, in half-ticks. */
 export const WORK = { gather: TICKS.gather * 2, study: TICKS.study * 2 } as const;
-/**
- * The work in gathering one of each thing, in half-ticks: its own time where its table says
- * (`ItemInfo.gather`: star crystal, 1,500 ticks), else a gatherer's (`WORK.gather`).
- */
-export const GATHER_WORK = Uint16Array.from(ALL_ITEMS, (n) => (ITEM_INFO[n]?.gather ?? TICKS.gather) * 2);
 /** For each kind that runs under tiles, what each tile past so many adds to its cost (`KindDef.deeper`). */
 const DEEPER = KIND_DEFS.map((d: KindDef) => d.deeper ?? null);
 /**
@@ -324,24 +297,16 @@ export const MIX_OF: readonly (Mix | null)[] = ALL_KINDS.map((k) => MIXES_N.find
  * What a piece that grows a thing from itself does (`content/grow.ts`): a run takes 1 of each of
  * `takes` and gives `gives`, for `work` half-ticks at grade 1, and every `extraEvery`th run gives 2.
  */
-export interface Grow {
-  readonly by: Kind;
-  readonly takes: readonly Item[];
-  readonly work: number;
-  readonly gives: Item;
-  readonly extraEvery: number;
-  readonly holds: number;
-}
-const GROWS: readonly Grow[] = [
-  {
-    by: kind(GROW.by),
-    takes: GROW.takes.map(item),
-    work: GROW.ticks * 2,
-    gives: item(GROW.gives),
-    extraEvery: GROW.extraEvery,
-    holds: GROW.holds,
-  },
-];
+const grow = (g: GrowInfo) => ({
+  by: kind(g.by),
+  takes: g.takes.map(item),
+  work: g.ticks * 2,
+  gives: item(g.gives),
+  extraEvery: g.extraEvery,
+  holds: g.holds,
+});
+export type Grow = Readonly<ReturnType<typeof grow>>;
+const GROWS: readonly Grow[] = [grow(GROW)];
 /** What each kind grows, by its number, or null. */
 export const GROW_OF: readonly (Grow | null)[] = ALL_KINDS.map((k) => GROWS.find((g) => g.by === k) ?? null);
 /** The things a growing piece gives in every `extraEvery` runs: one each, and one more. */
@@ -532,16 +497,8 @@ export const SPAN_MOST = most((u) => u.span);
 if (SPAN_MOST > 127) throw new Error("a tunnel runs under at most 127 tiles");
 export const BLUEPRINTS_MOST = most((u) => u.blueprints?.count);
 /** The largest box any blueprint holds, across and down. */
-export const BOX_MOST = {
-  w: Math.max(
-    BLUEPRINT.w,
-    most((u) => u.blueprints?.w),
-  ),
-  h: Math.max(
-    BLUEPRINT.h,
-    most((u) => u.blueprints?.h),
-  ),
-} as const;
+const [widest, tallest] = [most((u) => u.blueprints?.w), most((u) => u.blueprints?.h)];
+export const BOX_MOST = { w: Math.max(BLUEPRINT.w, widest), h: Math.max(BLUEPRINT.h, tallest) } as const;
 /**
  * How many places for blueprints any yard had before tier 5's plan room: a yard's check and its save
  * name a place past these only where it holds something, so a yard that uses none is as it was.
@@ -622,6 +579,7 @@ export function openOf(goals: readonly Goal[]): Open {
     for (const t of u.tools ?? []) tools |= toolBit(t);
   }
   const top = (f: (u: Unlocks) => number | undefined): number => Math.max(0, ...unlocks.map((u) => f(u) ?? 0));
+  const [wide, tall] = [top((u) => u.blueprints?.w), top((u) => u.blueprints?.h)];
   return {
     done,
     tier: tierOf(done),
@@ -631,16 +589,7 @@ export function openOf(goals: readonly Goal[]): Open {
     tools,
     blueprints: top((u) => u.blueprints?.count),
     pieces: top((u) => u.blueprints?.pieces),
-    box: {
-      w: Math.max(
-        BLUEPRINT.w,
-        top((u) => u.blueprints?.w),
-      ),
-      h: Math.max(
-        BLUEPRINT.h,
-        top((u) => u.blueprints?.h),
-      ),
-    },
+    box: { w: Math.max(BLUEPRINT.w, wide), h: Math.max(BLUEPRINT.h, tall) },
     stops: top((u) => u.stops),
     crate: top((u) => u.crate),
     reach: top((u) => u.reach),

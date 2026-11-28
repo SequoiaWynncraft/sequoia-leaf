@@ -100,13 +100,12 @@ test("a standing grower's headline and rows are its runs as the rules give them:
   expect(runs > 0 && runs < 20).toBe(true);
   const headline = ownPace([grower.pace?.(GROWER, 3) ?? "none"], null, grower.standing?.pace?.(standing) ?? null);
   const rows = grower.standing?.rows?.(standing) ?? [];
-  const per = (n: number): string => perMinute(n);
   expect([headline, rowsOf(rows)]).toEqual([
-    [{ label: "Grows, net", value: per(runs * 0.5) }],
+    [{ label: "Grows, net", value: perMinute(runs * 0.5) }],
     [
-      ["Gives out", [`${itemRef(CRYSTAL)} ${per(runs * 1.5)}`]],
-      ["Takes", [`${itemRef(CRYSTAL)} ${per(runs)}`, `${itemRef(FEED)} ${per(runs)}`]],
-      ["Net", [`${itemRef(CRYSTAL)} ${per(runs * 0.5)}`]],
+      ["Gives out", [`${itemRef(CRYSTAL)} ${perMinute(runs * 1.5)}`]],
+      ["Takes", [`${itemRef(CRYSTAL)} ${perMinute(runs)}`, `${itemRef(FEED)} ${perMinute(runs)}`]],
+      ["Net", [`${itemRef(CRYSTAL)} ${perMinute(runs * 0.5)}`]],
     ],
   ]);
   expect(i).toBeGreaterThan(0);
@@ -177,6 +176,6 @@ test("star crystal's card names the grower before it is known, from crystal feed
   ]);
   // It lies in ten plots of the third ring, 47 tiles in all.
   const lies = rows[3]?.things ?? [];
-  const tiles = lies.reduce((n, t) => n + Number.parseInt(String(t.note), 10), 0);
+  const tiles = lies.reduce((n, t) => n + Number.parseInt(typeof t.note === "string" ? t.note : "0", 10), 0);
   expect([rows[3]?.label, lies.length, tiles]).toEqual(["Lies in", 10, 47]);
 });

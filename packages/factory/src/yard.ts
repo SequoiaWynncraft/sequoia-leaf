@@ -139,14 +139,13 @@ export interface Wire {
   /** Tiles that hand things on, each after the tiles it hands to: but round a ring, where one of them must come first. */
   readonly order: Int32Array;
   /**
-   * The tiles of `order` that lie on a ring (things handed on from one come back to it), in its order;
-   * none in most yards. Round a ring no order puts each tile after the tile it hands to, so the tick
-   * gives those that carry one more try once the rest have handed on (`tick.ts`), and a full ring with
-   * a way off it moves as one, as a full belt does.
+   * The tiles of `order` that lie on a ring (things handed on from one come back to it), in its order,
+   * and those of them that carry and hand to a tile still ahead of them in `order`, where the walk cut
+   * the ring (`walk.ts`); none in most yards. Round a ring no order puts each tile after the tile it
+   * hands to, so the tick gives those that carry one more try once the rest have handed on, if one at
+   * a cut can (`tick.ts`), and a full ring with a way off it moves as one, as a full belt does.
    */
-  readonly rings: Int32Array;
-  /** The tiles of `rings` that carry and hand to a tile still ahead of them in `order`, where the walk cut a ring: where a second try begins. */
-  readonly cuts: Int32Array;
+  readonly rings: { readonly tiles: Int32Array; readonly cuts: Int32Array };
   /** Tiles that carry, tiles that work, and tiles that burn for power (a boiler) within reach of power. */
   readonly carry: Int32Array;
   /** Tunnels' way-in mouths, which carry things under the ground too. */

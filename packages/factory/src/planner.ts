@@ -6,11 +6,12 @@
  */
 import { TICKS } from "./content/machines.ts";
 import {
-  GATHER_WORK,
+  ALL_ITEMS,
   GATHERING,
   GROW_OF,
   grownIn,
   type Item,
+  ITEM_INFO,
   type Kind,
   MIX_OF,
   PACE,
@@ -36,6 +37,12 @@ export function makes(k: Kind, grade: number, r: Recipe | null): number {
   const times = own > 0 || !r ? 1 : timesOf(k, r);
   return work > 0 ? (MINUTE * (PACE[grade] ?? 0) * times) / work : 0;
 }
+
+/**
+ * The work in gathering one of each thing, in half-ticks: its own time where its table says
+ * (`ItemInfo.gather`: star crystal, 1,500 ticks), else a gatherer's (`TICKS.gather`).
+ */
+export const GATHER_WORK = Uint16Array.from(ALL_ITEMS, (n) => (ITEM_INFO[n]?.gather ?? TICKS.gather) * 2);
 
 /** How many of a thing from the ground a gatherer of a grade gathers a minute, at the thing's own pace (`GATHER_WORK`). */
 export function gathers(n: number, grade: number): number {

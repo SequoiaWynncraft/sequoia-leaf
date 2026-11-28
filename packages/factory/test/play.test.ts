@@ -16,6 +16,13 @@ import { delivering, generated } from "./yards.ts";
 
 type Rec = Record<string, unknown>;
 
+/**
+ * How many commands random play gives a start: the yards with the most kinds open play longer, as with
+ * 22 kinds to pick from 500 commands may build none of one, and 2,000 built no grower in the yard with
+ * tier 7 done.
+ */
+const commandsFor = (name: string): number => (name.includes("tier 7") ? 3000 : name.includes("tier 6") ? 2000 : 500);
+
 describe("random play", () => {
   const took = new Map<string, number>();
   const starts: [string, () => F.Yard][] = [
@@ -30,12 +37,9 @@ describe("random play", () => {
     ["a yard clearing a plot, all it wants delivered", clearingFilled],
     ["a generated yard", () => F.decode(F.encode(generated().y), generated().y.land) ?? F.create()],
   ];
-  // The yards with the most kinds open play longer: with 22 kinds to pick from, 500 commands may build
-  // none of one, and 2,000 built no grower in the yard with tier 7 done.
-  const commands = (name: string): number => (name.includes("tier 7") ? 3000 : name.includes("tier 6") ? 2000 : 500);
   for (const [name, start] of starts)
     test(`${name}: a refused command changes nothing, and the yard reads back as itself`, () => {
-      new Player(start(), name.length * 7919, took, true).play(commands(name));
+      new Player(start(), name.length * 7919, took, true).play(commandsFor(name));
     }, 90_000);
 
   test("reached every kind of command and piece", () => {

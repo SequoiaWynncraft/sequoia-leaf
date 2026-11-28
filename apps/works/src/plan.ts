@@ -368,9 +368,13 @@ function numberOf(s: Seen, y: Yard, L: Layout, i: number, depot: number): number
   } else if (FIXED[k] === 1) {
     const W = land.w;
     n |= ((i % W) - (depot % W) + 1 + (Math.floor(i / W) - Math.floor(depot / W) + 1) * 3) << 15;
-  } else if (MIDS[k]?.lit(y, i) === true && (y.part[i] === 0 || y.part[i] === OWN)) n |= 1 << 15;
+  } else n |= midLit(y, i, k) << 15;
   return n >>> 0;
 }
+
+/** 1 where the piece on a tile has its middle lit on the map, on its own tile (`KindPage.mapMid`: a grower holding star crystals); else 0. */
+const midLit = (y: Yard, i: number, k: number): number =>
+  MIDS[k]?.lit(y, i) === true && (y.part[i] === 0 || y.part[i] === OWN) ? 1 : 0;
 
 /** Paints one tile of a plan from its number, at its corner. */
 function tile(g: Ctx, P: number, x: number, y: number, n: number): void {
@@ -453,25 +457,29 @@ function tile(g: Ctx, P: number, x: number, y: number, n: number): void {
     }
     return;
   }
-  const block = LOOKS[kind];
-  if (!block) return;
+  block(g, P, x, y, kind, detail === 1);
+}
+
+/** A piece's block on a tile of a plan: at 8 pixels with a dark edge, darker along its foot, and its middle lit where its kind lights it (`MIDS`). */
+function block(g: Ctx, P: number, x: number, y: number, kind: number, lit: boolean): void {
+  const colours = LOOKS[kind];
+  if (!colours) return;
   // A block: at 8 pixels with a dark edge, and always darker along its foot, so that a row of them is told apart.
   const inset = P >= 8 ? 1 : 0;
   if (inset > 0) {
     g.fillStyle = INK;
     g.fillRect(x, y, P, P);
   }
-  g.fillStyle = block[0];
+  g.fillStyle = colours[0];
   g.fillRect(x + inset, y + inset, P - inset * 2, P - inset * 2);
-  g.fillStyle = block[1];
+  g.fillStyle = colours[1];
   const foot = P >= 8 ? 2 : 1;
   g.fillRect(x + inset, y + P - inset - foot, P - inset * 2, foot);
-  // Its middle lit, as its kind says (a grower's dome holding star crystals).
   const mid = MIDS[kind];
-  if (detail === 1 && mid) {
-    g.fillStyle = mid.colour;
-    g.fillRect(x + m, y + m, t, t);
-  }
+  if (!lit || !mid) return;
+  const m = Math.floor(P / 3);
+  g.fillStyle = mid.colour;
+  g.fillRect(x + m, y + m, P - m * 2, P - m * 2);
 }
 
 /**

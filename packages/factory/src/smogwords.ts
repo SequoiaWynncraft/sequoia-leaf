@@ -5,6 +5,7 @@
  */
 import { perMinute, whole } from "@sequoia-leaf/core";
 
+import { BURNS } from "./burns.ts";
 import { SMOG } from "./content/smog.ts";
 import { fuelNow } from "./kinds/burner.ts";
 import { MINUTE } from "./planner.ts";
@@ -12,7 +13,7 @@ import { litAt } from "./power.ts";
 import { pieceOf } from "./sizes.ts";
 import { shareAt, standingOn, stepOf } from "./smog.ts";
 import { machineRate } from "./status.ts";
-import { BURNS, isKind, NONE, SMOG_OF } from "./tables.ts";
+import { isKind, NONE, SMOG_OF } from "./tables.ts";
 import { KIT } from "./wire.ts";
 import type { Yard } from "./yard.ts";
 

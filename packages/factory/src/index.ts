@@ -6,6 +6,7 @@ export * from "./build.ts";
 export * from "./clearing.ts";
 export { fromBase64, spanByte, spanOfByte, toBase64 } from "./bytes.ts";
 export { type KeptPiece } from "./cells.ts";
+export * from "./burns.ts";
 export { check } from "./check.ts";
 export { blueprintCode, cleanCode, CODE_MOST, CODE_PREFIX, codePieces, codeRefusal, packedCode } from "./code.ts";
 export * from "./clock.ts";
@@ -29,6 +30,7 @@ export {
   yardSolid,
 } from "./footing.ts";
 export * from "./content/asks.ts";
+export * from "./content/grow.ts";
 export * from "./content/items.ts";
 export * from "./content/machines.ts";
 export * from "./content/nodes.ts";

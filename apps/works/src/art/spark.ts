@@ -3,13 +3,14 @@
  * and a cold cream light. The depot gone over in them, and the copper drum it wears; and the depot as
  * each era from Spark on draws it (`depotOf`, the Star era's from `star.ts`).
  */
-import type { Yard } from "@sequoia-leaf/factory";
+import { openOf, type Yard } from "@sequoia-leaf/factory";
+import { lessMotion } from "@sequoia-leaf/kit/dom.ts";
 import { BARK, CREAM, INK } from "@sequoia-leaf/kit/palette.ts";
 import { ell, outlined, R } from "@sequoia-leaf/kit/pix.ts";
 import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
 import { isSpark, isStar } from "../era.ts";
-import type { Machines } from "./machines.ts";
+import { DEPOT, type Machines } from "./machines.ts";
 import { CLAY, DARK, IRON, type Sprite } from "./pal.ts";
 import { MAST, mastLight, RING, starDepot, starRing } from "./star.ts";
 
@@ -99,6 +100,26 @@ export interface EraDepot {
 
 /** Each era's depot past Timber and Brass, made once for each set of the yard's pictures. */
 const made = new WeakMap<Machines, { spark: EraDepot; star: EraDepot }>();
+
+/** What the depot gives at first: above it, it wears its flywheel. */
+const DEPOT_FIRST = openOf([]).depot;
+/** The beat, in ticks of the yard's clock (SPEC-2's tier 8: every 20 seconds), and how long the Star depot's mast light shows on it. */
+const BEAT = 200;
+const BLINK = 10;
+
+/**
+ * What the depot wears over its picture this frame, each a picture and its corner on it: its
+ * flywheel while it gives more than at first, turning (in the Star era the ring under its dome,
+ * slowly); and the Star era's mast light on the beat, steady with less motion asked for.
+ */
+export function depotWears(d: EraDepot, y: Yard, t: number): (readonly [HTMLCanvasElement, number, number])[] {
+  const out: (readonly [HTMLCanvasElement, number, number])[] = [];
+  const fly = y.open.depot > DEPOT_FIRST ? d.fly[Math.floor(t * (d.flyAt ? 2 : 8)) % 4] : undefined;
+  const at = d.flyAt ?? { x: DEPOT.fly.x - 6, y: DEPOT.fly.y - 6 };
+  if (fly) out.push([fly, at.x, at.y]);
+  if (d.beat && (lessMotion() || y.tick % BEAT < BLINK)) out.push([d.beat.c, d.beat.x, d.beat.y]);
+  return out;
+}
 
 /** The depot as a yard's era draws it (SPEC-2 section 7), and the wheel it wears: from tier 5, Spark's brick and copper; from tier 7, Star's dome. */
 export function depotOf(m: Machines, y: Yard): EraDepot {

@@ -172,6 +172,22 @@ describe("tier 7's tables", () => {
   });
 });
 
+describe("what a grower grows", () => {
+  test("names things there are: a misspelt name in GROW or an item's gathering does not type-check", () => {
+    const right: F.GrowInfo = { ...F.GROW, gives: "crystal", takes: ["crystal", "feed"] };
+    // @ts-expect-error: "crystl" is no thing's name, so a grower cannot be written to give it.
+    const wrong: F.GrowInfo = { ...F.GROW, gives: "crystl" };
+    // @ts-expect-error: nor to take it.
+    const takes: F.GrowInfo = { ...F.GROW, takes: ["crystal", "fed"] };
+    expect([F.item(right.gives), right.takes.map(F.item)]).toEqual([CRYSTAL, [CRYSTAL, FEED]]);
+    // Written past the type, the name is refused where the tables read it (`item`), never let go.
+    expect(() => F.item(wrong.gives)).toThrow("crystl");
+    expect(() => takes.takes.map(F.item)).toThrow("fed");
+    // An item's own gathering time is kept by its name in the items' table, which names every thing.
+    expect([F.ITEM.crystal.gather, F.GATHER_WORK[CRYSTAL], F.GATHER_WORK[F.item("ore")]]).toEqual([1500, 3000, 30]);
+  });
+});
+
 describe("star crystal from the ground", () => {
   test("a gatherer III gives 1 in 750 ticks, and says so; one on ore gathers as it did", () => {
     const y = yard();

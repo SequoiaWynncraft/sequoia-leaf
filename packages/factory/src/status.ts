@@ -1,3 +1,4 @@
+import { BURNS, type Fuel } from "./burns.ts";
 /**
  * How a piece in the yard stands, and whether it is in trouble: decided in one place (`condition`,
  * a number, making nothing, so that a screen can ask it of every piece in view each frame), and put
@@ -11,7 +12,7 @@ import { RULES } from "./kinds/list.ts";
 import { holding as holdingOf, type MachineRate, rateOf, type State, STATES, TROUBLE } from "./kinds/say.ts";
 import { litAt } from "./power.ts";
 import { pieceOf } from "./sizes.ts";
-import { ALL_KINDS, BURNS, type Fuel, isMaker, type Item, type Kind, NONE, type Recipe } from "./tables.ts";
+import { ALL_KINDS, isMaker, type Item, type Kind, NONE, type Recipe } from "./tables.ts";
 import { KIT, rewire } from "./wire.ts";
 import { type Counts, holderOf, type Yard } from "./yard.ts";
 
