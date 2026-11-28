@@ -6,6 +6,7 @@
  */
 import { burningAt, BURNS, kind, MINUTE } from "@sequoia-leaf/factory";
 import type { Row } from "@sequoia-leaf/kit/card.ts";
+import { lessMotion } from "@sequoia-leaf/kit/dom.ts";
 import { STONE } from "@sequoia-leaf/kit/palette.ts";
 import { perMinute } from "@sequoia-leaf/kit/say.ts";
 import { hash } from "@sequoia-leaf/kit/util.ts";
@@ -42,10 +43,18 @@ function fuelRows(): Row[] {
 export const powerhouse: KindPage = {
   picture: () => powerhouseIcon(),
   draw(_art, y, at) {
-    // Burning, as its card says it (with the next piece taken the moment the last burns out).
+    // Burning, as its card says it (with the next piece taken the moment the last burns out): its
+    // window warm, flickering and smoking, or with less motion asked for, warm and steady.
     const lit = at.real && burningAt(y, at.i);
-    at.put(powerhouseOf(lit ? 1 + (Math.floor(at.t * 5) % 2) : 0), at.x - PAD, at.top - PAD - TALL, at.z, at.a);
-    if (lit && at.t > (at.mem.puffAt[at.i] ?? 0)) {
+    const steady = lessMotion();
+    at.put(
+      powerhouseOf(lit ? 1 + (steady ? 0 : Math.floor(at.t * 5) % 2) : 0),
+      at.x - PAD,
+      at.top - PAD - TALL,
+      at.z,
+      at.a,
+    );
+    if (lit && !steady && at.t > (at.mem.puffAt[at.i] ?? 0)) {
       const f = Math.max(
         0,
         FUELS.findIndex((fuel) => fuel.fuel === at.making),
