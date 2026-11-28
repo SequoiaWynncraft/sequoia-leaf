@@ -8,6 +8,7 @@ import { describe, expect, test } from "bun:test";
 import { artOf } from "@sequoia-leaf/figures/figures.ts";
 import { FIGURE_PAL } from "@sequoia-leaf/figures/pal.ts";
 import { CREAM, INK, WATER } from "@sequoia-leaf/kit/palette.ts";
+import { rgb } from "@sequoia-leaf/kit/pix.ts";
 import { eraOf, RELEASES } from "@sequoia-leaf/raid";
 import { catalogAt } from "@sequoia-leaf/raid/content/catalog.ts";
 import { SUMMON_IDS, TROUBLE_IDS, type UnitKind } from "@sequoia-leaf/raid/content/figures.ts";
@@ -15,6 +16,7 @@ import { hasTrueForm } from "@sequoia-leaf/raid/content/graid.ts";
 
 import { COMMODORE, type Crew, CREW_FRONT, GROOTERS } from "../../../review/crew.ts";
 import { BENCH, BOARD, CLOTHS, type HexTones, quietOf, RIM } from "./board.ts";
+import { WARM } from "./table.ts";
 
 /** A channel (0 to 255) as linear light, and lightness's curve. */
 const lin = (v: number): number => (v / 255 <= 0.04045 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4);
@@ -78,7 +80,8 @@ interface Surface {
   readonly apart: number;
 }
 const BARE_RULES = { groove: 12, fight: 6, chroma: 22, edge: { near: 38, far: 28 }, apart: 8 } as const;
-// A fight's groove is 55% of planning's: on a cloth's far half that is 4.
+// A fight's groove is mixed 45% toward its face, so its step is 55% of planning's: on a cloth's far
+// half, in the cloths' own tones, that is 5.1 (baize), 4.9 (velvet) and 4.3 (gingham). Held to 4, not 6.
 const CLOTH_RULES = { groove: 7, fight: 4, chroma: 38, edge: { near: 25, far: 20 }, apart: 5 } as const;
 const SURFACES: Readonly<Record<string, Surface>> = {
   bare: { ...BOARD, ...BARE_RULES },
@@ -113,13 +116,16 @@ describe("the board's value budget", () => {
     for (const { name, t, s } of FACES) {
       const step = L(t.face) - L(t.groove);
       const calm = L(quietOf(t).face) - L(quietOf(t).groove);
-      // A lip is one pixel wide, held by its lightness alone: the velvet's is chroma 41.
+      // A lip is one pixel wide, held by its lightness alone: the velvet's, `dusk(SKY[4], 0.32)`, is
+      // chroma 41, and any lip of that plum lighter than its face is over 38. That is its character.
       const tones = [t.face, t.groove, t.edge].filter((tone) => chroma(tone) > s.chroma);
       expect([name, L(t.face) >= 26, L(t.face) <= 48, L(t.lip) <= 54]).toEqual([name, true, true, true]);
       expect([name, step >= s.groove, step <= 26, calm >= s.fight, calm <= 14]).toEqual([name, true, true, true, true]);
       expect([name, tones]).toEqual([name, []]);
     }
-    // The wood round the board is the bare board's; the stump's bark at its rim and the bench's plank are their own wood, as dark.
+    // The wood round the board is the bare board's. The stump's bark at its rim and the bench's plank
+    // are their own wood, held by lightness alone: in the design's tones the rim's pale band is chroma
+    // 31 and the bench's top 28, the stump's orange kept where it meets the grass.
     for (const tone of [BOARD.wood, BOARD.ring, BOARD.fleck]) expect([tone, chroma(tone) <= 22]).toEqual([tone, true]);
     for (const tone of [RIM.pale, RIM.dark, BENCH.plank, BENCH.top, BENCH.foot, BENCH.slat]) {
       expect([tone, L(tone) <= 48]).toEqual([tone, true]);
@@ -144,6 +150,21 @@ describe("the board's value budget", () => {
     }
     const mud = EVERYONE.get("mud") ?? [];
     expect(Object.fromEntries(FACES.map(({ name, t }) => [name, round2(lost(mud, t.face))]))).toEqual(MUD);
+  });
+
+  test("the lanterns' pool lifts a face by 11 at most, at its heart", () => {
+    // The pool was raised from the design's 0.09 to 0.13 to keep the table warm, which the lead
+    // asked for. At its heart (the gap between the halves while planning, the middle rows' faces once
+    // they close in a fight) it lifts a face by up to 11 L*; on the front row's middle hex while
+    // planning, about 7. The design's 4 was already 5 there, and 7 at the heart, at 0.09. Not
+    // further: at 0.16 your middle rows pass L* 52 and the velvet turns pink.
+    for (const { name, t } of FACES) {
+      const lit = `#${rgb(t.face)
+        .map((v, i) => Math.min(255, v + Math.round((WARM[i] ?? 0) * BOARD.pool)))
+        .map((v) => v.toString(16).padStart(2, "0"))
+        .join("")}`;
+      expect([name, Math.round(L(lit) - L(t.face)) <= 11]).toEqual([name, true]);
+    }
   });
 
   test("4. your face is 8 to 12 lighter than theirs (5 to 12 on a cloth)", () => {

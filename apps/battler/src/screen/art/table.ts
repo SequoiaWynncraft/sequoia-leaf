@@ -234,10 +234,12 @@ function radial(stops: readonly (readonly [number, string])[]): HTMLCanvasElemen
 }
 let hole: HTMLCanvasElement | null = null;
 let warm: HTMLCanvasElement | null = null;
+/** The heart of the warm glow: what the lanterns' light adds where it is strongest. */
+export const WARM = [255, 196, 120] as const;
 /** A soft warm glow, for adding light to the picture. */
 export function warmGlow(): HTMLCanvasElement {
   warm ??= radial([
-    [0, "rgba(255,196,120,1)"],
+    [0, `rgba(${WARM.join(",")},1)`],
     [0.4, "rgba(255,160,90,0.5)"],
     [1, "rgba(255,140,80,0)"],
   ]);

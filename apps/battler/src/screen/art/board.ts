@@ -50,47 +50,21 @@ export interface BoardTones {
 /** The edge round a half, where it meets the wood: as dark as the ink band allows a board tone. */
 const HALF_EDGE = dusk(BARK[0], 0.3);
 
-/** The design's faces: a pale paper with dusk on it, nearly grey. */
-const PAPER_NEAR: HexTones = {
-  face: dusk(PAPER[1], 0.56),
-  lip: dusk(PAPER[1], 0.44),
-  groove: dusk(EARTH[0], 0.3),
-  edge: HALF_EDGE,
+/**
+ * The board: your half a honey gold with dusk on it (the warmest the fill check allows), theirs a
+ * paler, cooler paper, so the forest's figures waiting there while you plan keep their contrast; the
+ * stump's top is its own gold wood at dusk, with its rings; the lanterns' pool over the board's
+ * middle and the hole in the dusk round the board are what keep the table warm.
+ */
+export const BOARD: BoardTones = {
+  near: { face: dusk(GOLD[2], 0.6), lip: dusk(GOLD[2], 0.5), groove: dusk(EARTH[0], 0.3), edge: HALF_EDGE },
+  far: { face: dusk(PAPER[0], 0.62), lip: dusk(PAPER[0], 0.5), groove: dusk(EARTH[0], 0.46), edge: HALF_EDGE },
+  wood: dusk(GOLD[0], 0.65),
+  ring: dusk(BARK[3], 0.55),
+  fleck: dusk(GOLD[0], 0.58),
+  pool: 0.13,
+  hole: [320, 256],
 };
-const PAPER_FAR: HexTones = {
-  face: dusk(PAPER[0], 0.62),
-  lip: dusk(PAPER[0], 0.5),
-  groove: dusk(EARTH[0], 0.46),
-  edge: HALF_EDGE,
-};
-/** The warmest faces the fill check allows: a honey gold with dusk on it. */
-const GOLD_NEAR: HexTones = {
-  face: dusk(GOLD[2], 0.6),
-  lip: dusk(GOLD[2], 0.5),
-  groove: dusk(EARTH[0], 0.3),
-  edge: HALF_EDGE,
-};
-const GOLD_FAR: HexTones = {
-  face: dusk(GOLD[1], 0.66),
-  lip: dusk(GOLD[1], 0.58),
-  groove: dusk(EARTH[0], 0.46),
-  edge: HALF_EDGE,
-};
-const WOOD = { wood: dusk(GOLD[0], 0.65), ring: dusk(BARK[3], 0.55), fleck: dusk(GOLD[0], 0.58) } as const;
-const LIT = { pool: 0.13, hole: [320, 256] } as const;
-
-/** TEMPORARY, while the owner picks: the three warmth settings side by side (`?warmth=a|b|c`), each one step on from the last. */
-const WARM_NEAR: BoardTones = { near: GOLD_NEAR, far: PAPER_FAR, ...WOOD, ...LIT };
-const WARMTH: Readonly<Record<string, BoardTones>> = {
-  // The light alone: the pool and the hole raised, the design's faces.
-  a: { near: PAPER_NEAR, far: PAPER_FAR, ...WOOD, ...LIT },
-  // And your half warm.
-  b: WARM_NEAR,
-  // And both halves warm.
-  c: { near: GOLD_NEAR, far: GOLD_FAR, ...WOOD, ...LIT },
-};
-const ASKED = new URLSearchParams(globalThis.location?.search ?? "").get("warmth") ?? "b";
-export const BOARD: BoardTones = WARMTH[ASKED] ?? WARM_NEAR;
 
 /** A cloth laid under the board: its halves' tones, the ground round and between them, the nap in it, and the trim two pixels in from its edge. */
 export interface ClothTones {
