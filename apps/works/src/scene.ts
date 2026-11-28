@@ -30,7 +30,6 @@ import {
   litAt,
   litOf,
   NONE,
-  PACE,
   REACH,
   REACHES,
   SHUTS,
@@ -47,7 +46,7 @@ import { widthOf, write } from "@sequoia-leaf/kit/text.ts";
 import { clamp, type Ctx, makeCanvas, type Pt } from "@sequoia-leaf/kit/util.ts";
 
 import { walkers } from "./actors.ts";
-import { beltTile, marksOf, PAINTS, ride, STEPS, TILE, woodOf } from "./art/belts.ts";
+import { ALONG, beltTile, marksOf, PAINTS, ride, STEPS, TILE, woodOf } from "./art/belts.ts";
 import { BEYOND, type Box, glint, type Ground } from "./art/ground.ts";
 import type { Art } from "./art/index.ts";
 import { DEPOT as DEPOT_ART, lookOf } from "./art/machines.ts";
@@ -80,8 +79,6 @@ export interface Moment {
   pace: number;
 }
 
-/** How far across its tile a thing moves in a tick on a belt, tunnel, splitter, joiner or sorter of each grade. */
-const ALONG = PACE.map((pace) => pace / 8);
 /** The power the depot gives at first: a depot that gives more wears its flywheel. */
 
 /** The milliseconds a frame's parts have taken, counted only while somebody is looking (`on`): `bench`, or the meter. */

@@ -35,7 +35,7 @@ import { historyOf, stampOf } from "./history.ts";
 import { FIRST_LAND, holdsFirst, type KeptLand, keptLandOf, keptOn, piecesOn, tileOn } from "./keptland.ts";
 import { LAND, type Land, plotPrice } from "./land.ts";
 import { anyLaunches, keptLaunches, launchesOnto } from "./launches.ts";
-import { type KeptNames, keptNames, knownAt10, knownHere, pastTen, WIDER } from "./named.ts";
+import { gradePast, type KeptNames, keptNames, knownAt10, knownHere, pastTen, WIDER } from "./named.ts";
 import { counting, fillBoard, giveGoal, ORDER_WAITS, queue, study } from "./orders.ts";
 import { keptOf, packPieces, type Piece, placed, unpackWays } from "./pieces.ts";
 import { type KeptBlueprint, keptBlueprint, printText } from "./prints.ts";
@@ -79,10 +79,19 @@ import { type Away, counts, emptyYard, hold, type Print, reopen, reserve, type S
 export const VERSION = 11;
 /**
  * 12: a yard keeping launches or levels (tier 8, `launches.ts`), a field no Leaf of version 11 keeps,
- * which that Leaf leaves as a newer Leaf's; every other yard is kept as before. The newest this Leaf
- * writes and reads.
+ * which that Leaf leaves as a newer Leaf's; every other yard is kept as before.
  */
 export const LAUNCHED = 12;
+/**
+ * 13: a yard keeping a piece at grade 4 anywhere in it (`gradePast`): standing, in a blueprint or a
+ * plan, or in what Undo would stand again. Its bytes are a grade 3 piece's with a 4 for the 3, but a
+ * Leaf of version 12 clamps every grade to 3: it would stand the piece at grade 3 and pay nothing
+ * back for it. So that Leaf leaves this as a newer Leaf's. Every other yard is kept as before. The
+ * newest this Leaf writes and reads.
+ */
+export const FOURTH = 13;
+/** The highest grade a Leaf of version 12 builds: a yard keeping one past it is kept as `FOURTH`. */
+const GRADE_AT_12 = 3;
 /** 10: a kind past 15 kept anywhere. It still reads; nothing keeps a yard as it now. */
 const WIDE = 10;
 /** 9: the land a yard was kept on, so that its tiles stay where they are as the land grows. */
@@ -137,7 +146,8 @@ export interface Keep {
 /**
  * A yard as text: its numbers and orders as JSON, its pieces and blueprints packed; kept as version 9
  * while it names nothing the last Leaf of version 10 did not know (`knownAt10`), as version 11 once it
- * does, and as version 12 once it keeps launches (`LAUNCHED`).
+ * does, as version 12 once it keeps launches (`LAUNCHED`), and as version 13 once it keeps a piece at
+ * grade 4 (`FOURTH`).
  */
 export function encode(y: Yard, keep: Keep = {}): string {
   const pieces = keptPieces(y);
@@ -146,11 +156,13 @@ export function encode(y: Yard, keep: Keep = {}): string {
 }
 
 /**
- * The version a yard, kept as `rec` with its `pieces`, is kept as: 12 keeping launches; 11 keeping
- * anything the last Leaf of version 10 did not know, asked cheaply, of what these tables have past it
- * (`pastTen`), or while they have a thing, kind or plot past it, by the whole scan (`WIDER`); else 9.
+ * The version a yard, kept as `rec` with its `pieces`, is kept as: 13 keeping a piece at grade 4; 12
+ * keeping launches; 11 keeping anything the last Leaf of version 10 did not know, asked cheaply, of
+ * what these tables have past it (`pastTen`), or while they have a thing, kind or plot past it, by
+ * the whole scan (`WIDER`); else 9.
  */
 function versionFor(y: Yard, rec: Rec, pieces: readonly KeptPiece[]): number {
+  if (gradePast(y, GRADE_AT_12)) return FOURTH;
   if (anyLaunches(y.launches)) return LAUNCHED;
   // A yard that has begun a clearing keeps the count of them, which that Leaf would let go.
   if (y.begun > 0) return VERSION;
@@ -412,7 +424,7 @@ function firstPiece(v: unknown): KeptPiece | null {
 }
 
 /** The versions this one reads as its own. */
-const READS: ReadonlySet<unknown> = new Set([LAUNCHED, VERSION, WIDE, PLACED, UNPLACED, UNFELLED, UNGRADED]);
+const READS: ReadonlySet<unknown> = new Set([FOURTH, LAUNCHED, VERSION, WIDE, PLACED, UNPLACED, UNFELLED, UNGRADED]);
 
 /** Text as JSON, or nothing for text that is none. */
 function parsed(text: string): unknown {

@@ -4,10 +4,11 @@
  * power) and for balancing. Every piece is taken as working every tick, with power enough and nothing
  * held up; nothing that moves the yard reads it.
  */
-import { TICKS } from "./content/machines.ts";
+import { ACROSS, TICKS } from "./content/machines.ts";
 import { CHARGED, ROCKET_OF } from "./launch.ts";
 import {
   ALL_ITEMS,
+  CARRY,
   GATHERING,
   GROW_OF,
   grownIn,
@@ -24,8 +25,6 @@ import {
 
 /** Ticks in a minute. */
 export const MINUTE = 600;
-/** How far across its tile a thing on a belt is counted in: eighths (`tick.ts`). */
-const ACROSS = 8;
 
 /**
  * How many times a minute a piece of a kind and grade finishes: a gatherer's thing, a machine's
@@ -81,14 +80,15 @@ export function mixPerMinute(k: Kind, grade: number): number {
 
 /**
  * How many things a minute a line of belt of a grade carries, fed flat out, and a tunnel, splitter,
- * joiner or sorter of that grade in it: each crosses its tile at a belt's pace. A tile
+ * joiner or sorter of that grade in it: each crosses its tile at a belt's pace (`CARRY`). A tile
  * holds one thing, and a thing set on a line starts at its tile's edge and crosses it in whole ticks:
- * 4, 3 and 2 at the three grades' paces, so 150, 200 and 300 a minute. Not 225 at grade 2: what a
- * thing has over at the end of a tile it keeps on the next, so the tiles after the first never hold a
- * line back, but the first lets the next thing on only every third tick, whatever feeds it.
+ * 4, 3, 2 and 1 at the four grades' paces, so 150, 200, 300 and 600 a minute. Not 225 at grade 2:
+ * what a thing has over at the end of a tile it keeps on the next, so the tiles after the first never
+ * hold a line back, but the first lets the next thing on only every third tick, whatever feeds it.
+ * So a line carries 600 a minute over a whole number, and nothing between 300 and 600.
  */
 export function carried(grade: number): number {
-  const pace = PACE[grade] ?? 0;
+  const pace = CARRY[grade] ?? 0;
   return pace > 0 ? MINUTE / Math.ceil(ACROSS / pace) : 0;
 }
 

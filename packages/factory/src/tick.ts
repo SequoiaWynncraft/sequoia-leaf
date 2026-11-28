@@ -11,7 +11,8 @@
  * piece's kind for its step, and names no kind.
  *
  * Every number is whole. Work is counted in half-ticks: a machine at grade 1 does 2 a tick, at grade
- * 2 3 and at grade 3 4 (`PACE`), and a recipe of 12 ticks wants 24. Power is counted in halves. When the yard is short of power the machines work on only some
+ * 2 3 and at grade 3 4, a gatherer at grade 4 5 (`PACE`), and a recipe of 12 ticks wants 24. A line
+ * carries in eighths of a tile (`CARRY`): 2 a tick at grade 1, and 8 at grade 4. Power is counted in halves. When the yard is short of power the machines work on only some
  * ticks: each tick the power there is goes into a store (`charge`), and when the store holds all
  * that is drawn it is spent and every gatherer and machine works that tick. So with 3 power of every
  * 4 drawn they work 3 ticks in 4, exactly, and nothing is lost over time. A yard with power enough
@@ -47,7 +48,7 @@ import { RULES } from "./kinds/list.ts";
 import { work as make } from "./kinds/maker.ts";
 import { passUnder } from "./kinds/under.ts";
 import { countSmog, FULL, smogged } from "./smog.ts";
-import { CARRIES, ITEM_COUNT, NONE, PACE, SPAN_MOST, TIMES_MOST } from "./tables.ts";
+import { CARRIES, CARRY, ITEM_COUNT, NONE, PACE, SPAN_MOST, TIMES_MOST } from "./tables.ts";
 import { KIT, rewire, roomAt } from "./wire.ts";
 import { holderOf, take, tunnelOf, type Wire, type Yard } from "./yard.ts";
 
@@ -121,13 +122,13 @@ function takeFuel(y: Yard, i: number, r: number, burns: Burns, waiting: Uint8Arr
   }
 }
 
-/** Things on what carries (belts, splitters, joiners, sorters and tunnel mouths) move along, in eighths of a tile, each at its own grade's pace. */
+/** Things on what carries (belts, splitters, joiners, sorters and tunnel mouths) move along, in eighths of a tile, each at its own grade's pace (`CARRY`). */
 function carry(y: Yard, wire: Wire): void {
   const { item, prog, grade } = y;
   const carriers = wire.carry;
   for (let c = 0; c < carriers.length; c++) {
     const i = carriers[c] ?? 0;
-    if (item[i] !== NONE && (prog[i] ?? 0) < 8) prog[i] = (prog[i] ?? 0) + (PACE[grade[i] ?? 0] ?? 0);
+    if (item[i] !== NONE && (prog[i] ?? 0) < 8) prog[i] = (prog[i] ?? 0) + (CARRY[grade[i] ?? 0] ?? 0);
   }
 }
 
@@ -139,7 +140,7 @@ function carryUnder(y: Yard, wire: Wire): void {
   const mouths = wire.mouths;
   for (let c = 0; c < mouths.length; c++) {
     const i = mouths[c] ?? 0;
-    const along = PACE[grade[i] ?? 0] ?? 0;
+    const along = CARRY[grade[i] ?? 0] ?? 0;
     const at = tunnelOf(y, i) * SPAN_MOST;
     const s = span[i] ?? 0;
     for (let k = at; k < at + s; k++) if (under[k] !== NONE && (below[k] ?? 0) < 8) below[k] = (below[k] ?? 0) + along;

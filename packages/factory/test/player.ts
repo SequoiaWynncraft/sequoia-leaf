@@ -286,7 +286,8 @@ export class Player {
           this.pick<Rec>([
             { do: "build", kind: "belt", x: -1, y: 2, dir: 0 },
             { do: "fly" },
-            { do: "build", kind: "belt", x: 1, y: 2, dir: 0, grade: 4 },
+            // A grade past the highest there is: a command that does not read.
+            { do: "build", kind: "belt", x: 1, y: 2, dir: 0, grade: F.TOP + 1 },
             { do: "clear", tiles: [1, 2, 99_999] },
             { do: "stand", pieces: "all" },
           ]) ?? {}

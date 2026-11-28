@@ -9,7 +9,7 @@
  */
 import { GROW, type GrowInfo } from "./content/grow.ts";
 import { ITEM, type ItemName, ITEMS, type Wants } from "./content/items.ts";
-import { BLUEPRINT, BUFFER, GRADES, TICKS } from "./content/machines.ts";
+import { ACROSS, BLUEPRINT, BUFFER, GRADES, TICKS } from "./content/machines.ts";
 import { MIXES } from "./content/mixes.ts";
 import { NODES, START, type Tool, TOOLS, type Unlocks } from "./content/nodes.ts";
 import { PLOT_IDS, type PlotName, PLOTS } from "./content/plots.ts";
@@ -193,18 +193,23 @@ export const TOP = GRADES.length;
 export const isGraded = (k: number): boolean => GRADED[k] === 1;
 /** A piece's grade as it is kept: 1 to `TOP` for a kind that has one, 0 for a kind that has none. */
 export const gradeOf = (k: number, g = 1): number => (isGraded(k) ? Math.min(TOP, Math.max(1, Math.floor(g))) : 0);
-/** A grade's numbers made whole: so far as halves of grade 1 can, and a whole number of them always. */
-const halves = (f: (g: (typeof GRADES)[number]) => number): number[] => {
+/** A grade's numbers made whole: so far as halves of grade 1 can, and a whole number of them always, none past `most`. */
+const halves = (f: (g: (typeof GRADES)[number]) => number, most = Infinity): number[] => {
   const out = GRADES.map((g) => f(g) * 2);
-  if (!out.every(Number.isInteger)) throw new Error("a grade's pace and power must be whole halves");
+  if (!out.every((h) => Number.isInteger(h) && h <= most)) throw new Error("a grade's numbers must be whole halves");
   return out;
 };
 /**
- * How far a piece of each grade moves on a tick in which it works: eighths of a tile along a belt, a
- * tunnel, a splitter, a joiner or a sorter (so a tile in 4 ticks at grade 1), half-ticks of work in a
- * gatherer, a machine or a Study. At 0, a kind with no grade, which neither carries nor works.
+ * How far a piece of each grade gets on with its work on a tick in which it works: half-ticks of work
+ * in a gatherer, a machine or a Study. At 0, a kind with no grade, which does no work.
  */
 export const PACE: readonly number[] = [0, ...halves((g) => g.pace)];
+/**
+ * How far a thing on a belt, tunnel, splitter, joiner or sorter of each grade moves on a tick:
+ * eighths of a tile (`ACROSS`), so a tile in 4 ticks at grade 1, and in one at grade 4. A thing is
+ * handed on once a tick at most, so no grade carries further than a tile. At 0, a kind with no grade.
+ */
+export const CARRY: readonly number[] = [0, ...halves((g) => g.carry, ACROSS)];
 /** Power is counted in halves: a power is 2, and a piece of each grade draws this many halves for each power its kind draws. */
 export const HALF = 2;
 export const DRAWN: readonly number[] = [HALF, ...halves((g) => g.draw)];
@@ -217,12 +222,12 @@ const DEEPER = KIND_DEFS.map((d: KindDef) => d.deeper ?? null);
 /**
  * What a piece of a kind and grade costs to build: its kind's cost, and for one that runs under
  * `span` tiles (a far mouth's, below 0, counts the same) what each tile past its kind's `past` adds,
- * times its grade's price.
+ * times its grade's price: a line's for a piece that carries (`GRADES`' `linePrice`).
  */
 export function price(k: number, g: number, span = 0): number {
   const deep = DEEPER[k];
   const more = deep ? deep.each * Math.max(0, Math.abs(span) - deep.past) : 0;
-  return ((COST[k] ?? 0) + more) * (g === 0 ? 1 : (GRADES[g - 1]?.price ?? 1));
+  return ((COST[k] ?? 0) + more) * (g === 0 ? 1 : (GRADES[g - 1]?.[CARRIES[k] === 1 ? "linePrice" : "price"] ?? 1));
 }
 
 /** A count by name, as numbers. */

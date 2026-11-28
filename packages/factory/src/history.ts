@@ -267,11 +267,12 @@ function packSettings(o: Writer, was: readonly Setting[]): void {
   }
 }
 
-/** What a piece in a history names, known here or not: its kind, its span and the thing it is told to make. */
+/** What a piece in a history names, known here or not: its kind, its span, the thing it is told to make and its grade above the first. */
 export interface Named {
   readonly kind: number;
   readonly span: number;
   readonly recipe: number | undefined;
+  readonly grade: number | undefined;
 }
 /** Told each piece an entry names, and `NEWER` for a bit no reader here knows. */
 type Seen = (piece: Named | Newer) => void;
@@ -299,7 +300,7 @@ function readSetting(r: Reader, tile: number, seen?: Seen): Setting | null {
   const [kind, dir] = [(kd & 15) | (high << 4), (kd >> 4) & 3];
   if (r.over || (f & 64 && high === 0) || !isDir(dir)) return null;
   const spans = span === undefined ? 0 : spanOfByte(span);
-  seen?.({ kind, span: spans, recipe });
+  seen?.({ kind, span: spans, recipe, grade });
   if (!standsBack(kind, spans)) return null;
   const kept = keptOf(
     { ...unpackWays(ways ?? 0), recipe, tint, grade, open: closed === undefined ? undefined : false },
@@ -421,13 +422,18 @@ function readId(r: Reader): string | null {
   return !r.over && isId(id) ? id : null;
 }
 
+/** What an entry asks of each piece it would stand again: its span, kind and grade (above the first, where it is kept). */
+type Asked = { readonly span: number; readonly kind: number; readonly grade?: number | undefined };
 /** An entry of the pieces it would stand again, its id read from its first bytes. */
-const entry = (bytes: Uint8Array, pieces: readonly { readonly span: number; readonly kind: number }[]): Entry => ({
+const entry = (bytes: Uint8Array, pieces: readonly Asked[]): Entry => ({
   id: readId(new Reader(bytes)) ?? "",
   bytes,
   span: pieces.reduce((most, p) => Math.max(most, Math.abs(p.span)), 0),
   top: pieces.reduce((most, p) => Math.max(most, p.kind), -1),
+  grade: pieces.reduce((most, p) => Math.max(most, p.grade ?? 1), 1),
 });
+/** What an entry asks of a piece as it stood. */
+const asked = (s: Setting): Asked => ({ span: s.span, kind: s.kind, grade: s.kept.grade });
 /** An entry that cannot be undone, under its id: a command's own entry over the cap, or a stroke's. */
 function overCap(id: string, flags: number): Entry {
   const o = new Writer();
@@ -523,7 +529,7 @@ export function after(y: Yard, a: Act, b: Before | null, changes: readonly CoinC
   if (u.tiles.length === 0 && u.coins === 0) return;
   const bytes = written(y, u);
   const kept = stroke ? y.history.slice(0, -1) : y.history;
-  y.history = bytes.length > UNDO_ENTRY ? [overCap(u.id, u.flags)] : capped([...kept, entry(bytes, u.was)]);
+  y.history = bytes.length > UNDO_ENTRY ? [overCap(u.id, u.flags)] : capped([...kept, entry(bytes, u.was.map(asked))]);
 }
 
 // ---------- reading ----------

@@ -7,7 +7,7 @@
  * Each tile is drawn once for every step of the march and kept.
  */
 
-import type { Dir } from "@sequoia-leaf/factory";
+import { ACROSS, CARRY, type Dir } from "@sequoia-leaf/factory";
 import { BARK, CREAM, GOLD, INK, SKY, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { paint } from "@sequoia-leaf/kit/pix.ts";
 import { clamp } from "@sequoia-leaf/kit/util.ts";
@@ -17,6 +17,8 @@ import { CLAY, IRON } from "./pal.ts";
 export const TILE = 16;
 /** How many steps the march has before it comes round: a chevron every tile, a slat every four pixels. */
 export const STEPS = 16;
+/** How far across its tile a thing moves in a tick on a belt, tunnel, splitter, joiner or sorter of each grade. */
+export const ALONG = CARRY.map((pace) => pace / ACROSS);
 
 /** For each side of a tile (east, south, west, north): no arm, an arm things come in along, one they leave by, or a way out that is shut. */
 export type Arm = 0 | 1 | 2 | 3;

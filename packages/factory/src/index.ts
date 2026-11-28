@@ -41,6 +41,7 @@ export * from "./content/tiers.ts";
 export {
   decode,
   encode,
+  FOURTH,
   type Keep,
   type KeptOrder,
   keptOrder,
@@ -53,7 +54,7 @@ export {
   vouch,
 } from "./codec.ts";
 export { type KeptBlueprint, type KeptPrint } from "./prints.ts";
-export { type KeptNames, knownAt10, knownHere, pastTen, WIDER } from "./named.ts";
+export { gradePast, type KeptNames, knownAt10, knownHere, pastTen, WIDER } from "./named.ts";
 export * from "./game.ts";
 export { UNDO_BYTES, UNDO_ENTRY, UNDO_MOST } from "./history.ts";
 export * from "./land.ts";

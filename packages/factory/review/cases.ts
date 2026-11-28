@@ -7,8 +7,9 @@
  * - `yard-v9-full`, `yard-v11-full`: a yard of each version the writer writes now, with every
  *   optional field set: the away letter, Undo's entries, a queue, a node given things, orders, plain
  *   blueprints and a plan of the whole yard; in version 11, redwoods felled, a plot cleared, another
- *   being cleared, part filled, and smog; and in version 12, launches and levels too, and the first
- *   launch done (its postcard names the light in the town's sky);
+ *   being cleared, part filled, and smog; in version 12, launches and levels too, and the first
+ *   launch done (its postcard names the light in the town's sky); and in version 13, belts at grade 4,
+ *   standing, in a blueprint and in what Undo would put back;
  * - `yard-v11-part-<part>`: a yard of one piece, on the guild's land, with one part of its bytes set
  *   to a value that is not its kind's new one (`PARTS`); its bytes from the piece's own on are pinned
  *   as `cells` (`bytesOf`), which is the layout itself: the part's bit, where its payload goes and how
@@ -34,7 +35,7 @@ import { material } from "./state.ts";
  * town's sky (`sky`, from tier 8).
  */
 export const VERSIONS: Readonly<Record<string, readonly number[]>> = {
-  yard: [F.PLACED, F.VERSION, F.LAUNCHED],
+  yard: [F.PLACED, F.VERSION, F.LAUNCHED, F.FOURTH],
   cells: [F.VERSION],
   standing: [1],
   postcard: [1, 2],
@@ -250,6 +251,23 @@ function fullV12(): F.Yard {
   return y;
 }
 
+/**
+ * A yard kept as version 13: version 12's, with grade 4 known for lines and gatherers, its three belts
+ * north-west of the depot raised to grade 4 and kept so in its first blueprint, and the first of them
+ * taken away, which Undo would stand again at grade 4. It keeps no field the version before does not:
+ * only a grade past 3.
+ */
+function fullV13(): F.Yard {
+  const y = fullV12();
+  opened(y, ["starfolio", "gatherer4", "lines4"]);
+  const belts = F.within(y, ...xyOf(y, -3, -3), ...xyOf(y, -1, -3));
+  sent(y, { do: "upgrade", tiles: belts });
+  sent(y, { do: "saveBlueprint", slot: 0, tiles: belts });
+  const [x, z] = xyOf(y, -3, -3);
+  sent(y, { do: "remove", x, y: z });
+  return y;
+}
+
 // ---------- every part of a piece's bytes ----------
 
 /** A part of a piece's bytes: its bit (`cells.ts`), the kind it is set on, and how it is set. */
@@ -390,6 +408,7 @@ export function cases(seen: Seen): void {
   watch(seen, fullV9(), "full");
   watch(seen, fullV11(), "full");
   watch(seen, fullV12(), "full");
+  watch(seen, fullV13(), "full");
   for (const part of PART_CASES) {
     const { y, read } = partYard(part);
     watch(seen, y, `part-${part.name}`, read);

@@ -156,7 +156,7 @@ describe("decode refuses whole", () => {
       "",
       "not json",
       "[]",
-      JSON.stringify({ ...rec, v: F.LAUNCHED + 1 }),
+      JSON.stringify({ ...rec, v: F.FOURTH + 1 }),
       JSON.stringify({ ...rec, v: 5 }),
       JSON.stringify({ ...rec, cells: undefined }),
       JSON.stringify({ ...rec, cells: "!!!!" }),
@@ -366,10 +366,11 @@ const LEFT_OUT = new Set([
   "made",
   // Where a tile's piece of more than one tile stands: worked out from that tile's kind and way, which are mixed in.
   "part",
-  // What Undo would undo is mixed in as its bytes: an entry's id, longest span and highest kind are worked out from them.
+  // What Undo would undo is mixed in as its bytes: an entry's id, longest span, highest kind and highest grade are worked out from them.
   "history.0.id",
   "history.0.span",
   "history.0.top",
+  "history.0.grade",
   "holders.size",
   "holders.tile",
   "tunnels.size",

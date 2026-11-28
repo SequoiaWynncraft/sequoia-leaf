@@ -89,7 +89,7 @@ nothing:
 | ------- | ----- | --------------------------------------------------------------------------------------------------------- |
 | `kind`  | Uint8 | what stands there                                                                                         |
 | `dir`   | Uint8 | the way it faces: 0 east, 1 south, 2 west, 3 north                                                        |
-| `grade` | Uint8 | its grade, 1 to 3, for a belt, tunnel, splitter, joiner, sorter, gatherer, mill, bench, workshop or Study |
+| `grade` | Uint8 | its grade, 1 to 4, for a belt, tunnel, splitter, joiner, sorter, gatherer, mill, bench, workshop or Study |
 | `item`  | Uint8 | what a belt, splitter, joiner, sorter or tunnel mouth carries                                             |
 | `prog`  | Uint8 | how far across its tile, in eighths                                                                       |
 | `via`   | Uint8 | the side it was handed in from, 1 + a way, or 0 (only for drawing)                                        |
@@ -141,10 +141,10 @@ for their range.
 - **Coins** are thousandths. The depot pays a hundredth of a thing's worth for each that arrives
   (`ARRIVAL`: 3 for a plank); the till pays in whole Coins and keeps the rest.
 - **Work** is half-ticks. A gatherer, machine or Study does `PACE[grade]` a tick it works: 2 at
-  grade 1, 3 at grade 2, 4 at grade 3. A recipe of 12 ticks wants 24; a gatherer 30; a Study 100 for
-  each folio.
-- **Belts** move `PACE[grade]` eighths of a tile a tick: a tile in 4, 3 or 2 ticks; so do tunnels,
-  splitters, joiners and sorters, each at its own grade.
+  grade 1, 3 at grade 2, 4 at grade 3, and a gatherer 5 at grade 4. A recipe of 12 ticks wants 24; a
+  gatherer 30; a Study 100 for each folio.
+- **Belts** move `CARRY[grade]` eighths of a tile a tick: a tile in 4, 3, 2 or 1 ticks; so do
+  tunnels, splitters, joiners and sorters, each at its own grade. No grade carries past a tile a tick.
 - **Power** is counted in halves: a piece draws its kind's power once for each half its grade draws
   (2, 3, 4: `drawnAt`), and the depot, waterwheels and boilers give 2 halves for each power. Every
   screen reads power from `power` (with `speed`, the whole per cent machines work at, rounded down),
@@ -185,7 +185,12 @@ Not built, on purpose: a recipe that makes more than one.
 
 A belt, tunnel, splitter, joiner, sorter, gatherer, mill, bench, workshop and Study each have a
 grade, 1 to 3, kept on the piece; grade 2 works 1.5 times as fast, costs 3 times as much and draws
-1.5 times the power; grade 3, twice, 8 times and twice (`GRADES`). A splitter, joiner or sorter
+1.5 times the power; grade 3, twice, 8 times and twice (`GRADES`). Lines and gatherers have a grade 4
+(tier 7's research, `content/grade4.ts`); machines have none. A grade 4 gatherer works 2.5 times as
+fast, costs 20 times as much and draws 3 times the power; a grade 4 line carries a tile a tick (600
+a minute, twice grade 3, the fastest a line can go: `carried`) and costs 40 times as much. A yard
+keeping a grade 4 piece anywhere is kept as version 13 (`FOURTH`), which a Leaf of version 12 leaves
+as a newer Leaf's. A splitter, joiner or sorter
 passes things on at a belt's pace for its grade, so one of a lower grade than the belts round it
 holds their line back; whatever unlocks a belt's grade unlocks theirs (`content/nodes.ts`).
 `open.kinds[k]` is the highest grade of a kind the yard may build, 0 for a kind not unlocked; a
@@ -382,7 +387,8 @@ tree takes of each piece (`bill`). Every piece is taken as working every tick. `
 every thing the slice can make, one machine's output a minute and the line that feeds one flat out.
 `carried(grade)` is how many things a minute a belt, tunnel, splitter, joiner or sorter of a grade
 carries when it is kept full: a thing crosses a tile in a whole number of ticks, so 150 at the first
-grade, 200 at the second and 300 at the third, which a test holds a real line of each to.
+grade, 200 at the second, 300 at the third and 600 at the fourth, which a test holds a real line of
+each to.
 
 ## How long the slice takes
 
