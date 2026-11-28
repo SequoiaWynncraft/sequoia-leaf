@@ -38,6 +38,7 @@ import {
   saidOf,
   thingOf,
 } from "./face.ts";
+import { drawInto } from "./into.ts";
 import { fitHead, length, sheetScreen } from "./measure.ts";
 import { beside, type Box, clear, sheet, type Side } from "./place.ts";
 import { longPress } from "./press.ts";
@@ -407,10 +408,11 @@ function describedBy(by: object | null): void {
   if (page.described) described(page.described, true);
 }
 
-/** Puts a box at a corner, no taller than `most` (it scrolls, or shows what fits). */
+/** Puts a box at a corner, no taller than `most` (it scrolls, or shows what fits): its place is written only where it moves. */
 function putAt(box: HTMLElement, x: number, y: number, most: number, tall: number): void {
   box.style.maxHeight = most < tall ? `${most}px` : "";
-  box.style.transform = `translate(${x}px, ${y}px)`;
+  const at = `translate(${x}px, ${y}px)`;
+  if (box.style.transform !== at) box.style.transform = at;
 }
 
 /**
@@ -418,18 +420,20 @@ function putAt(box: HTMLElement, x: number, y: number, most: number, tall: numbe
  * height it was given, which takes away what it was scrolled by, so that is given back once its
  * height is.
  */
-function placeCard(card: HTMLElement, o: Open, how: "keep" | "follow" | "new"): void {
+function placeCard(card: HTMLElement, o: Open, how: "keep" | "follow" | "new"): boolean {
   const scrolled = card.scrollTop;
-  placeNow(card, o, how);
+  const placed = placeNow(card, o, how);
   card.scrollTop = scrolled;
+  return placed;
 }
 
 /**
  * `keep`: drawn again, the card keeps its corner while that is still clear of its thing (a card
  * followed to stays put); `follow`: it moves with its thing, on the side it was on; `new`: wherever
- * the rule says first. A sheet goes to whichever edge does not cover its thing.
+ * the rule says first. A sheet goes to whichever edge does not cover its thing. Says whether it has
+ * a place: not a card beside nothing (what it was for has left the page) with no corner kept.
  */
-function placeNow(card: HTMLElement, o: Open, how: "keep" | "follow" | "new"): void {
+function placeNow(card: HTMLElement, o: Open, how: "keep" | "follow" | "new"): boolean {
   const r0 = room();
   const spot = spotOf(o.at);
   card.style.maxHeight = "";
@@ -438,11 +442,13 @@ function placeNow(card: HTMLElement, o: Open, how: "keep" | "follow" | "new"): v
   if (card.classList.contains("sheet")) {
     const s = sheet(r.height, spot, r0);
     card.classList.toggle("top", s.edge === "top");
+    // A sheet stands where its edge's rule puts it: not where it stood as a floating card drawn into the same node.
+    card.style.transform = "";
     // As tall as that edge's own rule lets it be, measured there, and no taller than its room: the stricter wins.
     const there = card.getBoundingClientRect().height;
     card.style.maxHeight = s.most < there ? `${s.most}px` : "";
     page.corner = null;
-    return;
+    return true;
   }
   const c = page.corner;
   if (c && ((how === "keep" && spot && clear(c, size, spot, r0)) || !spot)) {
@@ -450,13 +456,14 @@ function placeNow(card: HTMLElement, o: Open, how: "keep" | "follow" | "new"): v
     const y = Math.round(Math.max(4, Math.min(c.y, r0.h - size.h - 4)));
     page.corner = { x, y };
     putAt(card, x, y, r0.h - 4 - y, size.h);
-    return;
+    return true;
   }
-  if (!spot) return;
+  if (!spot) return false;
   const p = beside(size, spot, r0, how === "new" || !page.side ? { side: o.side } : { side: o.side, was: page.side });
   page.corner = { x: p.x, y: p.y };
   page.side = p.side;
   putAt(card, p.x, p.y, p.most, size.h);
+  return true;
 }
 
 /** The glance of a thing pointed at inside the open card goes; with `by`, only that thing's. */
@@ -509,28 +516,32 @@ const howPlaced = (prev: Open | null, o: Open): "keep" | "follow" | "new" =>
 const sameShown = (prev: Open | null, o: Open): boolean =>
   sameCard(prev, o) && prev.stack.length === o.stack.length && sameThing(prev.stack.at(-1), o.stack.at(-1));
 
+/** The node the card is on the page, and how far it was scrolled when it was the very card drawn again. */
+type Swapped = { node: HTMLElement; scrolled: number | null };
+
 /**
- * The new card goes in beside the old before the old goes: taking the old one out takes the focus
- * off a button pressed in it, and `replaceWith` would lose whatever followed the old. The very card
- * that was up, drawn again (`again`, not one followed to from it), keeps whoever was on one of its
- * buttons, and gives back how far it was scrolled, for once it is placed (no taller than it was:
- * scrolled before that, the browser would cut the scroll to what the taller card has); another card
- * in its place (followed to, gone back to) has the focus the old one had.
+ * The very card that was up, drawn again (`again`: what it says changed, it was pinned, its glance
+ * grew; not one followed to from it), is drawn into the node already on the page: its face and its
+ * parts are the new drawing's, and the node keeps its place, its layer and the focus on it. A node
+ * put on the page has no place until it is placed, and a card refreshed four times a second was
+ * once a new node each time, which Firefox at times showed for a frame at the page's corner. It
+ * keeps whoever was on one of its buttons, and gives back how far it was scrolled, for once it is
+ * placed (no taller than it was: scrolled before that, the browser would cut the scroll to what the
+ * taller card has).
+ *
+ * Another card (new, followed to, gone back to) goes in beside the old before the old goes: taking
+ * the old one out takes the focus off a button pressed in it, and `replaceWith` would lose whatever
+ * followed the old. It has the focus the old one had.
  */
-function swapIn(was: HTMLElement | null, card: HTMLElement, again: boolean): number | null {
-  const scrolled = was?.scrollTop ?? 0;
-  const held = was ? [...was.querySelectorAll("button")].findIndex((b) => b === document.activeElement) : -1;
+function swapIn(was: HTMLElement | null, card: HTMLElement, again: boolean): Swapped {
+  if (was && again) return { node: was, scrolled: drawInto(was, card) };
   const focused = was?.contains(document.activeElement) ?? false;
   if (was) {
     was.before(card);
     was.remove();
   } else document.body.append(card);
-  if (!again) {
-    if (focused && card.hasAttribute("tabindex")) card.focus({ preventScroll: true });
-    return null;
-  }
-  card.querySelectorAll("button")[held]?.focus({ preventScroll: true });
-  return scrolled;
+  if (focused && card.hasAttribute("tabindex")) card.focus({ preventScroll: true });
+  return { node: card, scrolled: null };
 }
 
 /** Nothing is up: the card, its place and its layer go. */
@@ -550,10 +561,10 @@ const view: View = {
     unpeek();
     describedBy(null);
     if (!o || !d) return putAway(was);
-    const card = drawCard(d, faceOf(o), hands);
-    const scrolled = swapIn(was, card, sameShown(prev, o));
+    const { node: card, scrolled } = swapIn(was, drawCard(d, faceOf(o), hands), sameShown(prev, o));
     page.node = card;
-    placeCard(card, o, howPlaced(prev, o));
+    // Beside nothing, with no corner of its own (what it was for has left the page): it goes, rather than stand at the page's corner.
+    if (!placeCard(card, o, howPlaced(prev, o))) return deck.close();
     // Placed, its head has the width it is shown at: where its name has no room, it is placed again.
     if (fitHead(card)) placeCard(card, o, "keep");
     // The same card, as high as it is to be: scrolled where it was, so what was under a finger is still under it.

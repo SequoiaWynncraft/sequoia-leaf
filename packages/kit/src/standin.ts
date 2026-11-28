@@ -362,7 +362,11 @@ export class Part extends EventTarget {
   textContent = "";
   hidden = false;
   readonly dataset: Record<string, string> = {};
-  readonly style = { setProperty: (): void => undefined };
+  /** Its inline style: what the kit writes there (a card's place, `transform`) is kept as written. */
+  readonly style: Record<string, string> & { setProperty: () => void } = Object.assign(Object.create(null), {
+    setProperty: (): void => undefined,
+  });
+  scrollTop = 0;
   readonly classList = {
     add: (name: string): void => {
       if (!this.className.split(" ").includes(name)) this.className = `${this.className} ${name}`.trim();
@@ -373,6 +377,7 @@ export class Part extends EventTarget {
         .filter((c) => c !== "" && c !== name)
         .join(" ");
     },
+    contains: (name: string): boolean => this.className.split(" ").includes(name),
     toggle: (name: string, on = !this.className.split(" ").includes(name)): boolean => {
       if (on) this.classList.add(name);
       else this.classList.remove(name);
@@ -394,13 +399,33 @@ export class Part extends EventTarget {
   hasAttribute(name: string): boolean {
     return this.attrs.has(name);
   }
+  removeAttribute(name: string): void {
+    this.attrs.delete(name);
+  }
+  getAttributeNames(): string[] {
+    return [...this.attrs.keys()];
+  }
+  get childNodes(): Part[] {
+    return [...this.kids];
+  }
+  get lastElementChild(): Part | null {
+    return this.kids.at(-1) ?? null;
+  }
   appendChild<T>(kid: T): T {
-    if (kid instanceof Part) {
-      kid.remove();
-      kid.holder = this;
-      this.kids.push(kid);
-    }
+    if (kid instanceof Part) this.#put(kid, this.kids.length);
     return kid;
+  }
+  /** Puts what is given just before it, in what holds it. */
+  before(...kids: unknown[]): void {
+    for (const kid of kids)
+      if (kid instanceof Part && this.holder) this.holder.#put(kid, this.holder.kids.indexOf(this));
+  }
+  /** Holds `kid` at `at`, written down if that puts it on the page (`aPage`'s `put`), as it is then. */
+  #put(kid: Part, at: number): void {
+    kid.remove();
+    kid.holder = this;
+    this.kids.splice(at, 0, kid);
+    if (this.isConnected) page.put.push({ part: kid, transform: kid.style.transform ?? "" });
   }
   append(...kids: unknown[]): void {
     for (const kid of kids) this.appendChild(kid);
@@ -439,7 +464,19 @@ export class Part extends EventTarget {
   /** What it holds with a class (`.name`): the only selector the stand-in page looks for within. */
   querySelectorAll(selector: string): Part[] {
     const name = selector.replace(/^\./, "");
-    return [...this.#within()].filter((at) => at.className.split(" ").includes(name));
+    return [...this.#within()].filter((at) => at.className.split(" ").includes(name) || at.localName === name);
+  }
+  querySelector(selector: string): Part | null {
+    return this.querySelectorAll(selector)[0] ?? null;
+  }
+  /** Where it is on the page: at its place (`translate` in its style), as big as nothing. */
+  getBoundingClientRect(): { left: number; top: number; right: number; bottom: number; width: number; height: number } {
+    const [x = 0, y = 0] =
+      /translate\((-?[\d.]+)px, (-?[\d.]+)px\)/
+        .exec(this.style.transform ?? "")
+        ?.slice(1)
+        .map(Number) ?? [];
+    return { left: x, top: y, right: x, bottom: y, width: 0, height: 0 };
   }
   closest(selector: string): Part | null {
     return [...this.#out()].find((at) => at.matches(selector)) ?? null;
@@ -460,19 +497,21 @@ export class Part extends EventTarget {
   }
 }
 
-/** The stand-in page's one keyboard: the element that has it. */
-const page: { focused: Part | null } = { focused: null };
+/** The stand-in page's one keyboard, the element that has it; and every element put on the page, with its place then. */
+const page: { focused: Part | null; put: { part: Part; transform: string }[] } = { focused: null, put: [] };
 
 /** The globals a page has that the stand-in page stands in for, by name. */
 const PAGE_GLOBALS = ["document", "Element", "HTMLElement", "HTMLButtonElement"] as const;
 
 /**
  * Stands in for a page the kit draws on and a player presses on: `el` makes `Part`s, and `body`
- * is the page (what is under it is on it). `done` puts the real world back.
+ * is the page (what is under it is on it). `put` lists every element put on the page, in turn, with
+ * its place (`transform`) as it went on. `done` puts the real world back.
  */
-export function aPage(): { body: Part; done: () => void } {
+export function aPage(): { body: Part; put: { part: Part; transform: string }[]; done: () => void } {
   const body = new Part("body", true);
   page.focused = null;
+  page.put = [];
   const doc = {
     body,
     createElement: (tag: string) => new Part(tag),
@@ -491,6 +530,7 @@ export function aPage(): { body: Part; done: () => void } {
   for (const name of PAGE_GLOBALS) Object.defineProperty(globalThis, name, { value: values[name], configurable: true });
   return {
     body,
+    put: page.put,
     done: () => {
       for (const name of PAGE_GLOBALS) Reflect.deleteProperty(globalThis, name);
     },
