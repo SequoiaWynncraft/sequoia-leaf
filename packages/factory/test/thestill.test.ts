@@ -11,7 +11,7 @@ import type { Ctx } from "@sequoia-leaf/core";
 
 import * as F from "../src/index.ts";
 import { bareLand } from "./land.ts";
-import { must } from "./yards.ts";
+import { give, must } from "./yards.ts";
 
 const TAR = F.item("tar");
 const PITCH = F.item("pitch");
@@ -148,12 +148,44 @@ describe("tier 6's tables", () => {
     }
   });
 
-  test("the commission wants pitch, creosote and spirit as 1, 2 and 3; the tier is named; a tunnel passes under 20 tiles", () => {
-    const roadbed = F.GOALS[F.goal("roadbed")];
-    expect([roadbed?.kind, roadbed?.tier, F.NODES[F.goal("roadbed")]?.gift?.id]).toEqual(["commission", 6, "tar-road"]);
-    expect([F.tierName(6), F.SPAN_MOST]).toEqual(["Tier 6: The still", 20]);
+  test("the commission wants 2,000 tarmac, 4,000 sleepers and 6,000 varnish: pitch, creosote and spirit as 1, 2 and 3", () => {
+    const g = F.goal("roadbed");
+    const roadbed = F.GOALS[g];
+    expect([roadbed?.kind, roadbed?.tier, F.NODES[g]?.gift?.id, F.tierName(6)]).toEqual([
+      "commission",
+      6,
+      "tar-road",
+      "Tier 6: The still",
+    ]);
+    const want = roadbed?.want ?? F.counts();
+    expect((["tarmac", "sleeper", "varnish"] as const).map((n) => want[F.item(n)] ?? 0)).toEqual([2000, 4000, 6000]);
+    // What those take of the still's three, by their recipes: 2,000 pitch, 4,000 creosote, 6,000 spirit.
+    const takes = (part: F.Item): number =>
+      F.ALL_ITEMS.reduce((sum, n) => {
+        const r = F.RECIPE[n];
+        const at = r?.from.indexOf(part) ?? -1;
+        return at < 0 || !r ? sum : sum + (want[n] ?? 0) * (r.need[at] ?? 0);
+      }, 0);
+    expect([PITCH, CREOSOTE, SPIRIT].map(takes)).toEqual([2000, 4000, 6000]);
+  });
+
+  test("a tunnel passes under 20 tiles and carries what goes in all the way; under 21 it is refused", () => {
     const y = yard();
-    expect(y.open.span).toBe(20);
+    expect([F.SPAN_MOST, y.open.span]).toEqual([20, 20]);
+    const plank = F.item("plank");
+    must(y, { do: "build", kind: "crate", x: 1, y: 4, dir: 0 });
+    const out = bin(y, 25, 4);
+    must(y, F.writeAct({ do: "lay", legs: [{ tunnel: true, x: 2, y: 4, dir: 0, span: 20, grade: 1 }] }));
+    must(y, { do: "build", kind: "belt", x: 24, y: 4, dir: 0 });
+    expect([F.kindAt(y, 23, 4), y.span[F.at(y, 2, 4)], y.span[F.at(y, 23, 4)]]).toEqual([F.TUNNEL, 20, -20]);
+    fill(y, F.at(y, 1, 4), plank, 6);
+    for (let k = 0; k < 600; k++) F.step(y);
+    expect(F.held(y.holders, out, plank)).toBe(6);
+    // A span past the most does not read as a command at all, and changes nothing.
+    const was = F.encode(y);
+    const deeper = F.writeAct({ do: "lay", legs: [{ tunnel: true, x: 2, y: 6, dir: 0, span: 21, grade: 1 }] });
+    expect(() => give(y, deeper)).toThrow("does not read");
+    expect(F.encode(y)).toBe(was);
   });
 });
 
@@ -170,11 +202,44 @@ describe("a way out for one thing only", () => {
 });
 
 describe("the still", () => {
-  test("is three tiles by three, takes tar on the nine tile-sides of its back and sides, and holds up to 8", () => {
-    const y = yard();
+  test("is three tiles by three, takes tar in across each of the nine tile-sides of its back and sides, none at its front, and holds up to 8", () => {
+    // Where power does not reach, so that it distils nothing and keeps all it takes.
+    const y = F.create({ land: bareLand(38, 13, [], [33, 6]), tier: 7, seed: 1 });
     const i = piece(y, "still", 4, 4);
-    expect([F.isBig(STILL), F.wants(y, i, TAR), F.wants(y, i, PITCH)]).toEqual([true, true, false]);
-    expect(F.MIX_OF[STILL]?.holds).toBe(8);
+    expect([F.isBig(STILL), F.litAt(y, i), F.wants(y, i, PITCH)]).toEqual([true, false, false]);
+    // A crate of 1 tar against each side, handing in: its back (west), its left (north) and its right (south).
+    const sides: (readonly [number, number, number])[] = [];
+    for (let k = 3; k <= 5; k++) sides.push([2, k, 0], [k, 2, 1], [k, 6, 3]);
+    const crates = sides.map(([x, z, dir]) => {
+      must(y, { do: "build", kind: "crate", x, y: z, dir });
+      fill(y, F.at(y, x, z), TAR, 1);
+      return F.holderOf(y, F.at(y, x, z));
+    });
+    // And one against its front, which sends things out and takes nothing in.
+    must(y, { do: "build", kind: "crate", x: 6, y: 4, dir: 2 });
+    fill(y, F.at(y, 6, 4), TAR, 1);
+    for (let k = 0; k < 60; k++) F.step(y);
+    // What a crate still has of it: in it, or ready to hand on.
+    const has = (r: number): number => F.held(y.holders, r, TAR) + (y.holders.out[r] === TAR ? 1 : 0);
+    const left = crates.map(has);
+    // Eight of the nine came in; the ninth is offered still, with no room for it.
+    expect([
+      F.held(y.holders, F.holderOf(y, i), TAR),
+      left.filter((n) => n === 0).length,
+      left.filter((n) => n === 1).length,
+    ]).toEqual([8, 8, 1]);
+    expect([has(F.holderOf(y, F.at(y, 6, 4))), F.MIX_OF[STILL]?.holds]).toEqual([1, 8]);
+    // Power reaches it: it distils one tar and stops, its pitch with nowhere to go; with room for one
+    // again, it takes the ninth from where it waits.
+    for (const x of [30, 26, 22, 18, 14, 10, 6]) must(y, { do: "build", kind: "pylon", x, y: 8, dir: 0 });
+    for (let k = 0; k < 40; k++) F.step(y);
+    const r = F.holderOf(y, i);
+    expect([F.litAt(y, i), y.holders.out[r], F.held(y.holders, r, TAR), crates.every((c) => has(c) === 0)]).toEqual([
+      true,
+      PITCH,
+      8,
+      true,
+    ]);
   });
 
   test("gives pitch, creosote, pitch, spirit, pitch, creosote, out of its left, middle, left, right, left and middle ways out", () => {
