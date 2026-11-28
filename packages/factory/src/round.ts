@@ -78,21 +78,20 @@ function turnRing(y: Yard, wire: Wire, k: number, waiting: Uint8Array): void {
   const held = holdersFirst(y, wire, k, waiting);
   const at = beginAt(y, wire, k);
   const head = sweep(y, wire, at, end, waiting);
-  const tail = sweep(y, wire, from, at, waiting);
-  // The first tile not done and the last that moved, in the order begun at `at`: the tail comes after the head.
-  const open = openOf(head) >= 0 ? openOf(head) - at : openOf(tail) - from + (end - at);
+  const tail = at > from ? sweep(y, wire, from, at, waiting) : 0;
+  const openHead = openOf(head);
+  const openTail = openOf(tail);
+  // The last tile that moved, in the order begun at `at`: the tail comes after the head.
   const last = lastOf(tail) >= 0 ? lastOf(tail) - from + (end - at) : lastOf(head) - at;
-  if (openOf(head) < 0 && openOf(tail) < 0) {
-    if (!held && last < 0) still[k] = y.tick;
-    return;
-  }
-  if (open < last) {
-    if (openOf(head) >= 0) {
-      sweep(y, wire, openOf(head), end, waiting);
-      sweep(y, wire, from, at, waiting);
-    } else sweep(y, wire, openOf(tail), at, waiting);
-  }
   if (!held && last < 0) still[k] = y.tick;
+  if (openHead < 0 && openTail < 0) return;
+  // Once more from the first tile not done, if anything moved after it.
+  const open = openHead >= 0 ? openHead - at : openTail - from + (end - at);
+  if (open >= last) return;
+  if (openHead >= 0) {
+    sweep(y, wire, openHead, end, waiting);
+    if (at > from) sweep(y, wire, from, at, waiting);
+  } else sweep(y, wire, openTail, at, waiting);
 }
 
 /** The place in `Rings.tiles` of the first tile a sweep left not done, or -1 (`sweep`). */
@@ -106,24 +105,33 @@ const SPAN = 2 ** 24;
  * Where ring `k`'s turn begins (a place in `Rings.tiles`): at a tile of it that carries nothing, which
  * needs nothing of the ring to have room, so the tiles behind it all move in the turn; looked for from
  * where the last turn began, round the ring, as a free tile goes on round it as the ring moves. With
- * none, at the first that holds things, else where its order begins.
+ * none, at the first that holds things, else where its order begins; and while it stays still, not
+ * looked for again.
  */
 function beginAt(y: Yard, wire: Wire, k: number): number {
+  const { begin, still } = wire.rings;
+  // A ring with no free tile that has not moved since has none still: what carries is emptied only by handing on.
+  const t = begin[k] === -1 && still[k] === y.tick - 1 ? -1 : freeTile(y, wire, k);
+  begin[k] = t;
+  return t >= 0 ? t : firstHolder(wire, k);
+}
+
+/** Ring `k`'s first tile that carries nothing, from where its last turn began round it (a place in `Rings.tiles`), or -1. */
+function freeTile(y: Yard, wire: Wire, k: number): number {
   const { tiles, starts, begin, looked } = wire.rings;
   const from = starts[k] ?? 0;
   const len = (starts[k + 1] ?? 0) - from;
-  const was = begin[k] ?? from;
+  const was = Math.max(from, begin[k] ?? from);
   for (let n = 0; n < len; n++) {
     const t = was + n < from + len ? was + n : was + n - len;
     const i = tiles[t] ?? 0;
     if (y.item[i] === NONE && CARRIES[y.kind[i] ?? NONE] === 1) {
       looked[0] = (looked[0] ?? 0) + n + 1;
-      begin[k] = t;
       return t;
     }
   }
   looked[0] = (looked[0] ?? 0) + len;
-  return firstHolder(wire, k);
+  return -1;
 }
 
 /** Where ring `k`'s first holder is (a place in `Rings.tiles`), or where its order begins. */
@@ -143,6 +151,7 @@ function holdersFirst(y: Yard, wire: Wire, k: number, waiting: Uint8Array): bool
   const { tiles, holders, holderStarts, had, done, looked } = wire.rings;
   const from = holderStarts[k] ?? 0;
   const to = holderStarts[k + 1] ?? 0;
+  if (from === to) return false;
   let moved = false;
   for (let h = from; h < to; h++) {
     const t = holders[h] ?? 0;

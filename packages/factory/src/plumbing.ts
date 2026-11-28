@@ -33,7 +33,7 @@ export interface Rings {
    * whole number of 32 bits: a tick 2^32 ticks on (13 years of a yard's time) reads the same.
    */
   readonly done: Int32Array;
-  /** For each ring, where its last turn began (a place in `tiles`: `round.ts`). */
+  /** For each ring, where its last turn began (a place in `tiles`: `round.ts`), or -1 where it found no free tile. */
   readonly begin: Int32Array;
   /** For each ring, the last tick its turn moved nothing (`ringFull`). */
   readonly still: Float64Array;
