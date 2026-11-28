@@ -1,5 +1,5 @@
 /** The gatherer on the page: a gnome in his grade's hat, at work on his deposit, with his basket, rake and barrow. */
-import { ALL_ITEMS, isItem, isRaw, makes, NONE, WORK } from "@sequoia-leaf/factory";
+import { ALL_ITEMS, GATHER_WORK, isItem, isRaw, makes, NONE, WORK, type Yard } from "@sequoia-leaf/factory";
 import { GREEN, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { perMinute } from "@sequoia-leaf/kit/say.ts";
 import { hash, makeCanvas, must } from "@sequoia-leaf/kit/util.ts";
@@ -9,9 +9,12 @@ import { gathererHat } from "../art/machines.ts";
 import { itemRef } from "../ui/refs.ts";
 import type { Drawn, KindPage } from "./kind.ts";
 
-/** His pose: asleep where power does not reach, lifting what he has out, else as far as his work on the next has come. */
-function poseOf(at: Drawn): number {
-  const p = at.work / WORK.gather;
+/**
+ * His pose: asleep where power does not reach, lifting what he has out, else as far as his work on the
+ * next has come, of the work in gathering what lies under him (`GATHER_WORK`: star crystal's own).
+ */
+export function poseOf(y: Yard, at: Pick<Drawn, "i" | "work" | "powered" | "out" | "working">): number {
+  const p = at.work / (GATHER_WORK[y.land.deposit[at.i] ?? NONE] ?? WORK.gather);
   if (!at.powered) return 4;
   if (at.out !== NONE) return 3;
   if (!at.working) return 0;
@@ -45,7 +48,7 @@ export const gatherer: KindPage = {
   draw(art, y, at) {
     const { i, foot, cx, z } = at;
     const left = at.d === 2 || (at.d !== 0 && hash(i, 4, 7) > 0.5);
-    const pose = poseOf(at);
+    const pose = poseOf(y, at);
     const s = (left ? art.m.gnomeLeft : art.m.gnome)[gathererHat(at.grade)]?.[pose];
     if (!s) return foot - 16;
     at.stand(s, cx, foot - 1, z, at.a);

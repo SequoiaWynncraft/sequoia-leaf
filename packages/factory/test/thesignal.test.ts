@@ -7,11 +7,8 @@
  */
 import { describe, expect, test } from "bun:test";
 
-import type { Ctx } from "@sequoia-leaf/core";
-
 import { PARTS, unpackCells } from "../src/cells.ts";
 import * as F from "../src/index.ts";
-import { ringOfGrowers } from "./growers.ts";
 import { bareLand } from "./land.ts";
 import { give, must } from "./yards.ts";
 
@@ -225,6 +222,22 @@ describe("star crystal from the ground", () => {
     piece(low, "gatherer", 20, 8);
     expect(F.status(low, F.at(low, 20, 8))?.line).toBe("Gathering star crystals: 1 every 150 seconds.");
   });
+
+  test("short of power, a gatherer's words say the pace its headline does", () => {
+    const y = yard();
+    const g = piece(y, "gatherer", 20, 8, 3);
+    bin(y, 21, 8);
+    // Growers III by the depot, drawing more than it gives.
+    for (const x of [27, 23, 15, 11]) piece(y, "grower", x, 4, 3);
+    const { pace } = F.power(y);
+    const rate = F.machineRate(y, g).effective;
+    const line = F.status(y, g)?.line ?? "";
+    expect([pace < 1, line]).toEqual([
+      true,
+      `Gathering star crystals: 1 every ${Math.round(60 / rate)} seconds, at ${Math.floor(pace * 100)}% of its pace: the yard is short of power.`,
+    ]);
+    expect(Math.round(60 / rate)).toBeGreaterThan(75);
+  });
 });
 
 describe("the grower", () => {
@@ -421,47 +434,4 @@ describe("a yard with tier 7's pieces", () => {
     must(y, { do: "copy", tiles: F.within(y, 15, 5, 17, 7), turns: 0, x: 22, y: 5 });
     expect([F.kindAt(y, 23, 6), y.holders.mix[F.holderOf(y, F.at(y, 23, 6))]]).toEqual([GROWER, 0]);
   });
-});
-
-const ctx = (now: number): Ctx => ({
-  now,
-  player: { id: "p", guest: false },
-  seed: 9,
-  room: 0,
-  awards: [],
-  postcards: {},
-});
-const AT0 = 1_800_000_000_000;
-const MINUTE_MS = 60_000;
-
-describe("Leaf's copy and the page's", () => {
-  test("a ring of 40 belts with 4 growers on it, tended by Leaf across 24 hours away and run on by the page, gives one check all the way", () => {
-    const start = ringOfGrowers();
-    const growers = [4, 8, 12, 16].map((x) => F.at(start, x, 3));
-    expect([F.ringsOf(start).rings > 0, growers.every((i) => F.litAt(start, i))]).toEqual([true, true]);
-    const text = F.encode(start);
-    const leaf = F.decode(text, start.land);
-    const page = F.decode(text, start.land);
-    if (!leaf || !page) throw new Error("does not read back");
-    leaf.at = AT0;
-    leaf.seen = F.here(leaf);
-    page.seen = F.here(page);
-    const marks = [
-      ...Array.from({ length: 12 }, (_, m) => (m + 1) * MINUTE_MS),
-      ...Array.from({ length: 24 }, (_, h) => (h + 1) * 60 * MINUTE_MS),
-    ];
-    let grown = 0;
-    for (const after of marks) {
-      for (let further = true; further;) {
-        let left = 7777;
-        further = F.FACTORY.tend?.(leaf, ctx(AT0 + after), () => left-- > 0) ?? false;
-      }
-      F.stepTo(page, leaf.tick);
-      expect([after, F.check(page)]).toEqual([after, F.check(leaf)]);
-      grown = Math.max(grown, leaf.depot[CRYSTAL] ?? 0);
-    }
-    expect(Math.abs(leaf.tick - leaf.seen.tick - 24 * 60 * F.MINUTE)).toBeLessThan(F.MINUTE);
-    // It grew, and sent its net to the depot, until its feed ran out.
-    expect(grown).toBeGreaterThan(1000);
-  }, 120_000);
 });

@@ -34,11 +34,14 @@ function work(k: Kit, y: Yard, i: number, r: number, speed: number): boolean {
   return true;
 }
 
-/** ": 1 every 75 seconds", for a thing that takes its own time to gather, at the gatherer's grade; nothing for the rest. */
+/**
+ * ": 1 every 75 seconds", for a thing that takes its own time to gather, at the pace its headline says
+ * (`rateOf`), as its grade, the yard's power and smog let it; nothing for the rest.
+ */
 function slowly(k: Kit, y: Yard, i: number, n: Item): string {
   if (k.ITEM_INFO[n]?.gather === undefined) return "";
-  const seconds = workFor(k, y, i) / (k.PACE[y.grade[i] ?? 0] ?? 1) / 10;
-  return `: 1 every ${Math.round(seconds)} seconds`;
+  const perMinute = rateOf(k, y, i, null).effective;
+  return perMinute > 0 ? `: 1 every ${Math.round(60 / perMinute)} seconds` : "";
 }
 
 function condition(k: Kit, y: Yard, i: number, lit: boolean): number {
