@@ -6,8 +6,8 @@
  * one sign of the smog it makes: at grade III a steady thread. Its card says how much salvage it
  * breaks a minute and shows its mix of 20, the next picked out.
  */
-import { BREAKER, isItem, MIX_OF, mixPerMinute, mixShare, outsAs } from "@sequoia-leaf/factory";
-import type { Row, Stat } from "@sequoia-leaf/kit/card.ts";
+import { BREAKER, isItem, MIX_OF, mixPerMinute, outsAs } from "@sequoia-leaf/factory";
+import type { Stat } from "@sequoia-leaf/kit/card.ts";
 import { lessMotion } from "@sequoia-leaf/kit/dom.ts";
 import { perMinute } from "@sequoia-leaf/kit/say.ts";
 import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
@@ -15,8 +15,8 @@ import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
 import { TILE } from "../art/belts.ts";
 import { CLAY, IRON } from "../art/pal.ts";
 import { puff } from "../fx.ts";
-import { itemRef } from "../ui/refs.ts";
 import type { KindPage } from "./kind.ts";
+import { mixRows } from "./mix.ts";
 
 /** How far the picture reaches past the piece's box on each side, for its chute, and above it, for its height. */
 const PAD = 6;
@@ -110,26 +110,6 @@ function mouth(x: number, top: number, ox: number, oy: number, way: number): rea
   return [tx + (way === 0 ? 10 : way === 2 ? -10 : 0), ty + (way === 1 ? 10 : way === 3 ? -10 : 0)];
 }
 
-/**
- * The 20 things of its mix in order, as a card's row of pictures, on a standing one the next picked
- * out; and each thing it gives, a minute, of `total` a minute in all: at the card's grade flat out, or
- * on a standing one what it gives now (no more than its way out carries).
- */
-function mixRows(next: number | null, total: number): Row[] {
-  const gives = MIX_OF[BREAKER]?.gives ?? [];
-  return [
-    {
-      label: "Gives, in this order",
-      look: "icons",
-      things: gives.map((k, n) => ({ ref: itemRef(k), lit: n === next })),
-    },
-    {
-      label: "A minute",
-      things: [...new Set(gives)].map((k) => ({ ref: itemRef(k), note: perMinute(total * mixShare(BREAKER, k)) })),
-    },
-  ];
-}
-
 export const breaker: KindPage = {
   picture: (_p, n) => pictureOf(n, 1, 0, 0, 0),
   draw(art, _y, at) {
@@ -151,8 +131,8 @@ export const breaker: KindPage = {
   },
   pointer: "bare",
   pace: (k, n): Stat => ({ label: "Breaks", value: perMinute(mixPerMinute(k, n)) }),
-  rows: (p) => mixRows(null, mixPerMinute(BREAKER, p.grade)),
-  standing: { rows: (p) => mixRows(p.mix, p.rate ?? 0) },
+  rows: (p) => mixRows(BREAKER, null, mixPerMinute(BREAKER, p.grade)),
+  standing: { rows: (p) => mixRows(BREAKER, p.mix, p.rate ?? 0) },
   holdsUp: () => MIX_OF[BREAKER]?.holds ?? 8,
   map: [CLAY[1], CLAY[0]],
   dot: CLAY[1],

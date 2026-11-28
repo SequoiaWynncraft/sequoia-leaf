@@ -80,20 +80,16 @@ describe("the map's colours", () => {
   test("a line draws what it carries in that thing's own colour, every thing, and a paint over it in the paint's", () => {
     for (const n of ALL_ITEMS) expect([itemName(n), lineColour(lineField(0, n))]).toEqual([itemName(n), hueOf(n)]);
     // Every field fits the 8 bits the map keeps it in, and a painted line is its paint, whatever it carries.
-    expect(Math.max(...ALL_ITEMS.map((n) => lineField(0, n)))).toBeLessThan(256);
+    expect(Math.max(...ALL_ITEMS.map((n) => lineField(0, n)))).toBeLessThan(128);
     expect(lineColour(lineField(3, item("copper")))).toBe(lineColour(lineField(3, NONE)));
     expect(lineColour(lineField(3, NONE))).not.toBe(lineColour(lineField(0, NONE)));
   });
 
-  test("everything that lies in the ground shows where it lies, salvage too: a raw each, in the 3 bits the map keeps", () => {
+  test("everything that lies in the ground shows where it lies, salvage and tar too: a raw each, in the 4 bits the map keeps", () => {
     const raws = ALL_ITEMS.filter((n) => ITEM_INFO[n]?.step === 0);
     expect(LYING).toEqual(raws);
     expect(raws.map(liesOf)).toEqual(raws.map((_, k) => k + 1));
-    expect([raws.includes(item("salvage")), raws.length <= 7, liesOf(item("plank")), liesOf(NONE)]).toEqual([
-      true,
-      true,
-      0,
-      0,
-    ]);
+    expect([raws.includes(item("salvage")), raws.includes(item("tar")), raws.length <= 15]).toEqual([true, true, true]);
+    expect([liesOf(item("plank")), liesOf(NONE)]).toEqual([0, 0]);
   });
 });

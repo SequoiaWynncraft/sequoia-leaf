@@ -88,6 +88,20 @@ export const ROWS: Readonly<Record<ItemName, readonly string[]>> = {
   telegraph: ["....x..", "..yyyx.", ".r.o..r", ".r....r", "NNNNNNN", "nnnnnnb"],
   // Three small bulbs on a sagging dark line.
   lights: ["I.....I", ".I...I.", ".cIIIc.", ".w.c.w.", "...w..."],
+  // A near-black puddle with one pale glint.
+  tar: ["..TTT..", ".TTjTT.", "TTjwTTT", "TTTTTjT", ".TTTTT."],
+  // A black lump with a hard pale edge on top.
+  pitch: ["..ttt..", ".tKKKt.", "tKKIKKj", "KKIKKKK", "KKKKKIK", ".KKKKK."],
+  // A small drum, dark brown, one lighter band.
+  creosote: [".EEEEE.", "EffffFx", "fffffFx", "EEEEEEx", "fffffFx", "fffffFx", ".xxxxx."],
+  // A square can with a spout, pale straw.
+  spirit: [".....t.", "....t..", ".LLLL..", ".cLLLC.", ".cLLLC.", ".LLLLC.", ".CCCCC."],
+  // A black slab with a pale edge line.
+  tarmac: ["ttttttt", "IIiIIiI", "KKKKKKK", "KKKKKKK"],
+  // A squared beam, dark brown, a darker end grain.
+  sleeper: ["EEEEEE.", "FFFFFFb", "FFFFFFx", "ffffffb"],
+  // A small pot with a brush handle standing in it, amber.
+  varnish: ["....n..", "...n...", "..xn...", ".oooooo", ".MoMMMB", ".MMMMMB", "..BBBB."],
 };
 
 /** Each thing's picture with its dark edge, for a belt or a card. */

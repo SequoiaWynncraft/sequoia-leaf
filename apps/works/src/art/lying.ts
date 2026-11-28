@@ -1,6 +1,6 @@
 /**
  * What lies in the ground, as the floor draws it (`ground.ts`): the six things gathered from the
- * start, and tier 5's salvage. Each is drawn over the floor on its tile, never in ranks, by its own
+ * start, tier 5's salvage and tier 6's tar. Each is drawn over the floor on its tile, never in ranks, by its own
  * painter; and the floor round each tile that holds one is a soft-edged patch of its own colours.
  */
 import { isItem, itemName, type Land, RAW } from "@sequoia-leaf/factory";
@@ -12,8 +12,8 @@ import { TILE } from "./belts.ts";
 import { rock, stump } from "./nature.ts";
 import { CLAY, IRON } from "./pal.ts";
 
-/** What lies in the ground and is drawn there: the six, and tier 5's salvage. */
-export const LYING = [...RAW, "salvage"] as const;
+/** What lies in the ground and is drawn there: the six, tier 5's salvage and tier 6's tar, in the things' order. */
+export const LYING = [...RAW, "salvage", "tar"] as const;
 export type Lying = (typeof LYING)[number];
 /** What lies in the ground on a tile of a land, by name, or nothing. */
 export const rawAt = (land: Land, i: number): Lying | null => {
@@ -95,6 +95,24 @@ function salvage(g: Ctx, { ox, oy, a, b }: At): void {
   if (b > 0.55) R(g, cx + 4, cy + 2, 2, 1, IRON[3]);
 }
 
+/** Tar's own colour, the darkest thing in the yard. */
+const TAR = "#1f1b24";
+
+/** Tar seeping up: a dark pool soaked into the earth, a sheen across it and a smaller seep beside it. */
+function tar(g: Ctx, { ox, oy, a, b }: At): void {
+  const cx = ox + 5 + Math.floor(a * 6);
+  const cy = oy + 7 + Math.floor(b * 4);
+  ell(g, cx, cy + 1, 6.4, 3.6, BARK[0]);
+  ell(g, cx, cy, 5.6, 3, TAR);
+  ell(g, cx + 1, cy + 1, 3, 1.4, IRON[0]);
+  // The sheen: a short pale streak where the light lies on it, and a glint.
+  R(g, cx - 3, cy - 1, 3, 1, IRON[3]);
+  R(g, cx - 1, cy - 2, 2, 1, IRON[4]);
+  if (a > 0.4) {
+    ell(g, cx + 5 - Math.floor(b * 10), cy + 4, 2, 1.2, TAR);
+    R(g, cx + 4 - Math.floor(b * 10), cy + 4, 1, 1, IRON[3]);
+  }
+}
 /** How each thing lying in the ground is drawn on its tile. */
 const PAINT: Readonly<Record<Lying, (g: Ctx, at: At) => void>> = {
   deadfall(g, { ox, oy, seed, a, b }) {
@@ -125,6 +143,7 @@ const PAINT: Readonly<Record<Lying, (g: Ctx, at: At) => void>> = {
     R(g, ox + 12 + Math.floor(a * 2), oy + 12 - Math.floor(b * 3), 2, 1, GOLD[1]);
   },
   salvage,
+  tar,
 };
 
 /** Draws what lies in the ground on the tile (`tx`, `ty`). */
@@ -159,6 +178,8 @@ const PATCHES: readonly Patch[] = [
   (rim, f, g2) => (rim ? GREEN[0] : f > 0.975 ? GOLD[0] : g2 > 0.6 ? EARTH[0] : GREEN[0]),
   // Salvage: turned earth, grey with old scrap, a glint of glass in it.
   (rim, f, g2) => (rim ? EARTH[0] : f > 0.98 ? PAPER[1] : g2 > 0.62 ? "#7a6a5c" : EARTH[0]),
+  // Tar: earth soaked dark round the seep, black where it is wettest, a dull sheen here and there.
+  (rim, f, g2) => (rim ? EARTH[0] : f > 0.975 ? IRON[3] : g2 > 0.6 ? TAR : BARK[0]),
 ];
 export const patchOf = (d: number, rim: boolean, f: number, g2: number, x: number, y: number, jy: number): string =>
   PATCHES[d - 1]?.(rim, f, g2, x, y, jy) ?? EARTH[0];

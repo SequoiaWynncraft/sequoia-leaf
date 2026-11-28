@@ -88,6 +88,7 @@ export {
   waysOf,
 } from "./wire.ts";
 export { KIND_DEFS, type KindRules, RULES } from "./kinds/list.ts";
+export { wayNames } from "./kinds/ports.ts";
 export {
   cornerOf,
   FACING,

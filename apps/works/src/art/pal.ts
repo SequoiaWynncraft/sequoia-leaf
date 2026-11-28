@@ -68,6 +68,13 @@ export const PAL: Readonly<Record<string, string>> = {
   i: IRON[2],
   j: IRON[3],
   J: IRON[4],
+  // Tar and what is distilled from it, for tier 6: tar the darkest, creosote and sleepers the bark
+  // browns, spirit the straw of old glass, varnish amber.
+  T: "#1f1b24",
+  f: "#5a4636",
+  F: "#6b5040",
+  L: "#c9b98a",
+  M: "#b8873f",
 };
 
 /** A picture with the dark edge every sprite has; `ax`, `ay` are counted before the edge is added. */
