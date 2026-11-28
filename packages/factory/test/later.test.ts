@@ -7,10 +7,12 @@
  */
 import { describe, expect, test } from "bun:test";
 
+import { PARTS } from "../src/cells.ts";
+import { ENTRY_FLAGS, MASK_BITS, SETTING_PARTS } from "../src/history.ts";
 import * as F from "../src/index.ts";
 import { KNOWN_AT_10 } from "../src/known10.ts";
 import { beforeReach } from "./goals.ts";
-import { near } from "./near.ts";
+import { near, xy } from "./near.ts";
 import { Player } from "./player.ts";
 import { bare, TIER5, tunnel } from "./tier5.ts";
 import { generated, must, saved, SAVES, staged } from "./yards.ts";
@@ -110,6 +112,72 @@ describe("the version a yard is kept as", () => {
   });
 });
 
+/** A whole number as packed bytes write it, seven bits a byte, the lowest first. */
+const varint = (v: number): number[] => (v < 128 ? [v] : [(v % 128) | 128, ...varint(Math.floor(v / 128))]);
+
+/** The bits below `width` that `known` does not have, and for a varint one far past them all. */
+const unknownBits = (known: number, width: number): number[] => [
+  ...Array.from({ length: width }, (_, b) => 2 ** b).filter((bit) => Math.floor(known / bit) % 2 === 0),
+  ...(width > 8 ? [2 ** 40] : []),
+];
+
+/**
+ * A yard with one entry in its history, a belt taken away ("r-1"), as kept: its record, and the
+ * entry's bytes, with where its parts are. The entry's flags follow its id (its length, then a byte
+ * each); last are what it did to the one piece (a count, then `UP`), and the piece it stands again (a
+ * count, the tile, then its first byte: no parts follow).
+ */
+function oneEntry(): { kept: Rec; bytes: Uint8Array; mask: number } {
+  const y = F.create({ seed: 1, tier: 4 });
+  must(y, { do: "build", kind: "belt", ...near(0, -6), dir: 0 });
+  y.history = [];
+  must(y, { do: "remove", ...near(0, -6), id: "r-1" });
+  const kept = record(F.encode(y));
+  const bytes = F.fromBase64(words(kept.history)[0] ?? "");
+  if (!bytes) throw new Error("no entry");
+  const mask = bytes.length - 3 - varint(F.at(y, ...xy(0, -6))).length;
+  expect([bytes[0], bytes[4], bytes[mask - 1], bytes[mask], (bytes.at(-1) ?? 0) & 128]).toEqual([3, 0, 1, 1, 0]);
+  return { kept, bytes, mask };
+}
+
+describe("every bit a save keeps that this Leaf does not use", () => {
+  test("is a newer Leaf's, in every mask and flag field: pieces and their parts, Undo entries, their pieces and their settings, blueprints", () => {
+    const good = record(F.encode(F.create({ seed: 1 })));
+    const { kept, bytes, mask } = oneEntry();
+    const entry = (b: readonly number[]): string =>
+      JSON.stringify({ ...kept, history: [F.toBase64(Uint8Array.from(b))] });
+    const at = (i: number, v: readonly number[]): number[] => [...bytes.subarray(0, i), ...v, ...bytes.subarray(i + 1)];
+    // Each field: the bits this Leaf keeps in it, how wide it is, and a save with one other bit set.
+    // A field with every bit in use (a piece's first byte, a setting's first byte, a blueprint piece's
+    // flags) has none to set; the clearing keeps no field of bits, only names, which a name no Leaf
+    // knows already makes a newer Leaf's (`clearing.test.ts`).
+    const fields: readonly (readonly [string, number, number, (bit: number) => string])[] = [
+      [
+        "a piece's parts",
+        PARTS,
+        31,
+        (bit) =>
+          JSON.stringify({ ...good, cells: F.toBase64(Uint8Array.from([1, 5, F.BELT | 128, ...varint(bit), 7, 7])) }),
+      ],
+      ["an Undo entry's flags", ENTRY_FLAGS, 8, (bit) => entry(at(4, [bit]))],
+      ["what an Undo entry did to a piece", MASK_BITS, 31, (bit) => entry(at(mask, varint(bit)))],
+      [
+        "the parts of a piece an Undo entry stands again",
+        SETTING_PARTS,
+        8,
+        (bit) => entry([...at(bytes.length - 1, [(bytes.at(-1) ?? 0) | 128]), bit]),
+      ],
+      ["a piece's first byte, a setting's, a blueprint piece's flags", 0xff, 8, () => ""],
+    ];
+    expect([F.keptLater(entry([...bytes])), F.decode(entry([...bytes])) === null]).toEqual([false, false]);
+    for (const [name, known, width, save] of fields)
+      for (const bit of unknownBits(known, width)) {
+        const text = save(bit);
+        expect([name, bit, F.keptLater(text), F.decode(text)]).toEqual([name, bit, true, null]);
+      }
+  });
+});
+
 describe("a yard naming what this Leaf does not know is a newer Leaf's", () => {
   const rec = record(F.encode(staged("mid")));
   const later = (part: Rec): boolean => {
@@ -144,32 +212,6 @@ describe("a yard naming what this Leaf does not know is a newer Leaf's", () => {
     expect(later({ ...plan, blueprints: [{ whole: print }] })).toBe(true);
     const fits = F.toBase64(Uint8Array.from([F.TUNNEL, 0, 0, 4, F.SPAN_MOST]));
     expect(later({ ...plan, blueprints: [fits] })).toBe(false);
-  });
-
-  test("Undo's record with a flag no reader here knows, or a piece in it with a part none knows: never broken bytes", () => {
-    const y = F.create({ seed: 1, tier: 4 });
-    must(y, { do: "build", kind: "belt", ...near(0, -6), dir: 0 });
-    y.history = [];
-    must(y, { do: "remove", ...near(0, -6), id: "r-1" });
-    const kept = record(F.encode(y));
-    const bytes = F.fromBase64(words(kept.history)[0] ?? "");
-    if (!bytes) throw new Error("no entry");
-    const read = (b: Uint8Array): [boolean, boolean] => {
-      const text = JSON.stringify({ ...kept, history: [F.toBase64(b)] });
-      return [F.decode(text) === null, F.keptLater(text)];
-    };
-    // The entry's flags follow its id ("r-1": its length, then a byte each); the belt it stands
-    // again (one of the pieces to hand, 64), with no parts, is its last byte.
-    const kd = bytes.at(-1) ?? 0;
-    expect([bytes[0], kd & ~64]).toEqual([3, F.BELT]);
-    const flagged = Uint8Array.from(bytes);
-    flagged[4] = (flagged[4] ?? 0) | 0x80;
-    const parted = Uint8Array.from([...bytes.subarray(0, -1), kd | 128, 0x80]);
-    expect([read(bytes), read(flagged), read(parted)]).toEqual([
-      [false, false],
-      [true, true],
-      [true, true],
-    ]);
   });
 
   test("Undo's record of a tunnel longer than this Leaf's longest: never stood again into another tunnel's row", () => {

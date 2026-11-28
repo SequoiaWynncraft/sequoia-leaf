@@ -39,8 +39,8 @@ import { ALL_ITEMS, CARRIES, FIXED, type Goal, isItem, keptKind, NONE, SHUTS, SP
 import { KIT } from "./wire.ts";
 import { held, holderOf, type Holders, tunnelOf, type Yard } from "./yard.ts";
 
-/** The parts a piece's bytes may say follow, a bit each. */
-const PARTS = 0x1fffe;
+/** The parts a piece's bytes may say follow, a bit each: any other is a newer Leaf's. */
+export const PARTS = 0x1fffe;
 /** The parts kept since a kind could pass 15 and a piece hold a by-product, after all the others. */
 const HIGH = 0x4000;
 const ALSO = 0x8000;

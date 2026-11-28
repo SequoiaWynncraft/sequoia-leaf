@@ -136,6 +136,10 @@ const UP = 1;
 const MOVED = 1;
 const STROKE = 2;
 const TOO_BIG = 4;
+/** The bits of an entry's flags this Leaf keeps: any other is a newer Leaf's. */
+export const ENTRY_FLAGS = MOVED | STROKE | TOO_BIG;
+/** The bits of the byte saying which parts of a piece's settings follow (`packSettings`): any other is a newer Leaf's. */
+export const SETTING_PARTS = 127;
 
 /** Why an Undo is refused. */
 const UNDO_SAYS = {
@@ -224,6 +228,8 @@ const SETTINGS: readonly {
     },
   },
 ];
+/** The bits of what a command did to a piece (`masks`) this Leaf keeps: `UP`, and one for each setting. */
+export const MASK_BITS = (2 << SETTINGS.length) - 1;
 
 /** The settings of the piece on a tile that differ from how one stood (`s`), a bit each by its place in `SETTINGS`. */
 const changedOf = (y: Yard, s: Setting): number =>
@@ -282,7 +288,7 @@ const standsBack = (kind: number, span: number): kind is Kind =>
 function readSetting(r: Reader, tile: number, seen?: Seen): Setting | null {
   const kd = r.byte();
   const f = kd & 128 ? r.byte() : 0;
-  if (f > 127) {
+  if (f > SETTING_PARTS) {
     seen?.(NEWER);
     return null;
   }
@@ -534,11 +540,19 @@ function readTiles(r: Reader, tiles: number): number[] | null {
 }
 
 /** What a command did to each piece that stood on an entry's tiles, after their count: `UP` alone, or settings changed; null past `most`. */
-function readMasks(r: Reader, most: number): number[] | null {
+/**
+ * What an entry did to each piece, read back; null for bytes that are not that, and for a bit past
+ * the settings this Leaf has (`MASK_BITS`), which is told to `seen` as `NEWER` first.
+ */
+function readMasks(r: Reader, most: number, seen?: Seen): number[] | null {
   const n = r.varint();
   const out: number[] = [];
   for (let k = 0; k < Math.min(n, most) && !r.over; k++) out.push(r.varint());
-  return n > most || out.some((m) => m >= 2 << SETTINGS.length || (m & UP && m !== UP)) ? null : out;
+  if (!r.over && out.some((m) => (m & ~MASK_BITS) !== 0 || m > MASK_BITS)) {
+    seen?.(NEWER);
+    return null;
+  }
+  return n > most || out.some((m) => m & UP && m !== UP) ? null : out;
 }
 
 /** The rest of an entry's bytes, after its Coins and check: its tiles, the way back, the settings changed and how the pieces stood. */
@@ -550,7 +564,7 @@ function readBody(
 ): Pick<Undoing, "tiles" | "was" | "masks" | "back"> | null {
   const fresh = readTiles(r, tiles);
   const back = flags & MOVED ? { turns: r.byte(), x: r.byte(), y: r.byte() } : null;
-  const masks = readMasks(r, tiles);
+  const masks = readMasks(r, tiles, seen);
   const was = fresh && masks && !r.over && (back?.turns ?? 0) <= 3 ? readSettings(r, tiles, seen) : null;
   if (!fresh || !masks || !was || masks.length !== was.length) return null;
   const all = [...new Set([...fresh, ...was.map((s) => s.tile)])].toSorted((i, j) => i - j);
