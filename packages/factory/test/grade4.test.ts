@@ -147,6 +147,54 @@ describe("Upgrade", () => {
   });
 });
 
+describe("a grade 4 piece in hand", () => {
+  test("is raised from its card, alone, for the difference, and only while it is the piece the card was of", () => {
+    const y = bare4();
+    must(y, { do: "build", kind: "belt", x: 3, y: 8, dir: 0, grade: 3 });
+    const tiles = [F.at(y, 3, 8)];
+    const raise = { do: "upgrade", tiles, grade: 4, kind: "belt", from: 3 };
+    expect(spent(y, raise)).toBe(F.price(F.BELT, 4) - F.price(F.BELT, 3));
+    expect(y.grade[F.at(y, 3, 8)]).toBe(4);
+    expect(typeof spent(y, raise)).toBe("string");
+  });
+
+  test("kept in a blueprint goes into its code at grade 4, and pasted elsewhere is set down at grade 4", () => {
+    const y = bare4();
+    for (const [x, kind] of [
+      [3, "belt"],
+      [4, "splitter"],
+      [5, "joiner"],
+      [6, "sorter"],
+    ] as const)
+      must(y, { do: "build", kind, x, y: 8, dir: 0, grade: 4 });
+    must(y, { do: "saveBlueprint", slot: 0, tiles: F.within(y, 3, 8, 6, 8) });
+    const print = y.blueprints[0];
+    const code = print ? F.blueprintCode(print) : null;
+    if (code === null) throw new Error("no code");
+    const b = bare4();
+    must(b, { do: "pasteBlueprint", slot: 2, code });
+    must(b, { do: "placeBlueprint", slot: 2, turns: 0, x: 3, y: 2 });
+    expect([3, 4, 5, 6].map((x) => b.grade[F.at(b, x, 2)])).toEqual([4, 4, 4, 4]);
+    // In a yard without the research, pasted it keeps, and set down it is refused by name.
+    const early = bare4(["planchest"], 7);
+    must(early, { do: "pasteBlueprint", slot: 0, code });
+    const did = give(early, { do: "placeBlueprint", slot: 0, turns: 0, x: 3, y: 2 });
+    expect("refused" in did ? did.why : null).toContain("A grade 4 belt is not unlocked yet");
+  });
+
+  test("laid as a run is undone whole, its Coins given back", () => {
+    const y = bare4();
+    const legs = [3, 4, 5, 6, 7].map((x): F.Leg => ({ tunnel: false, x, y: 8, dir: 0, grade: 4 }));
+    const read = F.readCommand({ tick: y.tick, ...F.writeAct({ do: "lay", legs }), id: "run-1" });
+    if (!read) throw new Error("the run does not read");
+    const did = F.play(y, read);
+    if ("refused" in did) throw new Error(did.why);
+    expect([3, 4, 5, 6, 7].map((x) => y.grade[F.at(y, x, 8)])).toEqual([4, 4, 4, 4, 4]);
+    expect(spent(y, { do: "undo", entry: "run-1" })).toBeLessThan(0);
+    expect([3, 4, 5, 6, 7].map((x) => y.kind[F.at(y, x, 8)])).toEqual([F.NONE, F.NONE, F.NONE, F.NONE, F.NONE]);
+  });
+});
+
 describe("a yard with grade 4 pieces", () => {
   test("kept mid-run as version 13 and read back goes on as the one kept, tick for tick", () => {
     const y = bare4();
