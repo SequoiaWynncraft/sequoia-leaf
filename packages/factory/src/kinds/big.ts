@@ -1,7 +1,8 @@
 /**
  * What a piece of more than one tile that holds things hands on by: its ways out (`KindDef.ports`),
- * each sending the thing it finished or what was made beside it, to the tile ahead of that way. It
- * stops while either cannot leave: a machine begins nothing more until both have (`maker.ts`).
+ * each sending the thing it finished or what was made beside it, to the tile ahead of that way (a way
+ * for one thing only sends that thing: `Ports.out.only`). It stops while either cannot leave: a
+ * machine begins nothing more until both have (`maker.ts`).
  */
 import type { Wire, Yard } from "../yard.ts";
 import type { Hooks } from "./kind.ts";
@@ -19,8 +20,11 @@ export function handPorts(k: Kit, y: Yard, i: number, wire: Wire): void {
 export function readyPorts(k: Kit, y: Yard, i: number, to: number): boolean {
   const r = k.holderOf(y, i);
   const outs = k.outsOf(y, i);
-  for (let p = 0; p < outs.length; p++)
-    if (k.portTo(y, i, p) === to && (outs[p]?.also ? y.holders.also[r] : y.holders.out[r]) !== k.NONE) return true;
+  for (let p = 0; p < outs.length; p++) {
+    const o = outs[p];
+    const n = (o?.also ? y.holders.also[r] : y.holders.out[r]) ?? k.NONE;
+    if (o && k.portTo(y, i, p) === to && n !== k.NONE && k.sendsThing(o, n)) return true;
+  }
   return false;
 }
 

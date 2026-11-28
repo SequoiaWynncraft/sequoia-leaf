@@ -115,6 +115,7 @@ export interface Kit {
   readonly sendPort: typeof Wire.sendPort;
   readonly portTo: typeof Wire.portTo;
   readonly outsOf: typeof Wire.outsOf;
+  readonly sendsThing: typeof Wire.sendsThing;
   readonly takesAt: typeof Wire.takesAt;
   readonly refused: typeof Wire.refused;
   readonly roomBeside: typeof Wire.roomBeside;

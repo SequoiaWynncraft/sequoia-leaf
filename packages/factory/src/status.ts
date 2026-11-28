@@ -5,6 +5,7 @@
  * both for itself (`kinds/`), in the words they share (`kinds/say.ts`). Nothing here changes the yard
  * but working out its power and plumbing if a change left them unknown.
  */
+import { fuelNow } from "./kinds/burner.ts";
 import { RULES } from "./kinds/list.ts";
 import { holding as holdingOf, type MachineRate, rateOf, type State, STATES, TROUBLE } from "./kinds/say.ts";
 import { litAt } from "./power.ts";
@@ -88,14 +89,16 @@ export function flow(y: Yard, made: Counts, needed: Counts): void {
   const wire = y.wire ?? rewire(y);
   const { work, burners } = wire;
   for (let c = 0; c < work.length; c++) flowAt(y, work[c] ?? 0, made, needed);
-  for (let b = 0; b < BURNING.length; b++) {
-    const k = BURNING[b] ?? NONE;
-    const burns = BURNS[k];
-    if (!burns) continue;
-    let n = 0;
-    for (let c = 0; c < burners.length; c++) if (y.kind[burners[c] ?? 0] === k) n++;
-    needed[burns.fuel] = (needed[burns.fuel] ?? 0) + n * (KIT.MINUTE / burns.ticks);
-  }
+  // Each kind's fuel once, as many as burn it now times what one burns, in the tables' order.
+  for (const k of BURNING)
+    for (const f of BURNS[k]?.fuels ?? []) {
+      let n = 0;
+      for (let c = 0; c < burners.length; c++) {
+        const i = burners[c] ?? 0;
+        if (y.kind[i] === k && fuelNow(KIT, y, i) === f) n++;
+      }
+      needed[f.fuel] = (needed[f.fuel] ?? 0) + n * (KIT.MINUTE / f.ticks);
+    }
 }
 
 /** The kinds that burn for power, in the tables' order. */

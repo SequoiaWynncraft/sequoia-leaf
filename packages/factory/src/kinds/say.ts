@@ -68,13 +68,14 @@ export function slow(k: Kit, y: Yard, i: number): string {
 /**
  * Where the piece on its own tile `i` sends a thing held ready: each tile it leaves from and the tile it
  * goes to. One of one tile sends from its tile, ahead or by the ways it sends the thing `n` by; one of
- * more sends from each way out that sends its finished thing (or, with `also`, its by-product).
+ * more sends from each way out that sends its finished thing (or, with `also`, its by-product), and
+ * sends `n` (a way for one thing only sends that thing).
  */
 function sendings(k: Kit, y: Yard, i: number, n: Item, also: boolean): { from: number; to: number }[] {
   const outs = k.outsOf(y, i);
   if (outs.length > 0)
     return outs.flatMap((o, p) =>
-      o.also === also ? [{ from: i + o.dx + o.dy * y.land.w, to: k.portTo(y, i, p) }] : [],
+      o.also === also && k.sendsThing(o, n) ? [{ from: i + o.dx + o.dy * y.land.w, to: k.portTo(y, i, p) }] : [],
     );
   const ways = k.waysOf(y.kind[i] ?? k.NONE);
   if (ways === 0) return [{ from: i, to: k.nextOf(y, i) }];

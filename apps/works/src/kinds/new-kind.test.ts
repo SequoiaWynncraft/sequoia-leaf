@@ -256,7 +256,7 @@ export const furnace = kind({
   name: "furnace",
   info: { name: "Furnace", cost: 50, draw: 0, gives: 300, what: "Burns deadfall for a great deal of power." },
   holds: true,
-  burns: { fuel: "deadfall", ticks: 100, holds: 4 },
+  burns: { fuels: [{ fuel: "deadfall", ticks: 100 }], holds: 4 },
   rules: BURNER,
 });
 `;

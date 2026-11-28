@@ -13,6 +13,6 @@ export const boiler = kind({
     what: "Makes a lot of power, but only while it has deadfall to burn.",
   },
   holds: true,
-  burns: { fuel: "deadfall", ticks: TICKS.burn, holds: FUEL },
+  burns: { fuels: [{ fuel: "deadfall", ticks: TICKS.burn }], holds: FUEL },
   rules: BURNER,
 });

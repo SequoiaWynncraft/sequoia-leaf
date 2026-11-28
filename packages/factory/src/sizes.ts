@@ -19,7 +19,7 @@
  */
 import type { Opened } from "./kinds/kind.ts";
 import { KIND_DEFS } from "./kinds/list.ts";
-import { BIG, SIZE_H, SIZE_W } from "./tables.ts";
+import { BIG, itemNamed, NONE, SIZE_H, SIZE_W } from "./tables.ts";
 import type { Yard } from "./yard.ts";
 
 /** The part a tile is of a piece of more than one tile: where the piece's own tile is from it, four bits each way, 8 for none. */
@@ -61,13 +61,21 @@ function asFacing(w: number, h: number, d: number, lx: number, ly: number): read
   return [lx, ly];
 }
 
-/** An output, as a piece facing a way has it: its tile from the piece's own tile, the way it leaves, and what leaves (0 the thing finished, 1 a by-product). */
+/**
+ * An output, as a piece facing a way has it: its tile from the piece's own tile, the way it leaves,
+ * what leaves (0 the thing finished, 1 a by-product), and the one thing it sends, or `NONE` for any
+ * (`Ports.out.only`).
+ */
 export interface Out {
   readonly dx: number;
   readonly dy: number;
   readonly way: number;
   readonly also: boolean;
+  readonly only: number;
 }
+
+/** Whether a way out sends a thing: any it holds, or only the one it is for. */
+export const sendsThing = (o: Out, n: number): boolean => o.only === NONE || o.only === n;
 
 /**
  * A kind as it faces one way: the tiles it covers from its own tile (its own first), the sides of each
@@ -109,7 +117,8 @@ function facing(k: number, d: number): Facing {
   });
   const outs = (ports?.out ?? []).map((o): Out => {
     const [bx, by] = asFacing(w, h, d, o.at[0], o.at[1]);
-    return { dx: bx + cx, dy: by + cy, way: d, also: o.sends === "also" };
+    const only = o.only === undefined ? NONE : (itemNamed(o.only) ?? NONE);
+    return { dx: bx + cx, dy: by + cy, way: d, also: o.sends === "also", only };
   });
   return { dx, dy, takes, opened: [...opened].map(([when, bits]) => ({ when, takes: bits })), outs };
 }

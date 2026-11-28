@@ -208,18 +208,33 @@ export const HALF = 2;
 export const DRAWN: readonly number[] = [HALF, ...halves((g) => g.draw)];
 /** The power a piece of a kind at a grade draws where power reaches it, in halves: its kind's, once for each half its grade draws. */
 export const drawnAt = (k: number, grade: number): number => (DRAW[k] ?? 0) * (DRAWN[isGraded(k) ? grade : 0] ?? HALF);
-/** For each kind that burns for power (`KindDef.burns`): the thing it burns, the ticks a piece burns, how many pieces it holds, and the power it gives while it burns, in halves. */
-export interface Burns {
+/** A thing a burner burns: the thing, the ticks a piece of it burns, and the smog a piece taken adds to the burner's plot. */
+export interface Fuel {
   readonly fuel: Item;
   readonly ticks: number;
+  readonly smog: number;
+}
+/**
+ * For each kind that burns for power (`KindDef.burns`): what it burns, in the order it takes them;
+ * how many pieces of each it holds; and the power it gives while it burns, in halves.
+ */
+export interface Burns {
+  readonly fuels: readonly Fuel[];
   readonly holds: number;
   readonly halves: number;
 }
 export const BURNS: readonly (Burns | null)[] = KIND_DEFS.map((d: KindDef) => {
   const b = d.burns;
-  const fuel = b ? itemNamed(b.fuel) : null;
-  return b && fuel !== null ? { fuel, ticks: b.ticks, holds: b.holds, halves: d.info.gives * HALF } : null;
+  if (!b) return null;
+  const fuels = b.fuels.map((f): Fuel => ({
+    fuel: sure(itemNamed(f.fuel), f.fuel),
+    ticks: f.ticks,
+    smog: f.smog ?? 0,
+  }));
+  return { fuels, holds: b.holds, halves: d.info.gives * HALF };
 });
+/** What a burner burns of a thing, if it burns it. */
+export const fuelOf = (b: Burns, n: number): Fuel | undefined => b.fuels.find((f) => f.fuel === n);
 /** The work in gathering one thing and in studying one folio, in half-ticks. */
 export const WORK = { gather: TICKS.gather * 2, study: TICKS.study * 2 } as const;
 /** For each kind that runs under tiles, what each tile past so many adds to its cost (`KindDef.deeper`). */
