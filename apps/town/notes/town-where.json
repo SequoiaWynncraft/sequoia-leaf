@@ -1,0 +1,9 @@
+{
+  "id": "town-where",
+  "at": "2026-11-28T14:30Z",
+  "title": "Who is about",
+  "lines": [
+    "Who is about no longer shows a player as \"just now\" for hours. Seen lately shows how long ago each player left.",
+    "A player who is away shows for how long, like \"away for 3 hours\"."
+  ]
+}

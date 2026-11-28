@@ -5,22 +5,21 @@
  * shows them.
  *
  * - **In town**: the member first, marked as them; then everybody in town: in the town's live room
- *   with the member, or out of the room, whoever Leaf has in town; and for whoever is away, for how
- *   long.
+ *   with the member, or whoever else Leaf has in town; and for whoever is away, for how long
+ *   (`awayFor`: always with a time, and from the first for somebody only their page says is there).
  * - **Elsewhere**: in the game, but not in town: at the Works, at the raid table, in the Grove, in
  *   their camp or visiting somebody's (`campWords`); and for whoever is away, for how long.
- * - **Seen lately**: gone in the last day, newest first, with how long ago, and whose camp for
- *   whoever was last at one; first of all whoever has only just walked out of the town's room.
+ * - **Seen lately**: gone in the last day by Leaf's word, newest first, with how long ago they
+ *   left, and whose camp for whoever was last at one.
  *
  * The panel is one row for each player, kept by their id, so nobody can be listed twice. That is
  * the panel as it is opened; while it stays open its order holds (`held`).
  */
 
-import { away } from "@sequoia-leaf/core";
 import type { CampOwner, Place } from "@sequoia-leaf/kit/presence.ts";
 
 import { span } from "./letter.ts";
-import { inGame, type InRoom, type Where } from "./where.ts";
+import { awayFor, inGame, type InRoom, type Where } from "./where.ts";
 
 export type PartName = "In town" | "Elsewhere" | "Seen lately";
 
@@ -86,18 +85,18 @@ export function campWords(id: string, camp: CampOwner | null, me: string): strin
 export const placeWords = (w: Where, me: string): string =>
   w.at === "camp" ? campWords(w.id, w.camp, me) : WHERE[w.at];
 
-/** How long somebody has been away, in words: "away for 20 minutes"; only "away" when Leaf has never heard them do anything. */
-export const awayWords = (acted: number | null, now: number): string =>
-  acted === null ? "away" : `away for ${span(Math.max(0, (now - acted) / 60_000))}`;
+/** How long somebody has been away (`ms`, in milliseconds), in words: "away for 20 minutes". */
+export const awayWords = (ms: number): string => `away for ${span(ms / 60_000)}`;
 
 /**
  * What somebody in the game is about, in words, for their row and their card, as the member (`me`)
  * reads them: where they are if not in town, and for how long they have been away if they are
- * (Leaf's rule, `away`); nothing for somebody just about the town, or gone.
+ * (`awayFor`); nothing for somebody just about the town, or gone.
  */
 export function doingWords(w: Where, now: number, me: string): string[] {
   if (w.state === "gone") return [];
-  return [...(w.at === "town" ? [] : [placeWords(w, me)]), ...(away(w.acted, now) ? [awayWords(w.acted, now)] : [])];
+  const gone = awayFor(w, now);
+  return [...(w.at === "town" ? [] : [placeWords(w, me)]), ...(gone === null ? [] : [awayWords(gone)])];
 }
 
 /** A person's card's line under their rank: "At the Works", "Visiting you", "Away for 20 minutes"; null for nothing to say. */
@@ -105,9 +104,6 @@ export function cardLine(w: Where | undefined, now: number, me: string): string 
   const said = w ? doingWords(w, now, me).join(", ") : "";
   return said === "" ? null : said.charAt(0).toUpperCase() + said.slice(1);
 }
-
-/** The line for somebody who walked out of town within the last minute or so. */
-export const JUST_NOW = "just now";
 
 /** How long ago somebody was last seen, in the words the dozers' cards use: "3 hours ago". */
 export const agoLine = (seen: number, now: number): string => `${span(Math.max(0, (now - seen) / 60_000))} ago`;
@@ -133,11 +129,11 @@ export function whoIsAbout(o: { me: InRoom; all: ReadonlyMap<string, Where>; now
   const doing = (w: Where): string => line(w.rank, ...doingWords(w, o.now, o.me.id));
   for (const w of here.filter((x) => x.at === "town")) put("In town", w, doing(w));
   for (const w of here.filter((x) => x.at !== "town")) put("Elsewhere", w, doing(w));
-  // In the order the record has them: whoever has only just left first, then newest first.
+  // In the order the record has them: newest first.
   for (const w of all) {
     if (w.state !== "gone") continue;
     const camp = w.at === "camp" ? placeWords(w, o.me.id) : null;
-    put("Seen lately", w, line(w.rank, camp, w.seen === null ? JUST_NOW : agoLine(w.seen, o.now)));
+    put("Seen lately", w, line(w.rank, camp, agoLine(w.seen, o.now)));
   }
 
   const count = [...rows.values()].filter((r) => r.part !== "Seen lately").length;

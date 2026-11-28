@@ -19,7 +19,8 @@ export interface CampOwner {
 
 /**
  * Somebody on Leaf's list of who is about: where they are, or were last (at a camp, whose, when
- * their page said; null anywhere else), and when Leaf last heard of them there.
+ * their page said; null anywhere else), and when Leaf last heard of them there: for somebody gone,
+ * when they left.
  */
 export interface Seen {
   readonly playerId: string;
@@ -31,12 +32,23 @@ export interface Seen {
 }
 
 /**
- * Who is about: those here now, and those gone in the last day, in two lists: `resting`, whose
- * characters stay in town, and `gone`, whose do not. They are apart so that a page which draws
- * everybody resting as dozing never draws somebody who would rather not stay.
+ * Somebody here now: since when (their visit began then, and a deploy does not begin another), and
+ * whether a live room of the place has them (`live`), where everybody in it sees them and Leaf
+ * hears what they do. Not live, only their page says they are there.
+ */
+export interface Present extends Seen {
+  readonly live: boolean;
+  readonly since: number;
+}
+
+/**
+ * Who is about, each player in one list at most, from their one newest visit: those here now, and
+ * those gone in the last day, in two lists: `resting`, whose characters stay in town, and `gone`,
+ * whose do not. They are apart so that a page which draws everybody resting as dozing never draws
+ * somebody who would rather not stay.
  */
 export interface Here {
-  readonly present: readonly Seen[];
+  readonly present: readonly Present[];
   readonly resting: readonly Seen[];
   readonly gone: readonly Seen[];
 }
@@ -49,6 +61,9 @@ const Latest = Schema.Struct({
   campOwner: Schema.NullOr(PlayerUuid),
   campOwnerName: Schema.NullOr(Schema.String),
   guest: Schema.BooleanFromBit,
+  /** How Leaf knows of the visit: a live room of the place keeps it, or the player's page says so. */
+  source: Schema.Literals(["room", "call"]),
+  enteredAt: Schema.Int,
   heardAt: Schema.Int,
   leftAt: Schema.NullOr(Schema.Int),
   stay: Schema.BooleanFromBit,
@@ -64,7 +79,7 @@ export const campOwners = (here: Here): PlayerId[] =>
 
 /** The lists, each camp's owner named as `named` has them (as the camp list names them), else as before. */
 export const namedCamps = (here: Here, named: ReadonlyMap<string, string>): Here => {
-  const name = (p: Seen): Seen =>
+  const name = <P extends Seen>(p: P): P =>
     p.camp === null ? p : { ...p, camp: { ...p.camp, name: named.get(p.camp.playerId) ?? p.camp.name } };
   return { present: here.present.map(name), resting: here.resting.map(name), gone: here.gone.map(name) };
 };
@@ -78,6 +93,8 @@ const seen = (v: typeof Latest.Type): Seen => ({
   guest: v.guest,
   seenAt: v.leftAt ?? v.heardAt,
 });
+/** Somebody here, from their open visit: since it began, and live while a room keeps it. */
+const present = (v: typeof Latest.Type): Present => ({ ...seen(v), live: v.source === "room", since: v.enteredAt });
 /** Newest first, then by id. */
 const byNewest = (a: Seen, b: Seen) => b.seenAt - a.seenAt || (a.playerId < b.playerId ? -1 : 1);
 /** By name, then by id. */
@@ -94,7 +111,7 @@ export function hereFrom(visits: readonly (typeof Latest.Type)[], now: number): 
   const isHere = (v: typeof Latest.Type) => v.leftAt === null && v.heardAt > now - PRESENT_FOR_MS;
   const left = visits.filter((v) => !isHere(v));
   return {
-    present: visits.filter(isHere).map(seen).toSorted(byNewest).slice(0, PRESENT_MOST).toSorted(byName),
+    present: visits.filter(isHere).map(present).toSorted(byNewest).slice(0, PRESENT_MOST).toSorted(byName),
     resting: left
       .filter((v) => v.stay)
       .map(seen)
@@ -157,8 +174,9 @@ export const readHere = (sql: SqlClient.SqlClient) => {
 const newest = (sql: SqlClient.SqlClient, where: Statement.Fragment, by: "heard" | "left", most: number) => sql`
   SELECT * FROM (
     SELECT l.player_id AS playerId, p.name AS username, l.place, l.camp_owner AS campOwner, o.name AS campOwnerName,
-           l.guest, l.heard_at AS heardAt, l.left_at AS leftAt, l.stay
-    FROM last_visits AS l JOIN players_seen AS p ON p.player_id = l.player_id
+           l.guest, v.source, v.entered_at AS enteredAt, l.heard_at AS heardAt, l.left_at AS leftAt, l.stay
+    FROM last_visits AS l JOIN visits AS v ON v.id = l.visit_id
+      JOIN players_seen AS p ON p.player_id = l.player_id
       LEFT JOIN players_seen AS o ON o.player_id = l.camp_owner
     WHERE ${where} AND NOT EXISTS (SELECT 1 FROM merges AS m WHERE m.from_id = l.player_id)
     ORDER BY ${sql.literal(by === "heard" ? "l.heard_at" : "l.left_at")} DESC, l.player_id LIMIT ${most}

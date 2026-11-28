@@ -17,7 +17,7 @@ import { ABOUT_ASK_AGAIN } from "./about.ts";
 import { restart, start } from "./live.ts";
 import { backoff, onWake, outside, pretend } from "./net.ts";
 import { Playout, Track } from "./playout.ts";
-import { hearPresent, here, type Present } from "./presence.ts";
+import { askNow, forgetPresence, hearPresent, here, type Present } from "./presence.ts";
 import { forgetLedger } from "./purse.ts";
 import {
   askWhy,
@@ -387,6 +387,8 @@ const listed = (id: string, place: string) => ({
   username: id,
   place,
   guest: false,
+  live: place === "town",
+  since: "2026-11-25T09:30:00.000Z",
   seen_at: "2026-11-25T10:00:00.000Z",
 });
 const welcome = (you: number, time: number, roster = [{ ...ALICE, id: you }], room = "town"): ToClient => ({
@@ -412,6 +414,7 @@ describe("a live room", () => {
     world?.done();
     world = null;
     sockets.length = 0;
+    forgetPresence();
     restart();
     forgetLedger();
   });
@@ -788,6 +791,85 @@ describe("a live room", () => {
     await Bun.sleep(800);
     expect(sockets.length).toBe(1);
     expect(seen).toEqual(["connecting", "open", said]);
+  });
+
+  test("a page Leaf let go of says nothing of where the player is, until a room welcomes it again", async () => {
+    const lists = { status: 200, body: { present: [], resting: [] } };
+    const w = standin({
+      "GET /v1/game/hello": HELLO,
+      "GET /v1/game/me": { status: 200, body: TESTER },
+      "GET /v1/game/presence": lists,
+      "PUT /v1/game/presence": lists,
+    });
+    world = w;
+    await start();
+    undo = pretend({
+      socket: (url) => {
+        const s = new FakeSocket(url);
+        sockets.push(s);
+        return s;
+      },
+    });
+    const said = (): unknown[] => w.sent.filter((s) => s.path === "/v1/game/presence").map((s) => s.method);
+    room = joinLive("town");
+    here("town");
+    await Bun.sleep(10);
+    // Not in the room yet: the page says where the player is itself.
+    expect(said()).toEqual(["PUT"]);
+    socket(0).open();
+    socket(0).says(welcome(1, w.clock.now));
+    await Bun.sleep(10);
+    expect(said()).toEqual(["PUT", "GET"]);
+
+    // The player opened the game live on another page, which says where they are from here.
+    socket(0).drop(CLOSE.replaced);
+    await askNow();
+    here("camp");
+    here("town");
+    await Bun.sleep(10);
+    expect(said()).toEqual(["PUT", "GET"]);
+
+    // "Play here": a room of its own again, and the page is the player's once it is welcomed.
+    room = joinLive("camp:10000000-0000-0000-0000-000000000002");
+    here("camp");
+    await askNow();
+    expect(said()).toEqual(["PUT", "GET"]);
+    socket(1).open();
+    socket(1).says(welcome(1, w.clock.now, undefined, "camp:10000000-0000-0000-0000-000000000002/1"));
+    await askNow();
+    expect(said()).toEqual(["PUT", "GET", "PUT"]);
+  });
+
+  test("a page that closes its own room, or loses it by a drop, goes on saying where the player is", async () => {
+    const lists = { status: 200, body: { present: [], resting: [] } };
+    const w = standin({
+      "GET /v1/game/hello": HELLO,
+      "GET /v1/game/me": { status: 200, body: TESTER },
+      "GET /v1/game/presence": lists,
+      "PUT /v1/game/presence": lists,
+    });
+    world = w;
+    await start();
+    undo = pretend({
+      socket: (url) => {
+        const s = new FakeSocket(url);
+        sockets.push(s);
+        return s;
+      },
+    });
+    const said = (): unknown[] => w.sent.filter((s) => s.path === "/v1/game/presence").map((s) => s.method);
+    room = joinLive("town");
+    socket(0).open();
+    socket(0).says(welcome(1, w.clock.now));
+    here("town");
+    await Bun.sleep(10);
+    expect(said()).toEqual(["GET"]);
+    socket(0).drop();
+    await askNow();
+    expect(said()).toEqual(["GET", "PUT"]);
+    room.close();
+    await askNow();
+    expect(said()).toEqual(["GET", "PUT", "PUT"]);
   });
 
   test("may be closed by whoever hears its status, even as it connects again, and then does nothing more", async () => {

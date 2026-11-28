@@ -19,6 +19,8 @@
           "place": "town",
           "guest": false,
           "seen_at": "2026-11-25T12:55:00.000Z",
+          "live": false,
+          "since": "2026-11-25T12:54:30.000Z",
           "acted_at": null
         },
         {
@@ -27,6 +29,8 @@
           "place": "town",
           "guest": true,
           "seen_at": "2026-11-25T12:55:00.000Z",
+          "live": false,
+          "since": "2026-11-25T12:55:00.000Z",
           "acted_at": null
         }
       ],
@@ -57,6 +61,8 @@
           "place": "town",
           "guest": false,
           "seen_at": "2026-11-25T12:55:00.000Z",
+          "live": false,
+          "since": "2026-11-25T12:54:30.000Z",
           "acted_at": null
         },
         {
@@ -65,6 +71,8 @@
           "place": "town",
           "guest": true,
           "seen_at": "2026-11-25T12:55:00.000Z",
+          "live": false,
+          "since": "2026-11-25T12:55:00.000Z",
           "acted_at": null
         }
       ],
@@ -98,6 +106,8 @@
           "place": "table",
           "guest": false,
           "seen_at": "2026-11-25T12:55:00.000Z",
+          "live": false,
+          "since": "2026-11-25T12:55:00.000Z",
           "acted_at": null
         },
         {
@@ -106,6 +116,8 @@
           "place": "town",
           "guest": true,
           "seen_at": "2026-11-25T12:55:00.000Z",
+          "live": false,
+          "since": "2026-11-25T12:55:00.000Z",
           "acted_at": null
         }
       ],
@@ -140,6 +152,8 @@
           "place": "table",
           "guest": false,
           "seen_at": "2026-11-25T12:55:00.000Z",
+          "live": false,
+          "since": "2026-11-25T12:55:00.000Z",
           "acted_at": "2026-11-25T12:55:00.000Z"
         },
         {
@@ -150,6 +164,8 @@
           "camp_owner_name": "Bob",
           "guest": true,
           "seen_at": "2026-11-25T12:55:00.000Z",
+          "live": false,
+          "since": "2026-11-25T12:55:00.000Z",
           "acted_at": "2026-11-25T12:55:00.000Z"
         }
       ],

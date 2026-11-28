@@ -15,7 +15,8 @@
  * (Leaf allows a player only so many openings). A welcome to a room the page has asked to leave
  * meanwhile is answered by asking for the one it wants. Why a connection closed is
  * its close code alone (`CLOSE`): told the player opened the game live somewhere else, or that
- * their session ended, this page lets go. A browser cannot see why a connection would not open, so after a few tries
+ * their session ended, this page lets go, and says nothing more of where the player is (`letGo`:
+ * another page of theirs does) until a room welcomes it again. A browser cannot see why a connection would not open, so after a few tries
  * that did not, the page asks Leaf whether the player is still signed in, and lets go if not. With
  * no Leaf there is no server, and it does nothing.
  *
@@ -59,7 +60,7 @@ import { AboutHeard } from "./about.ts";
 import { device, type LetGo, member } from "./live.ts";
 import { ask, type Backoff, backoff, type LiveSocket, outside } from "./net.ts";
 import { Playout, Track } from "./playout.ts";
-import { askAgain, heardAbout, inRoom } from "./presence.ts";
+import { askAgain, heardAbout, inRoom, letGo } from "./presence.ts";
 
 // What a page needs of the wire to draw who is in its room.
 export { Flag, type LiveMember, type Motion } from "@sequoia-leaf/core";
@@ -608,9 +609,9 @@ export function joinLive(first: string, ears: LiveEars = {}): LiveRoom {
         const l = current(was);
         if (was.at === "open" && was.room !== "out" && next.why === "closed") say(was.link, { t: "leave" });
         l?.socket.close(CLOSE.done, "bye");
-        inRoom(null);
-        if (next.why !== "closed") status(next.why);
-        return;
+        if (next.why === "closed") return inRoom(null);
+        letGo();
+        return status(next.why);
       }
     }
   }

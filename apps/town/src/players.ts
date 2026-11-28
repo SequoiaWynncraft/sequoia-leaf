@@ -22,7 +22,6 @@
  * on every page; the moment they move or do anything, they are up and about again.
  */
 
-import { away } from "@sequoia-leaf/core";
 import { builtAt } from "@sequoia-leaf/core/build/moment.ts" with { type: "macro" };
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { type Emote, EMOTES } from "@sequoia-leaf/kit/emotes.ts";
@@ -69,7 +68,7 @@ import { newsMoment } from "./notes.ts";
 import type { Place } from "./screen.ts";
 import { touchThing } from "./town.ts";
 import { dozy, followLive } from "./visitors.ts";
-import { inGame, type Where } from "./where.ts";
+import { awayFor, inGame, type Where } from "./where.ts";
 
 /** After this many milliseconds with the connection down, the others fade away and the town plays on alone. */
 const ALONE_AFTER = 5000;
@@ -297,8 +296,8 @@ export function stepPlayers(me: Actor, dt: number, jumped: boolean, at: LivePlac
   drawOthers(dt, at);
 }
 
-/** Whether somebody in the game by the one account (`where.ts`) is away by Leaf's rule. */
-const dozes = (w: Where | undefined, now: number): boolean => w !== undefined && inGame(w) && away(w.acted, now);
+/** Whether somebody in the game by the one account (`where.ts`) is away (`awayFor`). */
+const dozes = (w: Where | undefined, now: number): boolean => w !== undefined && inGame(w) && awayFor(w, now) !== null;
 
 function drawOthers(dt: number, at: LivePlace): void {
   // Down a while: the others go, and the place plays on alone until the room welcomes the page again.
