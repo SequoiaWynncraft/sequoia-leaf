@@ -99,7 +99,9 @@ const ctxAt = (now: number, seed: number, room: number): Ctx => ({
   postcards: {},
 });
 
-/** A step of a script done: a command read off the wire and done or refused, or the yard run on. */
+const STAFF_ACTOR = { by: "00000000-0000-4000-8000-0000000060d2", name: "Staff" } as const;
+
+/** A step of a script done: a command read off the wire (or staff channel) and done or refused, or the yard run on. */
 function stepDone(
   y: F.Yard,
   script: Script,
@@ -112,8 +114,18 @@ function stepDone(
     const at = y.at + (step.wait + F.LEAD) * F.TICK_MS;
     return { y: F.FACTORY.advance(y, ctxAt(at, n, room)), did: ["wait", step.wait, y.tick], ok: true };
   }
-  const raw = typeof step.send === "function" ? step.send(y) : step.send;
-  const c = F.FACTORY.command(JSON.parse(JSON.stringify({ tick: y.tick, id: `c${n}`, ...raw })));
+  const raw =
+    "staff" in step
+      ? typeof step.staff === "function"
+        ? step.staff(y)
+        : step.staff
+      : typeof step.send === "function"
+        ? step.send(y)
+        : step.send;
+  const c =
+    "staff" in step
+      ? F.readStaffCommand(JSON.parse(JSON.stringify({ ...STAFF_ACTOR, ...raw })))
+      : F.FACTORY.command(JSON.parse(JSON.stringify({ tick: y.tick, id: `c${n}`, ...raw })));
   if (!c) throw new Error(`the wire does not read ${JSON.stringify(raw)}`);
   const done = F.FACTORY.apply(y, c, ctxAt(y.at, n, room));
   if (isRefused(done)) return { y, did: [raw.do, "refused", done.refused], ok: false };

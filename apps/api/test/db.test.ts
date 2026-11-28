@@ -47,8 +47,12 @@ function onFile<A, E>(path: string, program: Effect.Effect<A, E, SqlClient.SqlCl
 }
 
 /** Runs SQL against the database file at `path`. */
-/** Undoes migration 51: no session kept as one signed in inside a call. */
-const beforeCallSignIns = (sql: SqlClient.SqlClient) => sql`ALTER TABLE sign_ins DROP COLUMN in_call`;
+/** Undoes migration 52: no staff edits table kept. */
+const beforePlayStaffEdits = (sql: SqlClient.SqlClient) => sql`DROP TABLE play_staff_edits`;
+
+/** Undoes migrations 52 and 51: no staff edits table, and no session kept as one signed in inside a call. */
+const beforeCallSignIns = (sql: SqlClient.SqlClient) =>
+  Effect.andThen(beforePlayStaffEdits(sql), sql`ALTER TABLE sign_ins DROP COLUMN in_call`);
 
 /** Undoes migrations 51 and 50: no session kept as a call's, and no call's sitting kept. */
 const beforeSittingCalls = (sql: SqlClient.SqlClient) =>
@@ -317,6 +321,7 @@ describe("the database", () => {
       { migration_id: 49, name: "banner_called" },
       { migration_id: 50, name: "raid_sitting_calls" },
       { migration_id: 51, name: "sign_ins_in_call" },
+      { migration_id: 52, name: "play_staff_edits" },
     ]);
     // Each feed has its own lease and cursor, not started yet.
     expect(await query(path, (sql) => sql`SELECT name, started_at, cursor FROM sync_state ORDER BY name`)).toEqual([
@@ -379,6 +384,7 @@ describe("the database", () => {
           "raid_sitting_places",
           "raid_sittings",
           "banner_called",
+          "play_staff_edits",
         ]) {
           yield* sql`DROP TABLE ${sql(table)}`;
         }
@@ -393,7 +399,7 @@ describe("the database", () => {
 
     expect(account.balance).toBe(110);
     expect(await query(path, (sql) => sql`SELECT max(migration_id) AS latest FROM effect_sql_migrations`)).toEqual([
-      { latest: 51 },
+      { latest: 52 },
     ]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM announcements`)).toEqual([{ n: 0 }]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM saves`)).toEqual([{ n: 0 }]);

@@ -1,6 +1,7 @@
 import {
   campRoom,
   type CoinChange,
+  COMMAND_ID,
   type Ctx,
   type Done,
   type Game,
@@ -10,6 +11,7 @@ import {
   type LeafSpend,
   type Logged,
   type Meeting,
+  MOST_FLUSHED,
   newerThan,
   type PlayerId,
   type Standing,
@@ -17,7 +19,7 @@ import {
   visitRoom,
 } from "@sequoia-leaf/core";
 import { rulesVersions } from "@sequoia-leaf/core/build/rules.ts" with { type: "macro" };
-import { FACTORY } from "@sequoia-leaf/factory/game.ts";
+import { FACTORY, readStaffCommand as readWorksStaffCommand } from "@sequoia-leaf/factory/game.ts";
 import { keptLater } from "@sequoia-leaf/factory/later.ts";
 import { PULLS, PULLS_VERSION, readStaffCommand } from "@sequoia-leaf/pulls";
 import { RAID, TABLE_VERSION } from "@sequoia-leaf/raid/game.ts";
@@ -34,6 +36,8 @@ export type Attempt =
       readonly log: readonly Logged[];
       /** What it leaves for other players to meet (`Done.keep`). */
       readonly pieces: readonly Kept[];
+      /** The exact encoded state immediately before this command ran. */
+      readonly before: string;
       /** Makes the state the command left the open state. Until then, nothing has changed. */
       readonly keep: () => void;
       /** What a visitor's page is told of it (`Game.echo`): asked once it is kept, before the next command. */
@@ -129,18 +133,28 @@ const doneOf = <S, N>(done: Done<S, N>) => ({
   pieces: done.keep ?? [],
 });
 
+/** Metadata a staff command carries when the play service should log it in `play_staff_edits`. */
+export interface StaffEditMeta {
+  readonly by: PlayerId;
+  readonly command: Readonly<Record<string, unknown>>;
+}
+
 /**
- * A command one of the guild's staff give through Leaf's own code (`POST /v1/game/admin/grants`),
- * with its id, to be done to a player's state as a batch of theirs is (`Play.send`). No page can
- * send one: nothing read off the wire is ever an instance of a class. A game reads it with the
- * reader it was given for the staff's (`played`'s `staff`), and never as one of its own.
+ * A command one of the guild's staff give through Leaf's own code (`POST /v1/game/admin/grants`,
+ * or the Works staff tool), with its id, to be done to a player's state as a batch of theirs is
+ * (`Play.send`). No page can send one: nothing read off the wire is ever an instance of a class.
+ * A game reads it with the reader it was given for the staff's (`played`'s `staff`), and never as
+ * one of its own.
  */
 export class StaffCommand {
   readonly id: string;
   readonly command: unknown;
-  constructor(id: string, command: unknown) {
+  /** When set, `Play.send` records the edit (and the exact state it ran on) in `play_staff_edits`. */
+  readonly edit?: StaffEditMeta;
+  constructor(id: string, command: unknown, edit?: StaffEditMeta) {
     this.id = id;
     this.command = command;
+    if (edit !== undefined) this.edit = edit;
   }
 }
 
@@ -206,17 +220,14 @@ export function played<State, Command, View, Note, Short>(
       meets: (raw) => meetsOf(game, current(), commandOf(raw)),
       attempt: (raw, at) => {
         const command = commandOf(raw);
-        if (command === null) {
-          return { refused: "invalid_command" };
-        }
+        if (command === null) return { refused: "invalid_command" };
         const before = game.encode(current());
         const answer = game.apply(state, command, at);
-        if (isRefused(answer)) {
-          return { refused: answer.refused };
-        }
+        if (isRefused(answer)) return { refused: answer.refused };
         undo = before;
         return {
           ...doneOf(answer),
+          before,
           keep: () => {
             state = answer.state;
             undo = null;
@@ -345,12 +356,36 @@ const RULES = rulesVersions();
 /** The games on the play service. */
 export const GAMES: Readonly<Record<GameId, Played>> = {
   raid: played(RAID),
-  works: played(FACTORY, (player) => visitRoom("works", player)),
+  works: played(FACTORY, (player) => visitRoom("works", player), false, readWorksStaffCommand),
   // The town's doors and letter say what each of the member's games tells it.
   town: played(TOWN, campRoom, true),
   // The staff give a prize as a pull would (`POST /v1/game/admin/grants`).
   pulls: played(PULLS, undefined, false, readStaffCommand),
 };
+
+/** A command as it came, with its id. */
+export interface Sent {
+  readonly id: string;
+  readonly command: unknown;
+}
+
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
+
+/** The commands of a batch with their ids, or why the batch is not one. */
+export function sentOf(of: Played, commands: readonly unknown[]): readonly Sent[] | string {
+  if (commands.length > MOST_FLUSHED) return `A batch holds at most ${MOST_FLUSHED} commands`;
+  const sent: Sent[] = [];
+  for (const command of commands) {
+    if (!isRecord(command) || typeof command.id !== "string" || !COMMAND_ID.test(command.id)) {
+      return "Every command needs an id of its own: up to 64 letters, digits and _ . : -";
+    }
+    const { id } = command;
+    if (sent.some((other) => other.id === id)) return "Two commands in the batch have the same id";
+    if (!of.reads(command)) return `Command ${id} is not one of the game's`;
+    sent.push({ id, command });
+  }
+  return sent;
+}
 
 /** The games whose states tell the town anything (`Played.posts`). */
 export const POSTING: readonly GameId[] = Object.values(GAMES).flatMap((p) => (p.posts ? [p.id] : []));

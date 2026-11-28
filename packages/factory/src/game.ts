@@ -16,9 +16,12 @@ import { LAND, type Land } from "./land.ts";
 import { fillBoard, ORDER_TOLD, ORDER_WAITS } from "./orders.ts";
 import { shortOf, writeCommand } from "./page.ts";
 import { capstonesMade, postcard } from "./postcard.ts";
+import { applyStaff, isStaffCommand, type StaffNote, type WorksStaffCommand } from "./staff.ts";
 import { GOALS, isNode, MILLI } from "./tables.ts";
 import { step } from "./tick.ts";
 import { drain, emptyYard, type News, type Standing, type Yard } from "./yard.ts";
+
+export { readStaffCommand, type StaffNote, type WorksStaffCommand } from "./staff.ts";
 
 /** How far behind Leaf's clock `advance` leaves a yard, in ticks; and how far ahead a command may be done. */
 export const LEAD = 30;
@@ -29,6 +32,11 @@ export const LEAD = 30;
  * would undo is named by (`history.ts`). One of the tests' may have none.
  */
 export type Command = Act & { readonly tick: number; readonly id?: string };
+
+/** A player command, or a staff command sent through Leaf's own code (`readStaffCommand`). */
+export type FactoryCommand = Command | WorksStaffCommand;
+/** What a player command or a staff command notes. */
+export type FactoryNote = News | StaffNote;
 
 /** What the page is given: the yard as kept, without its seed, with its letter, and Leaf's tick now. */
 export interface View {
@@ -91,8 +99,8 @@ function runTo(y: Yard, tick: number, more: () => boolean): boolean {
 }
 
 /** Runs a yard toward `LEAD` short of Leaf's clock, or toward a command's tick, whose news is what happened on the way. */
-function runOn(y: Yard, now: number, more: () => boolean, c?: Command): boolean {
-  if (c) return runTo(y, tickOf(y, c, now), more);
+function runOn(y: Yard, now: number, more: () => boolean, c?: FactoryCommand): boolean {
+  if (c) return isStaffCommand(c) ? false : runTo(y, tickOf(y, c, now), more);
   const further = runTo(y, clockOf(y, now) - LEAD, more);
   drain(y);
   return further;
@@ -122,7 +130,10 @@ function told(y: Yard): Logged[] {
  * till's whole Coins is refused, with the rules' own sentence, as the ledger would refuse its price:
  * so the page asks at the moment it sends. Leaf plays with none, and its ledger is what refuses.
  */
-export function play(y: Yard, c: Command, purse = Infinity): Done<Yard, News> | Turned {
+export function play(y: Yard, c: Command, purse?: number): Done<Yard, News> | Turned;
+export function play(y: Yard, c: FactoryCommand, purse?: number): Done<Yard, FactoryNote> | Turned;
+export function play(y: Yard, c: FactoryCommand, purse = Infinity): Done<Yard, FactoryNote> | Turned {
+  if (isStaffCommand(c)) return applyStaff(y, c);
   stepTo(y, c.tick);
   const did = act(y, c, purse + Math.floor(y.till / MILLI), c.id ?? "");
   if ("refused" in did) return did;
@@ -151,7 +162,7 @@ const view = (y: Yard, ctx: Ctx): View => ({
 });
 
 /** The Works on flat data, for Leaf's play service. */
-export const FACTORY: Game<Yard, Command, View, News, Short> = {
+export const FACTORY: Game<Yard, FactoryCommand, View, FactoryNote, Short> = {
   id: "works",
   create: (ctx) => {
     const y = create({ seed: ctx.seed });
@@ -160,14 +171,15 @@ export const FACTORY: Game<Yard, Command, View, News, Short> = {
   },
   advance,
   tend: (y, ctx, more, c) => runOn(y, ctx.now, more, c),
-  apply: (y, c, ctx) => play(y, { ...c, tick: tickOf(y, c, ctx.now) }),
+  apply: (y, c, ctx) => (isStaffCommand(c) ? applyStaff(y, c) : play(y, { ...c, tick: tickOf(y, c, ctx.now) })),
   view: (y, ctx) => view(y, ctx),
   answer: (y, ctx) => shortOf(clockOf(y, ctx.now), answer(y)),
   // A visitor is given the yard as its owner's page is, blueprints and all, so that its copy can do
   // each command the owner does (a blueprint set down among them); the page shows none of them.
   visit: (y, ctx) => view(y, ctx),
   // The command as the owner's page wrote it, at the tick it was done at: the yard's, after it.
-  echo: (y, c) => writeCommand({ ...c, tick: y.tick }),
+  // Staff commands are never echoed as player commands.
+  echo: (y, c) => (isStaffCommand(c) ? null : writeCommand({ ...c, tick: y.tick })),
   decode: (text) => decode(text),
   encode: (y) => encode(y),
   command: readCommand,

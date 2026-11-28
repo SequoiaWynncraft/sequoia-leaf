@@ -485,6 +485,7 @@ describe("the counters' first counts", () => {
       }
       await before.query((sql) => sql`DROP TABLE last_visits`);
       for (const table of [
+        "play_staff_edits",
         "banner_called",
         "raid_sitting_calls",
         "raid_sitting_seats",

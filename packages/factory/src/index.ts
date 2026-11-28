@@ -53,9 +53,21 @@ export {
   VERSION,
   vouch,
 } from "./codec.ts";
-export { type KeptBlueprint, type KeptPrint } from "./prints.ts";
+export { type KeptBlueprint, type KeptPrint, packPrint } from "./prints.ts";
 export { gradePast, type KeptNames, knownAt10, knownHere, pastTen, WIDER } from "./named.ts";
 export * from "./game.ts";
+export {
+  applyStaff,
+  type ExportPart,
+  exportYard,
+  isStaffCommand,
+  readStaffNote,
+  type StaffActor,
+  type StaffLearn,
+  type StaffPieces,
+  type StaffPlots,
+  type StaffRestore,
+} from "./staff.ts";
 export { UNDO_BYTES, UNDO_ENTRY, UNDO_MOST } from "./history.ts";
 export * from "./land.ts";
 export { keptLater } from "./later.ts";

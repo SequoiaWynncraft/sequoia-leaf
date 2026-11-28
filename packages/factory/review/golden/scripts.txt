@@ -7,3 +7,4 @@ script orders and plots | dddrdrd: tier 4, 21 pieces, 29 goals done, 714 deliver
 script felling and clearing | drddrdddd: tier 5, 0 pieces, 55 goals done, 0 delivered, 0 Coins earned, 0 in the till | did 12f5b2b0a10d end e0cdc9dc170b
 script a delivering yard | ddd: tier 4, 21 pieces, 29 goals done, 2514 delivered, 4 Coins earned, 0 in the till | did 2c8d3748e9dd end fda0c432dce8
 script at the earnings cap | ddddd: tier 0, 23 pieces, 2 goals done, 669 delivered, 242 Coins earned, 0 in the till | did 7710af19aca1 end 4bed337ffd0d
+script staff | drddd: tier 4, 0 pieces, 29 goals done, 0 delivered, 0 Coins earned, 0 in the till | did d38cae215606 end bf41d0f412c1
