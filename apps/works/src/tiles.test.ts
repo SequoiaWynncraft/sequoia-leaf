@@ -13,8 +13,11 @@ test("a tunnel's hoods hide the half of each mouth toward the other, where a thi
   expect([y.kind[outMouth], dirAt(y, inMouth)]).toEqual([TUNNEL, 0]);
   // Going in: seen on the near half, gone under the hood past the middle.
   expect([0.2, 0.5, 0.7].map((p) => hooded(y, inMouth, p))).toEqual([false, false, true]);
-  // Coming up: under the hood until the middle, then seen.
+  // Coming up from under the ground: under the hood until the middle, then seen.
   expect([0.2, 0.5, 0.7].map((p) => hooded(y, outMouth, p))).toEqual([true, false, false]);
+  // Handed into the far mouth from a side: rides in along the side arm, never under the hood.
+  y.via[outMouth] = 1 + 3;
+  expect([0.2, 0.5, 0.7].map((p) => hooded(y, outMouth, p))).toEqual([false, false, false]);
   // A thing on it came in at its back (west), unless it was handed in from a side.
   expect(cameFrom(y, inMouth)).toBe(2);
   y.via[inMouth] = 1 + 3;

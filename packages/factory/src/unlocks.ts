@@ -113,7 +113,7 @@ const FLAGS = [
   {
     is: "mouths",
     name: "Wide mouths",
-    says: "A tunnel takes items in from the left and right of its way in, as well as from behind.",
+    says: "A tunnel takes items in from the left and right of both mouths, as well as from behind its way in.",
   },
 ] as const;
 

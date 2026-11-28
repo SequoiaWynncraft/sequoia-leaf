@@ -19,13 +19,25 @@ function says(h: Hold): string {
 }
 
 /**
- * A way-in mouth's arms: in from behind always, and in from its left or right where its ports take
- * things in there (with wide mouths) and something feeds it, as a belt's are drawn.
+ * A mouth's arms: a way-in mouth takes in from whichever of behind, left and right it takes from
+ * and something feeds (or from behind alone when nothing feeds it, as a belt does); a far mouth
+ * goes out ahead, and takes in from its left or right where it takes from and something feeds.
  */
-function wayInArms(y: Yard, i: number): Arms {
+function mouthArms(y: Yard, i: number): Arms {
   const d = (y.dir[i] ?? 0) & 3;
-  let a = withArm(0, BACK[d] ?? 2, 1);
-  for (const side of [LEFT[d] ?? 3, RIGHT[d] ?? 1]) {
+  const back = BACK[d] ?? 2;
+  const left = LEFT[d] ?? 3;
+  const right = RIGHT[d] ?? 1;
+  if ((y.span[i] ?? 0) > 0) {
+    let a: Arms = 0;
+    for (const side of [back, left, right]) {
+      const from = toward(y.land, i, side);
+      if (takes(y, i, from) && feeds(y, from, i)) a = withArm(a, side, 1);
+    }
+    return a === 0 ? withArm(0, back, 1) : a;
+  }
+  let a = withArm(0, d, 2);
+  for (const side of [left, right]) {
     const from = toward(y.land, i, side);
     if (takes(y, i, from) && feeds(y, from, i)) a = withArm(a, side, 1);
   }
@@ -45,7 +57,7 @@ export const tunnel: KindPage = {
     if (s) at.stand(s, at.cx, at.foot + 1, at.z - 2, at.a);
     return at.foot - 16;
   },
-  arms: (y, i) => ((y.span[i] ?? 0) > 0 ? wayInArms(y, i) : withArm(0, y.dir[i] ?? 0, 2)),
+  arms: mouthArms,
   aimArms: (d) => withArm(0, BACK[d], 1),
   far: (art, grade, d) => art.m.hood[lookOf(grade)]?.[BACK[d]],
   mapMark: STONE[3],

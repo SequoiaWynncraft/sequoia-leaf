@@ -2,8 +2,8 @@
  * Tier 5's tunnels: the deep culvert (`deepculvert`), with which a tunnel passes under up to 12
  * tiles, each tile beyond 5 adding 2 Coins to its grade I price, by the one price rule every
  * purchase and refund asks (`price`, its span among what it is priced by); and wide mouths
- * (`widemouths`), with which a tunnel's way in takes things in from its left and right as well as
- * from behind, as a belt does, by its kind's ports.
+ * (`widemouths`), with which both mouths of a tunnel take things in from their left and right, as
+ * well as from behind the way in, by its kind's ports.
  */
 import { describe, expect, test } from "bun:test";
 
@@ -206,6 +206,30 @@ function fedFromThree(research: readonly string[]): number[] {
   ];
 }
 
+/** What is left in each feeding crate and what reached the far crate, fed from behind the way in and from the left and right of the far mouth at once. */
+function fedAtExit(research: readonly string[]): number[] {
+  const y = yard(research);
+  must(y, tunnel(5, 5, 3));
+  // One belt behind the way in, and belts pointing into the left and right of the far mouth at (9, 5).
+  must(y, { do: "build", kind: "belt", x: 4, y: 5, dir: 0 });
+  must(y, { do: "build", kind: "belt", x: 9, y: 4, dir: 1 });
+  must(y, { do: "build", kind: "belt", x: 9, y: 6, dir: 3 });
+  const feeds = [
+    [3, 5, 0],
+    [9, 3, 1],
+    [9, 7, 3],
+  ] as const;
+  for (const [x, z, d] of feeds) must(y, { do: "build", kind: "crate", x, y: z, dir: d });
+  must(y, { do: "build", kind: "crate", x: 10, y: 5, dir: 0 });
+  must(y, { do: "crate", x: 10, y: 5, open: false });
+  for (const [x, z] of feeds) for (let k = 0; k < 5; k++) F.put(y.holders, y.row[F.at(y, x, z)] ?? -1, plank);
+  for (let k = 0; k < 3000; k++) F.step(y);
+  return [
+    ...feeds.map(([x, z]) => F.held(y.holders, y.row[F.at(y, x, z)] ?? -1, plank)),
+    F.held(y.holders, y.row[F.at(y, 10, 5)] ?? -1, plank),
+  ];
+}
+
 describe("wide mouths", () => {
   test("are tier 5's, after the deep culvert", () => {
     const g = F.GOALS[F.goal("widemouths")];
@@ -217,20 +241,21 @@ describe("wide mouths", () => {
     ]);
   });
 
-  test("without them, a tunnel's way in takes from behind alone; with them from its left and right too, never from its front", () => {
+  test("without them, a tunnel's way in takes from behind alone and its far mouth from none; with them, both mouths take from their left and right, never from behind the far mouth or from the front", () => {
     expect(takenFrom(mouth(["deepculvert"]))).toEqual([true, false, false, false]);
     expect(takenFrom(mouth(["widemouths"]))).toEqual([true, true, true, false]);
-    // Its far mouth takes nothing in, either way.
-    for (const research of [["deepculvert"], ["widemouths"]]) {
+    const farSides = [
+      [8, 5],
+      [9, 4],
+      [9, 6],
+      [10, 5],
+    ] as const;
+    const farTaken = (research: readonly string[]): boolean[] => {
       const y = mouth(research);
-      for (const [x, z] of [
-        [8, 5],
-        [9, 4],
-        [9, 6],
-        [10, 5],
-      ] as const)
-        expect(F.takes(y, F.at(y, 9, 5), F.at(y, x, z))).toBe(false);
-    }
+      return farSides.map(([x, z]) => F.takes(y, F.at(y, 9, 5), F.at(y, x, z)));
+    };
+    expect(farTaken(["deepculvert"])).toEqual([false, false, false, false]);
+    expect(farTaken(["widemouths"])).toEqual([false, true, true, false]);
   });
 
   test("with them, a way in on a line that crosses it takes in by just the sides a belt facing its way there would", () => {
@@ -243,6 +268,13 @@ describe("wide mouths", () => {
     expect(fedFromThree(["widemouths"])).toEqual([0, 0, 0, 15]);
     // Without: the side belts fill and wait; their crates keep the rest.
     const without = fedFromThree(["deepculvert"]);
+    expect([without[0], without[3]]).toEqual([0, 5]);
+    expect((without[1] ?? 0) + (without[2] ?? 0)).toBeGreaterThan(0);
+  });
+
+  test("fed from behind its way in and from the left and right of its far mouth at once, everything reaches the crate ahead; without them only what came through the tunnel", () => {
+    expect(fedAtExit(["widemouths"])).toEqual([0, 0, 0, 15]);
+    const without = fedAtExit(["deepculvert"]);
     expect([without[0], without[3]]).toEqual([0, 5]);
     expect((without[1] ?? 0) + (without[2] ?? 0)).toBeGreaterThan(0);
   });
