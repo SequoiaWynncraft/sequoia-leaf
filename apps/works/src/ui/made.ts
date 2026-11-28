@@ -1,13 +1,16 @@
 /**
  * Where a thing comes from, on its card: the parts it is made from and every machine that makes it,
  * what a mix of it is broken or distilled from and by what (by which way out, where each sends one
- * thing), or the gatherer and the plots it lies in.
+ * thing), what it is grown from and in what, or the gatherer and the plots it lies in.
  */
 import {
   GATHERING,
+  gathers,
+  GROW_OF,
   isRaw,
   type Item,
   type Kind,
+  makersOf,
   makes,
   MIX_OF,
   mixPerMinute,
@@ -72,8 +75,32 @@ export function madeRows(p: ItemPrint): Row[] {
   }
   if (mix) return mixed;
   if (!isRaw(k)) return [];
+  return [...grownRows(p), ...gatheredRows(p)];
+}
+
+/**
+ * For a thing a piece grows (star crystal): what it is grown from, and the kinds that grow it, each
+ * with what one of grade 1 nets a minute, named before it is researched; nothing for any other.
+ */
+function grownRows(p: ItemPrint): Row[] {
+  const plan = makersOf(p.item).find((r) => GROW_OF[r.by]);
+  const grow = plan ? GROW_OF[plan.by] : null;
+  if (!plan || !grow) return [];
   return [
-    { label: "Gathered by", things: [{ ref: machineRef(GATHERING), note: perMinute(makes(GATHERING, 1, null)) }] },
+    { label: "Grown from", things: grow.takes.map((n) => ({ ref: itemRef(n) })) },
+    {
+      label: "In",
+      things: p.makers
+        .filter((m) => GROW_OF[m])
+        .map((m) => ({ ref: machineRef(m), note: perMinute(makes(m, 1, plan)) })),
+    },
+  ];
+}
+
+/** For a thing from the ground: who gathers it, at its own pace, and where it lies. */
+function gatheredRows(p: ItemPrint): Row[] {
+  return [
+    { label: "Gathered by", things: [{ ref: machineRef(GATHERING), note: perMinute(gathers(p.item, 1)) }] },
     {
       label: "Lies in",
       things: p.found.map(([plot, tiles, yours]) => ({

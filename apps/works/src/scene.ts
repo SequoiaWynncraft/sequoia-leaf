@@ -40,6 +40,7 @@ import {
   TROUBLE,
   type Yard,
 } from "@sequoia-leaf/factory";
+import { lessMotion } from "@sequoia-leaf/kit/dom.ts";
 import { CORAL, CREAM, GOLD, INK, SKY } from "@sequoia-leaf/kit/palette.ts";
 import { R } from "@sequoia-leaf/kit/pix.ts";
 import { bubble, bubbleSize, wrap } from "@sequoia-leaf/kit/signs.ts";
@@ -85,6 +86,9 @@ export interface Moment {
 const ALONG = PACE.map((pace) => pace / 8);
 /** The power the depot gives at first: a depot that gives more wears its flywheel. */
 const DEPOT_FIRST = openOf([]).depot;
+/** The beat, in ticks of the yard's clock (SPEC-2's tier 8: every 20 seconds), and how long the Star depot's mast light shows on it. */
+const BEAT = 200;
+const BLINK = 10;
 
 /** The milliseconds a frame's parts have taken, counted only while somebody is looking (`on`): `bench`, or the meter. */
 export const spent: { on: boolean; at: number; ms: Record<string, number> } = { on: false, at: 0, ms: {} };
@@ -1007,7 +1011,7 @@ function standingLayer(f: Frame): void {
   // The depot, with whatever it wears.
   const { dx, dfoot } = depotAt(f);
   const dz = dfoot + cy - 1;
-  const { depot: ds, fly: flies } = depotOf(art.m, w);
+  const { depot: ds, fly: flies, flyAt, beat } = depotOf(art.m, w);
   const dl = dx - ds.ax;
   const dt = dfoot - ds.ay;
   if (dl < W && dl + ds.c.width > 0 && dt < H && dfoot > -8) {
@@ -1023,9 +1027,12 @@ function standingLayer(f: Frame): void {
           dz + 0.1,
         );
     }
-    // A depot that gives more than at first wears its flywheel.
-    const fly = w.open.depot > DEPOT_FIRST ? flies[Math.floor(S.t * 8) % 4] : undefined;
-    if (fly) put(fly, dl + DEPOT_ART.fly.x - 6, dt + DEPOT_ART.fly.y - 6, dz + 0.1);
+    // A depot that gives more than at first wears its flywheel: in the Star era, the ring under its dome turning slowly.
+    const fly = w.open.depot > DEPOT_FIRST ? flies[Math.floor(S.t * (flyAt ? 2 : 8)) % 4] : undefined;
+    const at = flyAt ?? { x: DEPOT_ART.fly.x - 6, y: DEPOT_ART.fly.y - 6 };
+    if (fly) put(fly, dl + at.x, dt + at.y, dz + 0.1);
+    // The Star era's mast light blinks on the beat, every 200 ticks of the yard's clock; with less motion asked for, it stays lit.
+    if (beat && (lessMotion() || w.tick % BEAT < BLINK)) put(beat.c, dl + beat.x, dt + beat.y, dz + 0.2);
   }
   eachTrunk(art, cx, cy, W, H, stand);
   for (let n = 0; n + 2 < L.fences.length; n += 3) {

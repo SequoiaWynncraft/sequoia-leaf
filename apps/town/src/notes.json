@@ -135,6 +135,26 @@
     ]
   },
   {
+    "id": "works-tier-7-signal",
+    "at": "TBD",
+    "title": "The Works: tier 7, The signal",
+    "lines": [
+      "Tier 7 is open. Star crystal lies on the outer ring and comes out of the ground slowly: 1 in 75 seconds a tile at best. A grower grows 3 from every 2 it is given, so send 2 of every 3 back into it."
+    ],
+    "more": [
+      {
+        "head": "New",
+        "points": ["Crystal feed, lattices, dishes and the Star folio.", "Research lets a tunnel pass under 32 tiles."]
+      },
+      {
+        "head": "Fixed",
+        "points": [
+          "A ring of belts that has filled now moves at the belt's speed wherever something takes things off it. It lost a tick for every item that went round."
+        ]
+      }
+    ]
+  },
+  {
     "id": "works-tier-6-still",
     "at": "2026-11-28T06:02Z",
     "title": "The Works: tier 6, The still",

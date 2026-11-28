@@ -89,6 +89,7 @@ import { balance } from "@sequoia-leaf/kit/purse.ts";
 import { joinVisit, type LiveRoom } from "@sequoia-leaf/kit/realtime.ts";
 
 import { beyondReach } from "./figure/reach.ts";
+import { counting, keepCounts, noteGrowers } from "./grown.ts";
 import { S } from "./state.ts";
 import { askDue, leafOf, type Link, type LinkEvent, type Room, type RoomEvent, roomStep, step } from "./sync.ts";
 import { ZOOM } from "./zoom.ts";
@@ -399,6 +400,7 @@ function take(): boolean {
   drain(yard);
   shown = Math.max(shown, yard.tick);
   keepLast(S.world, yard);
+  keepCounts(S.world, yard);
   S.world = yard;
   // A press waiting for a second was for the yard it was shown on (`pressKey`).
   unask();
@@ -538,6 +540,22 @@ export function doNow(act: Act): Did {
 export const collect = (): Did => doNow({ do: "collect" });
 
 /**
+ * Runs the copy on to `tick`; where it has growers, a tick at a time, each noted for the minute the
+ * page counts of them (`grown.ts`).
+ */
+function runOn(w: Yard, tick: number): void {
+  if (!counting(w)) {
+    stepTo(w, tick);
+    return;
+  }
+  for (let was = -1; w.tick < tick && w.tick !== was;) {
+    was = w.tick;
+    stepTo(w, w.tick + 1);
+    if (w.tick !== was) noteGrowers(w);
+  }
+}
+
+/**
  * A moment of the page's clock (`now`, in milliseconds, as `performance.now` counts them): Leaf's
  * yard is taken if it has come, the copy is run on to Leaf's tick, and its news is handed back for
  * the screen to make something of.
@@ -560,7 +578,7 @@ export function runYard(now: number): News[] {
     giveWay();
     return [];
   }
-  stepTo(w, tick);
+  runOn(w, tick);
   shown = w.tick;
   // A yard standing still (its owner away eight hours) holds Leaf's clock with it from the frame it
   // stops in, as Leaf does, until they act.

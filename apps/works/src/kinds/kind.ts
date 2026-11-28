@@ -164,6 +164,8 @@ export interface KindPage {
   readonly mapMark?: string;
   /** Its lamp on the map, in place of a block: a pylon's, small, so that a row of them does not read as machines. */
   readonly mapLamp?: string;
+  /** A colour in the middle of its own tile's block on the map while `lit` says (a grower holding star crystals, its dome full). */
+  readonly mapMid?: { readonly colour: string; readonly lit: (y: Yard, i: number) => boolean };
   /** Whether it sends each thing by what it is (a sorter), so the map carries no line's colour on through it. */
   readonly sorts?: true;
   /** Whether the map marks it, as a cart stop and a Study are marked, and with which mark. */

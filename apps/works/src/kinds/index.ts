@@ -14,6 +14,7 @@ import { cracker } from "./cracker.ts";
 import { crate } from "./crate.ts";
 import { depot } from "./depot.ts";
 import { gatherer } from "./gatherer.ts";
+import { grower } from "./grower.ts";
 import { joiner } from "./joiner.ts";
 import type { KindPage } from "./kind.ts";
 import { mill } from "./mill.ts";
@@ -50,6 +51,7 @@ export const PAGES: Readonly<Record<KindName, KindPage>> = {
   still,
   cracker,
   powerhouse,
+  grower,
 };
 
 /** Each kind's page module, by the kind's number. */

@@ -72,6 +72,7 @@ import { exact, num, whole } from "@sequoia-leaf/kit/say.ts";
 import type { Art } from "../art/index.ts";
 import { FLAG_AT } from "../art/machines.ts";
 import { stump } from "../art/nature.ts";
+import type { Counted } from "../grown.ts";
 import { pageOf } from "../kinds/index.ts";
 import type { Standing } from "../kinds/kind.ts";
 import { yardSfx } from "../sound.ts";
@@ -197,6 +198,8 @@ export interface StandingPrint extends SorterPrint {
   readonly ways: WaysPrint | null;
   /** For a piece that breaks a mix (the breaker): the place in its mix of the next thing it gives. */
   readonly mix: number | null;
+  /** For a grower: what it took in and gave out in the yard's last minute, as the page counted it (`grown.ts`). */
+  readonly counted: Counted | null;
   readonly visiting: boolean;
 }
 

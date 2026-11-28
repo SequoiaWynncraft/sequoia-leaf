@@ -28,6 +28,7 @@ import {
   type Land,
   nextOf,
   NONE,
+  OWN,
   plotState,
   redwoodAt,
   tunnelOf,
@@ -107,11 +108,18 @@ const HUE: Readonly<Record<ItemName, string>> = {
   tarmac: "#353039",
   sleeper: "#6b5040",
   varnish: "#b8873f",
+  crystal: "#b9a6d9",
+  feed: "#9fb7a6",
+  lattice: "#8fb5ad",
+  star: "#9f8fd0",
+  dish: "#d4d0de",
 };
 const HUES = ALL_ITEMS.map((n) => HUE[itemName(n)]);
 
 /** Each kind's block, lit and in shade, by its number; nothing for the kinds drawn another way (what carries, the lamp of a pylon, the depot). */
 const LOOKS = ALL_KINDS.map((k) => pageOf(k)?.map ?? null);
+/** Each kind's lit middle on the map, where it has one (`KindPage.mapMid`). */
+const MIDS = ALL_KINDS.map((k) => pageOf(k)?.mapMid ?? null);
 
 /** The ground by whose it is: the yard's (grass at dusk), a plot for sale (dim), land not for sale (dark). */
 const GROUNDS = [mix(GREEN[1], SKY[0], 0.22), mix(GREEN[0], DEEP[1], 0.5), DEEP[0]] as const;
@@ -336,8 +344,8 @@ export function makePlan(px: number): Plan {
 /**
  * A tile as one number: everything its picture is painted from. From the low bits: whose ground (2),
  * a plot's edges (2), water, a redwood, what lies in it (4, `liesOf`), what stands on it (5), a belt's
- * arms or which part of the depot (8), a line's paint or what it carries (7, `lineField`), a tunnel
- * under it (2).
+ * arms, which part of the depot, or a piece's middle lit (8), a line's paint or what it carries (7,
+ * `lineField`), a tunnel under it (2).
  */
 function numberOf(s: Seen, y: Yard, L: Layout, i: number, depot: number): number {
   const { land } = y;
@@ -360,7 +368,7 @@ function numberOf(s: Seen, y: Yard, L: Layout, i: number, depot: number): number
   } else if (FIXED[k] === 1) {
     const W = land.w;
     n |= ((i % W) - (depot % W) + 1 + (Math.floor(i / W) - Math.floor(depot / W) + 1) * 3) << 15;
-  }
+  } else if (MIDS[k]?.lit(y, i) === true && (y.part[i] === 0 || y.part[i] === OWN)) n |= 1 << 15;
   return n >>> 0;
 }
 
@@ -458,6 +466,12 @@ function tile(g: Ctx, P: number, x: number, y: number, n: number): void {
   g.fillStyle = block[1];
   const foot = P >= 8 ? 2 : 1;
   g.fillRect(x + inset, y + P - inset - foot, P - inset * 2, foot);
+  // Its middle lit, as its kind says (a grower's dome holding star crystals).
+  const mid = MIDS[kind];
+  if (detail === 1 && mid) {
+    g.fillStyle = mid.colour;
+    g.fillRect(x + m, y + m, t, t);
+  }
 }
 
 /**

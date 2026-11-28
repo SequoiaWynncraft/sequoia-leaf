@@ -1,15 +1,17 @@
 /**
  * The Works' pictures of the Spark era (tiers 5 and 6, SPEC-2 section 7): brick, copper, tarred timber
- * and a cold cream light. The depot gone over in them, and the copper drum it wears.
+ * and a cold cream light. The depot gone over in them, and the copper drum it wears; and the depot as
+ * each era from Spark on draws it (`depotOf`, the Star era's from `star.ts`).
  */
 import type { Yard } from "@sequoia-leaf/factory";
 import { BARK, CREAM, INK } from "@sequoia-leaf/kit/palette.ts";
 import { ell, outlined, R } from "@sequoia-leaf/kit/pix.ts";
 import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
-import { isSpark } from "../era.ts";
+import { isSpark, isStar } from "../era.ts";
 import type { Machines } from "./machines.ts";
 import { CLAY, DARK, IRON, type Sprite } from "./pal.ts";
+import { MAST, mastLight, RING, starDepot, starRing } from "./star.ts";
 
 /** Cream light, where every light before tier 5 was gold: the Spark era's lit glass, warm and pale. */
 const SPARK_GLASS = ["#8a7c6c", "#d8cfb4", "#ece3c8"] as const;
@@ -83,15 +85,37 @@ function copied(s: Sprite): Sprite {
   return { c, ax: s.ax, ay: s.ay };
 }
 
-/** The Spark era's depot and drum, made once for each set of the yard's pictures. */
-const made = new WeakMap<Machines, { depot: Sprite; fly: readonly HTMLCanvasElement[] }>();
+/**
+ * The depot as an era draws it: its picture, the frames of the wheel it wears while it gives more
+ * (`fly`), and where they go on it, where it is not by its door (`flyAt`, the frame's corner in the
+ * picture); and for the Star era, the light that blinks on the beat and where it is (`beat`).
+ */
+export interface EraDepot {
+  readonly depot: Sprite;
+  readonly fly: readonly HTMLCanvasElement[];
+  readonly flyAt?: { readonly x: number; readonly y: number };
+  readonly beat?: { readonly c: HTMLCanvasElement; readonly x: number; readonly y: number };
+}
 
-/** The depot as a yard's era draws it (SPEC-2 section 7), and the wheel it wears: from tier 5, Spark's brick and copper. */
-export function depotOf(m: Machines, y: Yard): { depot: Sprite; fly: readonly HTMLCanvasElement[] } {
+/** Each era's depot past Timber and Brass, made once for each set of the yard's pictures. */
+const made = new WeakMap<Machines, { spark: EraDepot; star: EraDepot }>();
+
+/** The depot as a yard's era draws it (SPEC-2 section 7), and the wheel it wears: from tier 5, Spark's brick and copper; from tier 7, Star's dome. */
+export function depotOf(m: Machines, y: Yard): EraDepot {
   if (!isSpark(y)) return { depot: m.depot, fly: m.fly };
-  const had = made.get(m);
-  if (had) return had;
-  const now = { depot: sparkDepot(copied(m.depot)), fly: [0, 1, 2, 3].map(sparkFly) };
-  made.set(m, now);
-  return now;
+  const had =
+    made.get(m) ??
+    made
+      .set(m, {
+        spark: { depot: sparkDepot(copied(m.depot)), fly: [0, 1, 2, 3].map(sparkFly) },
+        star: {
+          depot: starDepot(copied(m.depot)),
+          fly: [0, 1, 2, 3].map(starRing),
+          flyAt: RING,
+          beat: { c: mastLight(), x: MAST.x, y: MAST.y },
+        },
+      })
+      .get(m);
+  if (!had) return { depot: m.depot, fly: m.fly };
+  return isStar(y) ? had.star : had.spark;
 }

@@ -67,6 +67,9 @@ export const gatherer: KindPage = {
   dot: GREEN[4],
   dock: 4,
   pace: (k, grade) => ({ label: "Gathers", value: perMinute(makes(k, grade, null)) }),
+  // Standing, what it gathers now of what lies under it, at that thing's own pace (`rateOf`): a star
+  // crystal gatherer is far slower than its kind's pace says.
+  standing: { pace: (p) => ({ label: "Gathers", value: perMinute(p.rate ?? 0) }) },
   rows: () => [{ label: "Gathers", things: ALL_ITEMS.filter(isRaw).map((r) => ({ ref: itemRef(r) })) }],
   faces: true,
 };
