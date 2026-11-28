@@ -131,9 +131,9 @@ function settings(y: F.Yard): string {
   return JSON.stringify([piecesOnMap(y), pieces, Array.from(y.spare), Array.from(y.felled)]);
 }
 
-/** Whether anything stands on a tile, or is carried or under way there. */
+/** Whether anything stands on a tile, or is carried or under way there, or a way in or a turn is kept there. */
 const busy = (y: F.Yard, i: number): boolean =>
-  F.isKind(y.kind[i] ?? F.NONE) || y.item[i] !== F.NONE || y.prog[i] !== 0;
+  F.isKind(y.kind[i] ?? F.NONE) || y.item[i] !== F.NONE || y.prog[i] !== 0 || y.via[i] !== 0 || y.turn[i] !== 0;
 
 /** The tiles off the yard's own plots on which anything stands, carries or is under way, in either of two yards: none, ever. */
 function tilesOff(was: F.Yard, now: F.Yard): number[] {
@@ -285,6 +285,25 @@ function undoneAll(
 }
 
 describe("Undo", () => {
+  test("the check of the tiles off the yard's plots sees anything kept on one: a piece, a thing carried, work under way, a way in or a turn", () => {
+    const was = laid();
+    const own = new Set(ownTiles(was));
+    const off = was.kind.findIndex((_, i) => !own.has(i));
+    const marks: [string, (y: F.Yard) => void][] = [
+      ["a piece", (y) => (y.kind[off] = F.BELT)],
+      ["a thing carried", (y) => (y.item[off] = F.item("plank"))],
+      ["work under way", (y) => (y.prog[off] = 1)],
+      ["a way in", (y) => (y.via[off] = 1)],
+      ["a turn", (y) => (y.turn[off] = 1)],
+    ];
+    for (const [name, mark] of marks) {
+      const now = F.decode(F.encode(was), was.land);
+      if (!now) throw new Error("the yard does not read back");
+      mark(now);
+      expect([name, tilesOff(was, now)]).toEqual([name, [off]]);
+    }
+  });
+
   test("random play undone all the way back stands as it began, each Undo moving back just what its command moved, the yard's running state its own", () => {
     let undone = 0;
     let short = 0;
