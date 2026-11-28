@@ -61,13 +61,20 @@ export function keepLast(from: Yard, into: Yard): void {
 }
 
 /**
+ * The recipe a machine is counted for, by its card, the yard's Items and its plot's smog alike: what it
+ * is working toward (`aim`), or between batches, holding nothing and told nothing, what it last began
+ * (`lastRecipe`). None for a piece that makes nothing by recipe, or a machine that has begun nothing.
+ */
+export const countedFor = (y: Yard, i: number): Recipe | null => aim(y, i) ?? lastRecipe(y, i);
+
+/**
  * What a gatherer, a machine or a Study does a minute (the planner's `makes`), as every screen says
- * it: what it turns out (or a Study takes in) at full power, for what it is making (`aim`, or the
- * recipe given); the share of ticks it works, none where power does not reach and else the yard's
+ * it: what it turns out (or a Study takes in) at full power, for what it is counted for (`countedFor`,
+ * or the recipe given); the share of ticks it works, none where power does not reach and else the yard's
  * pace; what it does now at that share; and the power it draws now, its grade's where power reaches
  * it and none where it does not. Anything else does nothing a minute.
  */
-export const machineRate = (y: Yard, i: number, recipe: Recipe | null = aim(y, i)): MachineRate =>
+export const machineRate = (y: Yard, i: number, recipe: Recipe | null = countedFor(y, i)): MachineRate =>
   rateOf(KIT, y, i < 0 ? i : pieceOf(y, i), recipe);
 
 /**

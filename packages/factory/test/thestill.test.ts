@@ -258,6 +258,14 @@ describe("the cracker", () => {
     fill(y, i, CREOSOTE, 2);
     for (let k = 0; k < 40; k++) F.step(y);
     expect([F.held(y.holders, out, SPIRIT), made(y)]).toEqual([1, 2]);
+    // Between batches it holds nothing and aims at nothing: its card and its plot's smog both count it for
+    // what it last began, 60 spirit a minute, 1 smog each.
+    expect([F.aim(y, i), F.countedFor(y, i)?.out, F.machineRate(y, i).effective, F.madeOn(y, 0)]).toEqual([
+      null,
+      SPIRIT,
+      60,
+      60,
+    ]);
     // A cracker I makes 60 a minute of what it is told; III, 120.
     expect([F.machineRate(y, i, F.RECIPE[SPIRIT]).nominal, F.makes(CRACKER, 3, F.RECIPE[SPIRIT] ?? null)]).toEqual([
       60, 120,
