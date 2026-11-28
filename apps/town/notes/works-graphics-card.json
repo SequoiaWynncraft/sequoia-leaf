@@ -3,12 +3,13 @@
   "at": "TBD",
   "title": "The Works draws faster",
   "lines": [
-    "The Works draws the yard on the graphics card: smoother on slower phones and computers, and the ground is never missing while you move."
+    "The Works now draws the yard on your graphics card. It is smoother on slower phones and computers.",
+    "The ground is never missing while you move or zoom."
   ],
   "more": [
     {
       "head": "Fixed",
-      "points": ["On Firefox, part of the yard's ground no longer goes black for a moment while you move."]
+      "points": ["On Firefox, part of the ground no longer goes black for a moment while you move."]
     }
   ]
 }
