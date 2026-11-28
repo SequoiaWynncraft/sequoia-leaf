@@ -291,24 +291,38 @@ function drawZones(g: Ctx, f: Fight, c: number): void {
     if (z) by.set(z.kind, [...(by.get(z.kind) ?? []), cell]);
   });
   for (const [kind, cells] of by) {
-    const look = ZONE[kind];
-    const tint = hexSign(look.tint, look.tint);
-    for (const cell of cells) {
-      const k = kind === "snow" ? clamp((c - (M.since.get(cell) ?? c) - OUTLINED) / SETTLES, 0, 1) : 1;
-      drawHex(g, tint, cell, look.alpha * k);
-      const at = cellXY(shownCell(cell));
-      g.globalAlpha = k;
-      look.marks(g, V.bx + at.x, V.by + at.y);
-    }
-    g.globalAlpha = 1;
-    g.drawImage(
-      lineFor(
-        kind,
-        cells.map(shownCell).toSorted((a, b) => a - b),
-      ),
-      V.bx,
-      V.by,
-    );
+    const settled = (cell: number): number =>
+      kind === "snow" ? clamp((c - (M.since.get(cell) ?? c) - OUTLINED) / SETTLES, 0, 1) : 1;
+    drawZone(g, kind, cells.map(shownCell), (i) => settled(cells[i] ?? 0), V.bx, V.by);
     if (kind === "snow") flakes(g, cells, c);
   }
+}
+
+/** A zone of a kind on hexes as the board shows them, the board's corner at (`ox`, `oy`): how settled each is, by its place in `shown`. */
+export function drawZone(
+  g: Ctx,
+  kind: ZoneKind,
+  shown: readonly number[],
+  settled: (i: number) => number,
+  ox: number,
+  oy: number,
+): void {
+  const look = ZONE[kind];
+  const tint = hexSign(look.tint, look.tint);
+  shown.forEach((cell, i) => {
+    const at = cellXY(cell);
+    g.globalAlpha = look.alpha * settled(i);
+    g.drawImage(tint, ox + at.x - HEX_W / 2, oy + at.y - HEX_H / 2);
+    g.globalAlpha = settled(i);
+    look.marks(g, ox + at.x, oy + at.y);
+  });
+  g.globalAlpha = 1;
+  g.drawImage(
+    lineFor(
+      kind,
+      shown.toSorted((a, b) => a - b),
+    ),
+    ox,
+    oy,
+  );
 }

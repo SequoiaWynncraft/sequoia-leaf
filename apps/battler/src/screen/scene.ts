@@ -15,7 +15,7 @@ import { regularOf, ROOMS } from "@sequoia-leaf/raid/content/rooms.ts";
 import { HOME_ROWS, seatCell } from "@sequoia-leaf/raid/hex.ts";
 
 import { drawAimsUnder } from "./aimed.ts";
-import { drawShadow, hexSign, SIGN } from "./art/board.ts";
+import { drawShadow, hexSign, SIGN, SIGN_ALPHA } from "./art/board.ts";
 import { itemPic, levelPic } from "./art/icons.ts";
 import { drawLife } from "./art/place.ts";
 import { lampsOf, rimTop, stumpOf, warmGlow } from "./art/table.ts";
@@ -234,11 +234,15 @@ function drawMarks(g: Ctx): void {
   drawZone(g, marks.zone, V.bx, V.by, V.t);
   const zone = new Set(marks.zone);
   for (const seat of marks.seats)
-    put(hexSign(null, zone.has(seat) ? SIGN.zone : SIGN.free), seat, zone.has(seat) ? 0.55 : 0.85);
-  for (const seat of marks.swaps) put(hexSign(null, SIGN.swap), seat, 0.75);
+    put(
+      hexSign(null, zone.has(seat) ? SIGN.zone : SIGN.free),
+      seat,
+      zone.has(seat) ? SIGN_ALPHA.zoneRim : SIGN_ALPHA.free,
+    );
+  for (const seat of marks.swaps) put(hexSign(null, SIGN.swap), seat, SIGN_ALPHA.swap);
   const t = marks.target;
   if (t?.on === "board" && (marks.seats.includes(t.at) || marks.swaps.includes(t.at))) {
-    put(hexSign(SIGN.aimFill, SIGN.aimFill), t.at, 0.45);
+    put(hexSign(SIGN.aimFill, SIGN.aimFill), t.at, SIGN_ALPHA.aimFill);
     put(hexSign(null, SIGN.aim), t.at, 1);
   }
   g.globalAlpha = 1;

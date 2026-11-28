@@ -29,7 +29,7 @@ import {
   ROW,
   SLOT_W,
 } from "../geometry.ts";
-import { BENCH, BOARD, cutHex, type HexTones, RIM } from "./board.ts";
+import { BENCH, BOARD, CHECK, CLOTHS, cutHex, halvesOf, type HexTones, RIM } from "./board.ts";
 
 export const at = (ramp: readonly string[], i: number): string =>
   ramp[clamp(Math.round(i), 0, ramp.length - 1)] ?? "#000000";
@@ -256,17 +256,13 @@ export function lightHole(): HTMLCanvasElement {
 
 // ---------- the whole table ----------
 
-const CLOTH: Readonly<Record<ClothId, readonly [string, string, string] | null>> = {
-  bare: null,
-  baize: [GREEN[2], GREEN[1], GREEN[0]],
-  plum: [SKY[2], SKY[1], SKY[0]],
-  gingham: [CREAM, SKY[5], "#b0483a"],
-};
-
-/** The cloth under the board, if there is one: its colour at a pixel, or null where it does not reach. */
+/**
+ * The cloth under the board, if there is one: its colour at a pixel, or null where it does not reach.
+ * Its edge, a trim two pixels in, and its ground: a little nap and a fold where it has been kept, or
+ * the gingham's checks of four.
+ */
 export function clothAt(cloth: ClothId, x: number, y: number, p: Place): string | null {
-  const tones = CLOTH[cloth];
-  if (!tones) return null;
+  if (cloth === "bare") return null;
   const x0 = p.bx - 9;
   const x1 = p.bx + BOARD_W + 9;
   const y0 = p.by - GAP - 8;
@@ -276,18 +272,17 @@ export function clothAt(cloth: ClothId, x: number, y: number, p: Place): string 
   const dy = Math.min(y - y0, y1 - 1 - y);
   if (dx + dy < 3) return null;
   const edge = Math.min(dx, dy);
+  const t = CLOTHS[cloth];
+  if (edge < 1) return t.near.edge;
+  if (edge === 2) return t.trim;
   if (cloth === "gingham") {
-    if (edge < 1) return tones[2];
     const a = Math.floor((x - x0) / 4) % 2;
     const b = Math.floor((y - y0) / 4) % 2;
-    return a + b === 2 ? tones[2] : a + b === 1 ? tones[1] : tones[0];
+    return a + b === 2 ? CHECK : a + b === 1 ? t.nap : t.ground;
   }
-  if (edge < 1) return tones[2];
-  if (edge === 2) return cloth === "plum" ? GOLD[1] : tones[0];
-  // A little nap in the cloth, and a fold where it has been kept.
-  if (hash(x >> 1, y >> 1, 611) > 0.9) return tones[0];
-  if ((x - x0) % 56 === 55) return tones[2];
-  return tones[1];
+  if (hash(x >> 1, y >> 1, 611) > 0.92) return t.nap;
+  if ((x - x0) % 56 === 55) return t.near.edge;
+  return t.ground;
 }
 
 /** The bench: a plank along the near edge with nine hollows cut in it. */
@@ -509,8 +504,9 @@ export function paintSwatch(looks: Dressing, wood = swatchRings, post?: PostTone
     [66, 27],
   ];
   const hexes = makeCanvas(w, h);
-  for (const [x, y] of spots) cutHex(hexes.g, x, y, BOARD.near);
-  g.drawImage(outlined(hexes.c, BOARD.near.edge), -1, -1);
+  const near = halvesOf(looks.cloth).near;
+  for (const [x, y] of spots) cutHex(hexes.g, x, y, near);
+  g.drawImage(outlined(hexes.c, near.edge), -1, -1);
   const stand: (readonly [UnitKind, number, number])[] = [
     ["mossmote", 36, 45],
     ["crab7", 56, 45],

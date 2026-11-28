@@ -22,7 +22,7 @@ import { S } from "./state.ts";
 const MARKS: { stump?: HTMLCanvasElement; shut?: HTMLCanvasElement } = {};
 
 /** A hex closed: its face and lip the wood round the board, its grooves kept. */
-const bare = (): HTMLCanvasElement => hexSign(BOARD.wood, BOARD.wood);
+export const bare = (): HTMLCanvasElement => hexSign(BOARD.wood, BOARD.wood);
 
 /** A thing that closes a hex, on the hex's wood: `thing` drawn with an ink edge, its top left at `x`, `y`. */
 function closedBy(thing: HTMLCanvasElement, x: number, y: number): HTMLCanvasElement {
@@ -73,7 +73,7 @@ export function ruleShown(run: RunView): { named: readonly RuleId[]; rules: Figh
 }
 
 /** How a hex closed all fight long looks: a stump under Stumps, grown over under Narrow Table, else bare wood. */
-function closedMark(named: readonly RuleId[]): HTMLCanvasElement {
+export function closedMark(named: readonly RuleId[]): HTMLCanvasElement {
   if (named.includes("stumps")) return (MARKS.stump ??= stumpMark());
   return named.includes("narrow") ? (MARKS.shut ??= shutMark()) : bare();
 }

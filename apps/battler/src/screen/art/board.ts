@@ -6,9 +6,10 @@
  *
  * It moves to the kit when a second game needs it.
  */
-import { BARK, CREAM, EARTH, GOLD, PAPER, SKY, WATER } from "@sequoia-leaf/kit/palette.ts";
+import { BARK, CORAL, CREAM, EARTH, GOLD, GREEN, PAPER, SKY, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { paint, R, rgb } from "@sequoia-leaf/kit/pix.ts";
 import { type Ctx, makeCanvas } from "@sequoia-leaf/kit/util.ts";
+import type { ClothId } from "@sequoia-leaf/raid";
 import { CELLS } from "@sequoia-leaf/raid/hex.ts";
 
 import { BOARD_H, BOARD_W, cellXY, HEX_H, HEX_W, SLOPE } from "../geometry.ts";
@@ -90,6 +91,61 @@ const WARMTH: Readonly<Record<string, BoardTones>> = {
 };
 const ASKED = new URLSearchParams(globalThis.location?.search ?? "").get("warmth") ?? "b";
 export const BOARD: BoardTones = WARMTH[ASKED] ?? WARM_NEAR;
+
+/** A cloth laid under the board: its halves' tones, the ground round and between them, the nap in it, and the trim two pixels in from its edge. */
+export interface ClothTones {
+  readonly near: HexTones;
+  readonly far: HexTones;
+  readonly ground: string;
+  readonly nap: string;
+  readonly trim: string;
+}
+/** The red of the gingham's checks. */
+const CHECK_RED = "#b0483a";
+/**
+ * The cloths a member may buy, each the board's own material: its values in the board's band, its
+ * hue and ornament its own. Baize is as dark as it is because the brambles sink into any mid green;
+ * velvet is the one ground no figure sinks into; gingham's checks are round and between the halves
+ * only, its faces the bare board's.
+ */
+export const CLOTHS = {
+  baize: {
+    near: {
+      face: dusk(GREEN[3], 0.5),
+      lip: dusk(GREEN[3], 0.4),
+      groove: dusk(GREEN[0], 0.45),
+      edge: dusk(GREEN[0], 0.6),
+    },
+    far: {
+      face: dusk(GREEN[2], 0.5),
+      lip: dusk(GREEN[2], 0.4),
+      groove: dusk(GREEN[0], 0.55),
+      edge: dusk(GREEN[0], 0.6),
+    },
+    ground: dusk(GREEN[0], 0.35),
+    nap: dusk(GREEN[1], 0.4),
+    trim: dusk(GREEN[3], 0.4),
+  },
+  plum: {
+    near: { face: dusk(SKY[4], 0.42), lip: dusk(SKY[4], 0.32), groove: dusk(SKY[2], 0.4), edge: SKY[0] },
+    far: { face: dusk(SKY[4], 0.58), lip: dusk(SKY[4], 0.48), groove: dusk(SKY[2], 0.5), edge: SKY[0] },
+    ground: dusk(SKY[2], 0.35),
+    nap: dusk(SKY[3], 0.45),
+    trim: dusk(GOLD[0], 0.3),
+  },
+  gingham: {
+    near: { ...BOARD.near, groove: dusk(CHECK_RED, 0.4), edge: dusk(CHECK_RED, 0.55) },
+    far: { ...BOARD.far, groove: dusk(CHECK_RED, 0.5), edge: dusk(CHECK_RED, 0.55) },
+    ground: dusk(PAPER[2], 0.5),
+    nap: dusk(CORAL, 0.5),
+    trim: dusk(CHECK_RED, 0.3),
+  },
+} as const satisfies Readonly<Record<Exclude<ClothId, "bare">, ClothTones>>;
+/** The gingham's third check, the darkest. */
+export const CHECK = dusk(CHECK_RED, 0.3);
+/** The board's halves as a cloth has them, or the bare board's. */
+export const halvesOf = (cloth: ClothId): { near: HexTones; far: HexTones } =>
+  cloth === "bare" ? BOARD : CLOTHS[cloth];
 
 /** The rim band round the stump's top (pale, dark). */
 export const RIM = { pale: dusk(BARK[4], 0.25), dark: dusk(BARK[2], 0.2) } as const;
@@ -206,6 +262,8 @@ export const SIGN = {
   aimFill: GOLD[2],
   swap: WATER[3],
 } as const;
+/** How strongly each is laid: the rims, the zone's fill, the fill of the seat aimed at (its cream rim is whole). */
+export const SIGN_ALPHA = { free: 0.85, zoneRim: 0.55, zoneFill: 0.2, aimFill: 0.45, swap: 0.75 } as const;
 
 /** The shadow a figure standing on the board throws: two rows under its base, the lower shorter; wider under a big one. */
 export function drawShadow(g: Ctx, x: number, y: number, big = false): void {

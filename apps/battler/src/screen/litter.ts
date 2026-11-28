@@ -145,17 +145,17 @@ function wetRing(g: Ctx, x: number, y: number, k: number): void {
 /** The lumps of a bank of snow, left to right: where each starts, how wide and how tall it is. */
 const LUMPS: readonly (readonly [x: number, w: number, h: number])[] = [
   [-12, 6, 3],
-  [-8, 6, 5],
-  [-3, 6, 4],
-  [2, 6, 5],
+  [-8, 6, 4],
+  [-3, 6, 3],
+  [2, 6, 4],
   [7, 5, 3],
 ];
-/** A low bank of snow behind a figure's base, its lumps showing either side; a pixel lower as it melts (`k` of the way). */
+/** A low bank of snow behind a figure's base, its lumps showing either side, never taller than 4 so it hides no feet; a pixel lower as it melts (`k` of the way). */
 function bank(g: Ctx, x: number, y: number, k = 0): void {
   const low = k > 0.5 ? 1 : 0;
   for (const [dx, w, h] of LUMPS) R(g, x + dx - 1, y - h - 1 + low, w + 2, h + 2 - low, INK);
   for (const [dx, w, h] of LUMPS) {
-    R(g, x + dx, y - h + low, w, h - low, CREAM);
+    R(g, x + dx, y - h + low, w, h - low, PAPER[2]);
     R(g, x + dx, y - 1, w, 1, WATER[3]);
   }
 }

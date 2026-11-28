@@ -1,7 +1,7 @@
 {
   "complexity": {
     "apps/api/src/play/service.ts": 53,
-    "apps/battler/src/screen/art/table.ts": 72,
+    "apps/battler/src/screen/art/table.ts": 56,
     "apps/battler/src/screen/flow.ts": 30,
     "apps/battler/src/screen/hand.ts": 69,
     "apps/battler/src/screen/logic.ts": 27,

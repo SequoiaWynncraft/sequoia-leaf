@@ -14,7 +14,7 @@ import { SUMMON_IDS, TROUBLE_IDS, type UnitKind } from "@sequoia-leaf/raid/conte
 import { hasTrueForm } from "@sequoia-leaf/raid/content/graid.ts";
 
 import { COMMODORE, type Crew, CREW_FRONT, GROOTERS } from "../../../review/crew.ts";
-import { BENCH, BOARD, type HexTones, quietOf, RIM } from "./board.ts";
+import { BENCH, BOARD, CLOTHS, type HexTones, quietOf, RIM } from "./board.ts";
 
 /** A channel (0 to 255) as linear light, and lightness's curve. */
 const lin = (v: number): number => (v / 255 <= 0.04045 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4);
@@ -66,10 +66,41 @@ const EVERYONE = everyone();
 /** The share of a figure's own pixels within ΔE 14 of a ground: they read as holes in it. */
 const lost = (px: Pixels, ground: string): number => px.filter((c) => dE(c, ground) < 14).length / px.length;
 
-/** Mud keeps only its edge and its face on the board's faces (its picture wants a lighter tone): seen here when it changes. */
-const MUD = { near: 0.78, far: 0.18 } as const;
+/** A ground figures stand on: the bare board, or a cloth, with the rules its kind is held to. */
+interface Surface {
+  readonly near: HexTones;
+  readonly far: HexTones;
+  /** How much darker a groove is than its face while planning, and in a fight, at least; the most chroma; the ink edge's least step on each face; how far apart the halves are, at least. */
+  readonly groove: number;
+  readonly fight: number;
+  readonly chroma: number;
+  readonly edge: { readonly near: number; readonly far: number };
+  readonly apart: number;
+}
+const BARE_RULES = { groove: 12, fight: 6, chroma: 22, edge: { near: 38, far: 28 }, apart: 8 } as const;
+// A fight's groove is 55% of planning's: on a cloth's far half that is 4.
+const CLOTH_RULES = { groove: 7, fight: 4, chroma: 38, edge: { near: 25, far: 20 }, apart: 5 } as const;
+const SURFACES: Readonly<Record<string, Surface>> = {
+  bare: { ...BOARD, ...BARE_RULES },
+  ...Object.fromEntries(Object.entries(CLOTHS).map(([id, t]) => [id, { ...t, ...CLOTH_RULES }])),
+};
+/** Each half of each surface, named. */
+const FACES = Object.entries(SURFACES).flatMap(([id, s]) =>
+  (["near", "far"] as const).map((side) => ({ name: `${id} ${side}`, side, t: s[side], s })),
+);
 
-const HALVES = { near: BOARD.near, far: BOARD.far } as const;
+/** Mud keeps only its edge and its face on your bare face (its picture wants a lighter tone): seen here when it changes. */
+const MUD: Readonly<Record<string, number>> = {
+  "bare near": 0.78,
+  "bare far": 0.18,
+  "baize near": 0,
+  "baize far": 0,
+  "plum near": 0,
+  "plum far": 0,
+  "gingham near": 0.78,
+  "gingham far": 0.18,
+};
+
 const round2 = (v: number): number => Math.round(v * 100) / 100;
 
 describe("the board's value budget", () => {
@@ -78,28 +109,18 @@ describe("the board's value budget", () => {
     expect(EVERYONE.size).toBeGreaterThanOrEqual(60);
   });
 
-  test("1. faces are L* 26 to 48, grooves 12 to 26 darker (6 to 14 in a fight), the bare board's tones chroma 22 or less", () => {
-    for (const t of Object.values(HALVES)) {
-      expect(L(t.face)).toBeGreaterThanOrEqual(26);
-      expect(L(t.face)).toBeLessThanOrEqual(48);
-      expect(L(t.lip)).toBeLessThanOrEqual(54);
+  test("1. faces are L* 26 to 48, grooves 12 to 26 darker (7 on a cloth; 6 to 14 in a fight, 4 on a cloth), chroma 22 or less (38 on a cloth)", () => {
+    for (const { name, t, s } of FACES) {
       const step = L(t.face) - L(t.groove);
-      expect(step).toBeGreaterThanOrEqual(12);
-      expect(step).toBeLessThanOrEqual(26);
-      const quiet = quietOf(t);
-      const calm = L(quiet.face) - L(quiet.groove);
-      expect(calm).toBeGreaterThanOrEqual(6);
-      expect(calm).toBeLessThanOrEqual(14);
+      const calm = L(quietOf(t).face) - L(quietOf(t).groove);
+      // A lip is one pixel wide, held by its lightness alone: the velvet's is chroma 41.
+      const tones = [t.face, t.groove, t.edge].filter((tone) => chroma(tone) > s.chroma);
+      expect([name, L(t.face) >= 26, L(t.face) <= 48, L(t.lip) <= 54]).toEqual([name, true, true, true]);
+      expect([name, step >= s.groove, step <= 26, calm >= s.fight, calm <= 14]).toEqual([name, true, true, true, true]);
+      expect([name, tones]).toEqual([name, []]);
     }
-    // The hexes and the wood round them: the bare board.
-    const bare = [
-      ...Object.values(HALVES).flatMap((t: HexTones) => [t.face, t.lip, t.groove, t.edge]),
-      BOARD.wood,
-      BOARD.ring,
-      BOARD.fleck,
-    ];
-    for (const tone of bare) expect([tone, chroma(tone) <= 22]).toEqual([tone, true]);
-    // The stump's bark at its rim and the bench's plank are their own wood, as dark as the board.
+    // The wood round the board is the bare board's; the stump's bark at its rim and the bench's plank are their own wood, as dark.
+    for (const tone of [BOARD.wood, BOARD.ring, BOARD.fleck]) expect([tone, chroma(tone) <= 22]).toEqual([tone, true]);
     for (const tone of [RIM.pale, RIM.dark, BENCH.plank, BENCH.top, BENCH.foot, BENCH.slat]) {
       expect([tone, L(tone) <= 48]).toEqual([tone, true]);
     }
@@ -107,28 +128,28 @@ describe("the board's value budget", () => {
     expect(L(BOARD.wood)).toBeLessThan(L(BOARD.far.face));
   });
 
-  test("2. the ink edge against a face is at least 1.5 times the groove's step, and 38 on yours, 28 on theirs", () => {
-    for (const [side, t] of Object.entries(HALVES)) {
+  test("2. the ink edge against a face is at least 1.5 times the groove's step, and 38 on your bare face, 28 on theirs (25 and 20 on a cloth)", () => {
+    for (const { name, side, t, s } of FACES) {
       const edge = L(t.face) - L(INK);
-      expect([side, edge >= 1.5 * (L(t.face) - L(t.groove))]).toEqual([side, true]);
-      expect([side, edge >= (side === "near" ? 38 : 28)]).toEqual([side, true]);
+      expect([name, edge >= 1.5 * (L(t.face) - L(t.groove)), edge >= s.edge[side]]).toEqual([name, true, true]);
     }
   });
 
   test("3. no figure loses more than 30% of its fill to a face, but mud", () => {
-    for (const [side, t] of Object.entries(HALVES)) {
+    for (const { name, t } of FACES) {
       const sunk = [...EVERYONE]
         .filter(([kind, px]) => kind !== "mud" && lost(px, t.face) > 0.3)
         .map(([kind, px]) => `${kind} ${Math.round(lost(px, t.face) * 100)}%`);
-      expect([side, sunk]).toEqual([side, []]);
+      expect([name, sunk]).toEqual([name, []]);
     }
     const mud = EVERYONE.get("mud") ?? [];
-    expect({ near: round2(lost(mud, BOARD.near.face)), far: round2(lost(mud, BOARD.far.face)) }).toEqual(MUD);
+    expect(Object.fromEntries(FACES.map(({ name, t }) => [name, round2(lost(mud, t.face))]))).toEqual(MUD);
   });
 
-  test("4. your face is 8 to 12 lighter than theirs", () => {
-    const apart = L(BOARD.near.face) - L(BOARD.far.face);
-    expect(apart).toBeGreaterThanOrEqual(8);
-    expect(apart).toBeLessThanOrEqual(12);
+  test("4. your face is 8 to 12 lighter than theirs (5 to 12 on a cloth)", () => {
+    for (const [id, s] of Object.entries(SURFACES)) {
+      const apart = L(s.near.face) - L(s.far.face);
+      expect([id, apart >= s.apart, apart <= 12]).toEqual([id, true, true]);
+    }
   });
 });

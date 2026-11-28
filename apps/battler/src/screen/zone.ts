@@ -12,7 +12,7 @@ import { catalogOf, closedNow, type RunView, zoneOf } from "@sequoia-leaf/raid";
 import { isFigureId, type UnitKind } from "@sequoia-leaf/raid/content/figures.ts";
 import { COLS, SEATS } from "@sequoia-leaf/raid/hex.ts";
 
-import { hexSign, lineRound, SIGN } from "./art/board.ts";
+import { hexSign, lineRound, SIGN, SIGN_ALPHA } from "./art/board.ts";
 import { HEX_H, HEX_W, seatXY } from "./geometry.ts";
 
 /** The seats of the rows a figure belongs in on the member's half, by the run's catalogue, but any the room's rules close while planning. */
@@ -24,8 +24,7 @@ export function zoneSeats(run: RunView, kind: UnitKind): number[] {
   );
 }
 
-/** How strong the band's fill is, and its line's breath. */
-const FILL = 0.2;
+/** The band's line, breathing: the one thing on the board that moves while a figure is carried. */
 const lineAlpha = (t: number): number => 0.78 + 0.16 * Math.sin(t * 2.6);
 
 /** The line round a set of seats, made once each: there are two zones and a few rules' closed seats. */
@@ -53,7 +52,7 @@ export function drawZone(
   t: number,
 ): void {
   if (seats.length === 0) return;
-  g.globalAlpha = FILL;
+  g.globalAlpha = SIGN_ALPHA.zoneFill;
   const face = hexSign(SIGN.zone, SIGN.zone);
   for (const seat of seats) {
     const at = seatXY(seat);

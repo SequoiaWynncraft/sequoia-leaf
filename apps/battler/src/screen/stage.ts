@@ -15,7 +15,7 @@ import { type Ctx, makeCanvas, must } from "@sequoia-leaf/kit/util.ts";
 import { type Looks, newLooks } from "@sequoia-leaf/raid";
 import { HOME_ROWS } from "@sequoia-leaf/raid/hex.ts";
 
-import { BOARD, quietOf } from "./art/board.ts";
+import { BOARD, halvesOf, quietOf } from "./art/board.ts";
 import { paintPlace } from "./art/place.ts";
 import { paintHalf, type Place, warmGlow } from "./art/table.ts";
 import { BENCH_H, BENCH_Y, BOARD_H, BOARD_W, GAP, type Pt, ROW } from "./geometry.ts";
@@ -78,13 +78,16 @@ const halves = new Map<string, { far: HTMLCanvasElement; near: HTMLCanvasElement
 let overWasDrawn = false;
 let stopped = false;
 
-/** The two halves of the board as pictures; `quiet`, a fight's, with the grooves half gone. */
+/** The two halves of the board as pictures, in the cloth on the table; `quiet`, a fight's, with the grooves half gone. */
 export function boardHalves(quiet = false): { far: HTMLCanvasElement; near: HTMLCanvasElement } {
-  const key = quiet ? "quiet" : "plan";
+  const cloth = hooks?.looks().cloth ?? "bare";
+  const key = `${cloth}${quiet ? " quiet" : ""}`;
   let h = halves.get(key);
   if (!h) {
-    const tone = quiet ? quietOf : (t: typeof BOARD.near) => t;
-    h = { far: paintHalf(true, tone(BOARD.far)), near: paintHalf(false, tone(BOARD.near)) };
+    const { near, far } = halvesOf(cloth);
+    h = quiet
+      ? { far: paintHalf(true, quietOf(far)), near: paintHalf(false, quietOf(near)) }
+      : { far: paintHalf(true, far), near: paintHalf(false, near) };
     halves.set(key, h);
   }
   return h;
