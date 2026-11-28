@@ -8,7 +8,17 @@
  * Pointing at a thing on the yard says what it is; clicking or tapping pins its card.
  */
 import { at, carries, isItem, NONE, pieceOf, piecesAt, redwoodAt, tilesOf } from "@sequoia-leaf/factory";
-import { canvasCard, close, moveCard, pick, refresh, register, shown, watch } from "@sequoia-leaf/kit/card.ts";
+import {
+  canvasCard,
+  close,
+  moveCard,
+  pick,
+  pinnedBeside,
+  refresh,
+  register,
+  shown,
+  watch,
+} from "@sequoia-leaf/kit/card.ts";
 import { keepText, keptText } from "@sequoia-leaf/kit/keep.ts";
 import { sheetsWhere } from "@sequoia-leaf/kit/measure.ts";
 import { scope } from "@sequoia-leaf/kit/scope.ts";
@@ -122,6 +132,9 @@ export function tileBox(x: number, y: number): { x: number; y: number; w: number
   return { x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y };
 }
 
+/** The tile a card was last asked for on, what it was asked about, and where the tile stood on the page when the card was last placed beside it. */
+const asked = { ref: "", x: 0, y: 0, at: { x: 0, y: 0, w: 0, h: 0 } };
+
 /** Kept on this device once a card has been asked for from the yard: the line over the dock stops saying how (`dock.ts`). */
 const LEARNT = "works.card.v1";
 /** Whether a card has been asked for from the yard on this device. */
@@ -142,7 +155,22 @@ export function openCard(x: number, y: number, held = false): boolean {
   }
   if (!cardLearnt()) keepText(LEARNT, "1");
   const b = tileBox(x, y);
+  Object.assign(asked, { ref, x, y, at: b });
   return pick(ref, b.x, b.y, b.w, b.h);
+}
+
+/**
+ * The card pinned beside a tile stays beside it as the view moves (a drag, a pinch, a zoom, the view
+ * carried along with the member), a card followed to from it as well: each frame it is placed again
+ * if the tile has moved on the page. A sheet along an edge keeps its edge.
+ */
+export function keepCardBeside(): void {
+  if (!pinnedBeside(asked.ref)) return;
+  const b = tileBox(asked.x, asked.y);
+  const a = asked.at;
+  if (b.x === a.x && b.y === a.y && b.w === a.w && b.h === a.h) return;
+  asked.at = b;
+  moveCard(canvasCard, b);
 }
 
 export function closeCard(): void {

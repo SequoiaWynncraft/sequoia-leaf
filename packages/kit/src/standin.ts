@@ -339,9 +339,10 @@ export function liveSockets(): { sockets: FakeSocket[]; done: () => void } {
  */
 export const press = (on: EventTarget | null = null): void => heard({ is: "down", on });
 
-/** The selectors a stand-in element matches: a tag (`button`), a role (`[role='button']`), a link (`a[href]`). */
+/** The selectors a stand-in element matches: a tag (`button`), a class (`.sheet`), a role (`[role='button']`), a link (`a[href]`). */
 const matchesOne = (e: Part, one: string): boolean =>
   one === e.localName ||
+  (/^\.[\w-]+$/.test(one) && e.className.split(" ").includes(one.slice(1))) ||
   (one === "[role='button']" && e.getAttribute("role") === "button") ||
   (one === "a[href]" && e.localName === "a" && e.getAttribute("href") !== null);
 

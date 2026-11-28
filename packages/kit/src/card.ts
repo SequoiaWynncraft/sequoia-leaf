@@ -106,7 +106,7 @@ export class Deck {
   #told: string = "|";
   /** Whoever asked for a card whose description is still coming, and whether to pin it. */
   #awaited: { from: object; pinned: boolean } | null = null;
-  /** What the card on show holds while it is the one on show (`confirms`): a scope for each pinned card drawn, kept while it is drawn again. */
+  /** What the card on show holds while it is the one on show (`confirms`): a scope for each pinned card drawn, kept by its things while it is drawn again or moves with its thing. */
   readonly #entries = scope().turns();
 
   constructor(view: View) {
@@ -148,7 +148,7 @@ export class Deck {
   #set(open: Open | null, description: Description | null): void {
     this.open = open;
     // Another card on show (followed to, gone back to, pinned anew, put away): what the last held goes.
-    this.#entries(open?.pinned ? open : null);
+    this.#entries(open?.pinned ? open.stack : null);
     this.view.render(open, description);
     this.#tell();
   }
@@ -160,7 +160,7 @@ export class Deck {
    * Drawn again with what it says changed (`refresh`), it is still the same card.
    */
   confirms(a: Action, redraw: () => void): boolean {
-    const life = this.open?.pinned ? this.#entries(this.open) : null;
+    const life = this.open?.pinned ? this.#entries(this.open.stack) : null;
     return !a.ask || (life !== null && pressedTwice(life, actionSpend(this.shown() ?? "", a), redraw));
   }
 
@@ -521,17 +521,10 @@ type Swapped = { node: HTMLElement; scrolled: number | null };
 
 /**
  * The very card that was up, drawn again (`again`: what it says changed, it was pinned, its glance
- * grew; not one followed to from it), is drawn into the node already on the page: its face and its
- * parts are the new drawing's, and the node keeps its place, its layer and the focus on it. A node
- * put on the page has no place until it is placed, and a card refreshed four times a second was
- * once a new node each time, which Firefox at times showed for a frame at the page's corner. It
- * keeps whoever was on one of its buttons, and gives back how far it was scrolled, for once it is
- * placed (no taller than it was: scrolled before that, the browser would cut the scroll to what the
- * taller card has).
- *
- * Another card (new, followed to, gone back to) goes in beside the old before the old goes: taking
- * the old one out takes the focus off a button pressed in it, and `replaceWith` would lose whatever
- * followed the old. It has the focus the old one had.
+ * grew), is drawn into its node on the page, which keeps its place, its layer, its focus and whoever
+ * is on its buttons: a new node has no place until placed, which Firefox at times showed for a frame
+ * at the page's corner. It gives back how far it was scrolled, for once it is placed. Another card
+ * goes in beside the old before the old goes, keeping the focus the old one had.
  */
 function swapIn(was: HTMLElement | null, card: HTMLElement, again: boolean): Swapped {
   if (was && again) return { node: was, scrolled: drawInto(was, card) };
@@ -756,8 +749,7 @@ function pointedAgain(ref: Ref | null, spot: Spot): void {
   const at = page.pointAt;
   if (ref === null || (at && at.x === spot.x && at.y === spot.y && at.w === spot.w && at.h === spot.h)) return;
   page.pointAt = spot;
-  const o = deck.open;
-  if (o && !o.pinned && o.from === CANVAS && deck.shown() === ref) moveCard(CANVAS, spot);
+  if (!deck.open?.pinned && deck.shown() === ref) moveCard(CANVAS, spot);
 }
 
 /**
@@ -785,11 +777,9 @@ export function point(ref: Ref | null, x: number, y: number, w = 0, h = 0): void
 /** Something drawn on a canvas is clicked or tapped (or nothing is): its card is pinned, or put away if it was the one pinned. */
 export function pick(ref: Ref | null, x: number, y: number, w = 0, h = 0): boolean {
   page.pointWait();
-  if (ref === null) {
-    deck.close(CANVAS);
-    return false;
-  }
-  return deck.press(ref, { x, y, w, h }, page.via, CANVAS);
+  if (ref !== null) return deck.press(ref, { x, y, w, h }, page.via, CANVAS);
+  deck.close(CANVAS);
+  return false;
 }
 
 /** While the game holds something, shows what letting it go here would do (or nothing); with `side`, beside the box. */
@@ -824,13 +814,16 @@ export function settle(): void {
   placeCard(node, o, "follow");
 }
 
-/** What `from` opened (a canvas's card: `canvasCard`) is beside another box now: the view moved under it. It is placed again. */
+/** What `from` opened (a canvas's card: `canvasCard`) is beside another box now, the view moved under it: it moves with it, on its side, a card followed to from it too. */
 export function moveCard(from: object, spot: Spot): void {
-  if (!deck.moveTo(from, spot)) return;
-  // It is still the card that was drawn, now beside the new box.
+  if (!deck.moveTo(from, spot) || !page.node || !deck.open) return;
   page.drawn = deck.open;
-  settle();
+  if (!placeCard(page.node, deck.open, "follow")) deck.close();
 }
+
+/** Whether the canvas's pinned card was asked for `ref` (its first thing, before any followed to) and stands beside it, no sheet: for a game that keeps it there (`moveCard`). */
+export const pinnedBeside = (ref: Ref): boolean =>
+  deck.open?.stack[0] === ref && deck.open.pinned && deck.open.from === CANVAS && !page.node?.matches(".sheet");
 
 /**
  * Puts away the passing card once what it was shown for leaves the page or, unless it was shown for
