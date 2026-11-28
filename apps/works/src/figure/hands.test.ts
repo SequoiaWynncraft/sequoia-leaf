@@ -2,9 +2,10 @@
  * Being somebody in your own yard, on the page: the walking keys walk you and the view goes with you;
  * a drag lets go of you, and walking or a tap-walk takes hold again; a zoom while it goes with you
  * zooms about you; an empty-handed tap on the ground walks there and one on a piece opens its card;
- * the settings menu stops a walk; and you put pieces down and take them up within reach, the plot you
- * stand on and the eight round it, judged on the very command a press sends, so that what its
- * preview shows (gold or coral, and the line over the dock) is what the press then does.
+ * the settings menu stops a walk; and you build by hand only within reach, the plot you stand on and
+ * the eight round it, judged on the very command a press sends, so that what its preview shows (gold
+ * or coral, and the line over the dock) is what the press then does. The select tool and blueprints
+ * work anywhere on the land.
  */
 import { afterEach, describe, expect, test } from "bun:test";
 
@@ -17,6 +18,7 @@ import {
   LAND,
   type Leg,
   MILL,
+  NONE,
   type Piece,
   PLOT_H,
   PLOT_W,
@@ -31,8 +33,20 @@ import { noKeysHeld } from "@sequoia-leaf/kit/keys.ts";
 import { opened, useFakeLeaf } from "../../test/fake-leaf.ts";
 import { aimOf } from "../hand.ts";
 import { WORKS_KEYS } from "../keymap.ts";
+import { codeIn, pasteIn, saveIn } from "../plans.ts";
 import { S, toolHooks, toPage } from "../state.ts";
-import { aimAt, confirm, hold, markEnd, markOver, markStart, setGrade, setTool, takeAway } from "../tools.ts";
+import {
+  aimAt,
+  clearMark,
+  confirm,
+  hold,
+  markEnd,
+  markOver,
+  markStart,
+  setGrade,
+  setTool,
+  takeAway,
+} from "../tools.ts";
 import { setWayIn } from "../tunnel.ts";
 import { handPrint } from "../ui/dock.ts";
 import { doNow } from "../yard.ts";
@@ -48,6 +62,7 @@ const { fingerTap, initInput, letGo, stepInput } = await import("../input.ts");
 
 useFakeLeaf();
 afterEach(() => {
+  toolHooks.said = () => {};
   leave();
   noKeysHeld();
   Reflect.deleteProperty(globalThis, "HTMLElement");
@@ -147,17 +162,11 @@ function click(canvas: EventTarget, x: number, y: number): void {
   canvas.dispatchEvent(e("pointerup"));
 }
 
-/** With Select, the piece on row 9 at `x` marked, taken in hand to move, and set down at `to`: whether it was shown gold, which is whether it went. */
-function moved(x: number, to: number): boolean {
-  setTool("select");
-  startAt(x, 9);
-  overAt(x, 9);
-  markEnd();
-  hold("move");
-  aim(to, 9);
-  const shown = gold();
-  expect(confirm()).toBe(shown);
-  return shown;
+/** Everything the page says from now on (a refusal, on the line over the dock), until the test ends. */
+function sayings(): string[] {
+  const said: string[] = [];
+  toolHooks.said = (text) => void said.push(text);
+  return said;
 }
 
 /** The blueprint in place 0 taken in hand and set down aimed at `x` on row 20: whether it was shown gold, which is whether it went. */
@@ -198,7 +207,7 @@ describe("reach", () => {
     expect(inReach(0, 30)).toBe(false);
   });
 
-  test("a build, a run, a removal and a set-down out of reach are refused, a build over one of its kind too; turning and painting are not limited", async () => {
+  test("a build, a run and a removal out of reach are refused, a build over one of its kind too; turning and painting are not limited", async () => {
     const y = everywhere();
     await opened(y, 100_000);
     placeYou(mid(8, 6));
@@ -224,7 +233,6 @@ describe("reach", () => {
     placeYou(mid(8, 6));
     expect(beyondReach({ do: "build", kind: MILL, x: far.x, y: far.y, dir: 0, grade: 2 })).toEqual(refused);
     expect(doNow({ do: "remove", x: far.x, y: far.y })).toEqual(refused);
-    expect(doNow({ do: "clear", tiles: [far.y * y.land.w + far.x] })).toEqual(refused);
     // In reach, the rules decide.
     expect("refused" in doNow({ do: "build", kind: BELT, ...T(10, 6), dir: 0, grade: 1 })).toBe(false);
   });
@@ -282,29 +290,84 @@ describe("reach", () => {
     expect(doNow({ do: "remove", ...T(28, 14) })).not.toEqual(far);
   });
 
-  test("a move: gold where it leaves and lands in reach, coral and refused where it leaves from out of reach", async () => {
+  test("the select tool works anywhere on the land: a far area is moved, copied, cleared and saved", async () => {
     const y = everywhere();
-    stands(y, MILL, 33, 9);
-    stands(y, MILL, 28, 9);
+    stands(y, MILL, 43, 22);
+    stands(y, MILL, 46, 22);
     await opened(y, 100_000);
     placeYou(HOLLOW);
-    expect(moved(33, 26)).toBe(false);
-    expect(S.world.kind[at(33, 9)]).toBe(MILL);
-    expect(moved(28, 26)).toBe(true);
-    expect(S.world.kind[at(26, 9)]).toBe(MILL);
+    expect([inReach(43, 22), inReach(47, 31)]).toEqual([false, false]);
+    // Marked out of reach, Move, Copy, Remove and Save are offered, and none of them is refused.
+    const said = sayings();
+    setTool("select");
+    startAt(43, 22);
+    overAt(47, 23);
+    markEnd();
+    expect(handPrint().acting).toBe(true);
+    // Moved within the far corner: gold, and it goes.
+    hold("move");
+    aim(44, 30);
+    expect([gold(), aimOf(S.hand)?.why]).toEqual([true, null]);
+    expect(confirm()).toBe(true);
+    expect([S.world.kind[at(43, 22)], S.world.kind[at(43, 30)], S.world.kind[at(46, 30)]]).toEqual([NONE, MILL, MILL]);
+    // The moved pieces stay marked: saved where they stand, then copied, then cleared.
+    expect(saveIn(0)).toBe(true);
+    expect(S.world.blueprints[0]).toBeTruthy();
+    setTool("select");
+    startAt(43, 30);
+    overAt(47, 31);
+    markEnd();
+    hold("copy");
+    aim(44, 26);
+    expect(gold()).toBe(true);
+    expect(confirm()).toBe(true);
+    expect([S.world.kind[at(43, 26)], S.world.kind[at(46, 26)]]).toEqual([MILL, MILL]);
+    setTool("select");
+    startAt(43, 22);
+    overAt(47, 31);
+    markEnd();
+    expect(clearMark()).toBe(true);
+    const left = [at(43, 26), at(46, 26), at(43, 30), at(46, 30)].map((i) => S.world.kind[i]);
+    expect(left).toEqual([NONE, NONE, NONE, NONE]);
+    expect(said).toEqual([]);
   });
 
-  test("a blueprint holding a tunnel: gold only with both its mouths in reach, and the press does as shown", async () => {
+  test("a blueprint goes down anywhere on the land, a pasted code's too", async () => {
     const y = everywhere();
     stands(y, TUNNEL, 10, 18);
     await opened(y, 100_000);
     placeYou(HOLLOW);
+    const said = sayings();
     expect(doNow({ do: "saveBlueprint", slot: 0, tiles: [at(10, 18), at(12, 18)] })).not.toHaveProperty("refused");
-    // Its box is three tiles wide, aimed at its middle: at 31 its far mouth would be at 32.
-    expect(setPrint(31)).toBe(false);
-    expect(S.world.kind[at(30, 20)]).not.toBe(TUNNEL);
-    expect(setPrint(30)).toBe(true);
-    expect(S.world.kind[at(29, 20)]).toBe(TUNNEL);
+    // Its box is three tiles wide, aimed at its middle: at 45 on row 20 it stands from 44 to 46, all out of reach.
+    expect(inReach(44, 20)).toBe(false);
+    expect(setPrint(45)).toBe(true);
+    expect([S.world.kind[at(44, 20)], S.world.kind[at(46, 20)]]).toEqual([TUNNEL, TUNNEL]);
+    // The same blueprint by its code, kept in another place and set down further off.
+    const code = codeIn(0);
+    expect(code === null ? "no code" : pasteIn(1, code)).toBeNull();
+    setTool("select");
+    hold(1);
+    aim(45, 34);
+    expect(gold()).toBe(true);
+    expect(confirm()).toBe(true);
+    expect(S.world.kind[at(44, 34)]).toBe(TUNNEL);
+    expect(said).toEqual([]);
+  });
+
+  test("building one piece by hand out there is still refused: coral, said why, and nothing stands", async () => {
+    await opened(everywhere(), 100_000);
+    placeYou(HOLLOW);
+    setTool(MILL);
+    aim(45, 33);
+    // The aim's reason is what the line over the dock says.
+    expect([gold(), aimOf(S.hand)?.why]).toEqual([false, OUT_OF_REACH]);
+    expect(confirm()).toBe(false);
+    expect(S.world.kind[at(45, 33)]).toBe(NONE);
+    expect(doNow({ do: "stand", pieces: [{ kind: MILL, ...T(45, 33), dir: 0, span: 0 }] })).toEqual({
+      refused: "out_of_reach",
+      why: OUT_OF_REACH,
+    });
   });
 
   test("a piece built over one of its kind counts, out of reach too; the turn and grade commands do not", async () => {
@@ -344,25 +407,6 @@ describe("reach", () => {
     expect([gold(), aimOf(S.hand)?.why ?? null]).toEqual([true, null]);
     expect(confirm()).toBe(true);
     expect([S.world.grade[at(28, 11)], S.world.grade[at(31, 11)]]).toEqual([2, 2]);
-  });
-
-  test("moving a tunnel's way in onto its far mouth, which would bring the far mouth out of reach, is coral and refused", async () => {
-    // The reviewer's case: an eastbound tunnel from 28 to 31; moved one tile on, it would come up at 34.
-    const y = everywhere();
-    stands(y, TUNNEL, 28, 11, 2);
-    await opened(y, 100_000);
-    placeYou(HOLLOW);
-    setTool("select");
-    startAt(28, 11);
-    overAt(31, 11);
-    markEnd();
-    hold("move");
-    // Its box is four tiles wide, aimed at its second: aimed at 32, its way in lands on 31.
-    aim(32, 11);
-    expect(S.group?.at[0]).toMatchObject(T(31, 11));
-    expect(gold()).toBe(false);
-    expect(confirm()).toBe(false);
-    expect(S.world.kind[at(28, 11)]).toBe(TUNNEL);
   });
 
   test("a run of belt over standing belts counts every tile of it: re-laying far belts is refused", async () => {
