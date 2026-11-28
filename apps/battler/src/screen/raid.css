@@ -522,9 +522,10 @@ body.rack-open #rack .made .item {
  * by an ink edge, with no backing; the count and the cost sit on a backing in the foot's tone. A name
  * too long for the foot is cut short; its card says it whole.
  *
- * Two looks. Small, a phone's and a narrow window's: the thin frame, the traits by their signs, the
- * name in the small face, the figure at the layout's size. Large, where five cards are wide enough for a name of eight letters in the
- * name face: the full frame, each trait's sign and name, the name in the name face.
+ * Two looks. Small, a phone's and a narrow window's: the traits by their signs, the name in the
+ * small face, the figure at the layout's size; a phone held upright gives it the thin frame. Large,
+ * where five cards are wide enough for a name of eight letters in the name face: each trait's sign
+ * and name, the name in the name face.
  */
 .offer {
   --in: calc(var(--u) * 3);
@@ -539,10 +540,6 @@ body.rack-open #rack .made .item {
   text-align: left;
   cursor: pointer;
   touch-action: none;
-}
-#stall > .offer {
-  --k-fw: 3;
-  --k-f: var(--k-f-thin);
 }
 button.offer:hover {
   filter: brightness(1.2);
@@ -659,8 +656,6 @@ button.offer:active {
 }
 @container stall (width >= 35.3em) {
   #stall > .offer {
-    --k-fw: 5;
-    --k-f: var(--k-f-thick);
     --fs: 2;
     --card-h: calc(var(--u) * 84);
   }
@@ -1946,6 +1941,11 @@ body[data-rule] #says {
   }
   #stall {
     --gap: var(--u);
+  }
+  /* A phone's card wears the thin frame: the full one leaves its tabs no room. */
+  #stall > .offer {
+    --k-fw: 3;
+    --k-f: var(--k-f-thin);
   }
   /* A small card here is a phone's: its figure one unit to a pixel. */
   .offer {
