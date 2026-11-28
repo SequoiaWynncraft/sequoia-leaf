@@ -165,7 +165,7 @@ describe("tier 7's tables", () => {
     // The same land with no star crystal on it.
     const raws = (["tar", "sand", "salvage", "ore", "deadfall", "stone"] as const).map((n, k) => [k, 0, n] as const);
     const y = F.create({ land: bareLand(20, 12, raws, [16, 6]), tier: 8, seed: 3 });
-    const made = ["crystal", "lattice", "star", "dish"].map((n) => F.item(n as F.ItemName));
+    const made = (["crystal", "lattice", "star", "dish"] as const).map((n) => F.item(n));
     const asked = Array.from({ length: 400 }, () => F.fresh(y, 3)).filter((o) =>
       made.some((m) => (o.want[m] ?? 0) > 0),
     );

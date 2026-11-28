@@ -37,7 +37,7 @@ const MINUTE_MS = 60_000;
 function must(y: Yard, c: Record<string, unknown>): void {
   const read = readCommand({ tick: y.tick, ...c });
   const did = read ? play(y, read) : { refused: "does not read" };
-  if ("refused" in did) throw new Error(`${JSON.stringify(c)}: ${String(did.refused)}`);
+  if ("refused" in did) throw new Error(`${JSON.stringify(c)}: ${did.refused}`);
 }
 
 /**
@@ -85,21 +85,26 @@ test("a ring with growers on it, Leaf tending its yard now and then across a day
   ]);
   const seen: string[] = [];
   let grown = 0;
-  for (let minute = 1; minute <= 24 * 60; minute++) {
+  await day(1, (minute) => {
     const ms = minute * MINUTE_MS;
     fake.leaf.ms = ms;
     performance.now = () => 1000 + ms;
     runYard(1000 + ms);
+  });
+  // At each mark, Leaf tends its yard on to its clock, as it does.
+  async function day(minute: number, run: (minute: number) => void): Promise<void> {
+    if (minute > 24 * 60) return;
+    run(minute);
     // What the page sent reaches Leaf at once, as it would.
     await Bun.sleep(1);
-    if (!marks.has(minute)) continue;
-    // Leaf tends its yard on to its clock, as it does.
-    const leaf = fake.leaf.yard;
-    for (let further = true; further;)
-      further = FACTORY.tend?.(leaf, { ...ctx(), now: ctx().now + ms }, () => true) ?? false;
-    const same = leaf.tick === S.world.tick && check(leaf) === check(S.world);
-    seen.push(`${minute}: ${same}`);
-    grown = Math.max(grown, leaf.depot[CRYSTAL] ?? 0);
+    if (marks.has(minute)) {
+      const leaf = fake.leaf.yard;
+      const now = { ...ctx(), now: ctx().now + minute * MINUTE_MS };
+      for (let further = true; further;) further = FACTORY.tend?.(leaf, now, () => true) ?? false;
+      seen.push(`${minute}: ${leaf.tick === S.world.tick && check(leaf) === check(S.world)}`);
+      grown = Math.max(grown, leaf.depot[CRYSTAL] ?? 0);
+    }
+    await day(minute + 1, run);
   }
   // And the page was never put right: it read Leaf's yard once, as it opened.
   expect([seen, fake.leaf.reads.length]).toEqual([[...marks].map((m) => `${m}: true`), 1]);
