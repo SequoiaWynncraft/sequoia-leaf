@@ -10,7 +10,7 @@ import { R } from "@sequoia-leaf/kit/pix.ts";
 import { write } from "@sequoia-leaf/kit/text.ts";
 import { clamp, type Ctx } from "@sequoia-leaf/kit/util.ts";
 import { chairsOn, fieldCap, type ItemId, levelOf, pieceAt, type RunView, type Stars } from "@sequoia-leaf/raid";
-import { type FigureId, isBossId, type UnitKind } from "@sequoia-leaf/raid/content/figures.ts";
+import { type FigureId, isBossId, isSummonId, type UnitKind } from "@sequoia-leaf/raid/content/figures.ts";
 import { regularOf, ROOMS } from "@sequoia-leaf/raid/content/rooms.ts";
 import { HOME_ROWS, seatCell } from "@sequoia-leaf/raid/hex.ts";
 
@@ -33,7 +33,7 @@ import { DIM, shineOf } from "./light.ts";
 import { drawLitter } from "./litter.ts";
 import { arrivalOf, handing, watchersOf } from "./logic.ts";
 import { aloft, FOOT, type Pawn, pawns, spotOfPawn } from "./pawns.ts";
-import { drawPips, drawPlate, pipsWide, plateAt } from "./plate.ts";
+import { drawPlate, drawStars, plateAt, starsWide } from "./plate.ts";
 import { heldOver, planPlate } from "./plates.ts";
 import { drawRisings } from "./rising.ts";
 import { drawRoots } from "./roots.ts";
@@ -531,12 +531,8 @@ export function drawOver(g: Ctx): boolean {
       g.fillStyle = "rgba(26,15,30,0.25)";
       g.fillRect(Math.round(x) - 6, Math.round(y) + 3, 12, 2);
       drawStanding(g, catalogFor(S.run), p.kind, x, y - 4, S.looks.bases, { beat: 1 });
-      drawPips(
-        g,
-        p.stars,
-        Math.round(x) - Math.floor(pipsWide(p.stars) / 2),
-        Math.round(y) - 11 - framesOf(p.kind).tall,
-      );
+      const stars = isSummonId(p.kind) ? 0 : p.stars;
+      drawStars(g, stars, Math.round(x) - Math.floor(starsWide(stars) / 2), Math.round(y) - 12 - framesOf(p.kind).tall);
     } else {
       const s = pawnStanding(g, p, V.bx, V.by);
       s.draw();

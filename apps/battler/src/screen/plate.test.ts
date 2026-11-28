@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
+import { GOLD, INK, STONE } from "@sequoia-leaf/kit/palette.ts";
+import { must } from "@sequoia-leaf/kit/util.ts";
+
 import { HEX_W } from "./geometry.ts";
 import { heldAt } from "./held.ts";
 import {
@@ -8,11 +11,13 @@ import {
   barTall,
   BIG_BAR_W,
   healthOf,
-  pipsWide,
   type Plate,
   plateAt,
   plated,
   shapeOf,
+  starBoxes,
+  starColours,
+  starsWide,
   ticksOf,
 } from "./plate.ts";
 
@@ -30,16 +35,50 @@ const plate = (o: Partial<Plate> = {}): Plate => ({
   big: false,
   ...o,
 });
-/** The columns a plate takes, from its leftmost to its rightmost, pips, bar and held boxes together. */
+/** The columns a plate takes, from its leftmost to its rightmost, stars, bar and held boxes together. */
 function span(p: Plate, cx: number): [number, number] {
   const at = plateAt(p, cx, 40);
-  const lefts = [at.left, ...(at.pips ? [at.pips.x] : []), ...at.held.map((h) => h.x)];
+  const lefts = [at.left, ...(at.stars ? [at.stars.x] : []), ...at.held.map((h) => h.x)];
   const rights = [
     at.left + at.w,
-    ...(at.pips ? [at.pips.x + pipsWide(p.stars)] : []),
+    ...(at.stars ? [at.stars.x + starsWide(p.stars)] : []),
     ...at.held.map((h) => h.x + h.w),
   ];
   return [Math.min(...lefts), Math.max(...rights)];
+}
+
+/** The stars over a plate as pixels: each star's body (its colour, its left, and its shape as rows of `X` and `.`), and whether ink edges them all round. */
+function drawn(p: Plate): { bodies: { x: number; colour: string; shape: string[] }[]; edged: boolean } {
+  const at = plateAt(p, 50, 40);
+  if (!at.stars) return { bodies: [], edged: true };
+  const px = new Map<string, string>();
+  for (const b of starBoxes(p.stars, at.stars.x, at.stars.y))
+    for (let y = b.y; y < b.y + b.h; y++) for (let x = b.x; x < b.x + b.w; x++) px.set(`${x},${y}`, b.c);
+  const at0 = at.stars;
+  const lit = (x: number, y: number): boolean => {
+    const c = px.get(`${x},${y}`);
+    return c !== undefined && c !== INK;
+  };
+  const bodies = Array.from({ length: Math.min(p.stars, 3) }, (_, i) => {
+    const x = at0.x + 1 + i * 4;
+    const y = at0.y + 1;
+    return {
+      x,
+      colour: must(px.get(`${x + 1},${y}`)),
+      shape: [0, 1, 2].map((dy) => [0, 1, 2].map((dx) => (lit(x + dx, y + dy) ? "X" : ".")).join("")),
+    };
+  });
+  const edged = [...px.keys()].every((k) => {
+    const [x = 0, y = 0] = k.split(",").map(Number);
+    if (!lit(x, y)) return true;
+    return [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ].every(([dx = 0, dy = 0]) => px.has(`${x + dx},${y + dy}`));
+  });
+  return { bodies, edged };
 }
 
 describe("the plate over a figure", () => {
@@ -73,24 +112,52 @@ describe("the plate over a figure", () => {
     expect(ticksOf(500, over.whole, BAR_W).map((t) => t.x)).toEqual([5, 10]);
   });
 
-  test("stars are pips: none for one, two for two, three for three; a pip 2 wide, 1 apart, so three take 8", () => {
-    expect([pipsWide(0), pipsWide(1), pipsWide(2), pipsWide(3)]).toEqual([0, 0, 7, 10]);
-    // Less their edge, a pixel each side.
-    expect(pipsWide(3) - 2).toBe(8);
-    expect(plateAt(plate({ stars: 1 }), 50, 40).pips).toBeNull();
-    expect(plateAt(plate({ stars: 0 }), 50, 40).pips).toBeNull();
+  test("the stars are its level: one bronze, two silver, three gold; a summon none", () => {
+    for (const [stars, body] of [
+      [1, "#a3662a"],
+      [2, STONE[3]],
+      [3, GOLD[2]],
+    ] as const) {
+      const star = drawn(plate({ stars }));
+      expect(star.bodies.length).toBe(stars);
+      expect(star.bodies.every((b) => b.colour === body)).toBe(true);
+      // Each a star, not a square: four points round a middle, its corners ink, the middle the glint.
+      for (const b of star.bodies) expect(b.shape).toEqual([".X.", "XXX", ".X."]);
+      // An ink edge all round: nothing touches a star but ink or another star's ink.
+      expect(star.edged).toBe(true);
+    }
+    expect(plateAt(plate({ stars: 0 }), 50, 40).stars).toBeNull();
+    expect(drawn(plate({ stars: 0 })).bodies).toEqual([]);
     expect(shapeOf({ summoned: true, stars: 2, items: [], manaFull: 0 }).stars).toBe(0);
+    // Bright as three become one.
+    expect(starColours(3, true)).not.toEqual(starColours(3));
   });
 
-  test("the pips sit on the row over the bar, their colour flush with its left end; on the bench, centred", () => {
-    const at = plateAt(plate({ stars: 3 }), 50, 40);
-    expect(at.pips).toEqual({ x: at.left - 1, y: at.top - 4 });
-    expect(at.peak).toBe(at.top - 4);
-    // On the bench, no bar: the pips centred over what it holds.
-    const resting = plateAt(plate({ resting: true, items: ["thorn"] }), 50, 40);
-    expect([resting.h, resting.pips, resting.peak]).toEqual([0, { x: 47, y: 30 }, 30]);
-    // With no pips, the plate's top is the bar's.
-    expect(plateAt(plate({ stars: 1 }), 50, 40).peak).toBe(36);
+  test("the stars are centred on the bar, their edge on its top, no wider than it, a boss's too", () => {
+    for (const big of [false, true])
+      for (const stars of [1, 2, 3]) {
+        const p = plate({ stars, big });
+        const at = plateAt(p, 50, 40);
+        const edge = must(at.stars);
+        const wide = starsWide(stars);
+        expect(wide).toBeLessThanOrEqual(at.w);
+        // Centred: as many columns of bar either side, or one more on the right where the two are odd and even.
+        const leftOver = edge.x - at.left;
+        const rightOver = at.left + at.w - (edge.x + wide);
+        expect(rightOver - leftOver).toBeGreaterThanOrEqual(0);
+        expect(rightOver - leftOver).toBeLessThanOrEqual(1);
+        // The stars' own colour too, each a pixel in from the edge.
+        const star = drawn(p);
+        const xs = star.bodies.flatMap((b) => [b.x, b.x + 3]);
+        expect(Math.min(...xs) - at.left).toBe(leftOver + 1);
+        // Their ink edge's foot is the row over the bar.
+        expect(edge.y + 5).toBe(at.top);
+        expect(at.peak).toBe(edge.y);
+      }
+    expect([starsWide(0), starsWide(1), starsWide(2), starsWide(3)]).toEqual([0, 5, 9, 13]);
+    // On the bench, no bar: the stars centred over what it holds.
+    const resting = plateAt(plate({ stars: 3, resting: true, items: ["thorn"] }), 50, 40);
+    expect([resting.h, resting.stars, resting.peak]).toEqual([0, { x: 44, y: 29 }, 29]);
   });
 
   test("what it holds sits under the bar in boxes, three sharing their edges, and each is found under a point", () => {
@@ -116,10 +183,11 @@ describe("the plate over a figure", () => {
   });
 
   test("what rises over a head starts above the plate", () => {
-    // Pips 4, bar 4, and one clear row over the 3 to its foot.
-    expect(aboveHead(plate())).toBe(12);
-    expect(aboveHead(plate({ items: ["thorn"] }))).toBe(18);
-    expect(aboveHead(plate({ stars: 1 }))).toBe(8);
+    // Stars 5, bar 4, and one clear row over the 3 to its foot.
+    expect(aboveHead(plate())).toBe(13);
+    expect(aboveHead(plate({ items: ["thorn"] }))).toBe(19);
+    expect(aboveHead(plate({ stars: 1 }))).toBe(13);
+    expect(aboveHead(plate({ stars: 0 }))).toBe(8);
   });
 
   test("there is none on a figure fallen, hidden or gone under the board, and one on a figure that has dropped in", () => {
