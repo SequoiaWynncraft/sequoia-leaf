@@ -330,6 +330,8 @@ const GROWN: readonly (Recipe | null)[] = ALL_ITEMS.map((n) => {
     work: g.work * g.extraEvery,
   };
 });
+/** Whether a recipe is a thing grown (`GROWN`): planned so, though nothing grows it without some of it to begin. */
+export const isGrown = (r: Recipe): boolean => GROWN[r.out] === r;
 /** The mix that gives each thing, if one does. */
 const MIX_GIVING: readonly (Mix | null)[] = ALL_ITEMS.map((n) => MIXES_N.find((x) => x.gives.includes(n)) ?? null);
 /**

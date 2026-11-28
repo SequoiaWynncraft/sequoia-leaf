@@ -150,7 +150,9 @@ describe("tier 7's tables", () => {
       expect([n, F.ASKS[n]?.length]).toEqual([n, 2]);
     expect([F.ITEM_INFO[F.item("dish")]?.step, F.ITEM_INFO[CRYSTAL]?.unsold]).toEqual([5, undefined]);
     // A yard with tier 7 done on land with everything a dish is made of: orders until one wants dishes alone.
-    const raws = (["tar", "sand", "salvage", "ore", "deadfall", "stone"] as const).map((n, k) => [k, 0, n] as const);
+    const raws = (["tar", "sand", "salvage", "ore", "deadfall", "stone", "crystal"] as const).map(
+      (n, k) => [k, 0, n] as const,
+    );
     const y = F.create({ land: bareLand(20, 12, raws, [16, 6]), tier: 8, seed: 3 });
     const dish = F.item("dish");
     const order = Array.from({ length: 400 }, () => F.fresh(y, 3)).find(
@@ -160,6 +162,19 @@ describe("tier 7's tables", () => {
     // 0.4, give or take a fifth: 7 to 11 dishes of 1,340 ticks each (18 to 27 at a whole share).
     const n = order?.want[dish] ?? 0;
     expect([n >= 7 && n <= 11, F.workOf(dish)]).toEqual([true, 1340]);
+  });
+
+  test("the board asks for nothing of star crystal where the yard owns no tile of it: a grower needs some to begin", () => {
+    // The same land with no star crystal on it.
+    const raws = (["tar", "sand", "salvage", "ore", "deadfall", "stone"] as const).map((n, k) => [k, 0, n] as const);
+    const y = F.create({ land: bareLand(20, 12, raws, [16, 6]), tier: 8, seed: 3 });
+    const made = ["crystal", "lattice", "star", "dish"].map((n) => F.item(n as F.ItemName));
+    const asked = Array.from({ length: 400 }, () => F.fresh(y, 3)).filter((o) =>
+      made.some((m) => (o.want[m] ?? 0) > 0),
+    );
+    // It makes crystal feed, which needs none, and the board asks for that.
+    const feed = F.makeable(y).includes(FEED);
+    expect([made.filter((m) => F.makeable(y).includes(m)), asked.length, feed]).toEqual([[], 0, true]);
   });
 
   test("the deepest culvert lets a tunnel pass under 32 tiles; one under 33 does not read as a command", () => {
