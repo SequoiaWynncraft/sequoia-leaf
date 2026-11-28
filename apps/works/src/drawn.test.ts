@@ -85,6 +85,10 @@ const strung = (...ends: number[][]): Parameters<Wires["draw"]>[2] => ({
 
 describe("the lines between pylons", () => {
   const view = { x: 0, y: 0, w: 400, h: 300 };
+  // A yard of their own, before the Spark era (whose glint is cream), whatever yard a test before left.
+  beforeAll(() => {
+    S.world = create({ seed: 1 });
+  });
 
   test("every pixel of a line in view is drawn, faint, and the three under its glint in the glint's colour", () => {
     const { pen: g, boxes } = pen();
