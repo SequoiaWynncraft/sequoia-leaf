@@ -63,15 +63,26 @@ function picture(lit: number): HTMLCanvasElement {
   return c;
 }
 
-/** The powerhouse for a button or a card, small: the brick block, its stack and its window, warm. */
+/** The window drawn small, for the icon: an arched frame of dark brick round warm glass, a bar down it and a sill. */
+function smallWindow(g: Ctx, x: number, y: number): void {
+  arch(g, x - 1, y - 1, 8, 10, CLAY[0]);
+  arch(g, x, y, 6, 8, INK);
+  arch(g, x + 1, y + 1, 4, 7, GOLD[0]);
+  R(g, x + 1, y + 4, 4, 3, GOLD[1]);
+  R(g, x + 3, y + 1, 1, 7, TAR[0]);
+  R(g, x - 1, y + 9, 8, 1, IRON[3]);
+}
+
+/** The powerhouse for a button or a card, small: the brick block, its stack and its window, warm, all inside its 22 pixels. */
 export function powerhouseIcon(): HTMLCanvasElement {
   const { c, g } = makeCanvas(22, 22);
-  bricks(g, 14, 0, 5, 8, 95);
+  bricks(g, 14, 0, 5, 6, 95);
   R(g, 13, 0, 7, 1, IRON[3]);
-  shingles(g, 1, 5, 20, 4, (r) => Math.round((4 - r) * 0.3), PURPLE, 96);
-  bricks(g, 1, 9, 20, 13, 97);
-  R(g, 1, 9, 20, 1, CLAY[1]);
-  window(g, 6, 11, 1);
+  shingles(g, 1, 3, 20, 4, (r) => Math.round((4 - r) * 0.3), PURPLE, 96);
+  bricks(g, 1, 7, 20, 15, 97);
+  R(g, 1, 7, 20, 1, CLAY[1]);
+  // High in its wall, so that a button's price under it leaves the whole window to be seen.
+  smallWindow(g, 8, 9);
   return c;
 }
 
