@@ -44,7 +44,7 @@ import { builds, S } from "./state.ts";
 import { NO_LESSONS, type Nudge, stepLessons } from "./teach.ts";
 import { cancel, keepAim } from "./tools.ts";
 import { initBoard } from "./ui/board.ts";
-import { followCards, initCard, refreshCard } from "./ui/card.ts";
+import { followCards, initCard, keepCardBeside, refreshCard } from "./ui/card.ts";
 import { initDock, refreshDock } from "./ui/dock.ts";
 import { initHud, myYard, refreshHud } from "./ui/hud.ts";
 import { letters } from "./ui/letter.ts";
@@ -351,8 +351,7 @@ async function boot(): Promise<Page | null> {
     if ((window.devicePixelRatio || 1) !== S.view.dpr) fit();
     // What is aimed is drawn of the yard as it is: worked out again if the yard or the purse has changed under it.
     keepAim();
-    const w = S.world;
-    drawYard(art, { lead: S.held ? heldLead : leadAt(now), pace: power(w).pace });
+    drawYard(art, { lead: S.held ? heldLead : leadAt(now), pace: power(S.world).pace });
     drawWords(ctx, wordPx, inset.top * S.view.dpr);
     lap("words");
   }
@@ -396,6 +395,7 @@ async function boot(): Promise<Page | null> {
     if (!S.held) advance(dt, now);
     lap("page");
     draw(now);
+    keepCardBeside();
     if (!told) {
       told = true;
       tell({ town: "ready" });
