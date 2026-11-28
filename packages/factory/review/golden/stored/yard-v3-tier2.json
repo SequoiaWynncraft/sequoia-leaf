@@ -1,0 +1,31 @@
+{
+  "v": 3,
+  "seed": 77,
+  "tick": 5000,
+  "at": 1763900000000,
+  "till": 40,
+  "bank": 12,
+  "told": 12,
+  "seen": { "tick": 4000, "till": 0, "depot": { "plank": 30 } },
+  "plots": ["yard", "meadow", "stream"],
+  "plans": ["boiler"],
+  "story": 12,
+  "filled": { "plank": 3 },
+  "board": [{ "id": 4, "want": { "plank": 10 }, "filled": { "plank": 2 }, "pay": 60 }],
+  "serial": 5,
+  "done": 3,
+  "swapAt": 0,
+  "depot": { "plank": 300, "ingot": 120 },
+  "given": {},
+  "sold": 16567.419,
+  "paid": 40230,
+  "pace": { "ticks": 0, "warm": 0, "made": {} },
+  "cells": [
+    { "i": 740, "k": "gatherer", "d": 0, "g": 1 },
+    { "i": 741, "k": "mill", "d": 0, "r": "plank", "it": "log", "p": 1, "v": 2, "b": { "log": 3 }, "w": 4 },
+    { "i": 742, "k": "belt", "d": 0, "it": "log", "p": 3, "v": 2, "h": 3 },
+    { "i": 1026, "k": "tunnel", "d": 0, "s": 2 },
+    { "i": 1029, "k": "tunnel", "d": 0, "s": -2 },
+    { "i": 700, "k": "crate", "d": 1, "c": 1 }
+  ]
+}

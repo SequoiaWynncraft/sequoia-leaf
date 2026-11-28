@@ -1,0 +1,45 @@
+{
+  "game": "town",
+  "v": 1,
+  "sightings": 1,
+  "spotAt": 1795608000000,
+  "chestDay": -1,
+  "welcomedDay": 20782,
+  "seenAt": 1795608000000,
+  "cursor": null,
+  "stay": true,
+  "camp": {
+    "first": "fox",
+    "placed": [
+      { "n": 0, "id": "cabin", "x": 7, "y": 13, "t": 0, "s": 0 },
+      { "n": 1, "id": "trophy-shelf", "x": 18, "y": 15, "t": 0, "s": 0 },
+      { "n": 2, "id": "fire-ring", "x": 23, "y": 24, "t": 0, "s": 0 },
+      { "n": 3, "id": "log-seat", "x": 22, "y": 22, "t": 0, "s": 0 },
+      { "n": 4, "id": "log-seat", "x": 22, "y": 27, "t": 0, "s": 0 },
+      { "n": 5, "id": "lantern-post", "x": 13, "y": 18, "t": 0, "s": 0 },
+      { "n": 6, "id": "mailbox", "x": 41, "y": 23, "t": 0, "s": 0 },
+      { "n": 7, "id": "signpost", "x": 41, "y": 30, "t": 0, "s": 0 },
+      { "n": 8, "id": "stump", "x": 28, "y": 25, "t": 0, "s": 0 }
+    ],
+    "tray": { "lantern-post": 1, "fountain": 1, "member-banner-1": 1, "model-crab": 1 },
+    "fresh": ["lantern-post", "fountain", "member-banner-1", "model-crab"],
+    "looked": 0,
+    "letters": [
+      {
+        "id": "w-9",
+        "from": "Tindra",
+        "text": "A mushroom for your gate. It's the good kind. Welcome home!",
+        "gift": "toadstool",
+        "read": false,
+        "taken": false
+      }
+    ],
+    "greeted": 0,
+    "earned": ["fountain", "member-banner-1", "model-crab"]
+  },
+  "visit": { "id": 0, "who": "embertoe", "note": "Sat by your fire until it went out. Warm. Meow.", "gift": "" },
+  "nextCall": 1795608113083,
+  "rng": 780584192,
+  "made": 11,
+  "called": 1
+}

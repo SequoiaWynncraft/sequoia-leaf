@@ -1,0 +1,8 @@
+script the first lesson | ddddrd: tier 0, 6 pieces, 1 goals done, 798 delivered, 82 Coins earned, 0 in the till | did ddf630645d50 end ae9d0271be93
+script a line built | dddddddddddrdddddd: tier 4, 13 pieces, 29 goals done, 476 delivered, 0 Coins earned, 0 in the till | did a4d29f7ed588 end ba38bcfe23d7
+script research | rddddrrrd: tier 3, 64 pieces, 18 goals done, 6833 delivered, 5539 Coins earned, 0 in the till | did 43f82853413e end 5009f088f175
+script blueprints | dddrdddrrddrd: tier 4, 24 pieces, 29 goals done, 514 delivered, 0 Coins earned, 0 in the till | did d33cf3661953 end ff24259dc094
+script the gate's blueprints and grades | ddrdddd: tier 4, 67 pieces, 28 goals done, 67676 delivered, 10814 Coins earned, 0 in the till | did c1acc0a778b4 end 4fc3150ef958
+script orders and plots | dddrdrd: tier 4, 21 pieces, 29 goals done, 714 delivered, 446 Coins earned, 0 in the till | did 1be2c05a7e5a end 842c90ceb605
+script felling and clearing | drddrdddd: tier 5, 0 pieces, 55 goals done, 0 delivered, 0 Coins earned, 0 in the till | did 01a45a46603c end 1e996cdba667
+script a delivering yard | ddd: tier 4, 21 pieces, 29 goals done, 2514 delivered, 4 Coins earned, 0 in the till | did ecabfc1eb187 end ce6923f2a2e2
