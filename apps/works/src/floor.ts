@@ -1,65 +1,45 @@
 /**
- * The floor on the screen: the ground (`art/ground.ts`) kept in patches (`patches.ts`).
+ * The floor on the screen: the ground (`art/ground.ts`) kept whole on the graphics card, painted a
+ * chunk at a time and never given back.
  *
- * The yard's own land (every patch over a plot it owns or has for sale) is kept whole: once painted,
- * a patch of it is never given back. After the page's first frame it is all painted ahead of need,
- * nearest the view first, a small step at a time in the time frames have left once everything else
- * is drawn, at the plan's zoom too; so the land is whole a few seconds after the page opens, and no
- * frame is made long by painting however large the land. The forest beyond it is painted as it comes
- * into view or near, and ahead too up to a budget, and kept up to that budget, those seen longest ago
- * given back first. A patch not painted yet shows the map's flat colours.
+ * No frame shows ground that is not painted. Whatever the view needs and lacks is painted before the
+ * frame is drawn: the page's first view, a view that has outrun the painting, a plot that changed
+ * hands. Everything else is painted ahead of need, nearest the view first, a small step at a time in
+ * the time frames have left, at the plan's zoom too; so a few seconds after the page opens the whole
+ * land is painted, and from then on no frame paints anything but a plot bought.
  *
- * What a patch shows depends only on which of the plots under it the yard has cleared. A plot that
- * changes hands has its patches in view painted for its new owner at once, before the frame is laid:
- * a plot's few patches, once. While its undergrowth comes down, the plot's patches as they will be are
- * painted beside those on the screen, at once and whole, shown where the clearing has reached, and put
- * in their place once it is done. On the page's first frame, and the first after the browser emptied
- * the pictures, the view is painted before it is laid.
+ * What a chunk shows depends only on which of the plots under it the yard has cleared. While a plot's
+ * undergrowth comes down, its chunks as they will be are painted beside the ground, at once and
+ * whole, and shown where the clearing has reached; they become the ground once it is done.
  */
 
 import type { Land, Plot } from "@sequoia-leaf/factory";
-import { WATER } from "@sequoia-leaf/kit/palette.ts";
-import { type Ctx, makeCanvas } from "@sequoia-leaf/kit/util.ts";
+import type { Painter, Sheet } from "@sequoia-leaf/kit/painter.ts";
+import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
 import { TILE } from "./art/belts.ts";
-import { BEYOND, type Box, type Ground, pack } from "./art/ground.ts";
-import { DEEP } from "./art/pal.ts";
+import type { Box, Ground } from "./art/ground.ts";
 import type { Sign } from "./layout.ts";
-import { inSpan, PATCH, type Patch, Patches, placeOf, type Span, spanOf } from "./patches.ts";
 
-/**
- * Painting's time, in milliseconds: before the first frame, or the first after a loss, is laid, so
- * the view shows painted; and on every frame, what is left until this long after the frame began.
- */
-const BUDGET = { first: 120, frame: 6 } as const;
-/** Patches of the forest beyond the yard's land kept at most (and painted ahead): 40 of 48 KiB, under 2 MiB. */
-const WILD = 40;
-/** Frames in a row with no time left after which a step is painted anyway, so the floor is painted where every frame is long. */
+/** A chunk of the ground: a whole number of tiles each way, and a plot (sixteen tiles by twelve) is two chunks by two. */
+export const CHUNK = { w: 128, h: 96 } as const;
+/** Painting ahead takes what is left of a frame until this many milliseconds after the frame began. */
+const BUDGET = 6;
+/** Frames in a row with no time left after which a step is painted anyway, so the land is painted where every frame is long. */
 const STARVED = 8;
-/** The flat colours of a patch not painted yet: grass on the yard's own land, the forest's floor, the stream, and past the map. */
-const ROUGH = { owned: "#3d6b3a", wild: DEEP[2], water: WATER[0], margin: DEEP[1] } as const;
+/** The longest side of one of the ground's sheets, where the card allows as much. */
+const SHEET_MOST = 4096;
 
 /** Which plots the yard has cleared (by their place in the land's list). */
 export type Cleared = (plot: number) => boolean;
 
 /**
- * Whose the land is this frame: the plots cleared, the plots that are the yard's land (owned or for
- * sale), and those being cleared (owned a moment ago, their undergrowth coming down).
+ * Whose the land is this frame: the plots cleared, and those being cleared (owned a moment ago, their
+ * undergrowth coming down).
  */
 export interface Hands {
   readonly cleared: Cleared;
-  readonly land: Cleared;
   readonly clearing: readonly number[];
-}
-
-/** A patch to be painted: the store it goes in, where it is, and what it is to show. */
-interface Job {
-  readonly into: Patches;
-  readonly col: number;
-  readonly row: number;
-  readonly key: string;
-  readonly cleared: Cleared;
-  readonly far: number;
 }
 
 /**
@@ -76,290 +56,259 @@ export function handsNow(
     if (clearing.has(plot.plot) && L.owned[n] !== true) clearing.delete(plot.plot);
   });
   const now = plots.flatMap((plot, n) => (clearing.has(plot.plot) ? [n] : []));
-  const forSale = new Set(L.signs.map((s) => plots.indexOf(s.plot)));
-  return {
-    cleared: (n) => L.owned[n] === true && !now.includes(n),
-    land: (n) => L.owned[n] === true || forSale.has(n),
-    clearing: now,
-  };
+  return { cleared: (n) => L.owned[n] === true && !now.includes(n), clearing: now };
 }
 
-const sameJob = (a: Job, b: Job): boolean => a.into === b.into && a.col === b.col && a.row === b.row && a.key === b.key;
+/** One of the ground's sheets, and the corner of the ground's chunks it holds, in chunks. */
+interface Page {
+  readonly sheet: Sheet;
+  readonly col: number;
+  readonly row: number;
+}
 
 export class Floor {
   readonly #gr: Ground;
-  /** The patches on the screen, and those of plots being cleared as they will be. */
-  readonly #now: Patches;
-  readonly #next: Patches;
-  /** A picture on the CPU each patch is painted on first, as the whole ground was. */
-  readonly #scratch = makeCanvas(PATCH.w, PATCH.h);
-  /** The plots each patch lies on, by place, worked out once. */
-  readonly #under = new Map<number, readonly number[]>();
-  /** The map's flat colours, a pixel a tile, and the plots cleared they were painted for. */
-  readonly #rough: { c: HTMLCanvasElement; g: Ctx; key: string };
-  /** Frames laid, to know which patches were seen longest ago. */
-  #frame = 0;
-  /** The patch being painted, a step at a time, and what it is for. */
-  #busy: { job: Job; steps: Generator<void, void, undefined> } | null = null;
-  /** What the last frame wanted painted, first first; and frames in a row that had no time left for it. */
-  #wanted: readonly Job[] = [];
+  readonly #p: Painter;
+  /** The ground's chunks: the first column and row (in chunks from the map's corner), and how many across and down. */
+  readonly #c0: number;
+  readonly #r0: number;
+  readonly #cols: number;
+  readonly #rows: number;
+  /** The sheets the ground is kept on (one, unless the land is larger than the card's largest texture), and how many chunks each holds across and down. */
+  readonly #pages: Page[] = [];
+  readonly #across: number;
+  readonly #down: number;
+  /** What each chunk is painted for (`#keyOf`), or null for one not painted. */
+  readonly #painted: (string | null)[];
+  /** The plots each chunk lies on, by their place in the land's list. */
+  readonly #under: (readonly number[])[];
+  /** A chunk is painted on one of these, and then copied to its sheet: one for what a frame waits for, one for what is painted ahead. */
+  readonly #now = makeCanvas(CHUNK.w, CHUNK.h);
+  readonly #ahead = makeCanvas(CHUNK.w, CHUNK.h);
+  /** The chunks of plots being cleared, as they will be once it is done. */
+  readonly #next = new Map<number, { readonly c: HTMLCanvasElement; readonly key: string }>();
+  /** The chunk being painted ahead, a step at a time, and what it is for. */
+  #busy: { n: number; key: string; steps: Generator<void, void, undefined> } | null = null;
+  /** Frames in a row that had no time left to paint ahead in. */
   #starved = 0;
-  /** Nothing painted can be trusted: the floor was just made, or the browser emptied the pictures. */
-  #cold = true;
+  /** Whose the land was (`#handsKey`) when every chunk was last found painted for it: nothing is looked for until that changes. */
+  #settled: string | null = null;
+  /** Whose the land was at the last frame, for `waiting`. */
+  #hands: Hands | null = null;
 
-  constructor(gr: Ground, lost: () => void) {
+  constructor(gr: Ground, p: Painter) {
     this.#gr = gr;
-    this.#now = new Patches(lost);
-    this.#next = new Patches(lost);
-    this.#rough = { ...makeCanvas(gr.land.w, gr.land.h), key: "\u0000" };
+    this.#p = p;
+    this.#c0 = Math.floor(gr.x / CHUNK.w);
+    this.#r0 = Math.floor(gr.y / CHUNK.h);
+    this.#cols = Math.floor((gr.x + gr.w - 1) / CHUNK.w) - this.#c0 + 1;
+    this.#rows = Math.floor((gr.y + gr.h - 1) / CHUNK.h) - this.#r0 + 1;
+    const most = Math.min(p.most, SHEET_MOST);
+    this.#across = Math.max(1, Math.floor(most / CHUNK.w));
+    this.#down = Math.max(1, Math.floor(most / CHUNK.h));
+    for (let row = 0; row < this.#rows; row += this.#down)
+      for (let col = 0; col < this.#cols; col += this.#across) {
+        const w = Math.min(this.#across, this.#cols - col) * CHUNK.w;
+        const h = Math.min(this.#down, this.#rows - row) * CHUNK.h;
+        this.#pages.push({ sheet: p.sheet(w, h), col, row });
+      }
+    const count = this.#cols * this.#rows;
+    this.#painted = Array.from({ length: count }, () => null);
+    this.#under = Array.from({ length: count }, (_, n) => this.#plotsUnder(n));
   }
 
-  /** How many patches are kept, on the screen and for plots being cleared. */
-  get kept(): number {
-    return this.#now.size + this.#next.size;
-  }
-
-  /** Everything painted is forgotten: the browser emptied the pictures, or the page was put away. */
+  /** Nothing painted is on the card any more: it took everything back. */
   wipe(): void {
     this.#busy?.steps.return();
     this.#busy = null;
-    this.#now.clear();
+    this.#painted.fill(null);
     this.#next.clear();
-    this.#rough.key = "\u0000";
-    this.#cold = true;
+    this.#settled = null;
   }
 
-  /** How many patches are still wanted painted, for a review page waiting for the land to fill in. */
+  /** How many chunks are still to be painted, for a review page waiting for the land to be whole. */
   get waiting(): number {
-    return this.#wanted.filter((j) => j.into.get(j.col, j.row)?.key !== j.key).length;
+    const h = this.#hands;
+    return h ? this.#painted.filter((key, n) => key !== this.#keyOf(n, h.cleared)).length : this.#painted.length;
   }
 
-  /** The plots under a patch, by their place in the land's list. */
-  #plotsUnder(col: number, row: number): readonly number[] {
-    const place = placeOf(col, row);
-    let under = this.#under.get(place);
-    if (!under) {
-      const { land } = this.#gr;
-      const found = new Set<number>();
-      const tw = PATCH.w / TILE;
-      const th = PATCH.h / TILE;
-      for (let ty = row * th; ty < (row + 1) * th; ty++)
-        for (let tx = col * tw; tx < (col + 1) * tw; tx++)
-          if (tx >= 0 && ty >= 0 && tx < land.w && ty < land.h) found.add(land.plot[ty * land.w + tx] ?? -1);
-      under = [...found].toSorted((a, b) => a - b);
-      this.#under.set(place, under);
-    }
-    return under;
+  /** A chunk's box of the yard, in the yard's pixels. */
+  #boxOf(n: number): Box {
+    return {
+      x: ((n % this.#cols) + this.#c0) * CHUNK.w,
+      y: (Math.floor(n / this.#cols) + this.#r0) * CHUNK.h,
+      w: CHUNK.w,
+      h: CHUNK.h,
+    };
   }
 
-  /** What a patch shows: which of the plots under it are cleared. */
-  #keyOf(col: number, row: number, cleared: Cleared): string {
+  /** The plots under a chunk, by their place in the land's list. */
+  #plotsUnder(n: number): readonly number[] {
+    const { land } = this.#gr;
+    const b = this.#boxOf(n);
+    const found = new Set<number>();
+    for (let ty = b.y / TILE; ty < (b.y + b.h) / TILE; ty++)
+      for (let tx = b.x / TILE; tx < (b.x + b.w) / TILE; tx++)
+        if (tx >= 0 && ty >= 0 && tx < land.w && ty < land.h) found.add(land.plot[ty * land.w + tx] ?? -1);
+    return [...found].toSorted((a, b2) => a - b2);
+  }
+
+  /** What a chunk shows: which of the plots under it are cleared. */
+  #keyOf(n: number, cleared: Cleared): string {
     let key = "";
-    for (const n of this.#plotsUnder(col, row)) if (cleared(n)) key += `${n},`;
+    for (const plot of this.#under[n] ?? []) if (cleared(plot)) key += `${plot},`;
     return key;
   }
 
-  /**
-   * Paints patches, the first wanted first, a step at a time (`Ground.painting`) until the clock
-   * reaches `until` (one step at least, with `one`): carrying on with the patch begun at an earlier
-   * frame while it is still wanted, and putting each in its store once its last step is done.
-   */
-  #work(jobs: readonly Job[], until: number, one = false): void {
-    const busy = this.#busy;
-    if (busy && !jobs.some((j) => sameJob(j, busy.job))) {
-      busy.steps.return();
-      this.#busy = null;
-    }
-    const left = jobs.filter((j) => (!busy || !sameJob(j, busy.job)) && j.into.get(j.col, j.row)?.key !== j.key);
-    for (let first = one; first || performance.now() < until; first = false) {
-      if (!this.#busy) {
-        const job = left.shift();
-        if (!job) return;
-        const box = { x: job.col * PATCH.w, y: job.row * PATCH.h, w: PATCH.w, h: PATCH.h };
-        this.#busy = { job, steps: this.#gr.painting(this.#scratch.g, box, job.cleared) };
-      }
-      const b = this.#busy;
-      if (!b.steps.next().done) continue;
-      const p = b.job.into.take(b.job.col, b.job.row);
-      p.g.clearRect(0, 0, PATCH.w, PATCH.h);
-      p.g.drawImage(this.#scratch.c, 0, 0);
-      p.key = b.job.key;
+  /** Whose the land is, as one line: it differs whenever any chunk's key may. */
+  #handsKey(cleared: Cleared): string {
+    let key = "";
+    for (let n = 0; n < this.#gr.land.plots.length; n++) key += cleared(n) ? "1" : "0";
+    return key;
+  }
+
+  /** Copies a chunk's picture onto its sheet, painted for `key`. */
+  #keep(n: number, c: HTMLCanvasElement, key: string): void {
+    const col = n % this.#cols;
+    const row = Math.floor(n / this.#cols);
+    const page =
+      this.#pages[Math.floor(row / this.#down) * Math.ceil(this.#cols / this.#across) + Math.floor(col / this.#across)];
+    page?.sheet.put(c, (col - page.col) * CHUNK.w, (row - page.row) * CHUNK.h);
+    this.#painted[n] = key;
+    if (this.#busy?.n === n) {
+      this.#busy.steps.return();
       this.#busy = null;
     }
   }
 
   /**
-   * Paints what the last `lay` wanted, in what is left of a frame that began at `began` (the clock's
-   * time): nothing once it has run long, but a step after `STARVED` such frames.
+   * Brings a chunk to what it must show, at once: from the picture made while its plot was being
+   * cleared, if that is what it shows now, else painted.
    */
-  paintSpare(began: number): void {
-    const until = began + BUDGET.frame;
-    const late = performance.now() >= until;
-    if (late && ++this.#starved < STARVED) return;
-    this.#starved = 0;
-    this.#work(this.#wanted, until, late);
+  #bring(n: number, cleared: Cleared, key: string): void {
+    const next = this.#next.get(n);
+    if (next?.key === key) return this.#keep(n, next.c, key);
+    this.#gr.paint(this.#now.g, this.#boxOf(n), cleared);
+    this.#keep(n, this.#now.c, key);
   }
 
-  /** The jobs for the patches of a span that are missing from a store, or show something else, nearest `mid` first. */
-  #jobs(
-    into: Patches,
-    s: Span,
-    cleared: Cleared,
-    mid: { x: number; y: number },
-    only?: (col: number, row: number) => boolean,
-  ): Job[] {
-    const jobs: Job[] = [];
+  /** The chunks a box of the yard's pixels covers: the first and last column and row, among the ground's own. */
+  #span(b: Box): { c0: number; r0: number; c1: number; r1: number } {
+    return {
+      c0: Math.max(0, Math.floor(b.x / CHUNK.w) - this.#c0),
+      r0: Math.max(0, Math.floor(b.y / CHUNK.h) - this.#r0),
+      c1: Math.min(this.#cols - 1, Math.floor((b.x + b.w - 1) / CHUNK.w) - this.#c0),
+      r1: Math.min(this.#rows - 1, Math.floor((b.y + b.h - 1) / CHUNK.h) - this.#r0),
+    };
+  }
+
+  /**
+   * Lays the floor under a view of the yard (its corner the picture's): the yard's own floor on each
+   * plot `hands.cleared` says, the forest's elsewhere. Whatever of it is not painted for what it must
+   * show is painted first; so are the chunks of a plot being cleared, as they will be.
+   */
+  lay(view: Box, hands: Hands): void {
+    const { cleared, clearing } = hands;
+    this.#hands = hands;
+    if (clearing.length > 0) this.#paintNext(hands);
+    const s = this.#span(view);
     for (let row = s.r0; row <= s.r1; row++)
       for (let col = s.c0; col <= s.c1; col++) {
-        if ((only && !only(col, row)) || this.#beyond(col, row)) continue;
-        const key = this.#keyOf(col, row, cleared);
-        if (into.get(col, row)?.key === key) continue;
-        // A plot cleared a moment ago: its patches were painted as they are now while it was cleared.
-        if (into === this.#now && this.#next.get(col, row)?.key === key && into.swap(this.#next, col, row)) continue;
-        const far = Math.hypot((col + 0.5) * PATCH.w - mid.x, (row + 0.5) * PATCH.h - mid.y);
-        jobs.push({ into, col, row, key, cleared, far });
+        const n = row * this.#cols + col;
+        const key = this.#keyOf(n, cleared);
+        if (this.#painted[n] !== key) this.#bring(n, cleared, key);
       }
-    return jobs.toSorted((a, b) => a.far - b.far);
-  }
-
-  /** Whether a patch lies wholly past the ground, where it is all the colour beyond it: nothing to paint or keep. */
-  #beyond(col: number, row: number): boolean {
-    const gr = this.#gr;
-    const x = col * PATCH.w;
-    const y = row * PATCH.h;
-    return x >= gr.x + gr.w || y >= gr.y + gr.h || x + PATCH.w <= gr.x || y + PATCH.h <= gr.y;
-  }
-
-  /** Whether a patch lies on the yard's land: any plot under it owned or for sale. */
-  #onLand(col: number, row: number, hands: Hands): boolean {
-    return this.#plotsUnder(col, row).some((n) => hands.land(n));
-  }
-
-  /**
-   * What is painted ahead of need: the yard's land, then the forest beyond up to its budget, nearest
-   * `mid` first. Patches already wanted for the view are left to it.
-   */
-  #ahead(hands: Hands, mid: { x: number; y: number }): Job[] {
-    const all = spanOf(this.#gr);
-    const land = this.#jobs(this.#now, all, hands.cleared, mid, (col, row) => this.#onLand(col, row, hands));
-    let room = WILD - [...this.#now.kept].filter((p) => !this.#onLand(p.col, p.row, hands)).length;
-    const wild = this.#jobs(this.#now, all, hands.cleared, mid, (col, row) => !this.#onLand(col, row, hands)).filter(
-      (j) => this.#now.get(j.col, j.row) !== undefined || room-- > 0,
-    );
-    return [...land, ...wild];
-  }
-
-  /**
-   * Lays the floor on a picture whose corner is (`view.x`, `view.y`) of the yard: the yard's own floor
-   * on each plot `hands.cleared` says, the forest's elsewhere. Before it is laid: the patches of a plot
-   * being cleared, as they will be, all of them; a patch in view painted for another owner; and on the
-   * page's first frame (`opening`), or the first after a loss, the whole view. What else is wanted is
-   * painted after the frame is drawn (`paintSpare`).
-   */
-  lay(g: Ctx, view: Box, hands: Hands, opening: boolean): void {
-    const { cleared, clearing } = hands;
-    const mid = { x: view.x + view.w / 2, y: view.y + view.h / 2 };
-    const seen = spanOf(view);
-    const near = spanOf(view, 1);
-    if (clearing.length > 0) {
-      const after = (n: number): boolean => cleared(n) || clearing.includes(n);
-      const onClearing = (col: number, row: number): boolean =>
-        this.#plotsUnder(col, row).some((n) => clearing.includes(n));
-      this.#work(this.#jobs(this.#next, spanOf(this.#gr), after, mid, onClearing), Number.POSITIVE_INFINITY);
+    if (clearing.length === 0 && this.#next.size > 0) {
+      // The clearing is done: what was painted for it becomes the ground, out of view too.
+      for (const [n, next] of this.#next)
+        if (this.#painted[n] !== next.key && next.key === this.#keyOf(n, cleared)) this.#keep(n, next.c, next.key);
+      this.#next.clear();
     }
-    const inView = this.#jobs(this.#now, seen, cleared, mid);
-    const stale = inView.filter((j) => this.#now.get(j.col, j.row) !== undefined);
-    if (opening || this.#cold) this.#work(inView, performance.now() + BUDGET.first);
-    else if (stale.length > 0) this.#work(stale, Number.POSITIVE_INFINITY);
-    this.#cold = false;
-    this.#layPatches(g, view, seen, cleared);
-    this.#frame++;
-    for (const p of this.#now.kept) if (inSpan(near, p.col, p.row)) p.seen = this.#frame;
-    this.#now.trim(WILD, (p) => !inSpan(near, p.col, p.row) && !this.#onLand(p.col, p.row, hands));
-    if (clearing.length === 0) this.#next.clear();
-    // The view first, then the ring round it, so a pan finds it painted, then all the rest ahead.
-    this.#wanted = [
-      ...this.#jobs(this.#now, near, cleared, mid),
-      ...this.#ahead(hands, mid).filter((j) => !inSpan(near, j.col, j.row)),
-    ];
+    for (const page of this.#pages) {
+      const px = (page.col + this.#c0) * CHUNK.w;
+      const py = (page.row + this.#r0) * CHUNK.h;
+      const x0 = Math.max(view.x, px);
+      const y0 = Math.max(view.y, py);
+      const x1 = Math.min(view.x + view.w, px + page.sheet.w);
+      const y1 = Math.min(view.y + view.h, py + page.sheet.h);
+      if (x1 > x0 && y1 > y0) this.#p.from(page.sheet, x0 - px, y0 - py, x1 - x0, y1 - y0, x0 - view.x, y0 - view.y);
+    }
   }
 
-  /**
-   * At the plan's zoom, where no floor is laid: the land is painted ahead all the same, nearest `mid`
-   * first, in what is left of the frame that began at `began` (`paintSpare`).
-   */
-  plan(hands: Hands, mid: { x: number; y: number }, began: number): void {
-    if (hands.clearing.length === 0) this.#next.clear();
-    this.#wanted = this.#ahead(hands, mid);
-    this.paintSpare(began);
+  /** Paints the chunks under the plots being cleared as they will be once cleared, each once, at once. */
+  #paintNext(hands: Hands): void {
+    const after: Cleared = (plot) => hands.cleared(plot) || hands.clearing.includes(plot);
+    for (let n = 0; n < this.#under.length; n++) {
+      if (this.#next.has(n) || !this.#under[n]?.some((plot) => hands.clearing.includes(plot))) continue;
+      const made = makeCanvas(CHUNK.w, CHUNK.h);
+      this.#gr.paint(made.g, this.#boxOf(n), after);
+      this.#next.set(n, { c: made.c, key: this.#keyOf(n, after) });
+    }
   }
 
-  /** Lays what a plot being cleared will be, within the plot, on what `lay` laid: the caller clips it to where the clearing has reached. */
-  layClearing(g: Ctx, view: Box, plot: number): void {
+  /** Lays what a plot being cleared will be, within the plot, over what `lay` laid: the caller masks it to where the clearing has reached. */
+  layClearing(view: Box, plot: number): void {
     const p = this.#gr.land.plots[plot];
     if (!p) return;
     const box: Box = { x: p.x * TILE, y: p.y * TILE, w: p.w * TILE, h: p.h * TILE };
-    for (const patch of this.#next.kept) {
-      const x0 = Math.max(box.x, patch.x, view.x);
-      const y0 = Math.max(box.y, patch.y, view.y);
-      const x1 = Math.min(box.x + box.w, patch.x + PATCH.w, view.x + view.w);
-      const y1 = Math.min(box.y + box.h, patch.y + PATCH.h, view.y + view.h);
-      if (x1 > x0 && y1 > y0)
-        g.drawImage(patch.c, x0 - patch.x, y0 - patch.y, x1 - x0, y1 - y0, x0 - view.x, y0 - view.y, x1 - x0, y1 - y0);
+    for (const [n, next] of this.#next) {
+      const at = this.#boxOf(n);
+      const x0 = Math.max(box.x, at.x);
+      const y0 = Math.max(box.y, at.y);
+      const x1 = Math.min(box.x + box.w, at.x + CHUNK.w);
+      const y1 = Math.min(box.y + box.h, at.y + CHUNK.h);
+      if (x1 > x0 && y1 > y0) this.#p.part(next.c, x0 - at.x, y0 - at.y, x1 - x0, y1 - y0, x0 - view.x, y0 - view.y);
     }
+  }
+
+  /** The chunk nearest a point that is not painted for what it must show, with what that is; or null when all are. */
+  #nearestStale(cleared: Cleared, mid: { x: number; y: number }): { n: number; key: string } | null {
+    let best: { n: number; key: string } | null = null;
+    let least = Number.POSITIVE_INFINITY;
+    for (let n = 0; n < this.#painted.length; n++) {
+      const key = this.#keyOf(n, cleared);
+      if (this.#painted[n] === key) continue;
+      const b = this.#boxOf(n);
+      const far = Math.hypot(b.x + b.w / 2 - mid.x, b.y + b.h / 2 - mid.y);
+      if (far < least) {
+        least = far;
+        best = { n, key };
+      }
+    }
+    return best;
   }
 
   /**
-   * Each patch of the view as the yard has it now, over the map's flat colours laid once under the
-   * whole view where any patch is not painted for what it must show (not yet, or painted when a plot
-   * under it was someone else's). A patch covers its box whole, so nothing of the flat colours shows
-   * through one that is painted.
+   * Paints ahead of need in what is left of a frame that began at `began` (the clock's time): the
+   * chunk nearest `mid` first, a step at a time (`Ground.painting`); nothing once the frame has run
+   * long, but a step after `STARVED` such frames.
    */
-  #layPatches(g: Ctx, view: Box, s: Span, cleared: Cleared): void {
-    const shown: Patch[] = [];
-    let missing = false;
-    for (let row = s.r0; row <= s.r1; row++)
-      for (let col = s.c0; col <= s.c1; col++) {
-        if (this.#beyond(col, row)) continue;
-        const p = this.#now.get(col, row);
-        if (p && p.key === this.#keyOf(col, row, cleared)) shown.push(p);
-        else missing = true;
+  paintAhead(hands: Hands, mid: { x: number; y: number }, began: number): void {
+    this.#hands = hands;
+    const whose = this.#handsKey(hands.cleared);
+    if (this.#settled === whose && !this.#busy) return;
+    const until = began + BUDGET;
+    const late = performance.now() >= until;
+    if (late && ++this.#starved < STARVED) return;
+    this.#starved = 0;
+    for (let first = late; first || performance.now() < until; first = false) {
+      if (this.#busy && this.#keyOf(this.#busy.n, hands.cleared) !== this.#busy.key) {
+        this.#busy.steps.return();
+        this.#busy = null;
       }
-    if (missing) this.#layRough(g, view, cleared);
-    else {
-      // Past the ground, its colour; on it, the patches.
-      g.fillStyle = BEYOND;
-      g.fillRect(0, 0, view.w, view.h);
+      if (!this.#busy) {
+        const stale = this.#nearestStale(hands.cleared, mid);
+        if (!stale) {
+          this.#settled = whose;
+          return;
+        }
+        const steps = this.#gr.painting(this.#ahead.g, this.#boxOf(stale.n), hands.cleared);
+        this.#busy = { ...stale, steps };
+      }
+      const b = this.#busy;
+      if (!b.steps.next().done) continue;
+      this.#busy = null;
+      this.#keep(b.n, this.#ahead.c, b.key);
     }
-    for (const p of shown) g.drawImage(p.c, p.x - view.x, p.y - view.y);
-  }
-
-  /** The map's flat colours over a whole view: past the ground, the forest's floor round the map, and the map a tile a pixel. */
-  #layRough(g: Ctx, view: Box, cleared: Cleared): void {
-    const gr = this.#gr;
-    const { land } = gr;
-    g.imageSmoothingEnabled = false;
-    g.fillStyle = BEYOND;
-    g.fillRect(0, 0, view.w, view.h);
-    g.fillStyle = ROUGH.margin;
-    g.fillRect(gr.x - view.x, gr.y - view.y, gr.w, gr.h);
-    g.drawImage(this.#roughFor(cleared), -view.x, -view.y, land.w * TILE, land.h * TILE);
-  }
-
-  /** The map's flat colours, painted again when the plots cleared are not those they were painted for. */
-  #roughFor(cleared: Cleared): HTMLCanvasElement {
-    const { land } = this.#gr;
-    const r = this.#rough;
-    const key = land.plots.map((_, n) => (cleared(n) ? "1" : "0")).join("");
-    if (r.key === key) return r.c;
-    r.key = key;
-    // A pixel a tile, written straight in: a land has thousands of tiles.
-    const img = r.g.createImageData(land.w, land.h);
-    const px = new Uint32Array(img.data.buffer);
-    const [water, owned, wild] = [ROUGH.water, ROUGH.owned, ROUGH.wild].map(pack);
-    for (let i = 0; i < px.length; i++)
-      px[i] = (land.water[i] === 1 ? water : cleared(land.plot[i] ?? -1) ? owned : wild) ?? 0;
-    r.g.putImageData(img, 0, 0);
-    return r.c;
   }
 }

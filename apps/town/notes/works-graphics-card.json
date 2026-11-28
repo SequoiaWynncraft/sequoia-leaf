@@ -1,0 +1,14 @@
+{
+  "id": "works-graphics-card",
+  "at": "TBD",
+  "title": "The Works draws faster",
+  "lines": [
+    "The Works draws the yard on the graphics card: smoother on slower phones and computers, and the ground is never missing while you move."
+  ],
+  "more": [
+    {
+      "head": "Fixed",
+      "points": ["On Firefox, part of the yard's ground no longer goes black for a moment while you move."]
+    }
+  ]
+}

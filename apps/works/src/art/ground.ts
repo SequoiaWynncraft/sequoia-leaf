@@ -3,12 +3,12 @@
  * depot, the path to the gate) on the plots it owns and has cleared, and as the forest left it
  * elsewhere. What lies in the ground is the same in both, and so is the stream. Any box of it can
  * be painted on its own (`Ground.paint`), the same to the pixel as the whole would be, so the screen
- * paints only the part it needs (`floor.ts`).
+ * paints it a chunk at a time (`floor.ts`).
  */
 
 import type { Land } from "@sequoia-leaf/factory";
 import { EARTH, GREEN, SKY, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
-import { bitmap, R, rgb } from "@sequoia-leaf/kit/pix.ts";
+import { bitmap, type Pen, rgb } from "@sequoia-leaf/kit/pix.ts";
 import { clamp, type Ctx, hash, makeCanvas, vnoise } from "@sequoia-leaf/kit/util.ts";
 
 import { TILE } from "./belts.ts";
@@ -450,14 +450,14 @@ export function makeGround(land: Land): Ground {
 }
 
 /** A patch of water's glints for one moment: a few short bright dashes that drift with the stream. */
-export function glint(g: Ctx, land: Land, tx: number, ty: number, sx: number, sy: number, t: number): void {
+export function glint(g: Pen, land: Land, tx: number, ty: number, sx: number, sy: number, t: number): void {
   if (land.water[ty * land.w + tx] !== 1) return;
   const k = hash(tx, ty, 54);
   const phase = (t * 0.35 + k * 7) % 1;
   if (k < 0.45 || phase > 0.6) return;
   const x = sx + 2 + Math.floor(hash(tx, ty, 55) * 9);
   const y = sy + 2 + Math.floor(((k * 31 + t * 5) % 1) * 12);
-  R(g, x, y, phase < 0.3 ? 3 : 2, 1, phase < 0.15 ? WATER[3] : WATER[2]);
+  g.rect(x, y, phase < 0.3 ? 3 : 2, 1, phase < 0.15 ? WATER[3] : WATER[2]);
 }
 
 /** A pixel of the stream: deep in the middle, lighter at its banks, a stepping stone where it is forded. */

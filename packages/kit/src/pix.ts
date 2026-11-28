@@ -7,6 +7,31 @@ export function R(g: Ctx, x: number, y: number, w: number, h: number, c: string)
   g.fillRect(x, y, w, h);
 }
 
+/**
+ * What flat boxes and pictures are drawn with, whichever draws them: the graphics card
+ * (`painter.ts`), or a canvas (`penOn`). `a` is how solid, 1 unless said.
+ */
+export interface Pen {
+  rect(x: number, y: number, w: number, h: number, colour: string, a?: number): void;
+  pic(c: HTMLCanvasElement, x: number, y: number, a?: number): void;
+}
+
+/** A pen that draws on a canvas. */
+export function penOn(g: Ctx): Pen {
+  return {
+    rect(x, y, w, h, colour, a = 1) {
+      g.globalAlpha = a;
+      R(g, x, y, w, h, colour);
+      g.globalAlpha = 1;
+    },
+    pic(c, x, y, a = 1) {
+      g.globalAlpha = a;
+      g.drawImage(c, x, y);
+      g.globalAlpha = 1;
+    },
+  };
+}
+
 /** A picture typed as rows of letters, each letter a colour in `pal`; anything else is clear. */
 export function bitmap(rows: readonly string[], pal: Readonly<Record<string, string>>): HTMLCanvasElement {
   const w = rows.reduce((m, r) => Math.max(m, r.length), 1);

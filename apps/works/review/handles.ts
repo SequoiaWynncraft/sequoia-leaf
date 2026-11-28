@@ -25,7 +25,7 @@ import {
 } from "@sequoia-leaf/factory";
 import { balance } from "@sequoia-leaf/kit/purse.ts";
 import { tipOff } from "@sequoia-leaf/kit/tip.ts";
-import { makeCanvas, type Pt } from "@sequoia-leaf/kit/util.ts";
+import type { Pt } from "@sequoia-leaf/kit/util.ts";
 
 import { TILE } from "../src/art/belts.ts";
 import { following, holdView, look, zoom } from "../src/camera.ts";
@@ -36,7 +36,7 @@ import { fingerTap } from "../src/input.ts";
 import { layout } from "../src/layout.ts";
 import type { Page } from "../src/main.ts";
 import { buyLand } from "../src/plots.ts";
-import { lap, picture, spent } from "../src/scene.ts";
+import { cardHolds, lap, picture, settle, spent } from "../src/scene.ts";
 import { builds, gradeInHand, S, type Tool, toPage } from "../src/state.ts";
 import {
   aimAt,
@@ -154,12 +154,13 @@ declare global {
       /** The tiles of the pieces in trouble, as the yard's sheet counts them. */
       trouble: () => Pt[];
       state: () => Record<string, unknown>;
+      /** Draws a frame now and gives the yard's picture as a PNG's data address: the graphics card keeps a frame only until the page has shown it. */
+      shot: () => string;
+      /** What the graphics card holds for the picture: bytes by what they are for, the atlas's size and pictures, and what the last frame sent. */
+      holds: () => Record<string, unknown> | null;
     };
   }
 }
-
-/** A single pixel to take the picture onto, for `bench`: a browser may put off the drawing it was asked for. */
-const taken = makeCanvas(1, 1).g;
 
 /** Puts the handles on `window.works`, working the page through `p`. */
 export function installHandles(p: Page): void {
@@ -230,8 +231,8 @@ export function installHandles(p: Page): void {
         p.advance(1 / hz, null);
         lap("page");
         p.draw(0);
-        // A browser may put off the drawing it was asked for: taking the picture makes it do it now.
-        taken.drawImage(picture, 0, 0);
+        // The graphics card draws when it likes: waiting for it counts its work in the frame.
+        settle();
         lap("flush");
       }
       const ms = Object.fromEntries(Object.entries(spent.ms).map(([part, sum]) => [part, sum / frames]));
@@ -264,7 +265,7 @@ export function installHandles(p: Page): void {
         p.advance(1 / 60, null);
         lap("page");
         p.draw(0);
-        taken.drawImage(picture, 0, 0);
+        settle();
         lap("flush");
         return { ms: { ...spent.ms, whole: performance.now() - began }, z: S.view.z };
       });
@@ -320,7 +321,7 @@ export function installHandles(p: Page): void {
       p.advance(1 / 60, null);
       lap("page");
       p.draw(performance.now());
-      taken.drawImage(picture, 0, 0);
+      settle();
       lap("flush");
       const ms = spent.ms;
       spent.on = was;
@@ -371,6 +372,14 @@ export function installHandles(p: Page): void {
         x: i % w.land.w,
         y: Math.floor(i / w.land.w),
       }));
+    },
+    shot() {
+      p.draw(performance.now());
+      return picture.toDataURL("image/png");
+    },
+    holds() {
+      const card = cardHolds();
+      return card && { memory: card.memory, atlas: card.atlas, sent: { ...card.sent } };
     },
     state() {
       const w = S.world;

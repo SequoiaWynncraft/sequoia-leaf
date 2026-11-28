@@ -8,8 +8,7 @@
 
 import { FIXED, NONE, otherMouth, pieceOf, piecesTiles, type Yard } from "@sequoia-leaf/factory";
 import { GOLD, INK } from "@sequoia-leaf/kit/palette.ts";
-import { R } from "@sequoia-leaf/kit/pix.ts";
-import type { Ctx } from "@sequoia-leaf/kit/util.ts";
+import type { Pen } from "@sequoia-leaf/kit/pix.ts";
 
 import { TILE } from "./art/belts.ts";
 import { type Box, pieceBox } from "./big.ts";
@@ -45,7 +44,7 @@ export function pinPulse(): number {
  * The brackets round a box in the picture (a tile, or the depot's): gold, edged in ink, `t` of the
  * yard's pixels thick, and `pinPulse` further out.
  */
-function pinBox(g: Ctx, x: number, y: number, w: number, h: number, t: number): void {
+function pinBox(g: Pen, x: number, y: number, w: number, h: number, t: number): void {
   const out = pinPulse() * t;
   const arm = 4 * t;
   const x0 = x - 1 - out;
@@ -62,8 +61,8 @@ function pinBox(g: Ctx, x: number, y: number, w: number, h: number, t: number): 
       [x0, y1, 1, -1],
       [x1, y1, -1, -1],
     ] as const) {
-      R(g, (dx > 0 ? px : px - arm + 1) - e, (dy > 0 ? py : py - t + 1) - e, arm + 2 * e, t + 2 * e, col);
-      R(g, (dx > 0 ? px : px - t + 1) - e, (dy > 0 ? py : py - arm + 1) - e, t + 2 * e, arm + 2 * e, col);
+      g.rect((dx > 0 ? px : px - arm + 1) - e, (dy > 0 ? py : py - t + 1) - e, arm + 2 * e, t + 2 * e, col);
+      g.rect((dx > 0 ? px : px - t + 1) - e, (dy > 0 ? py : py - arm + 1) - e, t + 2 * e, arm + 2 * e, col);
     }
 }
 
@@ -88,7 +87,7 @@ export function pinBoxes(w: Yard, cx: number, cy: number, dx: number, dy: number
 }
 
 /** The mark near: brackets round each of its boxes (`pinBoxes`), at least 3 of the screen's pixels thick at any zoom. */
-export function pinMark(g: Ctx, w: Yard, cx: number, cy: number, dx: number, dy: number): void {
+export function pinMark(g: Pen, w: Yard, cx: number, cy: number, dx: number, dy: number): void {
   const t = Math.max(1, Math.ceil(3 / S.view.z));
   for (const b of pinBoxes(w, cx, cy, dx, dy)) pinBox(g, b.x, b.y, b.w, b.h, t);
 }

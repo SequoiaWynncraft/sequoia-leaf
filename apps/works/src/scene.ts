@@ -7,11 +7,10 @@
  * The lamplight is also the yard's power: the depot's lamps and every joined pylon's light the
  * ground exactly as far as power reaches, and dim together when the yard is short of it.
  *
- * Most of a frame is what the last one showed, so what stays is kept and only what moved is drawn:
- * the floor in patches painted near the view (`floor.ts`), each kind of belt laid in one go,
- * everything that stands up on a picture round the view that is mended where something changed
- * (`around.ts`), and the lines between pylons in patches of their own (`wires.ts`). Nothing kept is
- * as large as the land, so a frame costs the same on any size of land.
+ * The graphics card draws it (`@sequoia-leaf/kit/painter.ts`): the art is what the painters draw on
+ * canvases, copied to the card the first time each picture is drawn, and every frame is drawn whole,
+ * a layer at a time, from what is in view. The ground is kept on the card, painted before it can be
+ * seen (`floor.ts`); nothing else is kept between frames.
  */
 
 import {
@@ -40,23 +39,23 @@ import {
   TROUBLE,
   type Yard,
 } from "@sequoia-leaf/factory";
+import { type Layer, Painter } from "@sequoia-leaf/kit/painter.ts";
 import { CORAL, CREAM, GOLD, INK, SKY } from "@sequoia-leaf/kit/palette.ts";
-import { R } from "@sequoia-leaf/kit/pix.ts";
+import type { Scope } from "@sequoia-leaf/kit/scope.ts";
 import { bubble, bubbleSize, wrap } from "@sequoia-leaf/kit/signs.ts";
 import { widthOf, write } from "@sequoia-leaf/kit/text.ts";
-import { clamp, type Ctx, makeCanvas, must, type Pt } from "@sequoia-leaf/kit/util.ts";
+import { clamp, type Ctx, makeCanvas, type Pt } from "@sequoia-leaf/kit/util.ts";
 
 import { walkers } from "./actors.ts";
-import { Around } from "./around.ts";
-import { type Arms, beltTile, marksOf, PAINTS, ride, STEPS, TILE, woodOf } from "./art/belts.ts";
-import { type Box, glint, type Ground } from "./art/ground.ts";
+import { beltTile, marksOf, PAINTS, ride, STEPS, TILE, woodOf } from "./art/belts.ts";
+import { BEYOND, type Box, glint, type Ground } from "./art/ground.ts";
 import type { Art } from "./art/index.ts";
 import { DEPOT as DEPOT_ART, lookOf } from "./art/machines.ts";
 import type { Sprite } from "./art/pal.ts";
 import { depotOf } from "./art/spark.ts";
 import { aimBox, boxIn, drawnFrom, heldIn, markCovers, pointersOn } from "./big.ts";
-import { drawPlan, drawPlanMarks } from "./far.ts";
-import { Floor, handsNow } from "./floor.ts";
+import { drawPlan, drawPlanMarks, wipePlans } from "./far.ts";
+import { Floor, type Hands, handsNow } from "./floor.ts";
 import { bits, floaters, rings } from "./fx.ts";
 import { onGround } from "./haze.ts";
 import { heldBox, heldMarks } from "./held.ts";
@@ -65,7 +64,7 @@ import { pageOf } from "./kinds/index.ts";
 import type { Drawn, KindPage } from "./kinds/kind.ts";
 import { lampsIn } from "./lamps.ts";
 import { armsAt, asIf, type Layout, layout, pylonTop } from "./layout.ts";
-import { boxCorners, corners, pixelRing } from "./marks.ts";
+import { boxCorners, corners, dashes, pixelRing } from "./marks.ts";
 import { eachPerson } from "./people.ts";
 import { pinMark } from "./pinned.ts";
 import { builds, draws, type Group, handGrade, type Mark, S, seenFrom, standsOn, tileNudge } from "./state.ts";
@@ -96,18 +95,49 @@ export function lap(part?: string): void {
   spent.at = now;
 }
 
-/** The picture. The page shows this canvas itself, and no bigger than the ground and the light that falls past it. */
-const buf = makeCanvas(320, 200, true);
-export const picture = buf.c;
-const dusk = makeCanvas(320, 200, true);
+/**
+ * The picture. The page shows this canvas itself, and no bigger than the ground and the light that
+ * falls past it; the graphics card draws on it, once the page has opened it (`openPicture`).
+ */
+export const picture = document.createElement("canvas");
+picture.id = "view";
+/** What draws the picture: the painter, and the dusk and the pieces in hand as a layer each. */
+interface Stage {
+  readonly p: Painter;
+  readonly dusk: Layer;
+  readonly held: Layer;
+}
+const stage: { on: Stage | null } = { on: null };
 /** Where the picture's corner is in the view, in the yard's pixels: the camera says (`camera.ts`). */
 export const corner: Pt = { x: 0, y: 0 };
 /** How many times a trouble mark is enlarged: more than once only when the view is zoomed far out. */
 let markSize = 1;
-/** Counts each time what is kept between frames may have been emptied, so that it is all drawn again. */
+/** Counts each time what is kept may have been emptied, so that it is all made again. */
 let lost = 0;
-/** The browser took the kept pictures' memory back, or the page was put away: nothing kept is trusted. */
-export const wipe = (): void => void lost++;
+/** The graphics card took back what it kept (the ground, a plan's picture, the pieces in hand), or the browser emptied the words. */
+export const wipe = (): void => {
+  lost++;
+  wipePlans();
+};
+
+/**
+ * Opens the picture on the graphics card; false where the browser has no WebGL2, and nothing can be
+ * drawn. `sc` holds its listening for the card taking everything back, and giving it back.
+ */
+export function openPicture(sc: Scope): boolean {
+  const p = Painter.open(picture, sc);
+  if (!p) return false;
+  p.restored(wipe);
+  stage.on = { p, dusk: p.layer(), held: p.layer() };
+  return true;
+}
+
+/** What the card holds for the picture, in bytes, and how its atlas stands, for a review page. */
+export const cardHolds = (): Pick<Painter, "memory" | "atlas" | "sent"> | null => stage.on?.p ?? null;
+
+/** Waits for the card to have drawn the frame, for whoever times one. */
+export const settle = (): void => stage.on?.p.settle();
+
 function radial(size: number, stops: readonly (readonly [number, string])[]): HTMLCanvasElement {
   const { c, g } = makeCanvas(size, size);
   const gr = g.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
@@ -140,57 +170,29 @@ const SPARK = radial(32, [
   [0.5, "rgba(255,200,110,0.35)"],
   [1, "rgba(255,180,90,0)"],
 ]);
-/** A pool of light at each size it is laid down at, made once: enlarging one every frame costs more than all else in it. */
-const pools = new Map<HTMLCanvasElement, Map<number, HTMLCanvasElement>>();
-/** Lays a pool of light `r` across each way from a whole pixel, exactly as enlarging it there would. */
-function pool(g: Ctx, src: HTMLCanvasElement, x: number, y: number, r: number): void {
-  let sizes = pools.get(src);
-  if (!sizes) pools.set(src, (sizes = new Map()));
-  let at = sizes.get(r);
-  const edge = Math.floor(-r);
-  if (!at) {
-    const made = makeCanvas(Math.ceil(r - edge), Math.ceil(r - edge));
-    made.g.drawImage(src, -r - edge, -r - edge, r * 2, r * 2);
-    sizes.set(r, (at = made.c));
-  }
-  g.drawImage(at, x + edge, y + edge);
-}
+/** Dusk, as the layer the lamps are cut out of is cleared to: `rgba(32,14,50,0.5)`, each colour multiplied by how solid, in whole 255ths as a canvas keeps it. */
+const DUSK = [16 / 255, 7 / 255, 25 / 255, 128 / 255] as const;
+/** A pool of light `r` across each way from (`x`, `y`): the pool's picture enlarged, each pixel taking the pixel of it under its middle. */
+const pool = (g: Painter, src: HTMLCanvasElement, x: number, y: number, r: number, a: number): void =>
+  g.stretch(src, x - r, y - r, r * 2, r * 2, a);
 
-/** A kept picture made `w` by `h`, if it is not already. */
-function fit(b: { c: HTMLCanvasElement; g: Ctx }, w: number, h: number): void {
-  if (b.c.width === w && b.c.height === h) return;
-  b.c.width = w;
-  b.c.height = h;
-  b.g.imageSmoothingEnabled = false;
-}
-
-/** The picture's size; the dusk is made as large when it is next laid. */
+/** The picture's size, and how many times a trouble mark is enlarged. */
 export function sizeBuffers(w: number, h: number, marks: number): void {
   markSize = marks;
-  fit(buf, w, h);
+  if (picture.width !== w) picture.width = w;
+  if (picture.height !== h) picture.height = h;
 }
-
-/** Whether the page has laid its floor yet: the first time paints the view before laying it. */
-const opened = { yet: false };
 
 // ---------- things that stand up, far to near ----------
 
-/**
- * One thing to draw: where its corner is in the yard's pixels, how near it stands, how faint it
- * is, and the tiles of the kept picture it lies over (first and last, across and down).
- */
+/** One thing to draw: where its corner is in the yard's pixels, how near it stands, how faint it is, and how many times enlarged. */
 interface Draw {
   c: HTMLCanvasElement;
   x: number;
   y: number;
   z: number;
   a: number;
-  x0: number;
-  x1: number;
-  y0: number;
-  y1: number;
-  /** The picture's own number among those that have stood in the yard, or 0 until it is asked for. */
-  id: number;
+  k: number;
 }
 const listed: Draw[] = [];
 const order: Draw[] = [];
@@ -202,135 +204,43 @@ let seenX = 0;
 let seenY = 0;
 
 /** Lists a thing to draw: `x`, `y` is its corner in the picture. */
-function put(c: HTMLCanvasElement, x: number, y: number, z: number, a = 1): void {
+function put(c: HTMLCanvasElement, x: number, y: number, z: number, a = 1, k = 1): void {
   let d = listed[used];
   if (d) {
-    if (d.c !== c) d.id = 0;
     d.c = c;
     d.x = x + camX;
     d.y = y + camY;
     d.z = z;
     d.a = a;
+    d.k = k;
   } else {
-    d = { c, x: x + camX, y: y + camY, z, a, x0: 0, x1: 0, y0: 0, y1: 0, id: 0 };
+    d = { c, x: x + camX, y: y + camY, z, a, k };
     listed.push(d);
   }
   used++;
 }
-
-const known = new Map<HTMLCanvasElement, number>();
-const float = new Float64Array(1);
-const halves = new Uint32Array(float.buffer);
-let stood: {
-  /** The picture, kept round the view (`around.ts`). */
-  around: Around;
-  cols: number;
-  rows: number;
-  /** What stood over each tile's worth of the picture when it was last drawn, and now: a sum that changes when anything there does. */
-  was: Uint32Array;
-  now: Uint32Array;
-  torn: Uint8Array;
-  lost: number;
-} | null = null;
+const stand = (s: Sprite, x: number, y: number, z: number, a = 1, k = 1): void => {
+  put(s.c, x - s.ax * k, y - s.ay * k, z, a, k);
+};
+const farToNear = (p: Draw, q: Draw): number => p.z - q.z;
 
 /**
- * Everything listed, far to near, on a picture of the yard round the view kept between frames. Only
- * the tiles where something listed has changed since the last frame (another pose, a step, come or
- * gone), or that have come into the picture as the view moved, are wiped and drawn again, with the
- * part of whatever else stands over them.
+ * Draws everything listed from `from` on and takes it off the list: far to near (things as near as
+ * each other in the order they were listed), or with `sorted` false just as listed.
  */
-function standing(gr: Ground, view: Box): Around {
-  if (!stood) {
-    const cols = Math.ceil(gr.w / TILE);
-    const rows = Math.ceil(gr.h / TILE);
-    const tiles = (): Uint32Array => new Uint32Array(cols * rows);
-    const around = new Around(wipe);
-    stood = { around, cols, rows, was: tiles(), now: tiles(), torn: new Uint8Array(cols * rows), lost: -1 };
-  }
-  const k = stood;
-  const { cols, rows, now, was, torn } = k;
-  if (k.lost !== lost) {
-    k.lost = lost;
-    k.around.wipe();
-  }
-  const came = k.around.follow(view, 2 * TILE, TILE, gr.x, gr.y);
-  if (!came) was.fill(1);
-  else
-    for (const b of came) {
-      const x0 = clamp(Math.floor((b.x - gr.x) / TILE), 0, cols);
-      const x1 = clamp(Math.ceil((b.x + b.w - gr.x) / TILE), 0, cols);
-      for (
-        let ty = clamp(Math.floor((b.y - gr.y) / TILE), 0, rows);
-        ty < clamp(Math.ceil((b.y + b.h - gr.y) / TILE), 0, rows);
-        ty++
-      )
-        was.fill(1, ty * cols + x0, ty * cols + x1);
-    }
-  now.fill(0);
-  for (let n = 0; n < used; n++) {
-    const d = listed[n];
-    if (!d) continue;
-    const x = d.x - gr.x;
-    const y = d.y - gr.y;
-    d.x0 = clamp(Math.floor(x / TILE), 0, cols - 1);
-    d.x1 = clamp(Math.floor((x + d.c.width - 1) / TILE), 0, cols - 1);
-    d.y0 = clamp(Math.floor(y / TILE), 0, rows - 1);
-    d.y1 = clamp(Math.floor((y + d.c.height - 1) / TILE), 0, rows - 1);
-    if (d.id === 0) {
-      d.id = known.get(d.c) ?? known.size + 1;
-      known.set(d.c, d.id);
-    }
-    float[0] = d.z;
-    let h = Math.imul(d.id ^ Math.imul(d.x, 0x9e3779b1) ^ Math.imul(d.y, 0x85ebca6b), 0xc2b2ae35);
-    h ^= (halves[0] ?? 0) ^ Math.imul(halves[1] ?? 0, 0x27d4eb2f) ^ Math.imul(d.a * 255, 0x165667b1);
-    h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d);
-    for (let ty = d.y0; ty <= d.y1; ty++)
-      for (let i = ty * cols + d.x0, end = ty * cols + d.x1; i <= end; i++) now[i] = (now[i] ?? 0) + h;
-  }
-  let changed = 0;
-  for (let i = 0; i < now.length; i++) {
-    const tear = now[i] === was[i] ? 0 : 1;
-    torn[i] = tear;
-    changed += tear;
-  }
-  k.was = now;
-  k.now = was;
-  if (changed > 0) mendTorn(gr, k.around, changed * 6 >= now.length);
-  return k.around;
-}
-
-/** Draws again what stands over the tiles torn: few, only they; many (a yard just opened, a long way looked across), all of it. */
-function mendTorn(gr: Ground, around: Around, all: boolean): void {
-  const k = stood;
-  if (!k) return;
-  const { cols, torn } = k;
+function drawListed(g: Painter, from: number, sorted = true): void {
   order.length = 0;
-  for (let n = 0; n < used; n++) {
+  for (let n = from; n < used; n++) {
     const d = listed[n];
-    if (!d) continue;
-    let over = all;
-    for (let ty = d.y0; ty <= d.y1 && !over; ty++)
-      for (let i = ty * cols + d.x0, end = ty * cols + d.x1; i <= end; i++) if (torn[i] === 1) over = true;
-    if (over) order.push(d);
+    if (d) order.push(d);
   }
-  order.sort((p, q) => p.z - q.z);
-  if (all) around.mend(gr, order);
-  else
-    for (let i = 0; i < torn.length; i++) {
-      if (torn[i] !== 1) continue;
-      // A run of torn tiles along a row is mended as one.
-      let run = 1;
-      while ((i + run) % cols !== 0 && torn[i + run] === 1) run++;
-      around.mend(
-        { x: (i % cols) * TILE + gr.x, y: Math.floor(i / cols) * TILE + gr.y, w: run * TILE, h: TILE },
-        order,
-      );
-      i += run - 1;
-    }
+  if (sorted) order.sort(farToNear);
+  for (const d of order) {
+    if (d.k === 1) g.pic(d.c, d.x - camX, d.y - camY, d.a);
+    else g.stretch(d.c, d.x - camX, d.y - camY, d.c.width * d.k, d.c.height * d.k, d.a);
+  }
+  used = from;
 }
-const stand = (s: Sprite, x: number, y: number, z: number, a = 1): void => {
-  put(s.c, x - s.ax, y - s.ay, z, a);
-};
 
 interface Light {
   x: number;
@@ -543,29 +453,13 @@ function wear(art: Art, page: KindPage, k: number, c: number, head: number): voi
   if (!real) return;
   // Trouble that has lasted says so over the machine's head: but over one that shows where power does not reach in its own way.
   if (troubled(i) && !(page.sleeps && !onTile.powered)) {
-    const badge = grown(c % TROUBLE === UNPOWERED ? art.bolt : art.bang);
-    stand(badge, cx, head - 2 - Math.round(Math.abs(Math.sin(S.t * 4 + i)) * 2), z + 0.6);
+    const badge = c % TROUBLE === UNPOWERED ? art.bolt : art.bang;
+    stand(badge, cx, head - 2 - Math.round(Math.abs(Math.sin(S.t * 4 + i)) * 2), z + 0.6, 1, markSize);
   }
-}
-
-const big = new Map<Sprite, Sprite>();
-/**
- * A trouble mark as big as the view asks: its own size at every zoom there used to be, and that
- * many times bigger zoomed further out, so that it is as big on the screen as it was at the old furthest.
- */
-function grown(s: Sprite): Sprite {
-  if (markSize === 1) return s;
-  let made = big.get(s);
-  if (made?.c.width !== s.c.width * markSize) {
-    const { c, g } = makeCanvas(s.c.width * markSize, s.c.height * markSize);
-    g.drawImage(s.c, 0, 0, c.width, c.height);
-    big.set(s, (made = { c, ax: s.ax * markSize, ay: s.ay * markSize }));
-  }
-  return made;
 }
 
 /** The lines between pylons (`wires.ts`). */
-const wiring = new Wires(wipe);
+const wiring = new Wires();
 
 // ---------- many pieces at once: the area marked, and the pieces in hand ----------
 
@@ -575,78 +469,61 @@ const wiring = new Wires(wipe);
  * is a line of dashes that march. While the pieces are in hand to be moved, the tiles they leave
  * are dimmed instead.
  */
-function marked(g: Ctx, w: Yard, m: Mark, cx: number, cy: number): void {
+function marked(g: Painter, w: Yard, m: Mark, cx: number, cy: number): void {
   const W = w.land.w;
   // Every tile of a piece of more than one, marked by its own; by tile too, to find the mark's edges.
   const { on, all } = markCovers(w, m.tiles);
   const leaving = S.group?.as === "move";
-  g.globalCompositeOperation = leaving ? "source-over" : "lighter";
-  g.fillStyle = leaving ? "rgba(26,15,30,0.5)" : `rgba(255,176,64,${0.26 + 0.07 * Math.sin(S.t * 5)})`;
+  g.blend(leaving ? "over" : "add");
+  const glow = leaving ? "rgba(26,15,30,0.5)" : "rgba(255,176,64,1)";
+  const solid = leaving ? 1 : 0.26 + 0.07 * Math.sin(S.t * 5);
   // Only where a piece still stands: one may have been taken away since.
   for (const i of all)
-    if (w.kind[i] !== NONE) g.fillRect((i % W) * TILE - cx, Math.floor(i / W) * TILE - cy, TILE, TILE);
-  g.globalCompositeOperation = "source-over";
-  g.fillStyle = leaving ? GOLD[0] : GOLD[2];
+    if (w.kind[i] !== NONE) g.rect((i % W) * TILE - cx, Math.floor(i / W) * TILE - cy, TILE, TILE, glow, solid);
+  g.blend("over");
+  const edge = leaving ? GOLD[0] : GOLD[2];
   for (const i of all) {
     if (w.kind[i] === NONE) continue;
     const tx = i % W;
     const x = tx * TILE - cx;
     const y = Math.floor(i / W) * TILE - cy;
-    if (on[i - W] !== 1) g.fillRect(x, y, TILE, 1);
-    if (on[i + W] !== 1) g.fillRect(x, y + TILE - 1, TILE, 1);
-    if (tx === 0 || on[i - 1] !== 1) g.fillRect(x, y, 1, TILE);
-    if (tx === W - 1 || on[i + 1] !== 1) g.fillRect(x + TILE - 1, y, 1, TILE);
+    if (on[i - W] !== 1) g.rect(x, y, TILE, 1, edge);
+    if (on[i + W] !== 1) g.rect(x, y + TILE - 1, TILE, 1, edge);
+    if (tx === 0 || on[i - 1] !== 1) g.rect(x, y, 1, TILE, edge);
+    if (tx === W - 1 || on[i + 1] !== 1) g.rect(x + TILE - 1, y, 1, TILE, edge);
   }
-  g.strokeStyle = CREAM;
-  g.lineWidth = 1;
-  g.setLineDash([3, 3]);
-  g.lineDashOffset = -Math.floor(S.t * 10);
-  g.strokeRect(
-    m.x0 * TILE - cx - 1.5,
-    m.y0 * TILE - cy - 1.5,
-    (m.x1 - m.x0 + 1) * TILE + 3,
-    (m.y1 - m.y0 + 1) * TILE + 3,
-  );
-  g.setLineDash([]);
+  const [wide, high] = [(m.x1 - m.x0 + 1) * TILE + 3, (m.y1 - m.y0 + 1) * TILE + 3];
+  dashes(g, m.x0 * TILE - cx - 2, m.y0 * TILE - cy - 2, wide, high, CREAM, Math.floor(S.t * 10));
 }
 
-/** The pieces in hand, drawn once for each place they are aimed at and kept: `for` is the aim it was drawn for, of that yard at that count of its changes. */
-const held: {
-  c: HTMLCanvasElement;
-  g: Ctx;
-  for: Group["at"] | null;
-  yard: Yard | null;
-  rev: number;
-  lost: number;
-} = {
-  ...makeCanvas(1, 1, true),
+/** The pieces in hand, drawn on their layer once for each place they are aimed at: `for` is the aim it was drawn for, of that yard at that count of its changes. */
+const held: { for: Group["at"] | null; yard: Yard | null; rev: number; lost: number } = {
   for: null,
   yard: null,
   rev: -1,
   lost: -1,
 };
-held.c.addEventListener("contextrestored", wipe);
 /** Room in that picture round the box of tiles, for what stands taller or leans wider than its tile. */
 const ROOM = { side: 8, top: 40, bottom: 8 } as const;
 
 /**
  * Draws the pieces in hand where they are aimed, as they would stand (`asIf`, the yard with them
  * set down): belts joined to each other and to the lines already there, machines as built. Gold
- * lies over each piece that can go there and coral over each that cannot. It is drawn afresh only
- * when the aim moves to another tile or the yard changes, so a frame costs one picture however many
- * pieces are in hand.
+ * lies over each piece that can go there and coral over each that cannot. They are drawn on a layer
+ * of their own and that laid faint, so that one piece does not show through another; and afresh only
+ * when the aim moves to another tile or the yard changes.
  */
-function inHand(g: Ctx, art: Art, w: Yard, grp: Group, now: Moment, cx: number, cy: number): void {
+function inHand(f: Frame, grp: Group): void {
+  const { g, art, w, now, cx, cy } = f;
   const box = heldBox(w, grp);
+  const wide = box.w * TILE + ROOM.side * 2;
+  const high = box.h * TILE + ROOM.top + ROOM.bottom;
   if (held.for !== grp.at || held.yard !== w || held.rev !== w.rev || held.lost !== lost) {
     held.for = grp.at;
     held.yard = w;
     held.rev = w.rev;
     held.lost = lost;
-    held.c.width = box.w * TILE + ROOM.side * 2;
-    held.c.height = box.h * TILE + ROOM.top + ROOM.bottom;
-    const h = held.g;
-    h.imageSmoothingEnabled = false;
+    f.held.begin(wide, high);
     const ox = ROOM.side - box.x * TILE;
     const oy = ROOM.top - box.y * TILE;
     const mark = used;
@@ -662,34 +539,32 @@ function inHand(g: Ctx, art: Art, w: Yard, grp: Group, now: Moment, cx: number, 
         const d = p.dir;
         const a = draws(k) ? armsAt(yard, i) : 0;
         const grade = yard.grade[i] ?? 0;
-        if (a !== 0) h.drawImage(beltTile(a, d, 0, woodOf(grade), yard.tint[i] ?? 0, marksOf(grade)), x, top);
+        if (a !== 0) g.pic(beltTile(a, d, 0, woodOf(grade), yard.tint[i] ?? 0, marksOf(grade)), x, top);
         const over = pageOf(k)?.top?.(art, yard, i, d, false);
-        if (over) h.drawImage(over, x, top);
+        if (over) g.pic(over, x, top);
         const pip = over ? art.m.pips[grade - 2] : undefined;
-        if (pip) h.drawImage(pip, x, top);
+        if (pip) g.pic(pip, x, top);
         piece(art, yard, i, k, d, grade, yard.span[i] ?? 0, p.open ?? true, x, top, now, 1);
       }
     }
-    for (const d of listed.slice(mark, used).toSorted((p, q) => p.z - q.z)) h.drawImage(d.c, d.x - camX, d.y - camY);
-    used = mark;
+    drawListed(g, mark);
     lit = before;
     // Gold over each piece that can go and coral over each that cannot; coral corners over what it takes up.
-    heldMarks(h, w, grp, ox, oy);
+    heldMarks(g, w, grp, ox, oy);
+    f.held.end();
   }
-  g.globalAlpha = 0.88;
-  g.drawImage(held.c, box.x * TILE - ROOM.side - cx, box.y * TILE - ROOM.top - cy);
-  g.globalAlpha = 1;
+  g.from(f.held, 0, 0, wide, high, box.x * TILE - ROOM.side - cx, box.y * TILE - ROOM.top - cy, 0.88);
   const bad = grp.why.some((r) => r !== null);
   corners(g, box.x * TILE - cx, box.y * TILE - cy, box.w * TILE, box.h * TILE, bad ? CORAL : GOLD[2], true);
 }
 
-/** How many patches of the floor are still to be painted, for a review page waiting for the land to fill in. */
+/** How many chunks of the floor are still to be painted, for a review page waiting for the land to be whole. */
 export const floorWaiting = (): number | null => floored?.floor.waiting ?? null;
 
 /** The floor on the screen (`floor.ts`): for the ground it was opened on, and the count of losses it last saw. */
 let floored: { gr: Ground; floor: Floor; lost: number } | null = null;
-function floorFor(gr: Ground): Floor {
-  if (floored?.gr !== gr) floored = { gr, floor: new Floor(gr, wipe), lost };
+function floorFor(gr: Ground, p: Painter): Floor {
+  if (floored?.gr !== gr) floored = { gr, floor: new Floor(gr, p), lost };
   if (floored.lost !== lost) {
     floored.lost = lost;
     floored.floor.wipe();
@@ -697,82 +572,35 @@ function floorFor(gr: Ground): Floor {
   return floored.floor;
 }
 
-/** Tiles that all show the same picture, as one outline in the yard's pixels: the picture fills them in one go. */
-interface Tiled {
-  tiles: Path2D;
-}
 /**
- * What lies flat and stays put until the yard changes: every tile that carries, gathered by its
- * shape, way, colour and grade; over those, the splitters' arrowheads, the joiners' tops and the
- * sorters' boards, gathered by picture; over those, the grade's mark of each splitter, joiner and
- * sorter above the first, as a belt wears it in its tile; and where the pieces with a vane are (a splitter).
+ * What lies flat over the belts and stays put until the yard changes, a picture a tile: the
+ * splitters' arrowheads, the joiners' tops and the sorters' boards; over those on the same tile, the
+ * grade's mark of each splitter, joiner and sorter above the first, as a belt wears it in its tile;
+ * and where the pieces with a vane are (a splitter).
  */
-let laid: {
-  of: Layout;
-  belts: (Tiled & { arms: Arms; dir: Dir; tint: number; grade: number })[];
-  tops: (Tiled & { pic: HTMLCanvasElement })[];
-  marks: (Tiled & { pic: HTMLCanvasElement })[];
-  vanes: number[];
-} | null = null;
+let laid: { of: Layout; at: number[]; pics: HTMLCanvasElement[]; vanes: number[] } | null = null;
 function laidOf(L: Layout, art: Art): NonNullable<typeof laid> {
   if (laid?.of === L) return laid;
   const y = L.yard;
-  const { land } = y;
-  const made: NonNullable<typeof laid> = { of: L, belts: [], tops: [], marks: [], vanes: [] };
-  const belts = new Map<number, Path2D>();
-  const tops = new Map<HTMLCanvasElement, Path2D>();
-  const marks = new Map<HTMLCanvasElement, Path2D>();
+  const made: NonNullable<typeof laid> = { of: L, at: [], pics: [], vanes: [] };
   for (let i = 0; i < L.arms.length; i++) {
     const a = L.arms[i] ?? 0;
     const k = y.kind[i] ?? NONE;
-    const d = dirAt(y, i);
-    const tint = y.tint[i] ?? 0;
     if (a === 0 || k === NONE) continue;
-    const here = (tiles: Path2D): void => tiles.rect((i % land.w) * TILE, Math.floor(i / land.w) * TILE, TILE, TILE);
     const top = (pic: HTMLCanvasElement | undefined): void => {
       if (!pic) return;
-      let tiles = tops.get(pic);
-      if (!tiles) {
-        tiles = new Path2D();
-        tops.set(pic, tiles);
-        made.tops.push({ pic, tiles });
-      }
-      here(tiles);
+      made.at.push(i);
+      made.pics.push(pic);
     };
-    const grade = y.grade[i] ?? 0;
-    const key = ((a * 4 + d) * 7 + tint) * 4 + grade;
-    let tiles = belts.get(key);
-    if (!tiles) {
-      tiles = new Path2D();
-      belts.set(key, tiles);
-      made.belts.push({ arms: a, dir: d, tint, grade, tiles });
-    }
-    here(tiles);
-    // The grade's mark lies over what is laid on the tile, so no arrowhead or board hides it.
     const page = pageOf(k);
-    const pip = page?.top ? art.m.tilePips[grade - 2] : undefined;
-    if (pip) {
-      let on = marks.get(pip);
-      if (!on) {
-        on = new Path2D();
-        marks.set(pip, on);
-        made.marks.push({ pic: pip, tiles: on });
-      }
-      here(on);
-    }
+    const d = dirAt(y, i);
     if (page?.laid) page.laid(art, y, i, d, a, top);
     else if (page?.top) top(page.top(art, y, i, d, false));
+    // The grade's mark lies over what is laid on the tile, so no arrowhead or board hides it.
+    if (page?.top) top(art.m.tilePips[(y.grade[i] ?? 0) - 2]);
     if (page?.vane) made.vanes.push(i);
   }
   return (laid = made);
-}
-/** A picture as something to fill tiles with: side by side, from the yard's own corner. */
-const fills = new Map<HTMLCanvasElement, CanvasPattern>();
-function lay(g: Ctx, pic: HTMLCanvasElement, tiles: Path2D): void {
-  let fill = fills.get(pic);
-  if (!fill) fills.set(pic, (fill = must(g.createPattern(pic, "repeat"), "fill")));
-  g.fillStyle = fill;
-  g.fill(tiles);
 }
 /** The parts of carried things that lie over the tile to their left or above, to be drawn again over what tops that tile. */
 const lapping: { pic: HTMLCanvasElement; x: number; y: number; w: number; h: number }[] = [];
@@ -788,7 +616,11 @@ const wantsPower = (kind: Kind): boolean => (DRAW[kind] ?? 0) > 0 || (GIVES[kind
 interface Frame {
   readonly art: Art;
   readonly now: Moment;
-  readonly g: Ctx;
+  readonly g: Painter;
+  /** The layers the dusk and the pieces in hand are drawn on. */
+  readonly dusk: Layer;
+  readonly held: Layer;
+  readonly floor: Floor;
   readonly W: number;
   readonly H: number;
   /** The picture's box of the yard: `cx`, `cy`, `W`, `H`. */
@@ -817,90 +649,88 @@ const depotAt = (f: Frame): { dx: number; dfoot: number } => ({
  * or is about to be built. Each layer draws only what can show in the picture, judged by how far
  * what it draws reaches.
  */
-export function drawYard(art: Art, now: Moment): HTMLCanvasElement {
+export function drawYard(art: Art, now: Moment): void {
+  const on = stage.on;
+  if (!on) return;
   const began = performance.now();
-  const g = buf.g;
-  const W = buf.c.width;
-  const H = buf.c.height;
+  const g = on.p;
+  const W = picture.width;
+  const H = picture.height;
   seenX = S.cam.x + corner.x;
   seenY = S.cam.y + corner.y;
   const cx = (camX = Math.round(S.cam.x) + corner.x);
   const cy = (camY = Math.round(S.cam.y) + corner.y);
   const w = S.world;
   const L: Layout = layout(w);
-  if (S.view.z < 1) {
-    // Further out than a screen pixel for each of the yard's, the yard is its plan (`far.ts`); what
-    // only the picture near uses is let go of until the view comes back in.
-    fit(dusk, 1, 1);
-    stood?.around.release();
-    wiring.release();
+  const near = S.view.z >= 1;
+  // Past the ground the picture is its colour; a plan is laid on nothing, and the page shows round it.
+  if (!g.begin(near ? BEYOND : null)) return;
+  const floor = floorFor(art.ground, g);
+  const hands = handsNow(L, S.clearing);
+  if (near) {
+    if (w !== drawn) carry(w);
+    const { land } = w;
+    used = 0;
+    lit = 0;
+    const f: Frame = {
+      art,
+      now,
+      g,
+      dusk: on.dusk,
+      held: on.held,
+      floor,
+      W,
+      H,
+      view: { x: cx, y: cy, w: W, h: H },
+      cx,
+      cy,
+      w,
+      L,
+      // Two tiles past the view: the furthest a piece's own tile is from the tiles it covers.
+      tx0: Math.max(0, Math.floor(cx / TILE) - 2),
+      ty0: Math.max(0, Math.floor(cy / TILE) - 2),
+      tx1: Math.min(land.w - 1, Math.ceil((cx + W) / TILE) + 2),
+      ty1: Math.min(land.h - 1, Math.ceil((cy + H) / TILE) + 2),
+      steps: ALONG.map((along) => Math.floor((w.tick + now.lead) * along * TILE) % STEPS),
+    };
+    floorLayer(f, hands);
+    lap("floor");
+    flatLayer(f);
+    lap("belts");
+    standingLayer(f);
+    lap("standing");
+    lampLayer(f);
+    lap("dusk");
+    marksLayer(f);
+    lap("marks");
+  } else {
+    // Further out than a screen pixel for each of the yard's, the yard is its plan (`far.ts`).
     const [dx, dy] = drawPlan(g, w, L, corner.x, corner.y);
     lap("plan");
     drawPlanMarks(g, w, dx, dy);
     lap("marks");
-    // The land is painted ahead all the same, for when the view comes back in.
-    floorFor(art.ground).plan(handsNow(L, S.clearing), { x: S.cam.x + S.view.w / 2, y: S.cam.y + S.view.h / 2 }, began);
-    lap("painting");
-    return buf.c;
   }
-  if (w !== drawn) carry(w);
-  const { land } = w;
-  used = 0;
-  lit = 0;
-  const f: Frame = {
-    art,
-    now,
-    g,
-    W,
-    H,
-    view: { x: cx, y: cy, w: W, h: H },
-    cx,
-    cy,
-    w,
-    L,
-    // Two tiles past the view: the furthest a piece's own tile is from the tiles it covers.
-    tx0: Math.max(0, Math.floor(cx / TILE) - 2),
-    ty0: Math.max(0, Math.floor(cy / TILE) - 2),
-    tx1: Math.min(land.w - 1, Math.ceil((cx + W) / TILE) + 2),
-    ty1: Math.min(land.h - 1, Math.ceil((cy + H) / TILE) + 2),
-    steps: ALONG.map((along) => Math.floor((w.tick + now.lead) * along * TILE) % STEPS),
-  };
-  floorLayer(f);
-  lap("floor");
-  flatLayer(f);
-  lap("belts");
-  standingLayer(f);
-  lap("standing");
-  lampLayer(f);
-  lap("dusk");
-  marksLayer(f);
-  lap("marks");
-  // In what is left of the frame, the floor that is missing.
-  floorFor(art.ground).paintSpare(began);
+  g.end();
+  lap("card");
+  // In what is left of the frame, the ground that is not painted yet: at the plan's zoom too, for when the view comes back in.
+  floor.paintAhead(hands, { x: S.cam.x + S.view.w / 2, y: S.cam.y + S.view.h / 2 }, began);
   lap("painting");
-  return buf.c;
 }
 
 /** The floor: the forest's everywhere, the yard's own over it where the land is the yard's, the stream's glints and the rings things land with. */
-function floorLayer(f: Frame): void {
-  const { g, W, H, cx, cy, L, tx0, ty0, tx1, ty1, view } = f;
+function floorLayer(f: Frame, hands: Hands): void {
+  const { g, W, H, cx, cy, tx0, ty0, tx1, ty1, view } = f;
   const { land } = f.w;
-  const floor = floorFor(f.art.ground);
+  f.floor.lay(view, hands);
   // Bought a moment ago: the cleared ground opens out from the signpost, over the forest's floor.
-  const hands = handsNow(L, S.clearing);
-  floor.lay(g, view, hands, !opened.yet);
-  opened.yet = true;
   for (const n of hands.clearing) {
     const plot = land.plots[n];
     const at = plot && S.clearing.get(plot.plot);
     if (!at) continue;
-    g.save();
-    g.beginPath();
-    g.arc(at.x - cx, at.y - cy, Math.max(1, (S.t - at.at) * 260), 0, Math.PI * 2);
-    g.clip();
-    floor.layClearing(g, view, n);
-    g.restore();
+    g.disc(at.x - cx, at.y - cy, Math.max(1, (S.t - at.at) * 260));
+    f.floor.layClearing(view, n);
   }
+  g.disc();
 
   // The trees' shade, and the smog: on the ground, under every belt, piece and redwood.
   onGround(g, f.art, f.w, cx, cy, W, H, S.t);
@@ -910,27 +740,25 @@ function floorLayer(f: Frame): void {
 
   for (const r of rings) {
     const k = r.life / r.ttl;
-    g.globalAlpha = 1 - k;
-    pixelRing(g, r.x - cx, r.y - cy, 2 + r.r * k, (2 + r.r * k) * 0.55, r.col);
+    pixelRing(g, r.x - cx, r.y - cy, 2 + r.r * k, (2 + r.r * k) * 0.55, r.col, 1, 1 - k);
   }
-  g.globalAlpha = 1;
 }
 
-/** What lies flat: every belt laid in one go for each shape, what rides on them, the arrowheads, joiners' tops and sorters' boards over those, and each idle splitter's vane. */
+/** What lies flat: every belt in view, what rides on them, the arrowheads, joiners' tops and sorters' boards over those, and each idle splitter's vane. */
 function flatLayer(f: Frame): void {
   const { art, now, g, cx, cy, w, L, tx0, ty0, tx1, ty1, steps } = f;
   const { land } = w;
   const step = steps[1] ?? 0;
-  // Each kind in one go: its tile, at this step of the march, fills every tile of that kind.
-  const flat = laidOf(L, art);
-  g.setTransform(1, 0, 0, 1, -cx, -cy);
-  for (const kind of flat.belts)
-    lay(
-      g,
-      beltTile(kind.arms, kind.dir, steps[kind.grade] ?? step, woodOf(kind.grade), kind.tint, marksOf(kind.grade)),
-      kind.tiles,
-    );
-  g.setTransform(1, 0, 0, 1, 0, 0);
+  for (let ty = ty0; ty <= ty1; ty++)
+    for (let tx = tx0; tx <= tx1; tx++) {
+      const i = ty * land.w + tx;
+      const a = L.arms[i] ?? 0;
+      if (a === 0 || w.kind[i] === NONE) continue;
+      const grade = w.grade[i] ?? 0;
+      // Its tile at this step of its grade's march.
+      const tile = beltTile(a, dirAt(w, i), steps[grade] ?? step, woodOf(grade), w.tint[i] ?? 0, marksOf(grade));
+      g.pic(tile, tx * TILE - cx, ty * TILE - cy);
+    }
   let laps = 0;
   for (let ty = ty0; ty <= ty1; ty++)
     for (let tx = tx0; tx <= tx1; tx++) {
@@ -951,7 +779,7 @@ function flatLayer(f: Frame): void {
       const pic = art.item(n);
       const left = x + Math.round(ride(from, to, prog, false)) - (pic.width >> 1);
       const top = y + Math.round(ride(from, to, prog, true)) - (pic.height >> 1) - 1;
-      g.drawImage(pic, left, top);
+      g.pic(pic, left, top);
       // A splitter or a joiner to the left or above is topped after this is drawn, and this lies over its top.
       const beside = left < x && tx > 0 ? w.kind[i - 1] : top < y && ty > 0 ? w.kind[i - land.w] : NONE;
       if (pageOf(beside ?? NONE)?.top !== undefined) {
@@ -966,18 +794,29 @@ function flatLayer(f: Frame): void {
       if (prog8 >= 8) {
         reading(w, i);
         if (troubled(i))
-          stand(grown(art.bang), x + 8, y - 4 - Math.round(Math.abs(Math.sin(S.t * 4 + i)) * 2), (ty + 1) * TILE + 0.6);
+          stand(
+            art.bang,
+            x + 8,
+            y - 4 - Math.round(Math.abs(Math.sin(S.t * 4 + i)) * 2),
+            (ty + 1) * TILE + 0.6,
+            1,
+            markSize,
+          );
       }
     }
-  // Over what is carried: the arrowheads, the joiners' tops and the sorters' boards, each picture in
-  // one go, and over those their grades' marks; then each idle splitter's vane.
-  g.setTransform(1, 0, 0, 1, -cx, -cy);
-  for (const top of flat.tops) lay(g, top.pic, top.tiles);
-  for (const mark of flat.marks) lay(g, mark.pic, mark.tiles);
-  g.setTransform(1, 0, 0, 1, 0, 0);
+  // Over what is carried: the arrowheads, the joiners' tops and the sorters' boards, and over those
+  // their grades' marks; then each idle splitter's vane.
+  const flat = laidOf(L, art);
+  for (let n = 0; n < flat.at.length; n++) {
+    const i = flat.at[n] ?? 0;
+    const tx = i % land.w;
+    const ty = (i - tx) / land.w;
+    const pic = flat.pics[n];
+    if (pic && tx >= tx0 && tx <= tx1 && ty >= ty0 && ty <= ty1) g.pic(pic, tx * TILE - cx, ty * TILE - cy);
+  }
   for (let k = 0; k < laps; k++) {
     const over = lapping[k];
-    if (over) g.drawImage(over.pic, 0, 0, over.w, over.h, over.x, over.y, over.w, over.h);
+    if (over) g.part(over.pic, 0, 0, over.w, over.h, over.x, over.y);
   }
   for (const i of flat.vanes) {
     const a = L.arms[i] ?? 0;
@@ -985,15 +824,14 @@ function flatLayer(f: Frame): void {
     const ty = (i - tx) / land.w;
     if (a === 0 || w.item[i] !== NONE || tx < tx0 || tx > tx1 || ty < ty0 || ty > ty1) continue;
     const v = pageOf(w.kind[i] ?? NONE)?.vane?.(art, w, i, a);
-    if (v) g.drawImage(v, tx * TILE - cx + 5, ty * TILE - cy + 5);
+    if (v) g.pic(v, tx * TILE - cx + 5, ty * TILE - cy + 5);
   }
 }
 
-/** Everything that stands up, far to near, on the kept picture mended where it changed; then what hops into the depot, the lines between pylons and the bits that fly. */
+/** Everything that stands up, far to near; then what hops into the depot, the lines between pylons and the bits that fly. */
 function standingLayer(f: Frame): void {
   const { art, now, g, W, H, cx, cy, w, L, tx0, ty0, tx1, ty1 } = f;
   const { land } = w;
-  const gr = art.ground;
   for (let ty = ty0; ty <= ty1; ty++)
     for (let tx = tx0; tx <= tx1; tx++) {
       const i = ty * land.w + tx;
@@ -1063,7 +901,7 @@ function standingLayer(f: Frame): void {
   // The gnomes, and the member in their own yard.
   eachPerson(art, cx, cy, put);
 
-  standing(gr, f.view).lay(g, f.view);
+  drawListed(g, 0);
 
   // What the depot takes in hops over the sill and is gone; what a cart stop takes hops into its cart, which rolls under with it.
   for (let n = 0; n < L.intoDepot.length; n++) {
@@ -1099,23 +937,21 @@ function standingLayer(f: Frame): void {
       hops.splice(k, 1);
       continue;
     }
-    g.globalAlpha = 1 - u * u;
-    g.drawImage(
+    g.pic(
       h.pic,
       Math.round(h.x + h.dx * u * 7) - (h.pic.width >> 1) - cx,
       Math.round(h.y + h.dy * u * 7 - Math.sin(u * Math.PI) * 4) - (h.pic.height >> 1) - 1 - cy,
+      1 - u * u,
     );
-    g.globalAlpha = 1;
   }
 
-  wiring.draw(g, f.view, L, corner, lost);
+  wiring.draw(g, f.view, L, corner);
 
   for (const b of bits) {
     if (b.glow) continue;
-    g.globalAlpha = clamp((b.ttl - b.life) / (b.ttl * 0.4), 0, 1);
-    R(g, Math.round(b.x) - cx, Math.round(b.y) - cy, b.size, b.size, b.col);
+    const a = clamp((b.ttl - b.life) / (b.ttl * 0.4), 0, 1);
+    g.rect(Math.round(b.x) - cx, Math.round(b.y) - cy, b.size, b.size, b.col, a);
   }
-  g.globalAlpha = 1;
 }
 
 /** Every lamp and fire whose light reaches the picture (`lamps.ts`), wherever the pieces that hold them are. */
@@ -1127,45 +963,39 @@ function lamps(f: Frame): void {
     light(l.x - cx, l.y - cy, l.r, l.power, l.reach);
 }
 
-/** Dusk over everything, with every lamp and fire cut out of it; their warm glow; then the bits that glow. */
+/** Whether a light's pool reaches a picture of `W` by `H`. */
+const shows = (l: Light, W: number, H: number): boolean =>
+  l.x + l.r >= 0 && l.x - l.r <= W && l.y + l.r >= 0 && l.y - l.r <= H;
+
+/** Dusk over everything, on a layer of its own with every lamp and fire cut out of it; their warm glow; then the bits that glow. */
 function lampLayer(f: Frame): void {
   const { g, W, H, cx, cy } = f;
   lamps(f);
-  fit(dusk, W, H);
-  const d = dusk.g;
-  d.globalCompositeOperation = "copy";
-  d.globalAlpha = 1;
-  d.fillStyle = "rgba(32,14,50,0.5)";
-  d.fillRect(0, 0, W, H);
-  d.globalCompositeOperation = "destination-out";
+  f.dusk.begin(W, H, DUSK);
+  g.blend("cut");
   for (let k = 0; k < lit; k++) {
     const l = lights[k];
-    if (!l || l.x + l.r < 0 || l.x - l.r > W || l.y + l.r < 0 || l.y - l.r > H) continue;
+    if (!l || !shows(l, W, H)) continue;
     // A fire flickers by where it is on the screen.
-    d.globalAlpha = clamp(l.power * (l.reach ? 0.9 : 0.93 + 0.07 * Math.sin(S.t * 6 + l.x + corner.x)), 0, 1);
-    pool(d, l.reach ? REACHED : HOLE, l.x, l.y, l.r);
+    const a = clamp(l.power * (l.reach ? 0.9 : 0.93 + 0.07 * Math.sin(S.t * 6 + l.x + corner.x)), 0, 1);
+    pool(g, l.reach ? REACHED : HOLE, l.x, l.y, l.r, a);
   }
-  d.globalAlpha = 1;
-  g.drawImage(dusk.c, 0, 0);
-  g.globalCompositeOperation = "lighter";
+  g.blend("over");
+  f.dusk.end();
+  g.from(f.dusk, 0, 0, W, H, 0, 0);
+  g.blend("add");
   for (let k = 0; k < lit; k++) {
     const l = lights[k];
-    if (!l || l.reach || l.x + l.r < 0 || l.x - l.r > W || l.y + l.r < 0 || l.y - l.r > H) continue;
-    g.globalAlpha = clamp(0.14 * l.power, 0, 0.5);
-    pool(g, WARM, l.x, l.y, l.r * 0.9);
+    if (l && !l.reach && shows(l, W, H)) pool(g, WARM, l.x, l.y, l.r * 0.9, clamp(0.14 * l.power, 0, 0.5));
   }
-  g.globalCompositeOperation = "source-over";
-  g.globalAlpha = 1;
+  g.blend("over");
 
   for (const b of bits) {
     if (!b.glow) continue;
     const a = clamp((b.ttl - b.life) / (b.ttl * 0.5), 0, 1);
-    g.globalAlpha = a * 0.3;
-    g.drawImage(SPARK, Math.round(b.x) - cx - 3, Math.round(b.y) - cy - 3, 7, 7);
-    g.globalAlpha = a;
-    R(g, Math.round(b.x) - cx, Math.round(b.y) - cy, b.size, b.size, b.col);
+    g.stretch(SPARK, Math.round(b.x) - cx - 3, Math.round(b.y) - cy - 3, 7, 7, a * 0.3);
+    g.rect(Math.round(b.x) - cx, Math.round(b.y) - cy, b.size, b.size, b.col, a);
   }
-  g.globalAlpha = 1;
 }
 
 /** What is being pointed at, and what is about to be built: where power reaches, the picked and pointed-at pieces, the area marked, a run, the piece or pieces in hand, and the place a nudge is about. */
@@ -1177,7 +1007,6 @@ function marksLayer(f: Frame): void {
   const { dx, dfoot } = depotAt(f);
   if (builds(tool) && wantsPower(tool)) {
     // Where power reaches, edged in gold dots, while placing something that it matters to.
-    g.fillStyle = GOLD[1];
     const power = litOf(w);
     const on = (tx: number, ty: number): boolean =>
       tx >= 0 && ty >= 0 && tx < land.w && ty < land.h && power[ty * land.w + tx] === 1;
@@ -1185,9 +1014,9 @@ function marksLayer(f: Frame): void {
       for (let tx = tx0; tx <= tx1 + 1; tx++) {
         const here = on(tx, ty);
         if (here !== on(tx, ty - 1))
-          for (let k = 0; k < TILE; k += 3) g.fillRect(tx * TILE - cx + k, ty * TILE - cy, 1, 1);
+          for (let k = 0; k < TILE; k += 3) g.rect(tx * TILE - cx + k, ty * TILE - cy, 1, 1, GOLD[1]);
         if (here !== on(tx - 1, ty))
-          for (let k = 0; k < TILE; k += 3) g.fillRect(tx * TILE - cx, ty * TILE - cy + k, 1, 1);
+          for (let k = 0; k < TILE; k += 3) g.rect(tx * TILE - cx, ty * TILE - cy + k, 1, 1, GOLD[1]);
       }
   }
   pinMark(g, w, cx, cy, dx - 24, dfoot - 48);
@@ -1202,35 +1031,35 @@ function marksLayer(f: Frame): void {
   if (S.run) {
     // A run of belt, shown before it is laid.
     const bad = S.run.why !== null;
-    g.globalAlpha = 0.8;
     for (const leg of S.run.legs) {
       const x = leg.x * TILE - cx;
       const y = leg.y * TILE - cy;
       if (!leg.tunnel)
-        g.drawImage(
+        g.pic(
           beltTile(straight(leg.dir), leg.dir, steps[leg.grade] ?? step, woodOf(leg.grade), 0, marksOf(leg.grade)),
           x,
           y,
+          0.8,
         );
       else {
         // Its far mouth comes up `span + 1` tiles ahead.
         const far = (leg.span + 1) * TILE;
         const near = art.m.hood[lookOf(leg.grade)]?.[leg.dir];
         const out = art.m.hood[lookOf(leg.grade)]?.[BACK[leg.dir]];
-        if (near) g.drawImage(near.c, x + 8 - near.ax, y + TILE + 1 - near.ay);
+        if (near) g.pic(near.c, x + 8 - near.ax, y + TILE + 1 - near.ay, 0.8);
         if (out && leg.span > 0)
-          g.drawImage(out.c, x + DX[leg.dir] * far + 8 - out.ax, y + DY[leg.dir] * far + TILE + 1 - out.ay);
+          g.pic(out.c, x + DX[leg.dir] * far + 8 - out.ax, y + DY[leg.dir] * far + TILE + 1 - out.ay, 0.8);
       }
     }
     for (const turn of S.run.turns) {
       const grade = w.grade[turn.y * land.w + turn.x] ?? 1;
-      g.drawImage(
+      g.pic(
         beltTile(straight(turn.dir), turn.dir, steps[grade] ?? step, woodOf(grade), 0, marksOf(grade)),
         turn.x * TILE - cx,
         turn.y * TILE - cy,
+        0.8,
       );
     }
-    g.globalAlpha = 1;
     const last = S.run.legs.at(-1) ?? S.run.turns.at(-1);
     if (last) corners(g, last.x * TILE - cx, last.y * TILE - cy, TILE, TILE, bad ? CORAL : GOLD[2], true);
   }
@@ -1245,21 +1074,19 @@ function marksLayer(f: Frame): void {
       // The brush shows its colour on what it would colour, and nothing elsewhere.
       if (!bad) corners(g, x, y, TILE, TILE, PAINTS[S.tint - 1]?.lit ?? CREAM, true);
     } else if (tool === "select") {
-      if (S.group) inHand(g, art, w, S.group, now, cx, cy);
+      if (S.group) inHand(f, S.group);
     } else if (!S.run) {
       const mark = used;
       // At the grade it would stand at: the one in hand, or the higher one of a piece of its kind it would only turn.
       const grade = S.aim.grade ?? handGrade();
       const page = pageOf(tool);
       if (page?.aimArms) {
-        g.globalAlpha = 0.8;
         const a = page.aimArms(S.dir, S.right);
-        g.drawImage(beltTile(a, S.dir, steps[grade] ?? step, woodOf(grade), 0, marksOf(grade)), x, y);
+        g.pic(beltTile(a, S.dir, steps[grade] ?? step, woodOf(grade), 0, marksOf(grade)), x, y, 0.8);
         const top = page.top?.(art, null, -1, S.dir, S.right);
-        if (top) g.drawImage(top, x, y);
+        if (top) g.pic(top, x, y, 0.8);
         const pip = top ? art.m.pips[grade - 2] : undefined;
-        if (pip) g.drawImage(pip, x, y);
-        g.globalAlpha = 1;
+        if (pip) g.pic(pip, x, y, 0.8);
       }
       piece(art, w, on.y * land.w + on.x, tool, S.dir, grade, 1, true, x, y, now, bad ? 0.5 : 0.8);
       const far = S.aim.far ?? -1;
@@ -1269,14 +1096,7 @@ function marksLayer(f: Frame): void {
         const fy = (far - fx) / land.w;
         if (out) put(out.c, fx * TILE - cx + 8 - out.ax, fy * TILE - cy + TILE + 1 - out.ay, 0, 0.8);
       }
-      for (let k = mark; k < used; k++) {
-        const p = listed[k];
-        if (!p) continue;
-        g.globalAlpha = p.a;
-        g.drawImage(p.c, p.x - camX, p.y - camY);
-      }
-      g.globalAlpha = 1;
-      used = mark;
+      drawListed(g, mark, false);
       const col = bad ? CORAL : GOLD[2];
       if (REACHES[tool] === 1) {
         const ring = ((REACH.pylon * w.open.reach) / 10_000) * TILE;
