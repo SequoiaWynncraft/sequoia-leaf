@@ -14,6 +14,7 @@ import {
   item,
   type ItemName,
   kind,
+  locked,
   plot,
   plotPrice,
   plotState,
@@ -158,4 +159,22 @@ test("what a still gives says it is distilled from tar and by which way out; cre
   const ingot = rowsOf("ingot");
   expect(ingot.map(([label]) => label)).toEqual(["Made from", "In", "Broken from", "In"]);
   expect(ingot[3]).toEqual(["In", [`${machineRef(kind("breaker"))} 25 /min`]]);
+});
+
+test("before the still and the cracker are known, creosote's and spirit's cards name them both, so the card says what to research", async () => {
+  await opened(create({ seed: 5, tier: 6 }), 1_000);
+  expect([locked(S.world.open, { build: STILL }), locked(S.world.open, { build: CRACKER })]).toEqual([
+    "The still is not unlocked yet",
+    "The cracker is not unlocked yet",
+  ]);
+  for (const [name, way, per] of [
+    ["creosote", "middle", "40"],
+    ["spirit", "right", "20"],
+  ] as const)
+    expect(rowsOf(name)).toEqual([
+      ["Distilled from", [`${itemRef(item("tar"))} `]],
+      ["In", [`${machineRef(STILL)} ${per} /min (${way} way out)`]],
+      ["Made from", [`${itemRef(item(name === "creosote" ? "pitch" : "creosote"))} `]],
+      ["In", [`${machineRef(CRACKER)} 60 /min`]],
+    ]);
 });
