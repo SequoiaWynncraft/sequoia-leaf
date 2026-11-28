@@ -23,13 +23,6 @@
         "A grade 4 gatherer gathers 1 star crystal a minute. It costs 200 Coins and draws 3 power.",
         "There are no grade 4 machines."
       ]
-    },
-    {
-      "head": "How it looks",
-      "points": [
-        "Grade 4 lines are dark iron with a lilac light. Grade 4 gatherers wear an iron hat and push an iron cart.",
-        "Grade 4 pieces have 3 brass studs in the corner."
-      ]
     }
   ]
 }
