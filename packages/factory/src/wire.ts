@@ -449,7 +449,7 @@ function handingOrder(y: Yard): { order: Int32Array; rings: Int32Array; cuts: In
   const enter = (t: number, from: number): void => {
     const i = t < 0 ? t : pieceOf(y, t);
     if (i < 0) return;
-    if (at[i] >= 0) {
+    if ((at[i] ?? -1) >= 0) {
       if (from >= 0 && ((flags[i] ?? 0) & OPEN) !== 0) low[from] = Math.min(low[from] ?? 0, at[i] ?? 0);
       if (from >= 0 && ((flags[i] ?? 0) & ON_PATH) !== 0) flags[from] = (flags[from] ?? 0) | CUT;
       return;

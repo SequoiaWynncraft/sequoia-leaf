@@ -51,12 +51,13 @@ function build(y: F.Yard, kind: F.KindName, at: At, dir: number): void {
 }
 /** A straight run of grade III belt from a tile, `count` tiles toward `dir`. */
 function run(y: F.Yard, from: At, dir: number, count: number): void {
-  for (let k = 0; k < count; k++) build(y, "belt", [from[0] + F.DX[dir] * k, from[1] + F.DY[dir] * k], dir);
+  const [dx, dy] = [F.DX[dir] ?? 0, F.DY[dir] ?? 0];
+  for (let k = 0; k < count; k++) build(y, "belt", [from[0] + dx * k, from[1] + dy * k], dir);
 }
 /** A row of full crates, each handing on toward `dir`, from `at` away from where they hand: the first into what stands beyond. */
 function crates(y: F.Yard, at: At, dir: number, count: number, name: F.ItemName): void {
   for (let k = 0; k < count; k++) {
-    const c: At = [at[0] - F.DX[dir] * k, at[1] - F.DY[dir] * k];
+    const c: At = [at[0] - (F.DX[dir] ?? 0) * k, at[1] - (F.DY[dir] ?? 0) * k];
     build(y, "crate", c, dir);
     const r = F.holderOf(y, F.at(y, c[0], c[1]));
     for (let n = 0; n < y.open.crate; n++) F.put(y.holders, r, F.item(name));

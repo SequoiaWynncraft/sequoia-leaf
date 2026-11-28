@@ -412,11 +412,12 @@ const OWN: readonly (Recipe | null)[] = ALL_ITEMS.map((n) => MAKING[n]?.[0] ?? n
  */
 export const makersOf = (n: number): readonly Recipe[] => MAKING[n] ?? [];
 /**
- * The recipe a thing is got by: the first that makes it (`makersOf`); none for a thing only gathered
- * from the ground. Star crystal lies in the ground and is grown too, and is got by growing it: what
- * the ground gives of it is far too slow for anything else.
+ * The recipe a thing is got by: for a thing from the ground, none, as it is gathered, though a machine
+ * may make it too; but one that is grown (star crystal) is got by growing it (`GROWN`), as what the
+ * ground gives of it is far too slow for anything else. Any other thing, the first that makes it
+ * (`makersOf`).
  */
-export const recipeFor = (n: Item): Recipe | null => makersOf(n)[0] ?? null;
+export const recipeFor = (n: Item): Recipe | null => (isRaw(n) ? (GROWN[n] ?? null) : (makersOf(n)[0] ?? null));
 /**
  * For each kind, by the kind a recipe is made by, how many of that kind one piece of it is on the
  * recipe: 1 where they are the same, as many as it says for a machine that makes what another makes
