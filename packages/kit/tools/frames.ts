@@ -144,7 +144,7 @@ const ROSE: Ramp = ["#e0457a", "#ff8fb0", "#ffe3ec"];
 interface Frame {
   readonly band: Ramp;
   /** How many pixels thick the band is, its dark edges included. */
-  readonly thick: 4 | 5;
+  readonly thick: 3 | 4 | 5;
   /** How many pixels are cut off each corner. */
   readonly cut: number;
   /** How many pixels of corner the picture has each side of its two pixels of plain edge. */
@@ -183,7 +183,12 @@ function frame({ band: [lo, mid, hi], thick, cut, corner, gem, fill, drop = 0 }:
       // The top and the left are bright outside and dark inside; the bottom and the right the reverse.
       const lit = d === dy && dy <= dx ? y < n / 2 : d === dx ? x < n / 2 : x < n / 2 && y < n / 2;
       const across = lit ? [hi, mid, lo] : [lo, mid, hi];
-      const rings = thick === 5 ? [INK, ...across, INK] : [INK, across[0], across[2], INK];
+      const rings =
+        thick === 5
+          ? [INK, ...across, INK]
+          : thick === 4
+            ? [INK, across[0], across[2], INK]
+            : [INK, lit ? hi : mid, INK];
       put(g, x, y, rings[d] ?? INK);
     }
   if (!gem) return g;
@@ -205,16 +210,13 @@ function frame({ band: [lo, mid, hi], thick, cut, corner, gem, fill, drop = 0 }:
 /** The brass frame: a sign or a tip that is picked out wears it in place of its own. */
 const brass = (): Grid => frame({ band: BRASS, thick: 4, cut: 2, corner: 5, gem: [BRASS, 1], fill: FIELD, drop: 2 });
 /**
- * A tier's frame, every tier built alike and only its colours its own: an ink outline, a flat band of
- * the tier's metal, one lighter line inside it, and the outline's corner cut by a pixel. Five pixels
- * thick, or three (`thin`) for a small thing (`kit.css`); drawn over what it holds, nothing lies on it.
+ * A tier's frame, every tier built alike and only its colours its own: the tier's metal as a bevelled
+ * band lit from the top left between two ink lines, its corners cut, and no jewels. Five pixels thick,
+ * or three (`thin`) for a small thing (`kit.css`); its corners are no larger than its band, so it is
+ * the thing's border exactly, drawn over what it holds, and nothing of it lies inside.
  */
-const tier = ([, mid, hi]: Ramp, thin: boolean): Grid => {
-  const band: Ring = [mid, mid];
-  const rings: Ring[] = [INKED, ...Array.from({ length: thin ? 1 : 3 }, () => band), [hi, hi]];
-  const n = rings.length * 2 + 1;
-  return ringed(n, n, rings, null, 1);
-};
+const tier = (band: Ramp, thin: boolean): Grid =>
+  thin ? frame({ band, thick: 3, cut: 2, corner: 3 }) : frame({ band, thick: 5, cut: 3, corner: 5 });
 
 /** The jewel that stands on top of a frame of the third or fourth tier. */
 const crest = ([glo, gmid, ghi]: Ramp): Grid =>
