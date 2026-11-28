@@ -120,10 +120,16 @@ function roof(g: Ctx, working: boolean, step: number): void {
   // The gable's copper gear, turning while it works.
   R(g, 20, 12, 8, 8, TAR[0]);
   gear(g, 24, 16, 3, 7, working ? step / 4 : 0, CLAY[1], CLAY[0]);
-  // The eaves: a copper gutter, and under it a string of lamps lit while it works.
-  R(g, 0, WALL - 1, W, 1, CLAY[0]);
+  // The eaves: a copper gutter (the lamps under it are hung once the walls are up: `eaveLamps`).
   R(g, 0, WALL - 1, W, 1, CLAY[1]);
-  for (let lx = 3; lx < W - 2; lx += 6) R(g, lx, WALL + 1, 1, 1, working ? LIGHT[1] : UNLIT[1]);
+}
+
+/** A string of lamps under the eaves, over the walls: lit cream while it works, dark glass at rest. */
+function eaveLamps(g: Ctx, working: boolean): void {
+  for (let lx = 6; lx < W - 4; lx += 6) {
+    R(g, lx, WALL, 1, 1, TAR[0]);
+    R(g, lx, WALL + 1, 1, 1, working ? LIGHT[1] : UNLIT[1]);
+  }
 }
 
 /** A copper chute for its way out, on its right wall (`side` 1) or its left (-1). */
@@ -144,6 +150,7 @@ export function hall(d: number, grade: number, working: boolean, step: number): 
   tarred(g, 1, WALL, W - 2, FOOT - WALL, 63);
   bricks(g, 0, WALL, 4, FOOT - WALL, 65);
   bricks(g, W - 4, WALL, 4, FOOT - WALL, 66);
+  eaveLamps(g, working);
   window(g, 6, WALL + 6, working);
   window(g, W - 12, WALL + 6, working);
   doors(g, working, step % 3);
