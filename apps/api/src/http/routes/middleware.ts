@@ -48,8 +48,18 @@ export function sessionCookies(header: string | undefined): number {
   return (header ?? "").split(/[;,]/).filter((pair) => pair.split("=", 1)[0]?.trim() === SessionCookie.key).length;
 }
 
-/** Leaf's own sessions, for players who signed in with Discord alone: the cookie, and who it is. */
-const leafSessions = (signIns: SignIns["Service"], logins: Logins["Service"], publicOrigin: string) => {
+/**
+ * Leaf's own sessions, for players who signed in with Discord alone (on the website, or in a Discord
+ * call): the cookie, and who it is. A player with a Minecraft account linked stands in the guild as
+ * the backend says that account does (`standing`): the rank and the website's say a website session
+ * would have, so a member in a call has their quests and the guild's news.
+ */
+const leafSessions = (
+  signIns: SignIns["Service"],
+  logins: Logins["Service"],
+  identities: Identities["Service"],
+  publicOrigin: string,
+) => {
   /** A Leaf session's cookie, for a player who signed in with Discord alone; "" when there is none. */
   const leafCookie = Effect.gen(function* () {
     const request = yield* HttpServerRequest.HttpServerRequest;
@@ -63,20 +73,25 @@ const leafSessions = (signIns: SignIns["Service"], logins: Logins["Service"], pu
       return yield* new Unauthorized({ code: "unauthorized", message: "Your session has expired. Sign in again" });
     }
     // The player its Discord account is now: linking may have taken their first player into another.
-    const { discord, name, member } = signedIn.value;
+    const { discord, name, member, inCall } = signedIn.value;
     const now = yield* logins.discordPlayer(discord);
     if (Option.isNone(now)) {
       return yield* new Unauthorized({ code: "unauthorized", message: "Your session has expired. Sign in again" });
     }
     const playerId = now.value;
-    const linked = (yield* logins.minecraftOf([playerId])).has(playerId);
+    const minecraft = (yield* logins.minecraftOf([playerId])).get(playerId);
+    const linked = minecraft !== undefined;
+    const { guildRank, admin } = linked
+      ? yield* identities.standing(minecraft, discord)
+      : { guildRank: null, admin: false };
     const identity: Identity = {
       playerId,
       minecraft: null,
       discord,
       username: name,
-      guildRank: null,
-      admin: false,
+      guildRank,
+      inCall,
+      admin,
       session: Redacted.make(token),
       via: "discord",
       linked,
@@ -141,7 +156,7 @@ export const sessionChecks = Effect.gen(function* () {
     return result.identity;
   });
 
-  const { leafCookie, admitLeaf } = leafSessions(signIns, logins, publicOrigin);
+  const { leafCookie, admitLeaf } = leafSessions(signIns, logins, identities, publicOrigin);
 
   /**
    * The website's session, or, when the backend has refused it (signed out there, or linked

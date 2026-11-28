@@ -90,6 +90,18 @@ const joined = (j: Joining) =>
           ? Effect.fail(unchecked)
           : opened(j);
 
+/**
+ * The log line for a seat asked for at a call's table (`call_seat`): who asked, and how it went, by
+ * the code the page is answered with (`seated` once they are). Never the launch itself.
+ */
+const logSeat = (player: string) => (j: Joining) =>
+  Effect.logInfo("call_seat").pipe(
+    Effect.annotateLogs({
+      player,
+      outcome: j.status === "shown" ? "seated" : j.status === "unchecked" ? "call_unchecked" : j.status,
+    }),
+  );
+
 export const GameSittingsHandlers = HttpApiBuilder.group(LeafApi, "gameSittings", (handlers) =>
   Effect.gen(function* () {
     const sittings = yield* Sittings;
@@ -121,7 +133,9 @@ export const GameSittingsHandlers = HttpApiBuilder.group(LeafApi, "gameSittings"
           Effect.gen(function* () {
             const identity = yield* CurrentIdentity;
             if (payload.player !== identity.playerId) return yield* notYou;
-            const at = yield* sittings.join(callerOf(identity), payload.instance);
+            const at = yield* sittings
+              .join(callerOf(identity), payload.instance)
+              .pipe(Effect.tap(logSeat(payload.player)));
             if (at.status === "shown") yield* visits.acted(identity.playerId, yield* Clock.currentTimeMillis);
             return yield* joined(at);
           }),

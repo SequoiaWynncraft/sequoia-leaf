@@ -105,6 +105,8 @@ export interface Identity {
   readonly username: string;
   /** The player's rank in the guild, or null when they are not a member now. */
   readonly guildRank: string | null;
+  /** Whether their session was signed in inside a Discord call: Leaf makes no draw for it, wherever it asks from. */
+  readonly inCall: boolean;
   readonly admin: boolean;
   /** The session they came with, to ask the backend something as them (`/v1/game/requests`). */
   readonly session: Redacted.Redacted;
@@ -321,7 +323,7 @@ export class GamePlayApi extends HttpApiGroup.make("gamePlay")
       params: GameParams,
       payload: PlayBody,
       success: Played,
-      error: [Invalid, Missing, NotYou, StateUnreadable, SlowDown],
+      error: [BadOrigin, Invalid, Missing, NotYou, StateUnreadable, SlowDown],
     }).middleware(PlayBodyErrors),
     HttpApiEndpoint.get("standings", "/play/:game/standings", {
       params: GameParams,

@@ -28,7 +28,6 @@
     "apps/battler": {
       "name": "@sequoia-leaf/battler",
       "dependencies": {
-        "@discord/embedded-app-sdk": "2.5.0",
         "@sequoia-leaf/core": "workspace:*",
         "@sequoia-leaf/figures": "workspace:*",
         "@sequoia-leaf/kit": "workspace:*",
@@ -94,6 +93,7 @@
     "packages/kit": {
       "name": "@sequoia-leaf/kit",
       "dependencies": {
+        "@discord/embedded-app-sdk": "2.5.0",
         "@sequoia-leaf/core": "workspace:*",
       },
       "devDependencies": {

@@ -10,7 +10,7 @@
  *   keyboard prints it (`keyboard.ts`); the player may put another key in any slot but a few
  *   (`keystab.ts`).
  * - Account, where the page is live as somebody: how they signed in, whether a Wynncraft account is
- *   linked, and signing out (`account.ts`).
+ *   linked, and signing out (`account.ts`). Not in a Discord call, where Discord signs them in.
  * - Whatever tabs a page adds of its own (`MenuOf.tabs`).
  *
  * Under every tab, at the foot of the panel, the links to the Privacy and Terms pages (`legal.ts`).
@@ -20,11 +20,13 @@
  * tip that is up, which may name a key. A page builds its menu once, at the start (`settingsMenu`).
  */
 import { accountPage } from "./account.ts";
+import { openOutside } from "./call.ts";
 import { type Choices, choices } from "./choices.ts";
 import { dialog } from "./dialog.ts";
 import { el, icon } from "./dom.ts";
 import { type KeyList, nameOf } from "./keyboard.ts";
 import { KeysTab, shelf } from "./keystab.ts";
+import { inCall } from "./launch.ts";
 import { legalLinks } from "./legal.ts";
 import { where } from "./live.ts";
 import type { Scope } from "./scope.ts";
@@ -56,12 +58,8 @@ export interface MenuOf {
   readonly keys: KeyList;
   /** Tabs of the page's own, after Sound, Keys and Account. */
   readonly tabs?: readonly MenuTab[];
-  /** Whether there is an Account tab where the page is live as somebody: not where Discord signed them in, in a call. */
-  readonly account?: boolean;
   /** Told as the menu opens (true) and is put away (false): the page lets go of held keys and takes no play while it is open. */
   readonly opened?: (open: boolean) => void;
-  /** How the page opens an address outside itself, where a plain link to a new tab will not (a Discord call). */
-  readonly openLink?: (url: string) => void;
 }
 
 /** The menu of a page. */
@@ -147,7 +145,9 @@ class SettingsMenu implements Menu {
     });
     const w = where();
     const account: MenuTab[] =
-      w.mode === "live" && of.account !== false
+      // In a Discord call, Discord signs the player in: signing out signs them straight back in, and
+      // linking an account is the guild's website's.
+      w.mode === "live" && !inCall()
         ? [{ id: "account", name: "Account", draw: () => accountPage(w.me, w.signIn) }]
         : [];
     this.#tabsOf = [
@@ -175,7 +175,8 @@ class SettingsMenu implements Menu {
       this.#tabs.el,
       this.#keys.line,
       this.#page,
-      legalLinks(of.openLink),
+      // In a Discord call a link opens no tab of its own: Discord opens it, outside the call.
+      legalLinks(inCall() ? (url) => void openOutside(url) : undefined),
     );
     this.#scrim.append(this.#panel);
     document.body.append(this.#scrim);

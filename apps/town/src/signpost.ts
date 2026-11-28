@@ -7,6 +7,7 @@
  * from who is about (`atCamps`), asked for afresh as the signpost opens, and as it changes after.
  */
 
+import { leafSite } from "@sequoia-leaf/kit/call.ts";
 import { el, icon as glyph, replay, say, shown } from "@sequoia-leaf/kit/dom.ts";
 import { member } from "@sequoia-leaf/kit/live.ts";
 import { outside } from "@sequoia-leaf/kit/net.ts";
@@ -202,7 +203,10 @@ export function stripWays(host: { readonly id: string }): StripWays {
   return { els: [likes, wayButton("back", "Next camp", () => void goNext(host.id))], follow };
 }
 
-/** "Copy link to my camp": the page's address that opens on the member's camp, for pasting in chat; "Link copied" for a moment after. */
+/**
+ * "Copy link to my camp": the town's address that opens on the member's camp, for pasting in chat
+ * (in a Discord call, Leaf's own address, not Discord's for it); "Link copied" for a moment after.
+ */
 export function copyLink(life: Scope): HTMLElement {
   const label = el("span", "", { text: "Copy link to my camp" });
   const done = el("span", "hid", { text: "Link copied" });
@@ -211,7 +215,8 @@ export function copyLink(life: Scope): HTMLElement {
     done.classList.toggle("hid", !on);
   };
   async function copy(): Promise<void> {
-    const url = new URL(outside.href());
+    const site = leafSite();
+    const url = site === null ? new URL(outside.href()) : new URL("/play/town/", site);
     url.search = `?camp=${encodeURIComponent(myId())}`;
     url.hash = "";
     try {

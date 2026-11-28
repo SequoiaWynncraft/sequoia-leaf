@@ -340,13 +340,14 @@ const ORIGIN = "https://leaf.example";
 
 /**
  * Stands in for a game's page in the town's frame: a window whose parent is the town, on the same
- * origin, that hears messages. Returns how the town says something to it, and what the game said
- * to the town.
+ * origin, framed by the town's door (`#door`), that hears messages. Returns how the town says
+ * something to it, and what the game said to the town.
  */
 function aFramedPage(): { say: (data: unknown) => void; told: unknown[] } {
   const told: unknown[] = [];
   const town = { location: { origin: ORIGIN }, postMessage: (msg: unknown): void => void told.push(msg) };
-  const win = Object.assign(new EventTarget(), { location: { origin: ORIGIN }, parent: town });
+  const door = { closest: (selector: string): object | null => (selector === "#door" ? {} : null) };
+  const win = Object.assign(new EventTarget(), { location: { origin: ORIGIN }, parent: town, frameElement: door });
   Object.defineProperty(globalThis, "window", { value: win, configurable: true });
   page = () => {
     Reflect.deleteProperty(globalThis, "window");

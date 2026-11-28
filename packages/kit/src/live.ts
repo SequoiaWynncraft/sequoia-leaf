@@ -21,6 +21,7 @@ import { type Balances, type Device, deviceForWidth, readBalances } from "@sequo
 import { dialog } from "./dialog.ts";
 import { el } from "./dom.ts";
 import { keepText, keptText } from "./keep.ts";
+import { inCall } from "./launch.ts";
 import { ask, isRecord, listen, type Listening, outside } from "./net.ts";
 import type { Trouble } from "./play.ts";
 import { asGuest, fromLeaf, leafSpending, onLeaf, said, watch } from "./purse.ts";
@@ -108,9 +109,15 @@ const backTo = (): string => (outside.top() ? outside.href() : townAddress());
 
 /**
  * Sends the whole window to Leaf's own sign-in, with Discord, to come back here after. Anyone may
- * use it, with or without a Minecraft account linked.
+ * use it, with or without a Minecraft account linked. In a Discord call, Discord signs the player in
+ * as the page Discord frames opens: that page opens again (from a game in the town's frame, the town).
  */
 export function signInWithDiscord(): void {
+  if (inCall()) {
+    if (outside.top()) outside.reload();
+    else leave();
+    return;
+  }
   // With its query: a link to somebody's camp (`?camp=`) or yard (`?of=`) comes back to it signed in.
   const page = new URL(backTo());
   outside.away(`/v1/game/sign-in?to=${encodeURIComponent(page.pathname + page.search)}`);
@@ -271,11 +278,12 @@ const LATER_KEY = "leaf.link.later.v1";
 
 /**
  * The notice that asks a member of the guild's Discord with no Minecraft account linked to link
- * one, or null where there is nothing to ask: anybody else, or a member who answered Later in this
- * tab. Link account goes to the guild's sign-in; Later takes the notice away, and `later` is called.
+ * one, or null where there is nothing to ask: anybody else, a member who answered Later in this
+ * tab, or anyone in a Discord call, where the guild's sign-in cannot open. Link account goes to the
+ * guild's sign-in; Later takes the notice away, and `later` is called.
  */
 export function linkNotice(w: Where, later: () => void): Notice | null {
-  if (w.mode !== "live" || !w.me.askLink || keptText(LATER_KEY, "tab") !== null) return null;
+  if (w.mode !== "live" || !w.me.askLink || inCall() || keptText(LATER_KEY, "tab") !== null) return null;
   const { signIn } = w;
   return {
     title: "Link your Wynncraft account",

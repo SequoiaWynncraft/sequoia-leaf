@@ -164,10 +164,10 @@ async function me(token: string): Promise<typeof Me.Type & { body: unknown }> {
 }
 
 describe("signing in to the raid in a Discord call", () => {
-  it("tells the page the Discord application's client id, and nothing when there is none", async () => {
+  it("tells the page the Discord application's client id and Leaf's own address, and nothing when there is none", async () => {
     const hello = await app.request("/v1/activity");
     expect(hello.status).toBe(200);
-    expect(await hello.json()).toEqual({ client_id: CLIENT });
+    expect(await hello.json()).toEqual({ client_id: CLIENT, site: ORIGIN });
 
     await app.dispose();
     await leafs.dispose();
