@@ -11,7 +11,7 @@ import { perMinute } from "@sequoia-leaf/kit/say.ts";
 import { hash } from "@sequoia-leaf/kit/util.ts";
 
 import { CLAY, IRON } from "../art/pal.ts";
-import { PAD, powerhouseOf, STACK_TOP, TALL } from "../art/powerhouse.ts";
+import { PAD, powerhouseIcon, powerhouseOf, STACK_TOP, TALL } from "../art/powerhouse.ts";
 import { smoke } from "../fx.ts";
 import { itemRef } from "../ui/refs.ts";
 import type { KindPage } from "./kind.ts";
@@ -43,7 +43,7 @@ function fuelRows(): Row[] {
 const burning = (y: Yard, r: number, powered: boolean): boolean => powered && r >= 0 && (y.holders.fuel[r] ?? 0) > 0;
 
 export const powerhouse: KindPage = {
-  picture: () => powerhouseOf(0),
+  picture: () => powerhouseIcon(),
   draw(_art, y, at) {
     const lit = at.real && burning(y, at.r, at.powered);
     at.put(powerhouseOf(lit ? 1 + (Math.floor(at.t * 5) % 2) : 0), at.x - PAD, at.top - PAD - TALL, at.z, at.a);

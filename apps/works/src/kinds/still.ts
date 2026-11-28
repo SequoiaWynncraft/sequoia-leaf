@@ -11,7 +11,7 @@ import { lessMotion } from "@sequoia-leaf/kit/dom.ts";
 import { perMinute } from "@sequoia-leaf/kit/say.ts";
 
 import { IRON } from "../art/pal.ts";
-import { columnTop, PAD, stillOf, TALL } from "../art/still.ts";
+import { columnTop, PAD, stillIcon, stillOf, TALL } from "../art/still.ts";
 import { puff } from "../fx.ts";
 import type { KindPage } from "./kind.ts";
 import { mixRows } from "./mix.ts";
@@ -21,14 +21,14 @@ const STILL = kind("still");
 const COPPER = ["#b86a4a", "#7a3f2e"] as const;
 
 export const still: KindPage = {
-  picture: (_p, n) => stillOf(n, 0, -1, 1, 0),
+  picture: (_p, n) => stillIcon(n),
   draw(_art, _y, at) {
     // Stopped with a thing finished, the tap it leaves by is plugged.
     const plug =
       at.real && !at.working && isItem(at.out) ? outsAs(STILL, at.d).findIndex((o) => o.only === at.out) : -1;
     // Its fire: lit while it distils, flickering; dimmed while a thing cannot leave; out at rest.
     const fire = at.working ? 2 + (lessMotion() ? 0 : Math.floor(at.t * 6) % 2) : plug >= 0 ? 1 : 0;
-    const drop = at.working && !lessMotion() ? Math.floor(at.t * 5) % 3 : 0;
+    const drop = at.working && !lessMotion() ? Math.floor(at.t * 5) % 4 : 0;
     at.put(stillOf(at.grade, at.d, plug, fire, drop), at.x - PAD, at.top - PAD - TALL, at.z, at.a);
     // Each thing it gives lets go a puff of the smog it makes, from the top of its column.
     if (at.real && at.working && !lessMotion() && at.t > (at.mem.puffAt[at.i] ?? 0)) {
@@ -36,7 +36,8 @@ export const still: KindPage = {
       const [u, v] = columnTop(at.d);
       puff(at.x + u + at.seenX, at.top + v + at.seenY, 1, IRON[3], 6);
     }
-    return at.top - TALL;
+    // Its trouble is marked over its pot, inside its own box: its column reaches into the tiles behind it.
+    return at.top + 16;
   },
   lamps: (_y, i, x, foot, at, out) => {
     if (at.working(i)) out.push({ x, y: foot - 6, r: 22, power: 0.7, reach: false });

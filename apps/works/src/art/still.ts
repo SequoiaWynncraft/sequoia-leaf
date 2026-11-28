@@ -43,12 +43,15 @@ export function columnTop(d: number): readonly [number, number] {
 }
 
 /**
- * The brick hearth: a dark iron plate on top for the pot, a brick face in front with the fire's mouth
- * in it, and the fire: out (0), dimmed (1), or lit in one of two flickers (2, 3).
+ * The brick hearth: its top a floor of brick with an iron ring where the pot sits, a brick face in
+ * front with the fire's mouth in it, and the fire: out (0), dimmed (1), or lit in one of two flickers
+ * (2, 3).
  */
 function hearth(g: Ctx, x: number, y: number, fire: number): void {
-  R(g, x + 2, y + 4, BOX - 4, 32, IRON[2]);
-  R(g, x + 3, y + 5, BOX - 6, 30, IRON[1]);
+  R(g, x + 1, y + 3, BOX - 2, 34, BARK[0]);
+  bricks(g, x + 2, y + 4, BOX - 4, 32, 72);
+  R(g, x + 2, y + 4, BOX - 4, 1, CLAY[1]);
+  ell(g, x + 24, y + 23, 16, 10, IRON[1]);
   bricks(g, x + 2, y + 36, BOX - 4, 10, 71);
   R(g, x + 2, y + 36, BOX - 4, 1, CLAY[1]);
   R(g, x + 2, y + 46, BOX - 4, 1, BARK[0]);
@@ -83,23 +86,29 @@ function pot(g: Ctx, x: number, y: number): void {
   R(g, x + 23, y + 10, 1, 1, CLAY[3]);
 }
 
-/** The column: a tall copper pipe on an iron foot, its cap, and at grade III an iron jacket in rings. */
+/**
+ * The column: a tall copper pipe on an iron foot, rounded at the top, a ring round it every few pixels
+ * and at grade III an iron jacket over its middle.
+ */
 function column(g: Ctx, x: number, y: number, d: number, grade: number): void {
   const [u, v] = FOOT[d & 3] ?? [7, 27];
   const cx = x + u;
   const top = y + v - COL;
-  R(g, cx - 4, y + v - 2, 8, 3, IRON[2]);
-  R(g, cx - 4, y + v - 2, 8, 1, IRON[3]);
-  R(g, cx - 3, top, 6, COL - 2, CLAY[1]);
-  R(g, cx - 3, top, 1, COL - 2, CLAY[2]);
-  R(g, cx + 2, top, 1, COL - 2, CLAY[0]);
-  if (grade >= 3)
-    for (let ry = top + 4; ry < y + v - 4; ry += 5) {
-      R(g, cx - 3, ry, 6, 2, IRON[2]);
-      R(g, cx - 3, ry, 6, 1, IRON[4]);
-    }
-  R(g, cx - 4, top - 2, 8, 3, CLAY[0]);
-  R(g, cx - 4, top - 2, 8, 1, CLAY[1]);
+  R(g, cx - 5, y + v - 3, 10, 4, IRON[2]);
+  R(g, cx - 5, y + v - 3, 10, 1, IRON[4]);
+  R(g, cx - 4, top, 8, COL - 3, CLAY[0]);
+  R(g, cx - 3, top, 6, COL - 3, CLAY[1]);
+  R(g, cx - 3, top, 1, COL - 3, CLAY[2]);
+  for (let ry = top + 5; ry < y + v - 5; ry += 6) R(g, cx - 4, ry, 8, 1, CLAY[0]);
+  if (grade >= 3) {
+    R(g, cx - 4, top + 8, 8, 10, IRON[2]);
+    R(g, cx - 4, top + 8, 1, 10, IRON[4]);
+    R(g, cx - 4, top + 8, 8, 1, IRON[3]);
+  }
+  // Its dome.
+  R(g, cx - 3, top - 2, 6, 2, CLAY[0]);
+  R(g, cx - 2, top - 3, 4, 1, CLAY[0]);
+  R(g, cx - 2, top - 2, 3, 1, CLAY[2]);
 }
 
 /** The swan neck: a copper pipe from the top of the column, arching over and down to the pot's lid. */
@@ -112,8 +121,8 @@ function neck(g: Ctx, x: number, y: number, d: number): void {
     const t = k / 16;
     const px = Math.round((1 - t) * (1 - t) * x0 + 2 * (1 - t) * t * x1 + t * t * x2);
     const py = Math.round((1 - t) * (1 - t) * y0 + 2 * (1 - t) * t * y1 + t * t * y2);
-    R(g, px - 1, py, 2, 2, CLAY[0]);
-    R(g, px - 1, py, 2, 1, CLAY[1]);
+    R(g, px - 1, py, 3, 3, CLAY[0]);
+    R(g, px - 1, py, 3, 1, CLAY[2]);
   }
 }
 
@@ -134,27 +143,33 @@ function tap(
   const [tx, ty, way] = at;
   const ox = x + tx * TILE;
   const oy = y + ty * TILE;
-  // The spout (corner, width, height) and its mouth's pixel, by the way it points.
+  // The spout (corner, width, height), inside its tile and short of its edge, where the way's pointer
+  // is, and its mouth's pixel.
   const [sx, sy, sw, sh, mx, my] =
     way === 0
-      ? [ox + 14, oy + 6, 6, 3, ox + 19, oy + 9]
+      ? [ox + 3, oy + 4, 7, 4, ox + 10, oy + 8]
       : way === 1
-        ? [ox + 7, oy + 14, 3, 6, ox + 8, oy + 20]
+        ? [ox + 2, oy + 3, 4, 7, ox + 4, oy + 10]
         : way === 2
-          ? [ox - 4, oy + 6, 6, 3, ox - 4, oy + 9]
-          : [ox + 7, oy - 4, 3, 6, ox + 8, oy - 5];
+          ? [ox + 6, oy + 4, 7, 4, ox + 7, oy + 8]
+          : [ox + 10, oy + 6, 4, 7, ox + 12, oy + 6];
+  R(g, sx - 1, sy - 1, sw + 2, sh + 2, INK);
   R(g, sx, sy, sw, sh, CLAY[0]);
-  R(g, sx, sy, sw, 1, CLAY[1]);
+  R(g, sx, sy, sw, 1, CLAY[2]);
   // The valve: a small iron wheel on the spout's root.
-  const [vx, vy] = sw > sh ? [way === 0 ? sx : sx + sw - 2, sy - 1] : [sx - 1, way === 1 ? sy : sy + sh - 2];
+  const [vx, vy] = sw > sh ? [way === 0 ? sx + 1 : sx + sw - 3, sy - 2] : [sx - 2, way === 1 ? sy + 1 : sy + sh - 3];
   R(g, vx, vy, 2, 2, IRON[4]);
+  // Its mouth: stopped with a dark plug in an iron collar; or a bead of what it sends hanging there,
+  // a drop falling from it, and a small pool of it below.
   if (plugged) {
-    R(g, mx - 1, my - 2, 3, 3, INK);
-    R(g, mx, my - 1, 1, 1, IRON[1]);
+    R(g, mx - 2, my - 3, 4, 4, IRON[3]);
+    R(g, mx - 1, my - 2, 2, 2, INK);
     return;
   }
-  R(g, mx, my + drop, 1, 2, col);
-  R(g, mx, my + drop, 1, 1, IRON[4]);
+  R(g, mx - 1, my - 1, 2, 2, col);
+  R(g, mx - 1, my - 1, 1, 1, IRON[4]);
+  R(g, mx - 2, my + 5, 4, 1, col);
+  if (drop > 0 && drop < 3) R(g, mx - 1, my + 1 + drop, 1, 2, col);
 }
 
 /** Its taps facing `d`: each way out's tile in its box and the way it leaves, from the left as it faces. */
@@ -179,6 +194,38 @@ function picture(grade: number, d: number, plug: number, fire: number, drop: num
   if (!behind) column(g, x, y, d, grade);
   neck(g, x, y, d);
   tapsOf(d).forEach((at, w) => tap(g, x, y, at, DRIPS[w] ?? DRIPS[0], w === plug, drop));
+  return c;
+}
+
+/**
+ * The still for a button or a card, small: its pot on the hearth, the column behind with its neck,
+ * and three taps on its right, dripping black, brown and pale.
+ */
+export function stillIcon(grade: number): HTMLCanvasElement {
+  const { c, g } = makeCanvas(22, 22);
+  bricks(g, 0, 15, 22, 7, 73);
+  R(g, 0, 15, 22, 1, CLAY[1]);
+  arch(g, 8, 17, 6, 5, INK);
+  R(g, 9, 19, 4, 3, GOLD[0]);
+  ell(g, 11, 12, 7, 4.5, CLAY[0]);
+  ell(g, 11, 11.5, 6, 3.8, CLAY[1]);
+  R(g, 8, 9, 3, 1, CLAY[2]);
+  R(g, 2, 2, 4, 14, CLAY[0]);
+  R(g, 3, 2, 2, 14, CLAY[1]);
+  R(g, 3, 1, 2, 1, CLAY[0]);
+  for (const [px, py] of [
+    [5, 2],
+    [7, 2],
+    [9, 3],
+    [10, 5],
+    [11, 7],
+  ] as const)
+    R(g, px, py, 2, 2, CLAY[0]);
+  if (grade >= 2) R(g, 1, 15, 20, 1, GOLD[0]);
+  for (let w = 0; w < 3; w++) {
+    R(g, 18, 9 + w * 3, 3, 2, CLAY[0]);
+    R(g, 20, 11 + w * 3, 1, 1, DRIPS[w] ?? DRIPS[0]);
+  }
   return c;
 }
 

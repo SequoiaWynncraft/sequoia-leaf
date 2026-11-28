@@ -121,6 +121,28 @@ function picture(grade: number, d: number, lit: number): HTMLCanvasElement {
   return c;
 }
 
+/** The cracker for a button or a card, small: its drum over the firebox, the stack behind, a pipe out. */
+export function crackerIcon(grade: number): HTMLCanvasElement {
+  const { c, g } = makeCanvas(22, 22);
+  R(g, 16, 0, 3, 8, IRON[2]);
+  R(g, 16, 0, 1, 8, IRON[4]);
+  bricks(g, 1, 15, 20, 7, 82);
+  R(g, 1, 15, 20, 1, CLAY[1]);
+  arch(g, 8, 17, 6, 5, INK);
+  R(g, 9, 19, 4, 3, GOLD[0]);
+  R(g, 2, 5, 18, 10, IRON[2]);
+  R(g, 2, 6, 18, 2, IRON[4]);
+  R(g, 2, 13, 18, 2, IRON[1]);
+  for (const sx of [7, 14]) {
+    R(g, sx, 5, 1, 10, IRON[1]);
+    for (let ry = 7; ry < 14; ry += 3) R(g, sx + 1, ry, 1, 1, IRON[4]);
+  }
+  R(g, 19, 9, 3, 3, CLAY[0]);
+  R(g, 19, 9, 3, 1, CLAY[1]);
+  if (grade >= 2) R(g, 2, 15, 18, 1, GOLD[0]);
+  return c;
+}
+
 /** Each picture, made once: by grade, way and fire. */
 const pictures = new Map<string, HTMLCanvasElement>();
 export function crackerOf(grade: number, d: number, lit: number): HTMLCanvasElement {

@@ -7,7 +7,7 @@
 import { isItem, kind, makes, RECIPE } from "@sequoia-leaf/factory";
 import { lessMotion } from "@sequoia-leaf/kit/dom.ts";
 
-import { crackerOf, PAD, stackTop, TALL } from "../art/cracker.ts";
+import { crackerIcon, crackerOf, PAD, stackTop, TALL } from "../art/cracker.ts";
 import { IRON } from "../art/pal.ts";
 import { puff } from "../fx.ts";
 import type { KindPage } from "./kind.ts";
@@ -19,7 +19,7 @@ const IRONS = [IRON[4], IRON[2]] as const;
 
 export const cracker: KindPage = {
   ...MACHINE,
-  picture: (_p, n) => crackerOf(n, 0, 0),
+  picture: (_p, n) => crackerIcon(n),
   draw(_art, _y, at) {
     const lit = at.working ? (lessMotion() ? 1 : 1 + (Math.floor(at.t * 6) % 2)) : 0;
     at.put(crackerOf(at.grade, at.d, lit), at.x - PAD, at.top - PAD - TALL, at.z, at.a);

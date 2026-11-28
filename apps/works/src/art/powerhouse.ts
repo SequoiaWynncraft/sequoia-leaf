@@ -63,6 +63,18 @@ function picture(lit: number): HTMLCanvasElement {
   return c;
 }
 
+/** The powerhouse for a button or a card, small: the brick block, its stack and its window, warm. */
+export function powerhouseIcon(): HTMLCanvasElement {
+  const { c, g } = makeCanvas(22, 22);
+  bricks(g, 14, 0, 5, 8, 95);
+  R(g, 13, 0, 7, 1, IRON[3]);
+  shingles(g, 1, 5, 20, 4, (r) => Math.round((4 - r) * 0.3), PURPLE, 96);
+  bricks(g, 1, 9, 20, 13, 97);
+  R(g, 1, 9, 20, 1, CLAY[1]);
+  window(g, 6, 11, 1);
+  return c;
+}
+
 /** Each picture, made once: cold, and burning in two flickers. */
 const pictures = new Map<number, HTMLCanvasElement>();
 export function powerhouseOf(lit: number): HTMLCanvasElement {
