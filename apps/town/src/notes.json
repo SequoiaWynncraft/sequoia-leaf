@@ -149,7 +149,7 @@
       {
         "head": "Fixed",
         "points": [
-          "A ring of belts that has filled now moves at the belt's speed wherever something takes things off it. It lost a tick for every item that went round."
+          "A ring of belts that has filled now moves at the belt's speed while something takes things off it. Before, it lost a tick for every item that went round."
         ]
       }
     ]
