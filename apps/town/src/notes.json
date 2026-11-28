@@ -28,7 +28,7 @@
       {
         "head": "Traits",
         "points": [
-          "LHZ: Vi is one too.",
+          "Vi is LHZ too.",
           "Canopy: with 3, Canopy figures start the fight up the tree for 2 seconds, then drop with a shield of 20% of their health and 30 mana; with 5, a shield of 35% and a full mana bar.",
           "Crafter (Leetanns): after every 3 fights it fights on the board, a component is added to your rack.",
           "Feather now has 4 steps: with 2, 3, 4 and 5, 4%, 6%, 8% and 11% faster after every attack.",
@@ -70,7 +70,10 @@
       {
         "head": "Traits",
         "points": [
-          "LHZ is a new origin, with Yule and the Honorary Badge, its new charm. With 1, LHZ figures start the fight with 15 more mana; with 2, 25 more, and when one uses its ability every other LHZ gets 15 mana.",
+          "New origin: LHZ. Yule is one.",
+          "One LHZ figure starts the fight with 15 more mana. Two start with 25 more each.",
+          "With two, each time one uses its ability, the other gets 15 mana.",
+          "The Honorary Badge is a new charm. The figure holding it counts as LHZ.",
           "Huddle: with 2 and 4, Huddle figures that start the fight touching share one shield, worth 25% and 35% of their health added together. With 5 it comes back once, 6 seconds after it breaks, worth 35% of the health of those still up.",
           "Sage has a third step at 6: abilities 90% stronger, and each attack gives 7 more mana.",
           "Chorus has a fourth step at 5: the party gains 4 mana a second, and Chorus figures 8."
