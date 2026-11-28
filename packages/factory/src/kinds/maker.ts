@@ -133,13 +133,18 @@ export function work(k: Kit, y: Yard, i: number, r: number, speed: number, wire:
 /**
  * A machine making nothing begins the recipe it holds the parts for, if there is one: says whether it
  * did. One that found none looks again only once it is given something; one still holding a
- * by-product begins nothing until that has left too.
+ * by-product begins nothing until that has left too, nor one holding finished things other than
+ * what its card now says to make.
  */
 function begin(k: Kit, y: Yard, i: number, r: number, wire: Wire): boolean {
   const h = y.holders;
   if (h.idle[r] === 1 || h.also[r] !== k.NONE) return false;
-  // Holding finished things, it makes only more of them, to wait behind them.
-  const only = h.out[r] !== k.NONE ? (h.out[r] ?? k.NONE) : (y.set[i] ?? k.NONE);
+  const held = h.out[r] ?? k.NONE;
+  const set = y.set[i] ?? k.NONE;
+  // Holding finished things, it makes only more of them, to wait behind them; told on its card to
+  // make something else, it starts nothing until they have left, so they do.
+  if (held !== k.NONE && set !== k.NONE && set !== held) return false;
+  const only = held !== k.NONE ? held : set;
   const found = choose(k, h, r, wire.recipes[y.kind[i] ?? k.NONE] ?? NO_RECIPES, only);
   if (found === k.NONE) {
     // Only a machine free to choose keeps that it found nothing, to look again once given something.

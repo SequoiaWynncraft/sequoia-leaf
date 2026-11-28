@@ -307,6 +307,33 @@ describe("the assembler", () => {
     expect(gears).toBeGreaterThan(0);
   });
 
+  test("told clocks while poles wait, onto a belt slower than it makes poles, it stops making poles and makes clocks", () => {
+    const y = alone(ASSEMBLER, 1);
+    const r = F.holderOf(y, tile(y, 20, 10));
+    for (const x of [22, 23, 24]) expect(F.build(y, F.BELT, x, 10, 0, Infinity).ok).toBe(true);
+    made(y, 20, 10, F.item("pole"), 0);
+    const feed = (rec: F.Item): void => {
+      const need = F.RECIPE[rec];
+      need?.from.forEach((part, p) => {
+        while (F.held(y.holders, r, part) < (need.need[p] ?? 1) * 4) F.put(y.holders, r, part);
+      });
+    };
+    for (let t = 0; t < 300; t++) {
+      feed(F.item("pole"));
+      F.step(y);
+    }
+    expect(y.holders.out[r]).toBe(F.item("pole"));
+    // Told clocks, and fed all a clock needs (frames and gears, which poles need too, and glass).
+    expect(F.setRecipe(y, 20, 10, F.item("clock"))).toBeNull();
+    let clocks = 0;
+    for (let t = 0; t < 3000; t++) {
+      feed(F.item("clock"));
+      F.step(y);
+      if (y.holders.making[r] === F.item("clock")) clocks++;
+    }
+    expect(clocks).toBeGreaterThan(0);
+  });
+
   test("keeps 9 times what a bench keeps of each part, and tips out what it no longer keeps when told otherwise", () => {
     const plank = F.item("plank");
     const hamper = F.item("hamper");
