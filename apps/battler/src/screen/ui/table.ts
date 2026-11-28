@@ -45,7 +45,7 @@ import { forgetLight, paintLight } from "./lit.ts";
 import { oddsRow, runTag, waySign } from "./own.ts";
 import { forgetRack, renderRack } from "./rack.ts";
 import { forgetRackPlace, placeRack } from "./rackfold.ts";
-import { chairsTag, chairsTaken, forgetTrack, renderTrack, trackPlaque } from "./rooms.ts";
+import { chairsTaken, forgetTrack, renderTrack, trackPlaque } from "./rooms.ts";
 import { lineGone } from "./says.ts";
 import { type TallyView, tallyView } from "./tally.ts";
 
@@ -394,7 +394,6 @@ function renderPurseSide(run: RunView): void {
   const wasLv = level.dataset.n;
   level.replaceChildren(
     el("b", "", { text: `Level ${lv}` }),
-    chairsTag(run),
     bar,
     el("span", "k-dim", { text: need > 0 ? `${xp}/${need}` : "top" }),
     chairsTaken(run),

@@ -518,8 +518,9 @@ body.rack-open #rack .made .item {
 /*
  * A card: its cost's frame (the kit's `k-tier-N`), the art with the figure's traits on it, how many
  * the party has, the cost on a tab standing on the foot, and the name along the foot. Nothing touches
- * the frame: every word and tab sits `--in` inside its inner edge, on a backing in the foot's tone so
- * it reads over any picture. A name too long for the foot is cut short; its card says it whole.
+ * the frame: every word and tab sits `--in` inside its inner edge. The traits read over the picture
+ * by an ink edge, with no backing; the count and the cost sit on a backing in the foot's tone. A name
+ * too long for the foot is cut short; its card says it whole.
  *
  * Two looks. Small, a phone's and a narrow window's: the thin frame, the traits by their signs, the
  * name in the small face, the figure at the layout's size. Large, where five cards are wide enough for a name of eight letters in the
@@ -572,22 +573,31 @@ button.offer:active {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: var(--u);
 }
-.offer .tr,
 .offer .have,
 .offer .tab {
   background: var(--foot);
   white-space: nowrap;
 }
-/* A trait's line is one height whatever its sign (they are 11 pixels at most), so the lines under it never move. */
+/*
+ * A trait's line is one height whatever its sign (they are 11 pixels at most), so the lines under it
+ * never move; the lines touch. No backing: the sign has its own ink edge, and the name one pixel of
+ * its face in ink on four sides, so both read over the picture and cover little of it.
+ */
 .offer .tr {
+  --o: calc(var(--t-s) / 10);
   display: flex;
   align-items: center;
   box-sizing: border-box;
   height: calc(var(--u) * 11);
   gap: calc(var(--u) * 2);
   font: var(--f-small);
+  white-space: nowrap;
+  text-shadow:
+    var(--o) 0 var(--k-ink),
+    calc(var(--o) * -1) 0 var(--k-ink),
+    0 var(--o) var(--k-ink),
+    0 calc(var(--o) * -1) var(--k-ink);
 }
 /* Its sign from the line's top, so a sign a pixel shorter than another stands where it did. */
 .offer .tr > canvas {
@@ -595,7 +605,6 @@ button.offer:active {
 }
 .offer .tn {
   display: none;
-  padding-right: var(--u);
 }
 .offer .have {
   position: absolute;
@@ -655,12 +664,10 @@ button.offer:active {
     --fs: 2;
     --card-h: calc(var(--u) * 84);
   }
+  /* The figure low and to the right, so the traits at the top left are mostly over bare art. */
   .offer .art {
-    padding-left: calc(var(--u) * 12);
-  }
-  .offer .tr {
-    height: calc(var(--u) * 13);
-    padding: var(--u);
+    justify-items: end;
+    padding: 0 var(--in) 0 0;
   }
   .offer .tn {
     display: inline;
@@ -766,9 +773,6 @@ button.offer:active {
 #level .k-bar {
   width: 100%;
 }
-#level > .chairs {
-  grid-column: 1 / -1;
-}
 #level > .fielded {
   grid-column: 1 / -1;
   display: inline-flex;
@@ -785,6 +789,10 @@ button.offer:active {
   display: flex;
   gap: calc(var(--u) * 3);
   font: var(--f-small);
+}
+/* Every word in the column one line of its face tall, so its four lines fit at every size. */
+#level :is(b, .k-dim, .odds) {
+  line-height: 1;
 }
 .odds > .t1 {
   color: var(--k-tier-1);
@@ -1953,8 +1961,9 @@ body[data-rule] #says {
     .offer .traits {
       --u: var(--half);
       flex-direction: row;
+      gap: var(--u);
     }
-    .offer :is(.tr, .have) {
+    .offer .have {
       padding: 0;
       background: none;
     }

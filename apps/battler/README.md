@@ -32,7 +32,8 @@ kit's card: "The table needs the guild's server."
   leaf green with the acorn; two other regulars watch from logs where the window is wide enough.
 - **The figures.** Every one of the twenty-eight, the forest's trouble and bosses, and the few that
   are only ever summoned, each as its own small picture with a base the colour of what it costs and
-  its stars over its head. They breathe, turn to whoever they are fighting, lunge, recoil, strike a
+  a slim plate over its head: its health and mana on one bar, its stars as pips at the bar's left
+  (two silver, three gold, none for one), what it holds under the bar. They breathe, turn to whoever they are fighting, lunge, recoil, strike a
   pose of their own to use an ability, and tip over.
 - **Planning.** A figure may be dragged (mouse or finger) from the stall to the bench or the board,
   about the board and bench, onto another to change places, and onto the stall to sell it; the
@@ -97,10 +98,10 @@ kit's card: "The table needs the guild's server."
 - **Items.** Components, finished items and emblems sit on a rack. An emblem (what a charm boon
   gives) is drawn as its origin's sign; its card says its name, that its holder is of that origin
   too, and the origin as a chip, and a figure holding one has it among its chips and lights with it.
-  Every figure shows what it holds as a row of up to three small pictures under its base (under its
-  health bar in a fight), on both sides of the table, following it about and falling with it: a
-  finished item or an emblem has a gold edge, a loose component the plain dark one, each on a small
-  dark tile; pointing at one shows that item's card.
+  Every figure shows what it holds as a row of up to three small boxes under its plate's bar, on
+  both sides of the table, while planning and in a fight, following it about: each is the item's own
+  picture drawn small (by hand, in `icons.txt`), in a box with an ink edge; pointing at one shows
+  that item's card.
   The row is never wider than a hex, so it never reaches a neighbour on its row, and it is drawn
   with its figure, so a nearer figure stands in front of it.
 - **Handing over and making items.** An item may be dragged onto a figure, and a component onto
@@ -389,7 +390,7 @@ timed can be stepped by hand.
 | `src/screen/ui/rooms.ts`      | The track's pips (an endless run's past room 15 too), each room's card, an endless run's chairs       |
 | `src/screen/ui/tally.ts`      | The tally as rows and bars, two parties side by side (one at a time on a phone), with its tabs        |
 | `src/screen/ui/fightsheet.ts` | The sheet of a fight that is over: after it with the takings and "Carry on", or "Last fight"          |
-| `src/screen/held.ts`          | What a figure holds: where the row of small pictures under its base goes, drawing it, hitting it      |
+| `src/screen/held.ts`          | What a figure holds: where the row of small boxes under its plate's bar goes, drawing it, hitting it  |
 | `src/screen/ui/cards.ts`      | What each thing says about itself, registered with the kit's cards, and the references to them        |
 | `src/screen/ui/lit.ts`        | Which trait the cards have pointed at or pinned, and marking the chips and the stall for it           |
 | `src/screen/ui/picks.ts`      | Three cards to choose from                                                                            |

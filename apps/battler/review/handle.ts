@@ -46,9 +46,9 @@ import { COLS } from "@sequoia-leaf/raid/hex.ts";
 import { fightEvents, fightState, startFight } from "../src/screen/fightview.ts";
 import { carryOn, doSpeed, enterRun, lookBack, setOut, sitDown, startOn, toFront } from "../src/screen/flow.ts";
 import { grab, hover, overStall, tapPawn, unpick } from "../src/screen/hand.ts";
-import { heldRow, heldTop } from "../src/screen/held.ts";
 import { NUDGES } from "../src/screen/logic.ts";
 import { pawns, spotOfPawn, syncPawns } from "../src/screen/pawns.ts";
+import { heldOver } from "../src/screen/plates.ts";
 import { arrive } from "../src/screen/scene.ts";
 import { type Ended, endedIn } from "../src/screen/screen.ts";
 import * as stage from "../src/screen/stage.ts";
@@ -481,7 +481,7 @@ export function openHandle(): void {
       const p = pawns.get(id);
       const spot = spotOfPawn(p);
       const piece = S.run && spot ? pieceAt(S.run, spot) : null;
-      const at = p && piece ? heldRow(piece.items, p.x, heldTop(p.y, false))[i] : undefined;
+      const at = p && piece ? heldOver(p.kind, piece.items, p.x, p.y, p.phase)[i] : undefined;
       return at ? stage.boardToPage(at.x + at.w / 2, at.y + at.h / 2) : null;
     },
     rack() {

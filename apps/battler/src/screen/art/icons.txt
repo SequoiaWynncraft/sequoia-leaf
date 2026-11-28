@@ -266,7 +266,8 @@ S...n...S
 # ---------- items ----------
 # A component is 12 by 12, a colour and a shape of its own (`COMPONENT_TONE` in `pal.ts`), and 5 by 5
 # as a figure holds it (`held`). A finished item is 10 by 10, drawn in its two components' colours,
-# and framed in their light tones when it is shown (`icons.ts`).
+# and framed in their light tones when it is shown (`icons.ts`); 5 by 5 as a figure holds it, drawn
+# by hand from the large one in its own colours (`held`).
 
 item thorn
 .........RR.
@@ -407,6 +408,13 @@ wWw.mm....
 .w...mm...
 ......mm..
 
+held blackthorn
+.w.m.
+..m.w
+.m...
+w.m..
+...m.
+
 item wasptail
 .......YY.
 ......YyyY
@@ -418,6 +426,13 @@ item wasptail
 .RRy......
 .rR.......
 r.........
+
+held wasptail
+...yY
+..RRy
+.yy..
+RR...
+r....
 
 item glowthorn
 .......U..
@@ -431,6 +446,13 @@ UrrhRU..u.
 UrhRU.....
 .UUU......
 
+held glowthorn
+...U.
+..UrU
+.UrU.
+UrhU.
+.UU.u
+
 item hedgehog
 ..r.r.r...
 .rRrRrR...
@@ -442,6 +464,13 @@ reEEEEefff
 .eeeeeeff.
 ..e..e....
 ..........
+
+held hedgehog
+r.r..
+RERr.
+ERERf
+eEEfk
+.e.e.
 
 item conker
 ....R.....
@@ -455,6 +484,13 @@ lgGGRRGGgl
 lgGGRRGGgl
 ..ggggggl.
 
+held conker
+..r..
+lgGgl
+gRRGg
+gRhRg
+lgggl
+
 item hummingbird
 ..........
 ...ll.....
@@ -466,6 +502,13 @@ kklkLl....
 ....hllLLl
 .....l.lll
 ..........
+
+held hummingbird
+.lL..
+klL..
+.hLl.
+..hLl
+...ll
 
 item mothlantern
 ....oo....
@@ -479,6 +522,13 @@ item mothlantern
 ..oooooo..
 ...oyyo...
 
+held mothlantern
+..o..
+.oyo.
+oyUyo
+oUyUo
+.ooo.
+
 item quilt
 ..ee..ee..
 ..ey..ye..
@@ -490,6 +540,13 @@ eyyfeefyye
 eyyfeefyye
 effyeeyffe
 .eeeeeeee.
+
+held quilt
+.e.e.
+eyeye
+efyfe
+eyfye
+.eee.
 
 item honeycake
 ..........
@@ -503,6 +560,13 @@ lGGGGGGGGl
 .lGgGGgGl.
 ..llllll..
 
+held honeycake
+..Y..
+.yYy.
+oyyyo
+ooooo
+lGGGl
+
 item fairyring
 ...rr.rr..
 ..rwr.rrr.
@@ -514,6 +578,13 @@ rwr....rwr
 ..rrr.rwr.
 ...c...c..
 ..........
+
+held fairyring
+.rwr.
+r...r
+w...w
+r...r
+.rwr.
 
 item lichen
 ...ffff...
@@ -527,6 +598,13 @@ item lichen
 ..eEUuEe..
 ...eeee...
 
+held lichen
+.fff.
+.f.f.
+eEUEe
+eUuUe
+.eEe.
+
 item stewpot
 ..U...U...
 ...U...U..
@@ -538,6 +616,13 @@ AaGGGGGGaA
 .auUuuuua.
 ..aaaaaa..
 ..a....a..
+
+held stewpot
+.U.U.
+AAAAA
+AlGlA
+auuua
+.aaa.
 
 item stump
 ..nnnnnn..
@@ -551,6 +636,13 @@ nooNNNNooN
 .nooooooN.
 ..NNNNNN..
 
+held stump
+.nnn.
+noooN
+noNoN
+noooN
+.NNN.
+
 item hollowlog
 ..........
 ....l.l.l.
@@ -563,6 +655,13 @@ fmmfEEEfEe
 ..g...G...
 ..........
 
+held hollowlog
+..lGl
+fGGGe
+fmEEe
+fmEfe
+.fffe
+
 item hoard
 ....BB....
 ...BnnB...
@@ -574,6 +673,13 @@ BncBnnBncB
 BnnBBBBnnB
 BncB..BncB
 .BB....BB.
+
+held hoard
+..c..
+.nBn.
+cnBnc
+nBnBn
+.....
 
 # ---------- tools: used once, dropped on a figure ----------
 
