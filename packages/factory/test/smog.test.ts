@@ -193,6 +193,18 @@ describe("smog on a plot", () => {
     expect([level(y) > 0, y.smog.level[meadow]]).toEqual([true, 0]);
   });
 
+  test("its card counts what each dirty piece makes as that piece's own card says it: no more than its belt carries", () => {
+    const y = workings();
+    const i = breakers(y, 1)[0] ?? 0;
+    const ahead = F.nextOf(y, i);
+    must(y, { do: "build", kind: "belt", x: ahead % F.LAND.w, y: Math.floor(ahead / F.LAND.w), dir: 0 });
+    // A grade III breaker breaks 200 a minute; the grade I belt it hands to carries 150, and so it makes 150 smog.
+    const rate = F.machineRate(y, i);
+    expect([rate.nominal, rate.effective]).toEqual([200, F.carried(1)]);
+    expect(F.smogLine(y, WORKINGS)).toContain(`Made ${F.carried(1)} /min.`);
+    expect(F.madeOn(y, WORKINGS)).toBe(rate.effective * (F.SMOG_OF[F.BREAKER] ?? 0));
+  });
+
   test("is kept by its plot's name and checked; a yard with none keeps and checks as before", () => {
     const y = workings();
     const clean = F.encode(y);

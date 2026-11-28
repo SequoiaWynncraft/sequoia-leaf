@@ -106,19 +106,7 @@ export {
 export type { Ports } from "./kinds/kind.ts";
 export type { Hooks, KindDef, Words } from "./kinds/kind.ts";
 export * from "./yard.ts";
-export {
-  clearsAt,
-  clearsLine,
-  countSmog,
-  madeOn,
-  redwoodClears,
-  setLevel,
-  shareAt,
-  smogLine,
-  smogPace,
-  smogTrouble,
-  standingOn,
-  stepOf,
-} from "./smog.ts";
+export { clearsAt, countSmog, setLevel, shareAt, smogPace, standingOn, stepOf } from "./smog.ts";
+export { clearsLine, madeOn, redwoodClears, smogLine, smogTrouble } from "./smogwords.ts";
 export { SMOG } from "./content/smog.ts";
 export { MIXES } from "./content/mixes.ts";
