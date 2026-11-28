@@ -167,7 +167,7 @@ export function ringsFound(order: readonly number[], found: readonly number[][],
     exits: Uint8Array.from(exits),
     sorted: Int32Array.from(sorted),
     ringOf: Int32Array.from(sorted, (i) => onRing.get(i) ?? -1),
-    done: new Uint8Array(onRing.size),
+    done: new Int32Array(onRing.size),
   };
 }
 
@@ -179,7 +179,7 @@ export const NO_RINGS: Rings = {
   exits: new Uint8Array(0),
   sorted: new Int32Array(0),
   ringOf: new Int32Array(0),
-  done: new Uint8Array(0),
+  done: new Int32Array(0),
 };
 
 /** The ring a piece's own tile is on, or -1. */

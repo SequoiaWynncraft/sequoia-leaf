@@ -23,8 +23,8 @@ export interface Rings {
   /** The ring tiles by tile, ascending, and each one's ring (`ringAt`). */
   readonly sorted: Int32Array;
   readonly ringOf: Int32Array;
-  /** Room for which ring tiles have handed on this tick (`round.ts`). */
-  readonly done: Uint8Array;
+  /** For each ring tile, the last tick it was done handing on in (`round.ts`): this tick's, once it is. */
+  readonly done: Int32Array;
 }
 
 /** The yard's plumbing, worked out from what stands where (`wire.ts`). */
