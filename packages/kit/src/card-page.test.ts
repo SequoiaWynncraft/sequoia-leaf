@@ -52,6 +52,25 @@ describe("a card drawn again", () => {
       expect(words(card)).toContain(`Holds ${i}`);
     }
   });
+  test("as a sheet, after it passed by as a floating card, keeps no floating place on its node", () => {
+    const page = shown.page;
+    if (!page) throw new Error("no page");
+    // A screen where a finger's card is a sheet.
+    Object.defineProperty(globalThis, "window", { value: { ...WINDOW, matchMedia: () => ({ matches: true }) } });
+    register("gauge", () => ({ name: "Gauge" }));
+    // A mouse rests on a thing: its passing card, placed beside it.
+    const at = { x: 600, y: 300, w: 32, h: 32 };
+    const from = {};
+    deck.rest("gauge:1", at, "mouse", from);
+    const [card] = cards(page.body);
+    if (!card) throw new Error("no card");
+    expect(card.style.transform).toMatch(/^translate\(/);
+    // Then the same thing is tapped: the same card, drawn again into its node, now a sheet along an edge.
+    deck.pin("gauge:1", at, "touch", from);
+    expect(cards(page.body)[0]).toBe(card);
+    expect(card.className.split(" ")).toContain("sheet");
+    expect(card.style.transform).toBe("");
+  });
   test("for a thing that has left the page, with no place kept, is put away, not shown at the page's corner", () => {
     const page = shown.page;
     if (!page) throw new Error("no page");

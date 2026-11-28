@@ -442,6 +442,8 @@ function placeNow(card: HTMLElement, o: Open, how: "keep" | "follow" | "new"): b
   if (card.classList.contains("sheet")) {
     const s = sheet(r.height, spot, r0);
     card.classList.toggle("top", s.edge === "top");
+    // A sheet stands where its edge's rule puts it: not where it stood as a floating card drawn into the same node.
+    card.style.transform = "";
     // As tall as that edge's own rule lets it be, measured there, and no taller than its room: the stricter wins.
     const there = card.getBoundingClientRect().height;
     card.style.maxHeight = s.most < there ? `${s.most}px` : "";
