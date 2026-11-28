@@ -3,7 +3,7 @@
  * dashes round an area marked, the lines between pylons, and when a plan's picture has been painted
  * again. A pen here only writes down the boxes it is asked for; canvases are the kit's stand-ins.
  */
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 
 import { create, step } from "@sequoia-leaf/factory";
 import { bareLand } from "@sequoia-leaf/factory/test/land.ts";
@@ -85,6 +85,19 @@ const strung = (...ends: number[][]): Parameters<Wires["draw"]>[2] => ({
 
 describe("the lines between pylons", () => {
   const view = { x: 0, y: 0, w: 400, h: 300 };
+  // The glint reads the yard (gold before Spark, cream from it) and the clock (where it runs), which
+  // other files leave as they like: these set both, and put back what was there.
+  const was = { world: S.world, t: S.t };
+  beforeEach(() => {
+    was.world = S.world;
+    was.t = S.t;
+    S.world = create({ land: bareLand(18, 9, [], [12, 4]), tier: 4, seed: 1 });
+    S.t = 0;
+  });
+  afterEach(() => {
+    S.world = was.world;
+    S.t = was.t;
+  });
 
   test("every pixel of a line in view is drawn, faint, and the three under its glint in the glint's colour", () => {
     const { pen: g, boxes } = pen();
