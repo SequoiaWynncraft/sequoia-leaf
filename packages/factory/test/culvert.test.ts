@@ -10,7 +10,7 @@ import { describe, expect, test } from "bun:test";
 import * as F from "../src/index.ts";
 import { learn } from "./goals.ts";
 import { bareLand } from "./land.ts";
-import { give, must } from "./yards.ts";
+import { give, must, upgrading } from "./yards.ts";
 
 type Rec = Record<string, unknown>;
 const plank = F.item("plank");
@@ -105,7 +105,7 @@ describe("a deep culvert", () => {
     expect(spent(y, { do: "build", kind: "tunnel", x: 2, y: 4, dir: 0, grade: 2, span: 12 })).toBe(78 - 26);
     const tiles = [F.at(y, 2, 4), F.at(y, 15, 4)];
     expect(F.upgradePrice(y, tiles)).toBe(208 - 78);
-    expect(spent(y, { do: "upgrade", tiles })).toBe(208 - 78);
+    expect(spent(y, upgrading(y, tiles))).toBe(208 - 78);
     expect(spent(y, { do: "build", kind: "tunnel", x: 2, y: 4, dir: 0, grade: 1, span: 12 })).toBe(26 - 208);
   });
 

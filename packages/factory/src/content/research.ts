@@ -2,6 +2,7 @@
  * Research: from tier 3 on, unlocks are studied. A piece of research costs folios, which Studies
  * take in; it can be studied once its tier is open and what it needs is known or done.
  */
+import { GRADE_4_RESEARCH } from "./grade4.ts";
 import type { Wants } from "./items.ts";
 import type { Unlocks } from "./nodes.ts";
 import { TIER_7_RESEARCH } from "./tier7.ts";
@@ -428,4 +429,6 @@ export const RESEARCH: readonly ResearchInfo[] = [
   // Tier 7, the signal (`tier7.ts`).
   ...TIER_7_RESEARCH,
   ...TIER_8_RESEARCH,
+  // Grade 4 for gatherers and lines (`grade4.ts`), tier 7's, after tier 8's.
+  ...GRADE_4_RESEARCH,
 ];

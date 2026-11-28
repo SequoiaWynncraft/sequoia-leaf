@@ -9,7 +9,7 @@ import { describe, expect, test } from "bun:test";
 import * as F from "../src/index.ts";
 import { beforeReach } from "./goals.ts";
 import { bareLand } from "./land.ts";
-import { bought, must } from "./yards.ts";
+import { bought, must, upgrading } from "./yards.ts";
 
 const SALVAGE = F.item("salvage");
 const SLAG = F.item("slag");
@@ -120,7 +120,7 @@ describe("the breaker", () => {
     F.flow(y, made, F.counts());
     expect([made[F.item("copper")], made[SLAG]]).toEqual([carried * 0.4, carried * 0.15]);
     // Onto a grade III belt it gives all it breaks.
-    must(y, { do: "upgrade", tiles: [F.at(y, 6, 4)] });
+    must(y, upgrading(y, [F.at(y, 6, 4)]));
     expect(F.machineRate(y, i)).toMatchObject({ nominal: 200, effective: 200, most: null });
   });
 

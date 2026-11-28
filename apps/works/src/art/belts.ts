@@ -7,16 +7,18 @@
  * Each tile is drawn once for every step of the march and kept.
  */
 
-import type { Dir } from "@sequoia-leaf/factory";
+import { ACROSS, CARRY, type Dir } from "@sequoia-leaf/factory";
 import { BARK, CREAM, GOLD, INK, SKY, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { paint } from "@sequoia-leaf/kit/pix.ts";
 import { clamp } from "@sequoia-leaf/kit/util.ts";
 
-import { CLAY, IRON } from "./pal.ts";
+import { CLAY, IRON, LILAC } from "./pal.ts";
 
 export const TILE = 16;
 /** How many steps the march has before it comes round: a chevron every tile, a slat every four pixels. */
 export const STEPS = 16;
+/** How far across its tile a thing moves in a tick on a belt, tunnel, splitter, joiner or sorter of each grade. */
+export const ALONG = CARRY.map((pace) => pace / ACROSS);
 
 /** For each side of a tile (east, south, west, north): no arm, an arm things come in along, one they leave by, or a way out that is shut. */
 export type Arm = 0 | 1 | 2 | 3;
@@ -39,22 +41,27 @@ interface Wood {
   mark: string;
   rail: string;
   railLit: string;
+  /** How many pixels apart its slats are: 4, or 8 for plates wide enough not to seem to run backwards at a tile a tick. */
+  every: number;
 }
 /**
  * Plain slats, as a belt of the first grade lies in the yard; the lighter slats its picture has on a
- * button; iron rollers on an iron bed between brass rails, the third grade; and waxed boards, pale,
- * with a bright edge to the bed, the second.
+ * button; iron rollers on an iron bed between brass rails, the third grade; waxed boards, pale, with
+ * a bright edge to the bed, the second; and the fourth, the Star era's: wide plates on a bed of the
+ * darkest iron, between iron rails lit lilac along the top, the chevron the one small lilac light a
+ * Star piece wears. Darker than the third, not brighter.
  */
 const WOODS: readonly Wood[] = [
-  { bed: BARK[0], slat: BARK[1], mark: BARK[3], rail: BARK[2], railLit: BARK[3] },
-  { bed: BARK[0], slat: BARK[2], mark: GOLD[0], rail: BARK[3], railLit: BARK[4] },
-  { bed: IRON[1], slat: IRON[3], mark: GOLD[1], rail: GOLD[0], railLit: GOLD[1] },
-  { bed: BARK[1], slat: BARK[3], mark: GOLD[1], rail: BARK[4], railLit: GOLD[0] },
+  { bed: BARK[0], slat: BARK[1], mark: BARK[3], rail: BARK[2], railLit: BARK[3], every: 4 },
+  { bed: BARK[0], slat: BARK[2], mark: GOLD[0], rail: BARK[3], railLit: BARK[4], every: 4 },
+  { bed: IRON[1], slat: IRON[3], mark: GOLD[1], rail: GOLD[0], railLit: GOLD[1], every: 4 },
+  { bed: BARK[1], slat: BARK[3], mark: GOLD[1], rail: BARK[4], railLit: GOLD[0], every: 4 },
+  { bed: IRON[0], slat: IRON[2], mark: LILAC[3], rail: IRON[2], railLit: LILAC[2], every: 8 },
 ];
 /** What a belt, splitter, joiner or sorter of a grade is drawn in, in the yard: `tier` for `beltTile`. */
-export const woodOf = (grade: number): number => (grade >= 3 ? 2 : grade >= 2 ? 3 : 0);
-/** How many of the grade's marks a belt of a grade wears in the corner of its tile: one for the second, two for the third. */
-export const marksOf = (grade: number): number => Math.max(0, Math.min(2, grade - 1));
+export const woodOf = (grade: number): number => (grade >= 4 ? 4 : grade >= 3 ? 2 : grade >= 2 ? 3 : 0);
+/** How many of the grade's marks a belt of a grade wears in the corner of its tile: one for the second, two for the third, three for the fourth. */
+export const marksOf = (grade: number): number => Math.max(0, Math.min(3, grade - 1));
 /** The mark of a grade above the first: a stud of muted brass with a dark edge, as every graded piece wears (`machines.ts`, `PIP`). */
 const STUD = [
   [INK, INK, INK, INK],
@@ -62,8 +69,25 @@ const STUD = [
   [INK, GOLD[0], GOLD[0], INK],
   [INK, INK, INK, INK],
 ] as const;
-/** How far apart two studs stand. */
-const STUD_STEP = 3;
+/**
+ * Where each of a grade's studs stands in its mark, from its corner, as many as the grade has above
+ * the first: side by side for the second and third, and the fourth's third under the first, so that
+ * the mark is no wider than the third's and hides no more of a gatherer's hat.
+ */
+export const STUDS_AT: readonly (readonly [number, number])[] = [
+  [0, 0],
+  [3, 0],
+  [0, 3],
+];
+/** The colour of a pixel of a mark of so many studs (`STUDS_AT`), from its corner: undefined where no stud is. */
+function studAt(x: number, y: number, marks: number): string | undefined {
+  for (let k = Math.min(marks, STUDS_AT.length) - 1; k >= 0; k--) {
+    const [sx = 0, sy = 0] = STUDS_AT[k] ?? [];
+    const col = STUD[y - sy]?.[x - sx];
+    if (col !== undefined) return col;
+  }
+  return undefined;
+}
 
 /**
  * The paint a player can give a line, by its `tint`, 1 to 6: where the yard's light falls on it and
@@ -98,7 +122,7 @@ const cache = new Map<number, HTMLCanvasElement>();
  * most eight times those of one with no way shut.
  */
 export function beltTile(a: Arms, main: Dir, step: number, tier: number, tint = 0, marks = 0): HTMLCanvasElement {
-  const key = ((((a * 4 + main) * STEPS + step) * WOODS.length + tier) * 7 + tint) * 3 + marks;
+  const key = ((((a * 4 + main) * STEPS + step) * WOODS.length + tier) * 7 + tint) * 4 + marks;
   const had = cache.get(key);
   if (had) return had;
   const wood = WOODS[tier] ?? WOODS[0];
@@ -142,10 +166,8 @@ export function beltTile(a: Arms, main: Dir, step: number, tier: number, tint = 
   };
   const tile = paint(TILE, TILE, (x, y) => {
     // The grade's studs, in the corner: over the rail there, whichever way the belt runs.
-    if (y < STUD.length && x < STUD.length + (marks - 1) * STUD_STEP && marks > 0) {
-      const col = STUD[y]?.[x < STUD.length ? x : x - (marks - 1) * STUD_STEP];
-      if (col !== undefined) return col;
-    }
+    const stud = studAt(x, y, marks);
+    if (stud !== undefined) return stud;
     const shut = bar(x, y);
     if (shut) return shut;
     const p = part(x, y);
@@ -167,7 +189,7 @@ export function beltTile(a: Arms, main: Dir, step: number, tier: number, tint = 
       const k = (((s - step) % STEPS) + STEPS) % STEPS;
       if (across < 3 && (k === 2 - Math.floor(across) || (across < 1 && k === 3))) return wood.mark;
     }
-    return (((s - step) % 4) + 4) % 4 === 0 ? wood.slat : wood.bed;
+    return (((s - step) % wood.every) + wood.every) % wood.every === 0 ? wood.slat : wood.bed;
   });
   cache.set(key, tile);
   return tile;

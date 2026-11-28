@@ -1852,7 +1852,8 @@ describe("the assembler in the Works", () => {
     const commands = [
       { id: "a-1", do: "build", kind: "assembler", ...near(-6, -4), dir: 0, tick },
       { id: "a-2", do: "recipe", ...near(-5, -3), item: "lantern", tick },
-      { id: "a-3", do: "upgrade", tiles: [tileNear(-7, -5)], grade: 2, kind: "assembler", from: 1, tick },
+      // At the price its card shows: grade II's less grade I's.
+      { id: "a-3", do: "upgrade", tiles: [tileNear(-7, -5)], grade: 2, kind: "assembler", from: 1, price: 800, tick },
     ];
     const answered = await send("POST", "/v1/game/play/works", { commands });
     const { results, state } = Schema.decodeUnknownSync(Answered)(await answered.json());

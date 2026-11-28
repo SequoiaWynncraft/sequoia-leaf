@@ -1,0 +1,357 @@
+{
+  "text": "{\"v\":13,\"land\":{\"w\":112,\"h\":84,\"x\":48,\"y\":36},\"seed\":5,\"tick\":50,\"charge\":0,\"at\":0,\"till\":0,\"bank\":6,\"told\":59,\"away\":{\"seconds\":900,\"coins\":12,\"made\":{\"plank\":40}},\"seen\":{\"tick\":50,\"till\":0,\"depot\":{\"plank\":25}},\"plots\":[\"yard\",\"meadow\",\"workings\"],\"felled\":[6438],\"clearing\":{\"plot\":\"flats\",\"start\":\"case-6\",\"want\":{\"kit\":450,\"beacon\":225},\"filled\":{\"kit\":1}},\"cleared\":[\"workings\"],\"begun\":2,\"smog\":{\"hollow\":[40,7],\"grove\":[12,7]},\"launches\":{\"ever\":{\"any\":2,\"dish\":1},\"spent\":{\"any\":1},\"levels\":{\"roots\":1}},\"done\":[\"planks\",\"ingots\",\"tools\",\"gears\",\"boiler\",\"crates\",\"culvert\",\"signs\",\"banners\",\"stew\",\"chain\",\"drawing\",\"wax\",\"rakes\",\"windows\",\"shells\",\"hall\",\"oilpress\",\"workshop\",\"flywheel\",\"tooling\",\"sorter\",\"planchest\",\"carttrack\",\"nightshift\",\"upgrading\",\"brassfolio\",\"lanterns\",\"flags\",\"longculvert\",\"secondcart\",\"brassfittings\",\"shelves\",\"kits\",\"roadmill\",\"rollcall\",\"tooling3\",\"flywheel2\",\"nightshift2\",\"studydesk\",\"waysin\",\"pipework\",\"fireworks\",\"roadridge\",\"market\",\"lenses\",\"roadcamp\",\"clockmaking\",\"observatory\",\"orreryplans\",\"sky\",\"nightshift3\",\"wholeyard\",\"longreach\",\"felling\",\"launch\",\"starfolio\",\"gatherer4\",\"lines4\"],\"hand\":\"survey\",\"queue\":[\"stakes\"],\"line\":[],\"got\":{\"survey\":{\"tool\":1}},\"board\":[{\"id\":0,\"title\":\"Frames for the market stalls\",\"from\":\"The market stalls\",\"line\":\"New stalls for market day. The old ones have been leaning on each other.\",\"want\":{\"frame\":290},\"pay\":270,\"filled\":{\"frame\":1},\"starts\":50},{\"id\":1,\"title\":\"Tools for Pipwick\",\"from\":\"Pipwick\",\"line\":\"Pipwick borrowed a hammer, and now nobody can find Pipwick's hammer.\",\"want\":{\"tool\":230},\"pay\":245,\"filled\":{},\"starts\":50},{\"id\":2,\"title\":\"Engines and ingots for Fika\",\"from\":\"Fika\",\"line\":\"Fika sleeps on the bellows and would like them warmer. An engine, then. Meow.\",\"want\":{\"ingot\":540,\"engine\":75},\"pay\":440,\"filled\":{},\"starts\":50},{\"id\":3,\"title\":\"Bricks for the gnomes\",\"from\":\"The gnomes\",\"line\":\"The wall is knee high now. The gnomes have plans.\",\"want\":{\"brick\":780},\"pay\":225,\"filled\":{},\"starts\":50},{\"id\":4,\"title\":\"Frames for the market stalls\",\"from\":\"The market stalls\",\"line\":\"New stalls for market day. The old ones have been leaning on each other.\",\"want\":{\"frame\":330},\"pay\":310,\"filled\":{},\"starts\":50}],\"serial\":5,\"handed\":0,\"swapAt\":0,\"depot\":{\"plank\":25},\"sold\":0,\"paid\":0,\"cells\":\"CMYigIBIBACAgEgEjgaAgFgDAgCFgCACAINADACIgAIAh4ABCv8A/wACh4ABBg==\",\"blueprints\":[\"AAAAgAQAAQCABAACAIAE\",{\"whole\":\"ADUngAMANieAAwA3J4ADADYuiAMCBTcuEAIDOC5ADAg5LiAHOi4EAg==\"},\"AAAAiAMCBQEAEAIDAgBADAgDACAHBAAEAg==\",null],\"history\":[\"BmNhc2UtOQApDai4UAADBAQEA8UiQABAAEA=\",\"B2Nhc2UtMTUAvwH8VomRAAMEBAQDxSLAEAMAwBADAMAQAw==\",\"B2Nhc2UtMTcATlPBqM0AAQEBxSLAEAQ=\"],\"stamp\":\"18a43344ee0341.hx6alz\"}",
+  "read": {
+    "coins": { "till": 0, "bank": 6, "paid": 0, "sold": 0, "handed": 0, "serial": 5 },
+    "told": 59,
+    "depot": [["plank", 25]],
+    "seen": { "tick": 50, "till": 0, "depot": [["plank", 25]] },
+    "plots": ["yard", "meadow", "workings"],
+    "cleared": ["workings"],
+    "clearing": {
+      "plot": "flats",
+      "start": "case-6",
+      "want": [
+        ["beacon", 225],
+        ["kit", 450]
+      ],
+      "filled": [["kit", 1]]
+    },
+    "begun": 2,
+    "smog": [
+      ["hollow", 40, 7],
+      ["grove", 12, 7]
+    ],
+    "felled": [[6, 21]],
+    "spare": [
+      ["belt", 9],
+      ["gatherer", 1],
+      ["mill", 1]
+    ],
+    "goals": {
+      "done": [
+        "planks",
+        "ingots",
+        "tools",
+        "gears",
+        "boiler",
+        "crates",
+        "culvert",
+        "signs",
+        "banners",
+        "stew",
+        "chain",
+        "drawing",
+        "wax",
+        "rakes",
+        "windows",
+        "shells",
+        "hall",
+        "oilpress",
+        "workshop",
+        "flywheel",
+        "tooling",
+        "sorter",
+        "planchest",
+        "carttrack",
+        "nightshift",
+        "upgrading",
+        "brassfolio",
+        "lanterns",
+        "flags",
+        "longculvert",
+        "secondcart",
+        "brassfittings",
+        "shelves",
+        "kits",
+        "roadmill",
+        "rollcall",
+        "tooling3",
+        "flywheel2",
+        "nightshift2",
+        "studydesk",
+        "waysin",
+        "pipework",
+        "fireworks",
+        "roadridge",
+        "market",
+        "lenses",
+        "roadcamp",
+        "clockmaking",
+        "observatory",
+        "orreryplans",
+        "sky",
+        "nightshift3",
+        "wholeyard",
+        "longreach",
+        "felling",
+        "launch",
+        "starfolio",
+        "gatherer4",
+        "lines4"
+      ],
+      "hand": "survey",
+      "queue": ["stakes"],
+      "line": []
+    },
+    "got": [["survey", [["tool", 1]]]],
+    "board": {
+      "orders": [
+        [
+          0,
+          "Frames for the market stalls",
+          "The market stalls",
+          "New stalls for market day. The old ones have been leaning on each other.",
+          270,
+          50,
+          [["frame", 290]],
+          [["frame", 1]]
+        ],
+        [
+          1,
+          "Tools for Pipwick",
+          "Pipwick",
+          "Pipwick borrowed a hammer, and now nobody can find Pipwick's hammer.",
+          245,
+          50,
+          [["tool", 230]],
+          []
+        ],
+        [
+          2,
+          "Engines and ingots for Fika",
+          "Fika",
+          "Fika sleeps on the bellows and would like them warmer. An engine, then. Meow.",
+          440,
+          50,
+          [
+            ["engine", 75],
+            ["ingot", 540]
+          ],
+          []
+        ],
+        [
+          3,
+          "Bricks for the gnomes",
+          "The gnomes",
+          "The wall is knee high now. The gnomes have plans.",
+          225,
+          50,
+          [["brick", 780]],
+          []
+        ],
+        [
+          4,
+          "Frames for the market stalls",
+          "The market stalls",
+          "New stalls for market day. The old ones have been leaning on each other.",
+          310,
+          50,
+          [["frame", 330]],
+          []
+        ]
+      ],
+      "swapAt": 0
+    },
+    "blueprints": {
+      "open": 4,
+      "kept": [
+        [
+          0,
+          [
+            false,
+            [
+              [
+                ["belt", 0, 0, 0, 0, null],
+                [true, 0, 0, 0, 0, 4]
+              ],
+              [
+                ["belt", 1, 0, 0, 0, null],
+                [true, 0, 0, 0, 0, 4]
+              ],
+              [
+                ["belt", 2, 0, 0, 0, null],
+                [true, 0, 0, 0, 0, 4]
+              ]
+            ]
+          ]
+        ],
+        [
+          1,
+          [
+            true,
+            [
+              [
+                ["belt", 5, 3, 0, 0, null],
+                [true, 0, 0, 0, 0, 3]
+              ],
+              [
+                ["belt", 6, 3, 0, 0, null],
+                [true, 0, 0, 0, 0, 3]
+              ],
+              [
+                ["belt", 7, 3, 0, 0, null],
+                [true, 0, 0, 0, 0, 3]
+              ],
+              [
+                ["belt", 6, 10, 0, 0, null],
+                [true, 3, 0, 0, 0, 2]
+              ],
+              [
+                ["splitter", 7, 10, 0, 0, null],
+                [true, 0, 2, 0, 0, 1]
+              ],
+              [
+                ["bench", 8, 10, 0, 0, "tool"],
+                [true, 0, 0, 0, 0, 1]
+              ],
+              [
+                ["crate", 9, 10, 0, 0, null],
+                [false, 0, 0, 0, 0, 1]
+              ],
+              [
+                ["tunnel", 10, 10, 0, 2, null],
+                [true, 0, 0, 0, 0, 1]
+              ]
+            ]
+          ]
+        ],
+        [
+          2,
+          [
+            false,
+            [
+              [
+                ["belt", 0, 0, 0, 0, null],
+                [true, 3, 0, 0, 0, 2]
+              ],
+              [
+                ["splitter", 1, 0, 0, 0, null],
+                [true, 0, 2, 0, 0, 1]
+              ],
+              [
+                ["bench", 2, 0, 0, 0, "tool"],
+                [true, 0, 0, 0, 0, 1]
+              ],
+              [
+                ["crate", 3, 0, 0, 0, null],
+                [false, 0, 0, 0, 0, 1]
+              ],
+              [
+                ["tunnel", 4, 0, 0, 2, null],
+                [true, 0, 0, 0, 0, 1]
+              ]
+            ]
+          ]
+        ]
+      ]
+    },
+    "away": { "seconds": 900, "coins": 12, "made": [["plank", 40]] },
+    "pieces": [
+      {
+        "at": [6, 3],
+        "kind": "belt",
+        "set": [0, 4, 0, 0, 0, 0, 0, null],
+        "free": 1,
+        "span": 0,
+        "carries": [null, 0],
+        "holds": null,
+        "under": null
+      },
+      {
+        "at": [7, 3],
+        "kind": "belt",
+        "set": [0, 4, 0, 0, 0, 0, 0, null],
+        "free": 1,
+        "span": 0,
+        "carries": [null, 0],
+        "holds": null,
+        "under": null
+      },
+      {
+        "at": [6, 10],
+        "kind": "belt",
+        "set": [0, 2, 3, 0, 0, 0, 0, null],
+        "free": 1,
+        "span": 0,
+        "carries": [null, 0],
+        "holds": null,
+        "under": null
+      },
+      {
+        "at": [7, 10],
+        "kind": "splitter",
+        "set": [0, 1, 0, 0, 2, 0, 0, null],
+        "free": 0,
+        "span": 0,
+        "carries": [null, 0],
+        "holds": null,
+        "under": null
+      },
+      {
+        "at": [8, 10],
+        "kind": "bench",
+        "set": [0, 1, 0, 0, 0, 0, 0, "tool"],
+        "free": 0,
+        "span": 0,
+        "carries": [null, 0],
+        "holds": {
+          "out": null,
+          "also": null,
+          "more": 0,
+          "making": null,
+          "work": 0,
+          "mix": 0,
+          "quarter": 0,
+          "open": 1,
+          "fuel": 0,
+          "stock": []
+        },
+        "under": null
+      },
+      {
+        "at": [9, 10],
+        "kind": "crate",
+        "set": [0, 0, 0, 0, 0, 0, 0, null],
+        "free": 0,
+        "span": 0,
+        "carries": [null, 0],
+        "holds": {
+          "out": null,
+          "also": null,
+          "more": 0,
+          "making": null,
+          "work": 0,
+          "mix": 0,
+          "quarter": 0,
+          "open": 0,
+          "fuel": 0,
+          "stock": []
+        },
+        "under": null
+      },
+      {
+        "at": [10, 10],
+        "kind": "tunnel",
+        "set": [0, 1, 0, 0, 0, 0, 0, null],
+        "free": 0,
+        "span": 2,
+        "carries": [null, 0],
+        "holds": null,
+        "under": [
+          [null, null],
+          [0, 0]
+        ]
+      },
+      {
+        "at": [13, 10],
+        "kind": "tunnel",
+        "set": [0, 1, 0, 0, 0, 0, 0, null],
+        "free": 0,
+        "span": -2,
+        "carries": [null, 0],
+        "holds": null,
+        "under": null
+      }
+    ]
+  }
+}

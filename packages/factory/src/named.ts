@@ -1,23 +1,25 @@
 /**
  * What a kept yard names, wherever it names it: the goals it has done, holds, has in line or has
  * given anything; the things it counts, by name, and holds, carries, makes or is told to make, by
- * number; the kinds of its pieces; its plots, those it cleared and the one it is clearing; and the most tiles any of its tunnels passes under. Its
+ * number; the kinds of its pieces; its plots, those it cleared and the one it is clearing; the most
+ * tiles any of its tunnels passes under; and the highest grade any of its pieces is kept at. Its
  * pieces, its blueprints and plans of the whole yard, and what Undo would put back all count.
  *
  * One rule reads it: a yard naming anything this Leaf does not know (a launch's kind or a track among
- * them, `launches.ts`), a tunnel longer than this Leaf's longest, or a bit in a piece or an Undo entry
- * that no reader here knows, is a newer Leaf's (`knownHere`, which `decode` and `keptLater` ask), never read with
+ * them, `launches.ts`), a tunnel longer than this Leaf's longest, a grade past its highest, or a bit in
+ * a piece or an Undo entry that no reader here knows, is a newer Leaf's (`knownHere`, which `decode` and `keptLater` ask), never read with
  * that thing let go or its Coins paid back. And one writes it: a yard naming nothing past what the
  * last Leaf of version 10 knew (`knownAt10`) is kept so that Leaf reads it. Writing asks it before
  * every save, so it asks it cheaply (`pastTen`): of the yard itself, only what these tables have past
  * that Leaf (goals, and tunnels past its 5 tiles), each Undo entry by the span it keeps (`Entry.span`);
  * and the whole scan only once these tables have a thing, kind or plot that Leaf did not (`WIDER`).
  *
- * What it covers, and what it does not: names (goals, things, kinds, plots) and how far a tunnel
- * runs. A later release that widens anything else a reader takes as kept must widen this too, or a
- * Leaf of version 10 would read its yards and clamp or drop what it does not know: a grade past III
- * (on a piece or in a blueprint), a colour past the 7 tints, a blueprint slot past its 4, or a felled
- * redwood on a tile that Leaf's map has no redwood on.
+ * What it covers, and what it does not: names (goals, things, kinds, plots), how far a tunnel runs
+ * and how high a grade goes. A later release that widens anything else a reader takes as kept must
+ * widen this too, or a Leaf of version 10 would read its yards and clamp or drop what it does not
+ * know: a colour past the 7 tints, a blueprint slot past its 4, or a felled redwood on a tile that
+ * Leaf's map has no redwood on. A grade past III is kept as a version of its own (`codec.ts`), as no
+ * Leaf of version 12 or before asks it here.
  */
 import { NEWER, type Newer } from "./bytes.ts";
 import type { KeptPiece } from "./cells.ts";
@@ -39,6 +41,7 @@ import {
   NONE,
   plotNamed,
   SPAN_MOST,
+  TOP,
 } from "./tables.ts";
 import { PIECE_BYTES, type Yard } from "./yard.ts";
 
@@ -52,6 +55,8 @@ export interface KeptNames {
   readonly plots: ReadonlySet<string>;
   /** The most tiles a tunnel in it passes under, from either mouth. */
   readonly span: number;
+  /** The highest grade a piece in it is kept at: 1 for none above the first. */
+  readonly grade: number;
   /** Whether a piece or an Undo entry in it has a bit no reader here knows (`NEWER`). */
   readonly newer: boolean;
   /** Whether it keeps smog on any plot (`smog.ts`), or a piece's work past a whole half-tick that smog left (`Holders.quarter`), which no Leaf of version 10 knew. */
@@ -98,6 +103,13 @@ const pieceItems = (p: KeptPiece): number[] => [
   ...(p.under ?? []),
 ];
 
+/** What a piece kept anywhere in a yard names of itself: its kind, how far under it runs and its grade. */
+interface Piece {
+  readonly kind: number;
+  readonly span?: number | undefined;
+  readonly grade?: number | undefined;
+}
+
 /** What a kept yard names (its record, its pieces, its blueprints, and its history on a land of so many tiles). */
 export function keptNames(
   raw: Rec,
@@ -108,27 +120,28 @@ export function keptNames(
   const [goals, things, plots] = [new Set<string>(), new Set<string>(), new Set<string>()];
   const [items, kinds] = [new Set<number>(), new Set<number>()];
   recordNames(raw, goals, things, plots);
-  let span = 0;
-  const piece = (kind: number, s: number | undefined, made: readonly (number | undefined)[]): void => {
-    kinds.add(kind);
-    span = Math.max(span, Math.abs(s ?? 0));
+  let [span, grade] = [0, 1];
+  const piece = (p: Piece, made: readonly (number | undefined)[]): void => {
+    kinds.add(p.kind);
+    span = Math.max(span, Math.abs(p.span ?? 0));
+    grade = Math.max(grade, p.grade ?? 1);
     for (const n of made) if (n !== undefined) items.add(n);
   };
   let newer = pieces === NEWER;
-  for (const p of pieces === NEWER ? [] : pieces) piece(p.kind, p.span, pieceItems(p));
-  for (const b of prints) for (const p of b.pieces ?? []) piece(p.kind, p.span, [p.recipe]);
+  for (const p of pieces === NEWER ? [] : pieces) piece(p, pieceItems(p));
+  for (const b of prints) for (const p of b.pieces ?? []) piece(p, [p.recipe]);
   for (const p of historyNamed(raw.history, tiles))
     if (p === NEWER) newer = true;
-    else piece(p.kind, p.span, [p.recipe]);
+    else piece(p, [p.recipe]);
   items.delete(NONE);
   const slowed = pieces !== NEWER && pieces.some((p) => p.quarter !== undefined);
   const smog = slowed || (isRec(raw.smog) && Object.keys(raw.smog).length > 0);
-  return { goals, things, items, kinds, plots, span, newer, smog, launches: launchNames(raw.launches) };
+  return { goals, things, items, kinds, plots, span, grade, newer, smog, launches: launchNames(raw.launches) };
 }
 
 const every = <T>(set: ReadonlySet<T>, ok: (v: T) => boolean): boolean => [...set].every(ok);
 
-/** Whether this Leaf knows everything a kept yard names, and runs tunnels as long as its longest. */
+/** Whether this Leaf knows everything a kept yard names, runs tunnels as long as its longest and builds its highest grade. */
 export const knownHere = (n: KeptNames): boolean =>
   !n.newer &&
   n.launches.known &&
@@ -137,7 +150,8 @@ export const knownHere = (n: KeptNames): boolean =>
   every(n.items, isItem) &&
   every(n.kinds, isKind) &&
   every(n.plots, (id) => plotNamed(id) !== null) &&
-  n.span <= SPAN_MOST;
+  n.span <= SPAN_MOST &&
+  n.grade <= TOP;
 
 const AT_10 = {
   goals: new Set<string>(KNOWN_AT_10.goals),
@@ -147,7 +161,7 @@ const AT_10 = {
 
 /**
  * Whether the last Leaf of version 10 knew everything a yard (known here) names, each thing and kind
- * by the number it gave it, and ran its tunnels as long.
+ * by the number it gave it, ran its tunnels as long and built its highest grade.
  */
 export const knownAt10 = (n: KeptNames): boolean =>
   every(n.goals, (id) => AT_10.goals.has(id)) &&
@@ -156,6 +170,7 @@ export const knownAt10 = (n: KeptNames): boolean =>
   every(n.kinds, (k) => isKind(k) && KNOWN_AT_10.kinds[k] === kindName(k)) &&
   every(n.plots, (id) => AT_10.plots.has(id)) &&
   n.span <= KNOWN_AT_10.span &&
+  n.grade <= KNOWN_AT_10.grade &&
   !n.smog &&
   !n.launches.any;
 
@@ -184,6 +199,19 @@ function printPast(pieces: Uint8Array, most: number): boolean {
   return false;
 }
 
+/**
+ * Whether a yard keeps a piece at a grade past `most`: standing, in a blueprint or plan (the grade a
+ * piece's last byte, `PIECE_BYTES`), or in what Undo would stand again (`Entry.grade`).
+ */
+export function gradePast(y: Yard, most: number): boolean {
+  for (const g of y.grade) if (g > most) return true;
+  for (const b of y.blueprints) {
+    const pieces = b?.pieces ?? new Uint8Array();
+    for (let at = PIECE_BYTES - 1; at < pieces.length; at += PIECE_BYTES) if ((pieces[at] ?? 0) > most) return true;
+  }
+  return y.history.some((e) => e.grade > most);
+}
+
 /** Whether a piece of a kind past that Leaf's stands in a yard. */
 function kindPast(y: Yard): boolean {
   if (ALL_KINDS.length <= KINDS_AT_10) return false;
@@ -194,14 +222,14 @@ function kindPast(y: Yard): boolean {
 /**
  * Whether a yard keeps anything the last Leaf of version 10 did not know, while these tables have no
  * thing or plot past it and number its kinds as it did (`WIDER`): a goal done, held, in line or given
- * anything that Leaf did not have, or a kind past its own or a tunnel past its longest, standing, in a
- * blueprint or plan, or in what Undo would stand again. Each part stops at the first it finds; it
+ * anything that Leaf did not have, or a kind past its own, a tunnel past its longest or a grade past
+ * its highest, standing, in a blueprint or plan, or in what Undo would stand again. Each part stops at the first it finds; it
  * says what the whole scan says (`knownAt10`).
  */
 export function pastTen(y: Yard): boolean {
   if (y.smog.level.some((v) => v > 0) || y.smog.made.some((v) => v > 0)) return true;
   if (y.holders.quarter.subarray(0, y.holders.size).some((v) => v > 0)) return true;
-  if (anyLaunches(y.launches)) return true;
+  if (anyLaunches(y.launches) || gradePast(y, KNOWN_AT_10.grade)) return true;
   const goals = [...y.done, ...y.line, ...y.queue, y.hand];
   if (goals.some((g) => LATER_GOAL[g] === 1) || y.got.some((got, g) => got && LATER_GOAL[g] === 1)) return true;
   const most = KNOWN_AT_10.span;

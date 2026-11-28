@@ -8,6 +8,9 @@ import { BARK, CREAM, GOLD, GREEN, INK, PAPER, SKY, STONE, WATER } from "@sequoi
 import { bitmap, ell, flipped, outlined, paint, R, rgb, shingles } from "@sequoia-leaf/kit/pix.ts";
 import { type Ctx, hash, makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
+import { STUDS_AT } from "./belts.ts";
+import { starClad } from "./grade4.ts";
+import { type Hat, HATS } from "./hats.ts";
 import { bm, CLAY, DARK, IRON, PAL, spr, type Sprite } from "./pal.ts";
 
 type Canvas = HTMLCanvasElement;
@@ -106,30 +109,12 @@ function fire(g: Ctx, x: number, y: number, w: number, h: number, step: number):
 // ---------- the gatherer: a gnome ----------
 
 /**
- * The gnome's hats: a gatherer's by its grade (`GATHERER_HAT`), and all five for the gnomes who come
- * to the gate (the last, blue, is Pipwick's, as in town).
- */
-const HATS: readonly (readonly [string, string])[] = [
-  [CLAY[2], CLAY[1]],
-  [GOLD[1], GOLD[0]],
-  [SKY[4], SKY[3]],
-  [GREEN[4], GREEN[3]],
-  [WATER[3], WATER[2]],
-];
-/** Which of `HATS` is Pipwick's. */
-export const PIPWICK_HAT = 4;
-/** Which of `HATS` a gatherer wears at each grade, the first first: clay red, then green, then gold. */
-const GATHERER_HATS = [0, 3, 1] as const;
-/** The hat a gatherer of a grade wears, so that each grade can be told at a glance. */
-export const gathererHat = (grade: number): number => GATHERER_HATS[Math.max(0, grade - 1)] ?? GATHERER_HATS[0];
-
-/**
  * A gnome, in one of five poses: standing, leaning, bent to the ground, lifting what he has found
  * over his head, and sat down asleep (which is what a gatherer does when no power reaches it and
  * the dusk is too deep to see by). Standing or with his arms up, `step` 1 or 2 is one foot of a
  * waddle: that boot lifted, and the rest of him leant a pixel over the other.
  */
-function gnomePic(hat: readonly [string, string], pose: number, step = 0): Canvas {
+function gnomePic(hat: Hat, pose: number, step = 0): Canvas {
   const { c, g } = makeCanvas(12, 15);
   const [hx, hy] = pose === 1 ? [1, 1] : pose === 2 ? [2, 4] : pose === 4 ? [0, 3] : [0, 0];
   const lean = step === 1 ? -1 : step === 2 ? 1 : 0;
@@ -183,12 +168,12 @@ function gnomePic(hat: readonly [string, string], pose: number, step = 0): Canva
     R(g, x + 4, y - 3, 2, 1, hat[1]);
   } else {
     R(g, x + 2, y - 4, 2, 1, hat[0]);
-    R(g, x + 2 + (pose === 2 ? 1 : 0), y - 5 + (pose === 2 ? 1 : 0), 1, 1, hat[0]);
+    R(g, x + 2 + (pose === 2 ? 1 : 0), y - 5 + (pose === 2 ? 1 : 0), 1, 1, hat[2]);
   }
   R(g, x + 1, y - 2, 1, 1, CREAM);
   return c;
 }
-const gnome = (hat: readonly [string, string], pose: number, step = 0): Sprite => spr(gnomePic(hat, pose, step), 6, 15);
+const gnome = (hat: Hat, pose: number, step = 0): Sprite => spr(gnomePic(hat, pose, step), 6, 15);
 
 /** The rake a second-grade gatherer keeps by him, stood in the ground: a steel head on a pale handle. */
 const RAKE = [
@@ -417,8 +402,8 @@ function workshop(lit: boolean, step: number, grade = 1): Sprite {
 
 // ---------- the Study ----------
 
-/** The scholars' hat: plum, where a gatherer's is red, green or gold by its grade and Pipwick's is blue. */
-const SCHOLAR: readonly [string, string] = [SKY[3], SKY[2]];
+/** The scholars' hat: plum, where a gatherer's is red, green, gold or dark iron by its grade and Pipwick's is blue. */
+const SCHOLAR: Hat = [SKY[3], SKY[2], SKY[3]];
 /** The spines on a shelf, by turns: muted, and no two alike side by side. */
 const SPINES = [CLAY[1], WATER[1], PAPER[0], GREEN[2], SKY[3], CLAY[0], WATER[2], STONE[1]] as const;
 
@@ -674,6 +659,7 @@ function hood(side: number, grade = 1): Sprite {
     }
   }
   ironClad(g, grade, true);
+  starClad(g, grade);
   return spr(c, 8, 18);
 }
 
@@ -994,7 +980,7 @@ export interface Machines {
   pylon: Sprite[][];
   wheel: Sprite[];
   boiler: Sprite[];
-  /** hood[look][side]. */
+  /** hood[look][side], with a fourth look for the fourth grade (`grade4.ts`). */
   hood: Sprite[][];
   /** splitter[dir] and joiner[dir]: what marks the tile, pointing each way. */
   splitter: Canvas[];
@@ -1017,8 +1003,8 @@ export interface Machines {
   fenceAcross: Sprite;
   fenceDown: Sprite;
   /**
-   * The mark every piece of the second grade wears in the top-left corner of its tile, and the two of
-   * the third: pips[0] and pips[1]. A belt has the same mark as part of its tile (`belts.ts`); a
+   * The mark every piece of the second grade wears in the top-left corner of its tile, the two of the
+   * third and the three of the fourth: pips[0], pips[1] and pips[2]. A belt has the same mark as part of its tile (`belts.ts`); a
    * splitter, joiner or sorter has it laid over its arrowheads or its board.
    */
   pips: Canvas[];
@@ -1026,20 +1012,25 @@ export interface Machines {
   tilePips: Canvas[];
 }
 
-/** Which of a graded piece's three looks a grade is drawn in: wood, wood with brass, or iron with brass. */
-export const lookOf = (grade: number): number => (grade >= 3 ? 2 : grade >= 2 ? 1 : 0);
+/**
+ * Which of a graded piece's looks a grade is drawn in: wood, wood with brass, iron with brass, or for
+ * a tunnel and a gatherer, the only kinds with a fourth grade that have looks, dark iron with lilac.
+ */
+export const lookOf = (grade: number): number => (grade >= 4 ? 3 : grade >= 3 ? 2 : grade >= 2 ? 1 : 0);
 /** The three looks, as the grades they are drawn from. */
 const LOOKS = [1, 2, 3] as const;
 /**
  * The mark of a grade above the first, typed: one stud of muted brass with its dark edge for the
- * second, two side by side for the third. A belt's tile and every other graded piece use the same.
+ * second, two side by side for the third, and a third under the first for the fourth (`STUDS_AT`). A
+ * belt's tile and every other graded piece use the same.
  */
-export const PIP = { rows: ["kkkk", "kyok", "kook", "kkkk"], step: 3 } as const;
+export const PIP = { rows: ["kkkk", "kyok", "kook", "kkkk"] } as const;
 /** The mark of a grade as a small picture, or nothing for the first. */
 function pips(count: number): Canvas {
-  const { c, g } = makeCanvas(PIP.rows[0].length + (count - 1) * PIP.step, PIP.rows.length);
+  const at = STUDS_AT.slice(0, count);
+  const { c, g } = makeCanvas(4 + Math.max(...at.map(([x]) => x)), 4 + Math.max(...at.map(([, y]) => y)));
   const one = bitmap(PIP.rows, PAL);
-  for (let k = 0; k < count; k++) g.drawImage(one, k * PIP.step, 0);
+  for (const [x, y] of at) g.drawImage(one, x, y);
   return c;
 }
 
@@ -1067,7 +1058,7 @@ export function makeMachines(): Machines {
     pylon: [false, true].map((tall) => [0, 1, 2].map((l) => pylon(tall, l))),
     wheel: [0, 1, 2, 3].map(wheel),
     boiler: [0, 1, 2].map(boiler),
-    hood: LOOKS.map((grade) => [0, 1, 2, 3].map((side) => hood(side, grade))),
+    hood: [...LOOKS, 4].map((grade) => [0, 1, 2, 3].map((side) => hood(side, grade))),
     splitter: eachWay(SPLITTER),
     joiner: eachWay(JOINER),
     heads: HEADS.map(([top, foot]) =>
@@ -1084,8 +1075,8 @@ export function makeMachines(): Machines {
     gate: gate(),
     fenceAcross: fence(true),
     fenceDown: fence(false),
-    pips: [1, 2].map(pips),
-    tilePips: [1, 2].map((count) => {
+    pips: [1, 2, 3].map(pips),
+    tilePips: [1, 2, 3].map((count) => {
       const { c, g } = makeCanvas(16, 16);
       g.drawImage(pips(count), 0, 0);
       return c;

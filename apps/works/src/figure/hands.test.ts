@@ -390,7 +390,7 @@ describe("reach", () => {
     expect(confirm()).toBe(false);
     expect([S.world.dir[at(40, 9)], S.world.grade[at(40, 9)]]).toEqual([0, 1]);
     // Turning it (R, or its card) and the grade command put nothing down and take nothing up.
-    expect(beyondReach({ do: "upgrade", tiles: [at(40, 9)] })).toBeNull();
+    expect(beyondReach({ do: "upgrade", tiles: [at(40, 9)], price: 2 })).toBeNull();
     expect(doNow({ do: "turn", ...T(40, 9), dir: 1 })).not.toHaveProperty("refused");
     expect(S.world.dir[at(40, 9)]).toBe(1);
   });

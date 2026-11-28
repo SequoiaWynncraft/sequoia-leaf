@@ -38,8 +38,8 @@ import {
 } from "./tables.ts";
 import { carries } from "./wire.ts";
 
-/** A grade as it is written: I, II, III. */
-export const numeral = (grade: number): string => ["", "I", "II", "III"][grade] ?? String(grade);
+/** A grade as it is written: I, II, III, IV. */
+export const numeral = (grade: number): string => ["", "I", "II", "III", "IV"][grade] ?? String(grade);
 
 /** The numbers an unlock may raise, by what each is of. */
 export type Numbered = "stops" | "crate" | "reach" | "depot" | "span" | "away" | "hooks" | "range";

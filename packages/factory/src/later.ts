@@ -7,12 +7,12 @@
  */
 import { newerThan } from "@sequoia-leaf/core";
 
-import { keptUnknown, LAUNCHED } from "./codec.ts";
+import { FOURTH, keptUnknown } from "./codec.ts";
 import { keptBeyond } from "./keptland.ts";
 import { LAND, type Land } from "./land.ts";
 
 export function keptLater(text: string, land: Land = LAND): boolean {
-  if (newerThan(text, LAUNCHED)) return true;
+  if (newerThan(text, FOURTH)) return true;
   let raw: unknown;
   try {
     raw = JSON.parse(text);

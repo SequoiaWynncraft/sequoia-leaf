@@ -45,6 +45,9 @@ const HOURS: readonly (readonly [string, number])[] = [
   ["grower2", 14],
   ["grower3", 78],
   ["deepestculvert", 17],
+  // Grade 4 for gatherers and lines, in the same measure.
+  ["gatherer4", 5.6],
+  ["lines4", 11],
 ];
 
 /** A bare yard with all of tier 7 known (growers to grade III), the depot's middle at (33, 6), pylons along row 10, star crystal at (6, 7) and (20, 8), ore at (24, 8). */

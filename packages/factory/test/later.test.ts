@@ -7,11 +7,14 @@
  */
 import { describe, expect, test } from "bun:test";
 
-import { PARTS, unpackCells } from "../src/cells.ts";
+import { newerThan } from "@sequoia-leaf/core";
+
+import { type KeptPiece, packKept, PARTS, unpackCells } from "../src/cells.ts";
 import { ENTRY_FLAGS, MASK_BITS, SETTING_PARTS } from "../src/history.ts";
 import * as F from "../src/index.ts";
 import { KNOWN_AT_10 } from "../src/known10.ts";
 import { beforeReach } from "./goals.ts";
+import { GRADED } from "./grade4.ts";
 import { bareLand } from "./land.ts";
 import { near, xy } from "./near.ts";
 import { Player } from "./player.ts";
@@ -309,5 +312,45 @@ describe("the yard's 15 launch numbers", () => {
       true,
       F.LAUNCHED,
     ]);
+  });
+});
+
+/** A blueprint of one belt at a grade: its kind, x, y, flags (128: a grade follows), grade. */
+const print = (grade: number): string => F.toBase64(Uint8Array.from([F.BELT, 0, 0, 128, grade]));
+
+describe("a piece at grade 4", () => {
+  for (const [name, make] of Object.entries(GRADED))
+    test(`${name} at grade 4 is kept as version ${F.FOURTH}, which a Leaf of version 12 leaves as a newer Leaf's, and reads back here with the same check`, () => {
+      const y = make(4);
+      const text = F.encode(y);
+      expect([record(text).v, newerThan(text, F.LAUNCHED), F.keptLater(text, y.land)]).toEqual([F.FOURTH, true, false]);
+      const back = F.decode(text, y.land);
+      expect([back && F.check(back), back && F.encode(back)]).toEqual([F.check(y), text]);
+    });
+
+  test("each of those yards keeps nothing else past version 12: at grade 3 instead, it is kept as version 11, as before", () => {
+    for (const [name, make] of Object.entries(GRADED)) {
+      const text = F.encode(make(3));
+      expect([name, record(text).v, newerThan(text, F.LAUNCHED)]).toEqual([name, F.VERSION, false]);
+    }
+  });
+
+  test("a grade past this Leaf's highest, in a piece or a blueprint, is a newer Leaf's, never read with it let go", () => {
+    const y = GRADED["a belt"]?.(4);
+    if (!y) throw new Error("no yard");
+    const rec = record(F.encode(y));
+    const later = (part: Rec): [boolean, boolean] => {
+      const text = JSON.stringify({ ...rec, ...part });
+      return [F.keptLater(text, y.land), F.decode(text, y.land) === null];
+    };
+    expect(later({ blueprints: [print(F.TOP)] })).toEqual([false, false]);
+    expect(later({ blueprints: [print(F.TOP + 1)] })).toEqual([true, true]);
+    expect(later({ blueprints: [{ whole: print(F.TOP + 1) }] })).toEqual([true, true]);
+    // The belt standing, kept a grade past the highest.
+    const cells = unpackCells(F.fromBase64(String(rec.cells)) ?? new Uint8Array(), y.land.w * y.land.h);
+    if (!Array.isArray(cells)) throw new Error("no cells");
+    expect(cells.map((p) => p.grade)).toEqual([F.TOP]);
+    const raised: KeptPiece[] = cells.map((p) => Object.assign({}, p, { grade: F.TOP + 1 }));
+    expect(later({ cells: F.toBase64(packKept(raised)) })).toEqual([true, true]);
   });
 });

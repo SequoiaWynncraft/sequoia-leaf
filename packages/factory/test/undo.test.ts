@@ -13,7 +13,7 @@ import { bareLand } from "./land.ts";
 import { near, xy } from "./near.ts";
 import { Player } from "./player.ts";
 import { rng } from "./random.ts";
-import { bought, buying, delivering, give, junctions, lay, must, saved, staged } from "./yards.ts";
+import { bought, buying, delivering, give, junctions, lay, must, saved, staged, upgrading } from "./yards.ts";
 
 type Rec = Record<string, unknown>;
 
@@ -646,7 +646,7 @@ describe("the history", () => {
     // The oldest ten turns and the splitter were let go: it faces as the tenth turn left it.
     expect([y.history.length, y.dir[F.at(y, ...xy(0, -6))]]).toEqual([0, 10 % 4]);
     const many = large();
-    must(many, { do: "upgrade", tiles: F.within(many, 0, 0, many.land.w, many.land.h) });
+    must(many, upgrading(many, F.within(many, 0, 0, many.land.w, many.land.h)));
     // And a belt of it turned.
     const belt = many.kind.indexOf(F.BELT);
     const turned = ((many.dir[belt] ?? 0) + 1) % 4;

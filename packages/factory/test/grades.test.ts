@@ -10,7 +10,7 @@ import { describe, expect, test } from "bun:test";
 import * as F from "../src/index.ts";
 import { fill } from "./goals.ts";
 import { bareLand } from "./land.ts";
-import { flatOut, give, must } from "./yards.ts";
+import { flatOut, give, must, upgrading } from "./yards.ts";
 
 /** A yard of every goal of the slice done, on a bare land of 13 by 9 with deadfall at (5, 4), and nothing to hand. */
 function yard(tier = 4): F.Yard {
@@ -164,15 +164,15 @@ describe("raising an area", () => {
     expect(F.upgradeRefusal(y, tiles, 47)).toBe("Not enough Coins: 1 short");
     expect(F.upgrade(y, tiles, 47)).toEqual({ ok: false, why: "Not enough Coins: 1 short" });
     expect([3, 4, 5, 6].map((x) => y.grade[F.at(y, x, 2)])).toEqual([1, 1, 1, 1]);
-    expect(spent(y, { do: "upgrade", tiles })).toBe(48);
+    expect(spent(y, upgrading(y, tiles))).toBe(48);
     expect([3, 4, 5, 6, 7, 8].map((x) => y.grade[F.at(y, x, 2)])).toEqual([2, 2, 2, 2, 2, 0]);
     expect(y.grade[F.at(y, 5, 6)]).toBe(2);
-    expect(give(y, { do: "upgrade", tiles })).toMatchObject({
+    expect(give(y, upgrading(y, tiles))).toMatchObject({
       refused: "cannot_upgrade",
       why: "Nothing here can be raised",
     });
     // Before "Upgrading an area" is known, the command is the tool's to refuse.
-    expect(give(yard(3), { do: "upgrade", tiles: [] })).toMatchObject({ refused: F.LOCKED });
+    expect(give(yard(3), { do: "upgrade", tiles: [], price: 0 })).toMatchObject({ refused: F.LOCKED });
   });
 });
 
@@ -311,7 +311,7 @@ describe("splitters, joiners and sorters", () => {
       });
     const tiles = F.within(y, 1, 2, 6, 2);
     expect(F.upgradePrice(y, tiles)).toBe(3 * (8 - 1) + (64 - 8) * 2 + (96 - 12));
-    must(y, { do: "upgrade", tiles });
+    must(y, upgrading(y, tiles));
     expect([1, 2, 3, 4, 5, 6].map((x) => y.grade[F.at(y, x, 2)])).toEqual([3, 3, 3, 3, 3, 3]);
   });
 

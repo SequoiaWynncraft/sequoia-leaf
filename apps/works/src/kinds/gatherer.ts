@@ -1,11 +1,12 @@
-/** The gatherer on the page: a gnome in his grade's hat, at work on his deposit, with his basket, rake and barrow. */
+/** The gatherer on the page: a gnome in his grade's hat, at work on his deposit, with his basket, rake, barrow and cart. */
 import { ALL_ITEMS, GATHER_WORK, isItem, isRaw, makes, NONE, WORK, type Yard } from "@sequoia-leaf/factory";
 import { GREEN, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { perMinute } from "@sequoia-leaf/kit/say.ts";
 import { hash, makeCanvas, must } from "@sequoia-leaf/kit/util.ts";
 
+import { cart } from "../art/grade4.ts";
+import { gathererHat } from "../art/hats.ts";
 import type { Art } from "../art/index.ts";
-import { gathererHat } from "../art/machines.ts";
 import { itemRef } from "../ui/refs.ts";
 import type { Drawn, KindPage } from "./kind.ts";
 
@@ -21,23 +22,27 @@ export function poseOf(y: Yard, at: Pick<Drawn, "i" | "work" | "powered" | "out"
   return p < 0.2 ? 0 : p < 0.4 ? 1 : p < 0.72 ? 2 : 3;
 }
 
-/** His basket at his back, from the third grade a wheelbarrow in its place, out beside him; from the second, a rake stood in the ground on his other side. */
+/**
+ * His basket at his back, from the third grade a wheelbarrow in its place, out beside him, and at the
+ * fourth an iron cart with a lilac lamp (`cart`); from the second, a rake stood in the ground on his other side.
+ */
 function tools(art: Art, at: Drawn, left: boolean): void {
   const { m } = art;
   const { x, foot, z, a } = at;
   if (at.look >= 2) {
-    const barrow = left ? m.barrowLeft : m.barrow;
+    const own = left ? m.barrowLeft : m.barrow;
+    const barrow = at.grade >= 4 ? cart(own, left) : own;
     at.put(barrow, left ? x + 11 : x + 5 - barrow.width, foot - barrow.height, z - 0.2, a);
   } else at.put(m.basket, left ? x + 15 - m.basket.width : x, foot - m.basket.height, z - 0.2, a);
   if (at.look > 0) at.stand(left ? m.rakeLeft : m.rake, x + (left ? 2 : 13), foot - 1, z - 0.1, a);
 }
 
 export const gatherer: KindPage = {
-  // A gatherer in his grade's hat; of the second grade with his rake stood beside him, of the third his wheelbarrow too.
+  // A gatherer in his grade's hat; of the second grade with his rake stood beside him, of the third his wheelbarrow too, of the fourth his cart.
   picture: ({ m }, grade) => {
     const gnome = must(m.gnome[gathererHat(grade)]?.[0], "gnome").c;
     if (grade < 2) return gnome;
-    const barrow = grade >= 3 ? m.barrow : null;
+    const barrow = grade >= 4 ? cart(m.barrow, false) : grade >= 3 ? m.barrow : null;
     const left = barrow ? barrow.width - 4 : 0;
     const { c, g } = makeCanvas(left + gnome.width + 5, gnome.height);
     if (barrow) g.drawImage(barrow, 0, gnome.height - barrow.height);

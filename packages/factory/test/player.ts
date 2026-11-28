@@ -185,8 +185,11 @@ export class Player {
       }
       case 9:
         return { do: "clear", tiles: this.box() };
-      case 10:
-        return { do: "upgrade", tiles: this.box() };
+      case 10: {
+        // At the price the yard asks now, as the page sends it.
+        const tiles = this.box();
+        return { do: "upgrade", tiles, price: F.upgradePrice(y, tiles) };
+      }
       case 11:
         return { do: "paint", tint: this.int(8), ...at };
       case 12: {
@@ -286,7 +289,8 @@ export class Player {
           this.pick<Rec>([
             { do: "build", kind: "belt", x: -1, y: 2, dir: 0 },
             { do: "fly" },
-            { do: "build", kind: "belt", x: 1, y: 2, dir: 0, grade: 4 },
+            // A grade past the highest there is: a command that does not read.
+            { do: "build", kind: "belt", x: 1, y: 2, dir: 0, grade: F.TOP + 1 },
             { do: "clear", tiles: [1, 2, 99_999] },
             { do: "stand", pieces: "all" },
           ]) ?? {}

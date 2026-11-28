@@ -1,7 +1,7 @@
 /**
  * What the last Leaf that knows no version after 10 knows (leaf at c1a3dd16), frozen here as it was:
- * its goals by id, its things and kinds by name in the order it numbers them, its plots by id, and
- * the most tiles its tunnels pass under. A yard that keeps nothing past this is kept as version 9,
+ * its goals by id, its things and kinds by name in the order it numbers them, its plots by id, the
+ * most tiles its tunnels pass under, and the highest grade it builds. A yard that keeps nothing past this is kept as version 9,
  * byte for byte as that Leaf keeps it, so it reads there; one that keeps anything past it is kept as
  * a later version, which that Leaf leaves as a newer Leaf's (`codec.ts`). It never changes: a later
  * Leaf's own knowledge is its tables.
@@ -114,4 +114,5 @@ export const KNOWN_AT_10 = {
   ],
   plots: ["yard", "meadow", "bank", "stream", "grove", "seam", "quarry", "hollow", "pond"],
   span: 5,
+  grade: 3,
 } as const;

@@ -170,6 +170,8 @@ export interface Entry {
   readonly span: number;
   /** The highest kind, by its number, of any piece it would stand again, -1 for none: what keeping it asks too. */
   readonly top: number;
+  /** The highest grade of any piece it would stand again, 1 for none above the first: and this. */
+  readonly grade: number;
 }
 
 /** A piece kept in a blueprint, 10 bytes: kind, x, y, way, span, recipe, open, tint, a splitter's ways or a sorter's side (`packWays`), grade. */
@@ -217,7 +219,7 @@ export interface Yard {
   readonly ins: Uint8Array;
   /** The one thing a machine is told to make, or `NONE`. */
   readonly set: Uint8Array;
-  /** A piece's grade, 1 to 3, or 0 for a kind that has none. */
+  /** A piece's grade, 1 to 4, or 0 for a kind that has none (and for no piece). */
   readonly grade: Uint8Array;
   /** 1 for one of the pieces a new yard has to hand: it cost nothing and gives nothing back. */
   readonly free: Uint8Array;
