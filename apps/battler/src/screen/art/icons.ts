@@ -11,7 +11,7 @@ import { readRows } from "@sequoia-leaf/figures/rows.ts";
  * of the trait it grants, in a frame of that trait's colour. Framed means made. Each is first a grid
  * of colours (`itemGrid`, `heldGrid`), which the tests read, then a picture.
  */
-import { CREAM, GOLD, INK, PAPER } from "@sequoia-leaf/kit/palette.ts";
+import { INK, PAPER, SKY } from "@sequoia-leaf/kit/palette.ts";
 import { bitmap, outlined, paint } from "@sequoia-leaf/kit/pix.ts";
 import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
 import { type BoonId, boonIn } from "@sequoia-leaf/raid/content/boons.ts";
@@ -21,7 +21,6 @@ import {
   type EmblemId,
   emblemTrait,
   halvesOf,
-  isComponentId,
   isEmblemId,
   isFinishedId,
 } from "@sequoia-leaf/raid/content/items.ts";
@@ -134,17 +133,6 @@ export function framed(inner: Grid, a: string, b: string): Grid {
 /** A component's light: its finished items' frames, and their held tiles, are drawn in it. */
 const lightOf = (id: ComponentId): string => COMPONENT_TONE[id].light;
 
-/**
- * A finished item as a figure holds it, 5 by 5: the first component's light above the diagonal, the
- * second's below, and the first's shade on it. Two of the same: one light with a cream middle.
- */
-export function heldTile(a: ComponentId, b: ComponentId): Grid {
-  return square(5, (x, y) => {
-    if (a === b) return x === 2 && y === 2 ? CREAM : lightOf(a);
-    return x + y < 4 ? lightOf(a) : x + y > 4 ? lightOf(b) : COMPONENT_TONE[a].shade;
-  });
-}
-
 /** An item's picture as colours (a tool is typed as an item and drawn bare): see the module's head. */
 export function itemGrid(id: RackItem): Grid {
   if (isEmblemId(id)) {
@@ -192,16 +180,29 @@ function halved(rows: readonly string[]): string[] {
 }
 
 /**
- * What a figure holds, 5 by 5 (7 with its edge): a component its own small picture with the dark
- * edge; a finished item its held tile and an emblem its sign halved, both with a gold edge.
+ * What a figure holds, 5 by 5 at most: always the item's own picture, never a sign for it. A
+ * component or a finished item its own small drawing, drawn by hand from its large one in its
+ * colours (`held` in `icons.txt`); an emblem its trait's sign halved.
  */
 export function heldGrid(id: RackItem): Grid {
-  if (isComponentId(id)) return gridOf(rowsOf("held", id));
-  if (isFinishedId(id)) return heldTile(...halvesOf(NOW, id));
+  const drawn = rowsOf("held", id);
+  if (drawn.length > 0) return gridOf(drawn);
   return gridOf(halved(isEmblemId(id) ? rowsOf("trait", grantedOf(id)) : rowsOf("item", id)));
 }
-/** The colour of a held picture's edge: dark for a component, gold for anything made. */
-export const heldEdge = (id: RackItem): string => (isComponentId(id) ? INK : GOLD[2]);
+/** How big a held picture's box is, edge and all. */
+export const HELD_BOX = 7;
+/** The ground inside a held picture's box: a plum a step over the ink edge round it, so the box shows and dark pictures still read. */
+const HELD_GROUND = SKY[1];
+/** What a figure holds in its box: a 1-pixel ink edge, the same for every item so a row is quiet on any ground, its ground, its picture in the middle. */
+export function heldBox(id: RackItem): Grid {
+  const inner = heldGrid(id);
+  const ox = 1 + Math.floor((HELD_BOX - 2 - widthOf(inner)) / 2);
+  const oy = 1 + Math.floor((HELD_BOX - 2 - inner.length) / 2);
+  const last = HELD_BOX - 1;
+  return square(HELD_BOX, (x, y) =>
+    x === 0 || y === 0 || x === last || y === last ? INK : (inner[y - oy]?.[x - ox] ?? HELD_GROUND),
+  );
+}
 
 // ---------- the pictures ----------
 
@@ -211,8 +212,17 @@ export const traitIcon = (id: TraitId): HTMLCanvasElement => copy(traitPic(id));
 /** The kept picture of an item or a tool, for drawing on the table. Do not put it on the page. */
 export const itemPic = (id: RackItem): HTMLCanvasElement => baking(`i:${id}`, () => itemGrid(id), INK);
 export const itemIcon = (id: RackItem): HTMLCanvasElement => copy(itemPic(id));
-/** What a figure holds, as it is shown under its plate's bars. Do not put it on the page. */
-export const heldPic = (id: RackItem): HTMLCanvasElement => baking(`h:${id}`, () => heldGrid(id), heldEdge(id));
+/** What a figure holds, in its box, as it is shown under its plate's bar. Do not put it on the page. */
+export function heldPic(id: RackItem): HTMLCanvasElement {
+  const key = `h:${id}`;
+  let c = baked.get(key);
+  if (!c) {
+    const g = heldBox(id);
+    c = paint(HELD_BOX, HELD_BOX, (x, y) => g[y]?.[x] ?? null);
+    baked.set(key, c);
+  }
+  return c;
+}
 export const glyphPic = (id: Glyph): HTMLCanvasElement => bakedOf(`g:${id}`, rowsOf("glyph", id), id !== "hand");
 export const glyph = (id: Glyph): HTMLCanvasElement => copy(glyphPic(id));
 /** A figure's level, 1 to 6, as a small green number: drawn beside its base, never among its stars. */
