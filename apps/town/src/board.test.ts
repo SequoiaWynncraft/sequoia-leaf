@@ -173,8 +173,9 @@ describe("the board's news", () => {
     const before = BEFORE_FILES.split(/\s+/).filter((id) => id !== "");
     expect(before).toHaveLength(150);
     expect(NOTES.map((n) => n.id).filter((id) => before.includes(id))).toEqual(before);
-    // The ten newest of them, as the News tab showed them then.
-    expect(newestAt(LATER).map((n) => n.id)).toEqual(before.slice(0, 10));
+    // The ten newest of them, as the News tab showed them then; notes written since come in above.
+    const shown = newestAt(LATER, NOTES.length).map((n) => n.id);
+    expect(shown.filter((id) => before.includes(id)).slice(0, 10)).toEqual(before.slice(0, 10));
   });
 
   test("the news calls Worm, Moth, Rock, Greg and Orphion Graid, and Groot only the Nest of the Grootslangs", () => {
