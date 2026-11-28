@@ -30,6 +30,7 @@ import { spread } from "./shared.ts";
 
 /** Wednesday 25 November 2026, 12:00 UTC. */
 const NOW = Date.UTC(2026, 10, 25, 12);
+const TOWN = { place: "town", camp: null };
 const SIZES = [1000, 2000, 10_000];
 /** Closed visits each player has had in the last day, before the one they are in. */
 const HISTORY = 8;
@@ -192,7 +193,7 @@ async function refresh(open: number) {
         // The writer is under way before the refresh, and has its last wait counted after it.
         yield* Effect.sleep("20 millis");
         const began = performance.now();
-        yield* visits.inRoom(everybody, "town", NOW + 1000);
+        yield* visits.inRoom(everybody, TOWN, NOW + 1000);
         const took = performance.now() - began;
         yield* Effect.sleep("20 millis");
         yield* Fiber.interrupt(writer);

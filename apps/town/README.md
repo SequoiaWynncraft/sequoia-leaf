@@ -499,9 +499,10 @@ card says so and the town is not loaded.
   member, the member first and marked "you" (out of the room, whoever the guild says is in town); **Elsewhere**, in the game but not in town, "at the Works", "at the
   raid table", "in the Grove" or "in their camp"; and **Seen lately**, those gone in the last day, newest
   first, with how long ago they left in the words the dozers' cards use ("3 hours ago"). Where
-  each person is, is what Leaf says of them and nothing else (`where.ts`): nobody is gone but on
-  Leaf's word, at the time Leaf gives, and whoever is away says for how long ("away for 20
-  minutes"; in town with no live room, where only their page says they are there, from the first). Each has their
+  each person is, is what Leaf says of them and nothing else (`where.ts`), for a page in the
+  town's room with them as for any other: nobody is gone but on Leaf's word, at the time Leaf
+  gives, and whoever is away says for how long ("away for 20 minutes"; in town or at a camp with
+  no live room, where only their page says they are there, from the first). Each has their
   face, name, and rank or "Guest"; the guild's lists say no ranks, so somebody never seen in the
   room has their rank only if they are a guest. A part with nobody in it is left out; with nobody
   but the member it says "Only you, for now." It keeps up with the room as it changes, and with the

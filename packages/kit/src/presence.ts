@@ -47,10 +47,13 @@ export interface Present {
   rank: string | null;
   /** Whether they play as a guest, not in the guild. */
   guest: boolean;
-  /** Whether a live room of the place has them: the others in it see them, and Leaf hears what they do. Not live, only their page says they are there. */
-  live: boolean;
-  /** Since when they have been there. */
-  since: number;
+  /**
+   * Whether a live room of the place has them: the others in it see them, and Leaf hears what they
+   * do. Not live, only their page says they are there. Null from a Leaf from before it said.
+   */
+  live: boolean | null;
+  /** Since when they have been there; null from a Leaf from before it said. */
+  since: number | null;
   /** When they last did something, as far as Leaf knows; null for not since they came. */
   acted: number | null;
 }
@@ -82,9 +85,10 @@ function campOf(row: Record<string, unknown>): CampOwner | null {
 }
 
 /**
- * The list from the server's answer, leaving out anything that makes no sense: a row that does not
- * say since when somebody is there, or whether a live room has them, is none of Leaf's (a Leaf from
- * before it said so, for the moment of the deploy that brought it), and nobody is made up from it.
+ * The list from the server's answer, leaving out anything that makes no sense. A row that does not
+ * say since when somebody is there, or whether a live room has them, is a Leaf's from before it
+ * said so (beside the new one for the moment of a deploy): they are there all the same, as that Leaf
+ * meant, and what it did not say is not made up (null).
  */
 export function readPresent(v: unknown): Present[] {
   if (!isRecord(v) || !Array.isArray(v.present)) return [];
@@ -92,7 +96,6 @@ export function readPresent(v: unknown): Present[] {
   for (const p of v.present) {
     if (!isRecord(p) || typeof p.id !== "string" || typeof p.username !== "string" || !isPlace(p.place)) continue;
     const since = typeof p.since === "string" ? Date.parse(p.since) : NaN;
-    if (typeof p.live !== "boolean" || !Number.isFinite(since)) continue;
     const acted = typeof p.acted_at === "string" ? Date.parse(p.acted_at) : NaN;
     out.push({
       id: p.id,
@@ -101,8 +104,8 @@ export function readPresent(v: unknown): Present[] {
       camp: campOf(p),
       rank: typeof p.rank === "string" ? p.rank : null,
       guest: p.guest === true,
-      live: p.live,
-      since,
+      live: typeof p.live === "boolean" ? p.live : null,
+      since: Number.isFinite(since) ? since : null,
       acted: Number.isFinite(acted) ? acted : null,
     });
   }

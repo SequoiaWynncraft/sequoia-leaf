@@ -122,10 +122,6 @@ describe("who is here", () => {
           aliceRow({ id: "b", username: "Bob", place: "the moon" }),
           aliceRow({ id: 3, username: "Cleo", place: "town" }),
           "nobody",
-          // Where, with no word of since when or whether a live room has them: not Leaf's, and nobody is made up from it.
-          { id: "d", username: "Dan", place: "town", seen_at: "2026-11-25T10:00:00.000Z", acted_at: null },
-          aliceRow({ id: "e", username: "Eve", place: "town", live: "yes" }),
-          aliceRow({ id: "f", username: "Fay", place: "town", since: "a while" }),
         ],
       }),
     ).toEqual([
@@ -142,6 +138,25 @@ describe("who is here", () => {
       },
     ]);
     expect(readPresent(null)).toEqual([]);
+  });
+
+  test("reads a row of a Leaf from before it said since when, or whether a live room has them, as somebody there", () => {
+    // What Leaf answered until it said them: for the moment of a deploy, a page may still be given it.
+    const older = { id: "d", username: "Dan", place: "town", guest: false, seen_at: "2026-11-25T10:00:00.000Z" };
+    expect(
+      readPresent({
+        present: [
+          { ...older, acted_at: "2026-11-25T09:58:00.000Z" },
+          { ...older, id: "e", username: "Eve", place: "works", acted_at: null },
+          aliceRow({ id: "f", username: "Fay", place: "town", live: "yes", since: "a while" }),
+        ],
+      }).map((p) => [p.name, p.place, p.live, p.since, p.acted]),
+    ).toEqual([
+      ["Dan", "town", null, null, Date.UTC(2026, 10, 25, 9, 58)],
+      ["Eve", "works", null, null, null],
+      // Neither said in a way that can be read: not made up either.
+      ["Fay", "town", null, null, null],
+    ]);
   });
 });
 

@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { type Motion, playerId } from "@sequoia-leaf/core";
+import { applyAbout, campRoom, type Motion, playerId, readWho, type Who } from "@sequoia-leaf/core";
 import { type Duration, Schema } from "effect";
 
 import { Live, type LiveTuning, TICK } from "../src/live/live.ts";
@@ -61,8 +61,8 @@ afterEach(async () => {
   directory = null;
 });
 
-async function connect(sent: Opening, to: Served | null = server): Promise<LiveClient> {
-  const client = await LiveClient.open(to?.origin ?? "", sent);
+async function connect(sent: Opening, to: Served | null = server, room?: string): Promise<LiveClient> {
+  const client = await LiveClient.open(to?.origin ?? "", sent, room);
   open.push(client);
   return client;
 }
@@ -248,6 +248,94 @@ async function listedHere(token: string, from: Served | null = server): Promise<
   });
   return Schema.decodeUnknownSync(Listed)(await answer.json()).present.map((p) => [p.username, p.place, p.live]);
 }
+
+/** Who is about as a page in the town's room has it: the lists it was given, with each change told since made to them. */
+function aboutOf(c: LiveClient): Who | null {
+  let who: Who | null = null;
+  for (const m of c.texts) {
+    if (m.t === "about" && m.who !== undefined) who = readWho(m.who);
+    else if (m.t === "aboutChanged" && who !== null) who = applyAbout(who, m);
+  }
+  return who;
+}
+/** Each of a list's people as the page has them: who, and where. */
+const placed = (rows: readonly Who["present"][number][] | undefined) => (rows ?? []).map((r) => [r.id, r["place"]]);
+
+describe("one place a player, the one their live connection is in", () => {
+  it("keeps a player in the town's room there, live, while another page of theirs calls from the Works: everybody reads the same", async () => {
+    await start();
+    const a = await connect({ bearer: "alice-token" });
+    await a.welcome();
+    const b = await connect({ bearer: "bob-token" });
+    await b.welcome();
+    await visitsWhen((r) => r.length === 2);
+    // Alice's other page, with no room, says the Works, as it does every half minute.
+    expect((await sayHere("alice-token", "works")).status).toBe(200);
+    await pass("30 seconds");
+    expect((await sayHere("alice-token", "works")).status).toBe(200);
+    await pass("1 second");
+
+    expect((await visits()).map((v) => [v.player_id, v.place, v.source, v.left_at])).toEqual([
+      [alice, "town", "room", null],
+      [bob, "town", "room", null],
+    ]);
+    // As a page asks Leaf, and as Bob's page in the room with her is told.
+    expect(await listedHere("bob-token")).toEqual([
+      ["Alice", "town", true],
+      ["Bob", "town", true],
+    ]);
+    expect(placed(aboutOf(b)?.present)).toEqual([
+      [alice, "town"],
+      [bob, "town"],
+    ]);
+  });
+
+  it("has a visitor at a camp there by the camp's room, live, whose camp it is", async () => {
+    await start();
+    const a = await connect({ bearer: "alice-token" }, server, campRoom(bob));
+    await a.welcome();
+    const [camp] = await visitsWhen((r) => r.length === 1);
+    expect(camp).toMatchObject({ place: "camp", source: "room", left_at: null });
+    expect(await services?.query((sql) => sql`SELECT camp_owner FROM visits`)).toEqual([{ camp_owner: bob }]);
+    expect(await listedHere("bob-token")).toEqual([["Alice", "camp", true]]);
+
+    // Her page's own word of the camp is the same place: one visit, the room's still.
+    const said = await fetch(`${server?.origin ?? ""}/v1/game/presence`, {
+      method: "PUT",
+      headers: { Authorization: "Bearer alice-token", "Content-Type": "application/json" },
+      body: JSON.stringify({ place: "camp", camp_owner: alice }),
+    });
+    expect(said.status).toBe(200);
+    expect(await visits()).toMatchObject([{ place: "camp", source: "room", left_at: null }]);
+
+    a.send({ t: "leave" });
+    const [left] = await visitsWhen((r) => closed(r[0]));
+    expect(left).toMatchObject({ place: "camp", source: "room" });
+  });
+});
+
+describe("every page hears what Leaf's records say within a minute, whichever Leaf wrote it", () => {
+  it("in a deploy, a page on one Leaf is told of somebody who comes into the other's town and leaves it", async () => {
+    const { old, next } = await deploying();
+    const b = await connect({ bearer: "bob-token" }, next);
+    await b.welcome();
+    const a = await connect({ bearer: "alice-token" }, old);
+    await a.welcome();
+    await visitsWhen((r) => r.length === 2);
+    await pass("31 seconds");
+    expect(placed(aboutOf(b)?.present)).toEqual([
+      [alice, "town"],
+      [bob, "town"],
+    ]);
+
+    // She leaves the old Leaf's room, which tells only its own pages.
+    a.send({ t: "leave" });
+    await visitsWhen((r) => closed(r.find((v) => v.player_id === alice)));
+    await pass("31 seconds");
+    const now = aboutOf(b);
+    expect([placed(now?.present), placed(now?.resting)]).toEqual([[[bob, "town"]], [[alice, "town"]]]);
+  });
+});
 
 describe("who a live room has", () => {
   it("is said of everybody here: live in the town's room, and not for a page that only says it is in town", async () => {

@@ -75,8 +75,11 @@ export interface Visitor {
   at: Stand;
   /** Where their skin sheet is served. */
   skin: string;
-  /** When they last did something, as far as anybody knows, or with nothing heard, when they came there. Away is Leaf's rule on it (`awayFor`). */
-  acted: number;
+  /**
+   * When they last did something, as far as anybody knows, or with nothing heard, when they came
+   * there; null when nothing says. Away is Leaf's rule on it, as `awayFor` has it for a game.
+   */
+  acted: number | null;
 }
 
 /** A real member who has gone in the last day: one who stays dozes in town where they were, and one who does not goes. */

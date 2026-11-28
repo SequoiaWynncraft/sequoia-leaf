@@ -21,7 +21,7 @@ const mate = (
   rank: string | null = null,
   acted: number | null = NOW,
   o: Partial<Here> = {},
-): Here => ({ id, name, rank, at, camp: null, live: at === "town", since: NOW, acted, ...o });
+): Here => ({ id, name, rank, at, camp: null, live: at === "town" || at === "camp", since: NOW, acted, ...o });
 /** Somebody on Leaf's list as gone, who left at `seen`. */
 const past = (id: string, name: string, at: Place, rank: string | null, seen: number): Gone => ({
   id,
@@ -159,23 +159,26 @@ describe("who is about", () => {
     expect(someoneAway.alone).toBe(false);
   });
 
-  test("somebody in the room is in town whatever the list says, and nobody is in two parts", () => {
-    const about = whoIs({
-      room: [ME, { id: "b", name: "Birchwood", rank: "Captain" }],
+  test("the list says where somebody is, for a page in the room with them as for any other, and nobody is in two parts", () => {
+    const lists = {
       present: [
-        // Still at the Works as far as the list of a moment ago knows, but in the room now.
-        mate("b", "Birchwood", "works"),
+        // At the Works by Leaf's list, though a page of theirs is in the town's room.
+        mate("b", "Birchwood", "works", "Captain"),
         // In town by Leaf's list, and not in the room with the member: in town.
         mate("q", "Quillon", "town"),
         mate("me", "Tester", "town"),
       ],
       // Lists that had somebody twice would still show them once, where they are now.
       resting: [past("q", "Quillon", "town", null, NOW - 5 * MIN), past("f", "Fernhollow", "town", null, NOW - MIN)],
-    });
-    expect(shown(about)).toEqual([
-      ["In town", ["Tester: Strategist (you)", "Birchwood: Captain", "Quillon: "]],
+    };
+    const same: [string, string[]][] = [
+      ["In town", ["Tester: Strategist (you)", "Quillon: "]],
+      ["Elsewhere", ["Birchwood: Captain · at the Works"]],
       ["Seen lately", ["Fernhollow: 1 minute ago"]],
-    ]);
+    ];
+    expect(shown(whoIs({ room: [ME, { id: "b", name: "Birchwood", rank: "Captain" }], ...lists }))).toEqual(same);
+    expect(shown(whoIs({ room: [ME], ...lists }))).toEqual(same);
+    expect(shown(whoIs({ room: null, ...lists }))).toEqual(same);
   });
 
   test("a player whose page says the town with no live room is never listed as having just left", () => {

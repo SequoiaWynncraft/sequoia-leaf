@@ -23,7 +23,6 @@
  * drawn here as well.
  */
 
-import { away } from "@sequoia-leaf/core";
 import { BARK, CREAM, LEAF, PAPER, STONE } from "@sequoia-leaf/kit/palette.ts";
 import { R } from "@sequoia-leaf/kit/pix.ts";
 import { bake, type Body, lookFor, paintSkin, SIT, skinOf } from "@sequoia-leaf/kit/skin.ts";
@@ -52,6 +51,7 @@ import {
   strings,
 } from "./spots.ts";
 import { props } from "./town.ts";
+import { awaySince } from "./where.ts";
 
 /** How long somebody takes to fade in or out, in seconds. */
 export const FADE = 0.5;
@@ -436,7 +436,7 @@ export function stepVisitors(dt: number, awake: readonly Actor[]): void {
   for (const w of visitors) {
     const got = placed.get(w.at)?.get(w.id);
     if (!got) continue;
-    const isAway = away(w.acted, now);
+    const isAway = awaySince(w.acted, now);
     wanted.set(w.id, { who: w, put: { at: w.at, ...got }, pose: (v) => busy(v, w.at, got, isAway) });
     if (w.at === "grove") atStone = true;
   }

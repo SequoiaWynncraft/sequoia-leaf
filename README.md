@@ -590,10 +590,11 @@ later is newer), each entry `{ "id", "username", "place", "guest", "seen_at" }`:
 `present` is the 50 heard of most recently of everyone whose newest visit is
 open and was heard of in the last 90 seconds (`VISIT_RULES.silentMs`), the
 player included, in name order, each with `since` (when their visit there
-began), `live` (whether a live room of the place has them, where the others in
-it see them and Leaf hears what they do; false where only their page says they
-are there) and `acted_at` (when they last did something; null for not since
-they came); `resting` is the rest of
+began), `live` (whether a live room of the place has them, the town's or a
+camp's, where the others in it see them and Leaf hears what they do; false
+where only their page says they are there) and `acted_at` (when they last did
+something, which only ever moves forward, whichever Leaf writes it; null for
+not since Leaf began hearing); `resting` is the rest of
 those whose newest visit was heard of in the last day (closed, or silent),
 whose `stay` is true, newest first, at most 24, and `gone`
 the same of those whose `stay` is false: of each, `seen_at` is when they left.
@@ -1312,20 +1313,29 @@ welcomes it. Going into a game, the town leaves its own room at once, before
 the game's page is made, since that page may go into a visit's room on the same
 connection. The `live` line counts `told`, the batches told to visits' rooms.
 
-**Where they are, for everybody else.** A player in a room whose kind is one of
-the game's places (`town`) is there as `PUT /v1/game/presence` would have them,
-by Live: their visit there opens when they come into the room (keeping what they
-last said about staying, and staying if they never said), is heard of again
-every 30 seconds while they are in it, and closes when they leave it (their
-connection's grace run out, a `leave`, or another room), last seen there then
-and gone from then on, unless their game has said since that they are somewhere
-else. So pages count them right, and they rest in town after they go, though
+**Where they are, for everybody else.** A player in the town's room, or a
+camp's (`camp:<owner>`), is there as `PUT /v1/game/presence` would have them,
+by Live, and `live`: their visit there opens when they come into the room
+(keeping what they last said about staying, and staying if they never said), is
+heard of again every 30 seconds while they are in it, and closes when they leave
+it (their connection's grace run out, a `leave`, or another room), last seen
+there then and gone from then on. One place a player, the one their live
+connection is in: a page of theirs with no room (another tab, another device)
+that calls from somewhere else does not move them out of it, so everybody reads
+the same place of them; what it said in the last 90 seconds is where they are
+once they leave the room, so a page that says where it is going before its room
+hears it has left loses nothing by the order. A room's word always moves them.
+So pages count them right, and they rest in town after they go, though
 their page never says where it is. Every change to who is about, once it is
 written (somebody comes into a room or leaves it, a page says its player is
 somewhere else, or says otherwise about staying, a visit goes silent, somebody
 away does something), is told to everybody in every room of the game's places
 (not a visit's room), read once 200 ms after the first change of a burst; a
-write that only says again what was said is not a change. A page of version 3
+write that only says again what was said is not a change. With no change told
+for 30 seconds the lists are read and told again all the same (`ABOUT_EVERY`):
+a change another Leaf wrote beside this one in a deploy is told to nobody here,
+so this is how every page has what the records say within a minute, whichever
+Leaf it is on, and why a page in a room never asks. A page of version 3
 is given all of the lists as it comes into such a room, `{ "t": "about", "v",
 "who" }` (`who` the presence routes' answer), and then each change to them,
 `{ "t": "aboutChanged", "v", "at", "lists" }`, numbered one more than the last

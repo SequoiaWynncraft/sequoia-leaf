@@ -1,4 +1,5 @@
 import {
+  campOwnerOf,
   CLOSE,
   decodeMove,
   type Device,
@@ -28,7 +29,7 @@ import {
 import { Socket } from "effect/socket";
 
 import { whoIsAbout } from "../activity/about.ts";
-import { type Visitor, Visits } from "../activity/visits.ts";
+import { type Spot, type Visitor, Visits } from "../activity/visits.ts";
 import { type Identity, isGuest } from "../api/api.ts";
 import { PLACES } from "../api/schemas.ts";
 import { AppConfig, LIVE_MOST_PLAYERS } from "../config.ts";
@@ -108,6 +109,13 @@ const FORGET_EVERY = Duration.seconds(1);
 
 /** How long Live waits after a change to who is about before it tells the rooms, for the rest of a burst to come. */
 const ABOUT_GATHER = Duration.millis(200);
+/**
+ * How long Live goes without a change told before it reads who is about again and tells the rooms
+ * all the same. A change this Leaf did not write is never told to it (another Leaf beside it in a
+ * deploy closes a visit, or the minute's upkeep does there), so every page in a room has what Leaf's
+ * records say within this long, whichever Leaf it is on, and need never ask.
+ */
+export const ABOUT_EVERY = Duration.seconds(30);
 
 export { LiveMeter, TICK, type TickTimes } from "./tick.ts";
 
@@ -118,11 +126,23 @@ const watch = (session: Effect.Effect<boolean>, every: Duration.Duration): Effec
     Effect.flatMap((ok) => (ok ? watch(session, every) : Effect.void)),
   );
 
-/** Where a player's presence says they are while they are in a room of a kind, if it is one of the game's places. */
+/** The place a room of a kind is told who is about in, if it is one of the game's places (the town). */
 const placeOf = (kindName: string): string | null => PLACES.find((p) => p === kindName) ?? null;
 
-/** Whether a player is in a room of one of the game's places. */
+/** Whether a player is in a room of one of the game's places, where who is about is told. */
 const inPlace = (p: Player): boolean => p.place.at === "room" && placeOf(p.place.room.kindName) !== null;
+
+/**
+ * Where a player is while they are in a room of a kind, which their visit is the room's for
+ * (`Visits.inRoom`): the town, or the camp a camp's room is (`campRoom`), by its owner. A visit's
+ * room says nothing of where anybody is.
+ */
+const spotOf = (kindName: string): Spot | null => {
+  const place = placeOf(kindName);
+  if (place !== null) return { place, camp: null };
+  const owner = campOwnerOf(kindName);
+  return owner === undefined ? null : { place: "camp", camp: owner };
+};
 
 /** A player in a room of one of the game's places, as their visits write them. */
 const inRoom = (p: Player): Visitor => ({
@@ -138,8 +158,8 @@ const inRoom = (p: Player): Visitor => ({
  * for the Tally), and Leaf's farewell, when every open visit is handed over to the next Leaf.
  */
 type Whereabouts =
-  | { readonly kind: "in"; readonly players: readonly Visitor[]; readonly place: string; readonly at: number }
-  | { readonly kind: "left"; readonly playerId: PlayerId; readonly place: string; readonly at: number }
+  | { readonly kind: "in"; readonly players: readonly Visitor[]; readonly spot: Spot; readonly at: number }
+  | { readonly kind: "left"; readonly playerId: PlayerId; readonly spot: Spot; readonly at: number }
   | { readonly kind: "acted"; readonly playerId: PlayerId; readonly at: number }
   | {
       readonly kind: "act";
@@ -189,17 +209,19 @@ function censusOf(rooms: Rooms, players: ReadonlyMap<string, Player>): Census {
   return { players: players.size, connected, rooms: inRooms };
 }
 
-/** Everybody in a room of one of the game's places, by place, as their visits write them. */
-function byPlaceOf(players: Iterable<Player>): Map<string, Visitor[]> {
-  const byPlace = new Map<string, Visitor[]>();
+/** Everybody in a room that says where they are (`spotOf`), by the room's kind, as their visits write them. */
+function bySpotOf(players: Iterable<Player>): Map<string, { readonly spot: Spot; readonly those: Visitor[] }> {
+  const bySpot = new Map<string, { readonly spot: Spot; readonly those: Visitor[] }>();
   for (const p of players) {
-    const place = p.place.at === "room" ? placeOf(p.place.room.kindName) : null;
-    if (!place) continue;
-    const those = byPlace.get(place) ?? [];
-    those.push(inRoom(p));
-    byPlace.set(place, those);
+    if (p.place.at !== "room") continue;
+    const { kindName } = p.place.room;
+    const spot = spotOf(kindName);
+    if (!spot) continue;
+    const there = bySpot.get(kindName) ?? { spot, those: [] };
+    there.those.push(inRoom(p));
+    bySpot.set(kindName, there);
   }
-  return byPlace;
+  return bySpot;
 }
 
 /** The longest text frame Leaf reads, in UTF-16 code units (as JavaScript counts a string's length). Every message the game sends is far shorter. */
@@ -250,20 +272,21 @@ export interface Page {
  * by connection. Rooms are in memory, in this process: during a deploy every player is told Leaf is
  * restarting, and reconnects to the new container.
  *
- * A player in a room of one of the game's places (the town) is there as far as their visits know
- * (`Visits`), as if their game said so: their visit opens when they come in, is heard of every
- * `presenceMs` while they stay, and closes when they go, so that nobody's page need say where they
- * are while it is in a room; and Leaf's farewell hands every open visit over to the next Leaf
+ * A player in the town's room or a camp's (`spotOf`) is there as far as their visits know
+ * (`Visits`), live, whatever a page of theirs with no room says: their visit opens when they come
+ * in, is heard of every `presenceMs` while they stay, and closes when they go, so that nobody's
+ * page need say where they are while it is in a room; and Leaf's farewell hands every open visit over to the next Leaf
  * (`Visits.handOver`: none closes for a deploy) before it closes any connection. Whenever who is
  * about changes, everybody in every room of the game's places is told,
- * once for a burst of changes within `ABOUT_GATHER` (`AboutTold`): a page of version 3 what changed
+ * once for a burst of changes within `ABOUT_GATHER` (`AboutTold`), and every `ABOUT_EVERY` all the
+ * same, as the records then say, for what another Leaf wrote: a page of version 3 what changed
  * (`aboutChanged`), having been given all of it as it came in; a page of version 2 all of who is
  * about now (`about`, the presence routes' answer).
  *
  * Everybody in a room hears what Leaf does there while they are in it, as the play service tells it
  * (`Watchers`): in a visit's room (`visitRoom`: somebody's yard, from Top yards), each batch done to
- * the state visited; in a camp's (`campRoom`), each that changed what a visitor sees of it. Neither
- * is a place, so nobody's presence there is written: a page in a camp says where it is itself.
+ * the state visited; in a camp's (`campRoom`), each that changed what a visitor sees of it. A
+ * visit's room says nothing of where anybody is: a game's page says where it is itself.
  *
  * The players it holds are kept by Leaf id in one map (`LivePlayers`), through which the rest of Leaf
  * tells a player something of their own, on every connection they have: that a raid sitting they are
@@ -337,9 +360,9 @@ export class Live extends Context.Service<
       const write = (w: Whereabouts): Effect.Effect<void> => {
         switch (w.kind) {
           case "in":
-            return ofVisits(visits.inRoom(w.players, w.place, w.at));
+            return ofVisits(visits.inRoom(w.players, w.spot, w.at));
           case "left":
-            return ofVisits(visits.leftRoom(w.playerId, w.place, w.at));
+            return ofVisits(visits.leftRoom(w.playerId, w.spot, w.at));
           case "acted":
             return ofVisits(visits.acted(w.playerId, w.at));
           case "act":
@@ -369,7 +392,8 @@ export class Live extends Context.Service<
       const about = new AboutTold();
       const changed = yield* visits.changes;
       const tellAbout = Effect.gen(function* () {
-        yield* PubSub.takeAll(changed);
+        // A change told here, or none for so long that the records are read again all the same.
+        yield* Effect.timeoutOption(PubSub.takeAll(changed), ABOUT_EVERY);
         yield* Effect.sleep(ABOUT_GATHER);
         // The rest of the burst, heard meanwhile, is in what is read now: told once, not once a change.
         yield* PubSub.takeUpTo(changed, Number.POSITIVE_INFINITY);
@@ -392,8 +416,8 @@ export class Live extends Context.Service<
         was.hearing();
         room.leave(occupant.member.id);
         rooms.tidy(room);
-        const place = placeOf(room.kindName);
-        if (place) Queue.offerUnsafe(whereabouts, { kind: "left", playerId: p.identity.playerId, place, at: now });
+        const spot = spotOf(room.kindName);
+        if (spot) Queue.offerUnsafe(whereabouts, { kind: "left", playerId: p.identity.playerId, spot, at: now });
       };
 
       /** All of who is about, as last told, to a player in a room of the game's places whose page is told what changes. */
@@ -437,8 +461,8 @@ export class Live extends Context.Service<
         if (!room) return false;
         const occupant = room.join(who, p, now, SERVER_HZ, p.speaks);
         p.place = { at: "room", room, occupant, hearing: watchers.hear(room.kindName, p) };
-        const place = placeOf(kindName);
-        if (place) Queue.offerUnsafe(whereabouts, { kind: "in", players: [inRoom(p)], place, at: now });
+        const spot = spotOf(kindName);
+        if (spot) Queue.offerUnsafe(whereabouts, { kind: "in", players: [inRoom(p)], spot, at: now });
         return true;
       };
 
@@ -525,11 +549,11 @@ export class Live extends Context.Service<
       );
       yield* Effect.forkScoped(Effect.repeat(forget, Schedule.spaced(FORGET_EVERY)));
 
-      // Everybody in a room of one of the game's places is there still, as their game would say.
+      // Everybody in a room that says where they are is there still, as their game would say.
       const stillHere = Effect.flatMap(Clock.currentTimeMillis, (now) =>
         Effect.sync(() => {
-          for (const [place, those] of byPlaceOf(players.values()))
-            Queue.offerUnsafe(whereabouts, { kind: "in", players: those, place, at: now });
+          for (const { spot, those } of bySpotOf(players.values()).values())
+            Queue.offerUnsafe(whereabouts, { kind: "in", players: those, spot, at: now });
         }),
       );
       yield* Effect.forkScoped(Effect.repeat(stillHere, Schedule.spaced(Duration.millis(tuning.presenceMs))));

@@ -23,14 +23,14 @@ const room = (...names: string[]): InRoom[] => [
   { id: ME, name: "Tester", rank: "Strategist" },
   ...names.map((n) => ({ id: n, name: n, rank: null })),
 ];
-/** Somebody on Leaf's list as in the game: there since `NOW`, doing something then, in a live room if in town, unless said. */
+/** Somebody on Leaf's list as in the game: there since `NOW`, doing something then, in a live room in town or at a camp, unless said. */
 const here = (id: string, at: Place, o: Partial<Here> = {}): Here => ({
   id,
   name: id,
   rank: null,
   at,
   camp: null,
-  live: at === "town",
+  live: at === "town" || at === "camp",
   since: NOW,
   acted: NOW,
   ...o,
@@ -52,16 +52,17 @@ const said = (m: ReadonlyMap<string, Where>): string[] =>
   );
 
 describe("where everybody is", () => {
-  test("one record each, by id, never the member: the room first, then Leaf's list of who is here, then those gone", () => {
+  test("one record each, by id, never the member: the room's whom Leaf has in town, then Leaf's list of who is here, then those gone", () => {
     const m = all({
-      room: room("Birch"),
-      present: [here(ME, "town"), here("Birch", "works"), here("Quill", "works")],
+      room: room("Birch", "Ash"),
+      present: [here(ME, "town"), here("Ash", "town"), here("Birch", "works"), here("Quill", "works")],
       resting: [left("Quill", "town", NOW - 5 * MIN), left("Fern", "table", NOW - 40 * MIN)],
       gone: [left("Fern", "town", NOW - 50 * MIN), left("Oak", "camp", NOW - MIN)],
     });
     expect(said(m)).toEqual([
-      // In the room: in town, whatever Leaf's list said a moment ago.
-      "Birch: town live",
+      "Ash: town live",
+      // In the room, and at the Works by Leaf's list: at the Works, as every other page reads them.
+      "Birch: works",
       "Quill: works",
       "Oak: camp gone 1 min not staying",
       "Fern: table gone 40 min",
@@ -123,13 +124,18 @@ describe("every pairing of the room and Leaf's list has one reading, each part o
   const read = (inRoom: boolean, row: (typeof ROWS)[number]): Where | undefined =>
     all({ room: inRoom ? room("X") : room(), ...rows[row] }).get("X");
 
-  test("in the room with the member: in town, drawn, whatever the list says; and in town since the list says so", () => {
-    for (const row of ROWS) {
-      const w = read(true, row);
-      expect([row, w?.state, w?.at]).toEqual([row, "live", "town"]);
-      const since = row === "town, live" || row === "town, by their page" ? SINCE : null;
-      expect([row, w?.state === "live" ? w.since : undefined]).toEqual([row, since]);
+  test("in the room with the member: in town, drawn, when the list has them in town or not at all; in town since the list says so", () => {
+    expect(read(true, "town, live")).toMatchObject({ state: "live", at: "town", since: SINCE });
+    expect(read(true, "town, by their page")).toMatchObject({ state: "live", at: "town", since: SINCE });
+    expect(read(true, "not listed")).toMatchObject({ state: "live", at: "town", since: null });
+  });
+
+  test("the room never says otherwise than the list: a page in the room with somebody reads them as a page out of it does", () => {
+    for (const row of ["the Works", "gone", "gone, not staying"] as const) {
+      expect([row, read(true, row)]).toEqual([row, read(false, row)]);
     }
+    expect(read(true, "the Works")).toMatchObject({ state: "listed", at: "works" });
+    expect(read(true, "gone")).toMatchObject({ state: "gone", seen: LEFT });
   });
 
   test("not in the room: exactly what the list says, and nobody at all when it says nothing", () => {
@@ -158,6 +164,9 @@ describe("every pairing of the room and Leaf's list has one reading, each part o
     }
   });
 });
+
+/** X in town, as a Leaf from before it said since when or whether live lists them. */
+const older = (o: Partial<Here>): Here => here("X", "town", { live: null, since: null, ...o });
 
 /** X, who is in the game, from the room and Leaf's lists. */
 const one = (o: Partial<Parameters<typeof whereabouts>[0]>): Extract<Where, { state: "live" | "listed" }> => {
@@ -199,6 +208,22 @@ describe("for how long somebody has been away", () => {
 
   test("in the room and not yet on Leaf's list, nothing says since when: not away", () => {
     expect(awayFor(one({ room: room("X") }), NOW)).toBeNull();
+  });
+
+  test("at a camp by their page alone, as in town: said from the first; in the camp's room, by Leaf's rule", () => {
+    const at = (live: boolean): number | null =>
+      awayFor(one({ present: [here("X", "camp", { live, acted: NOW - MIN })] }), NOW);
+    expect([at(false), at(true)]).toEqual([MIN, null]);
+  });
+
+  test("listed by a Leaf from before it said since when or whether live: there all the same, and away only with a time", () => {
+    expect(all({ room: room(), present: [older({ acted: null })] }).get("X")).toMatchObject({
+      state: "listed",
+      at: "town",
+    });
+    expect(awayFor(one({ present: [older({ acted: null })] }), NOW)).toBeNull();
+    expect(awayFor(one({ present: [older({ acted: NOW - MIN })] }), NOW)).toBeNull();
+    expect(awayFor(one({ present: [older({ acted: NOW - 20 * MIN })] }), NOW)).toBe(20 * MIN);
   });
 });
 
@@ -242,7 +267,7 @@ describe("how many are at each camp", () => {
 });
 
 describe("the town's figures, from where everybody is", () => {
-  test("standing at the Works, the stump or the Grove: in the game there, not live, at most so many", () => {
+  test("standing at the Works, the stump or the Grove: in the game there by Leaf's list, at most so many", () => {
     const m = all({
       room: room("Birch"),
       present: [
@@ -253,7 +278,8 @@ describe("the town's figures, from where everybody is", () => {
       ],
     });
     const s = standing(m, 12);
-    expect(s.map((w) => `${w.id}@${w.at}`).slice(0, 3)).toEqual(["Grim@grove", "n00@table", "n01@table"]);
+    // Birch, at the Works by Leaf's list, is at the Works, though the room has a figure of theirs.
+    expect(s.map((w) => `${w.id}@${w.at}`).slice(0, 3)).toEqual(["Birch@works", "Grim@grove", "n00@table"]);
     expect(s.length).toBe(12);
   });
 
