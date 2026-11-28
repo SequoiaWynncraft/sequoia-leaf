@@ -1,0 +1,142 @@
+{
+  "text": "{\"v\":11,\"land\":{\"w\":48,\"h\":36,\"x\":16,\"y\":12},\"seed\":5,\"tick\":0,\"charge\":0,\"at\":0,\"till\":0,\"bank\":2,\"told\":54,\"seen\":{\"tick\":0,\"till\":0,\"depot\":{}},\"plots\":[\"yard\",\"meadow\"],\"felled\":[1606],\"done\":[\"planks\",\"ingots\",\"tools\",\"gears\",\"boiler\",\"crates\",\"culvert\",\"signs\",\"banners\",\"stew\",\"chain\",\"drawing\",\"wax\",\"rakes\",\"windows\",\"shells\",\"hall\",\"oilpress\",\"workshop\",\"flywheel\",\"tooling\",\"sorter\",\"planchest\",\"carttrack\",\"nightshift\",\"upgrading\",\"brassfolio\",\"lanterns\",\"flags\",\"longculvert\",\"secondcart\",\"brassfittings\",\"shelves\",\"kits\",\"roadmill\",\"rollcall\",\"tooling3\",\"flywheel2\",\"nightshift2\",\"studydesk\",\"waysin\",\"pipework\",\"fireworks\",\"roadridge\",\"market\",\"lenses\",\"roadcamp\",\"clockmaking\",\"observatory\",\"orreryplans\",\"sky\",\"nightshift3\",\"wholeyard\",\"felling\"],\"hand\":null,\"line\":[],\"got\":{},\"board\":[{\"id\":0,\"title\":\"Frames for the market stalls\",\"from\":\"The market stalls\",\"line\":\"New stalls for market day. The old ones have been leaning on each other.\",\"want\":{\"frame\":290},\"pay\":270,\"filled\":{},\"starts\":50},{\"id\":1,\"title\":\"Tools for Pipwick\",\"from\":\"Pipwick\",\"line\":\"Pipwick borrowed a hammer, and now nobody can find Pipwick's hammer.\",\"want\":{\"tool\":230},\"pay\":245,\"filled\":{},\"starts\":50},{\"id\":2,\"title\":\"Engines and ingots for Fika\",\"from\":\"Fika\",\"line\":\"Fika sleeps on the bellows and would like them warmer. An engine, then. Meow.\",\"want\":{\"ingot\":540,\"engine\":75},\"pay\":440,\"filled\":{},\"starts\":50},{\"id\":3,\"title\":\"Bricks for the gnomes\",\"from\":\"The gnomes\",\"line\":\"The wall is knee high now. The gnomes have plans.\",\"want\":{\"brick\":780},\"pay\":225,\"filled\":{},\"starts\":50},{\"id\":4,\"title\":\"Frames for the market stalls\",\"from\":\"The market stalls\",\"line\":\"New stalls for market day. The old ones have been leaning on each other.\",\"want\":{\"frame\":330},\"pay\":310,\"filled\":{},\"starts\":50}],\"serial\":5,\"handed\":0,\"swapAt\":0,\"depot\":{},\"sold\":0,\"paid\":0,\"cells\":\"AA==\"}",
+  "read": {
+    "coins": { "till": 0, "bank": 2, "paid": 0, "sold": 0, "handed": 0, "serial": 5 },
+    "depot": [],
+    "seen": { "tick": 0, "till": 0, "depot": [] },
+    "plots": ["yard", "meadow"],
+    "cleared": [],
+    "clearing": null,
+    "begun": 0,
+    "smog": [],
+    "felled": [[6, 21]],
+    "spare": [
+      ["belt", 12],
+      ["gatherer", 1],
+      ["mill", 1]
+    ],
+    "goals": {
+      "done": [
+        "planks",
+        "ingots",
+        "tools",
+        "gears",
+        "boiler",
+        "crates",
+        "culvert",
+        "signs",
+        "banners",
+        "stew",
+        "chain",
+        "drawing",
+        "wax",
+        "rakes",
+        "windows",
+        "shells",
+        "hall",
+        "oilpress",
+        "workshop",
+        "flywheel",
+        "tooling",
+        "sorter",
+        "planchest",
+        "carttrack",
+        "nightshift",
+        "upgrading",
+        "brassfolio",
+        "lanterns",
+        "flags",
+        "longculvert",
+        "secondcart",
+        "brassfittings",
+        "shelves",
+        "kits",
+        "roadmill",
+        "rollcall",
+        "tooling3",
+        "flywheel2",
+        "nightshift2",
+        "studydesk",
+        "waysin",
+        "pipework",
+        "fireworks",
+        "roadridge",
+        "market",
+        "lenses",
+        "roadcamp",
+        "clockmaking",
+        "observatory",
+        "orreryplans",
+        "sky",
+        "nightshift3",
+        "wholeyard",
+        "felling"
+      ],
+      "hand": null,
+      "queue": [],
+      "line": []
+    },
+    "got": [],
+    "board": {
+      "orders": [
+        [
+          0,
+          "Frames for the market stalls",
+          "The market stalls",
+          "New stalls for market day. The old ones have been leaning on each other.",
+          270,
+          50,
+          [["frame", 290]],
+          []
+        ],
+        [
+          1,
+          "Tools for Pipwick",
+          "Pipwick",
+          "Pipwick borrowed a hammer, and now nobody can find Pipwick's hammer.",
+          245,
+          50,
+          [["tool", 230]],
+          []
+        ],
+        [
+          2,
+          "Engines and ingots for Fika",
+          "Fika",
+          "Fika sleeps on the bellows and would like them warmer. An engine, then. Meow.",
+          440,
+          50,
+          [
+            ["engine", 75],
+            ["ingot", 540]
+          ],
+          []
+        ],
+        [
+          3,
+          "Bricks for the gnomes",
+          "The gnomes",
+          "The wall is knee high now. The gnomes have plans.",
+          225,
+          50,
+          [["brick", 780]],
+          []
+        ],
+        [
+          4,
+          "Frames for the market stalls",
+          "The market stalls",
+          "New stalls for market day. The old ones have been leaning on each other.",
+          310,
+          50,
+          [["frame", 330]],
+          []
+        ]
+      ],
+      "swapAt": 0
+    },
+    "blueprints": { "open": 4, "kept": [] },
+    "away": null,
+    "pieces": []
+  }
+}

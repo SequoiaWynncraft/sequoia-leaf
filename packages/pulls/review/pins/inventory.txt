@@ -1,0 +1,6 @@
+pulls 1 stored/pulls-v1-new.json
+pulls_top 1 stored/pulls_top-v1-played.json
+pulls 1 stored/pulls-v1-pulled.json
+pulls_granted 1 stored/pulls_granted-v1-played.json
+pulls 1 stored/pulls-v1-granted.json
+standing 1 stored/standing-v1-granted.json

@@ -1,0 +1,14 @@
+yard new | tier 0, 0 pieces, 0 goals done, 0 delivered, 0 Coins earned, 0 in the till | start 939f8274ebec end f137712b19be
+yard small | tier 0, 23 pieces, 2 goals done, 1269 delivered, 243 Coins earned, 243 in the till | start 2147cf9440a3 end 24a0c1ca9aa1
+yard short | tier 0, 43 pieces, 3 goals done, 1384 delivered, 505 Coins earned, 265 in the till | start 8fa8fbd2bc0d end 16a435d85c1b
+yard mid | tier 2, 44 pieces, 9 goals done, 2137 delivered, 2513 Coins earned, 6 in the till | start 9cb4b2c15ea0 end de305f79ad62
+yard hall | tier 3, 44 pieces, 17 goals done, 4311 delivered, 5528 Coins earned, 3021 in the till | start 0f45a7f696df end 5fb99f9c12d9
+yard study | tier 3, 64 pieces, 18 goals done, 6083 delivered, 5536 Coins earned, 13 in the till | start 0f33e7e35047 end a69a992e2dbe
+yard gate | tier 4, 67 pieces, 28 goals done, 68476 delivered, 10817 Coins earned, 7 in the till | start c4f29007cc11 end f33c20f051c7
+yard large | tier 3, 494 pieces, 17 goals done, 2976 delivered, 5522 Coins earned, 0 in the till | start f828c6f4d874 end a49a4feb891f
+yard tier 1 | tier 1, 12 pieces, 4 goals done, 876 delivered, 1 Coins earned, 1 in the till | start d025f564e9d4 end d2a1d06f40b3
+yard junctions | tier 5, 51 pieces, 54 goals done, 2384 delivered, 5 Coins earned, 5 in the till | start 0a454de84d61 end f1bf81832cb8
+yard townlight | tier 5, 791 pieces, 62 goals done, 2952 delivered, 57 Coins earned, 57 in the till | start 28733ac6b916 end 43db91c5991d
+yard townlight without slag | tier 5, 577 pieces, 62 goals done, 30 delivered, 4 Coins earned, 4 in the till | start d08991a5ecb6 end 1a8c5b19d965
+yard roadbed | tier 6, 336 pieces, 84 goals done, 1399 delivered, 27 Coins earned, 27 in the till | start e81b28dbd7f9 end ef53b3e7779f
+yard roadbed without cracking | tier 6, 305 pieces, 84 goals done, 1194 delivered, 23 Coins earned, 23 in the till | start 8c4e331b8e8f end abff8a3e0f03

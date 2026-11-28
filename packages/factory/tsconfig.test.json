@@ -3,5 +3,5 @@
   "compilerOptions": {
     "types": ["bun"]
   },
-  "include": ["test", "tools", "bench.ts", "pace.ts", "pace"]
+  "include": ["test", "tools", "review", "bench.ts", "pace.ts", "pace"]
 }
