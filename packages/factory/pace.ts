@@ -1,5 +1,6 @@
 /**
- * How long the slice takes: `bun pace.ts` (`--json` for the same as data, `--seed N` for another
+ * How long the slice takes: `bun pace.ts` (`--json` for the same as data, `--from N` for the planner's
+ * estimate of a tier from its opening, where the player cannot lay it out yet, `--seed N` for another
  * land's orders, `--seeds 1-12` for the least, the middle and the most of each tier over those
  * seeds, `--folios N` for the folios a minute the Studies are built for). It plays the second design
  * from a new yard through every node below and every piece of research below, by the real rules, as
@@ -11,6 +12,7 @@
  * research added to the two lists (and, in `pace/table.ts`, the time it is meant to take). Change them
  * and run it again; the same seed and the same numbers give the same table, to the tick.
  */
+import { estimate, estimateText } from "./pace/estimate.ts";
 import { type Hands, Player, type Settings } from "./pace/player.ts";
 import { type Report, report, seeds, seedsText, text } from "./pace/table.ts";
 
@@ -168,6 +170,13 @@ function flag(args: readonly string[], name: string, none: number): number {
 if (import.meta.main) {
   const args = process.argv.slice(2);
   const json = args.includes("--json");
+  // From a tier the player cannot lay out yet: the planner's estimate (`pace/estimate.ts`).
+  const from = flag(args, "--from", 0);
+  if (from > 0) {
+    const e = estimate(from);
+    console.log(json ? JSON.stringify(e, null, 2) : estimateText(e));
+    process.exit(0);
+  }
   const folios = flag(args, "--folios", FOLIOS);
   const at = args.indexOf("--seeds");
   const range = at >= 0 ? /^(\d+)-(\d+)$/.exec(args[at + 1] ?? "") : null;
