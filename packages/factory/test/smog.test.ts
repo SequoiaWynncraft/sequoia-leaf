@@ -1,7 +1,8 @@
 /**
  * Smog (SPEC-2 section 5.2): what a dirty piece finishes is made on its plot; every 100 ticks each
  * plot is counted against its ground (300 a minute) and each redwood standing on it (120); and the
- * pieces that work on a plot at step 1, 2 or 3 lose 1, 2 or 3 ticks in 4.
+ * pieces that work on a plot at step 1, 2 or 3 work at 3, 2 or 1 fourths of their pace: as 3, 2 or 1
+ * tick in 4 would, on average, exactly, and with the yard short of power the two multiply.
  */
 import { describe, expect, test } from "bun:test";
 
@@ -26,11 +27,11 @@ function workings(): F.Yard {
   for (const x of [54, 50]) must(y, { do: "build", kind: "pylon", x, y: 68, dir: 0 });
   return y;
 }
-/** Breakers at grade III along The Old Workings' bottom rows (clear ground), with power, so many of them: their tiles. */
-function breakers(y: F.Yard, n: number): number[] {
+/** Breakers at a grade (III unless said) along The Old Workings' bottom rows (clear ground), with power, so many of them: their tiles. */
+function breakers(y: F.Yard, n: number, grade = 3): number[] {
   return Array.from({ length: n }, (_, k) => {
     const [x, z] = [(corner?.x ?? 0) + 1 + 3 * k, (corner?.y ?? 0) + 10];
-    must(y, { do: "build", kind: "breaker", x, y: z, dir: 0, grade: 3 });
+    must(y, { do: "build", kind: "breaker", x, y: z, dir: 0, ...(grade > 1 ? { grade } : {}) });
     const i = F.at(y, x, z);
     if (!F.litAt(y, i)) throw new Error("a breaker with no power");
     return i;
@@ -49,6 +50,32 @@ function run(y: F.Yard, at: readonly number[], ticks: number): void {
   }
 }
 const level = (y: F.Yard): number => y.smog.level[WORKINGS] ?? 0;
+/** What one breaker of a grade on The Old Workings breaks in so many ticks, its smog held at a level, from just after a count. */
+function counted(grade: number, smog: number, ticks: number): number {
+  const y = workings();
+  const at = breakers(y, 1, grade);
+  while (y.tick % 100 !== 1) run(y, at, 1);
+  y.smog.level[WORKINGS] = smog;
+  y.smog.made[WORKINGS] = 0;
+  run(y, at, ticks);
+  return y.smog.made[WORKINGS] ?? 0;
+}
+
+describe("the pieces that work", () => {
+  test("work in the plumbing's order, by tile, whatever plot each is on, as before smog: a yard with none runs as it did", () => {
+    // The Clay Bank comes before the yard's own plot in the land's list, and its rows run below the
+    // yard's top rows: a mill on each, the yard's on a row above the bank's.
+    const y = F.create({ seed: 1, tier: 5 });
+    bought(y, "bank");
+    must(y, { do: "build", kind: "pylon", x: 49, y: 40, dir: 0 });
+    must(y, { do: "build", kind: "mill", x: 52, y: 37, dir: 0 });
+    must(y, { do: "build", kind: "mill", x: 46, y: 40, dir: 0 });
+    const work = Array.from(F.rewire(y).work);
+    const on = new Set(work.map((i) => y.land.plots[y.land.plot[i] ?? 0]?.plot));
+    expect([on.has(F.plot("yard")), on.has(F.plot("bank"))]).toEqual([true, true]);
+    expect(work).toEqual(work.toSorted((a, b) => a - b));
+  });
+});
 
 describe("smog on a plot", () => {
   test("2 breakers III on The Old Workings, which has 1 redwood, stay at 0: 400 a minute made, 420 cleared", () => {
@@ -79,19 +106,29 @@ describe("smog on a plot", () => {
     expect(F.status(y, at[0] ?? 0)?.line).toMatch(/^Breaking salvage, at (75|50)% of its pace: smog on this plot\.$/);
   });
 
-  test("a plot at step 2 works exactly 2 ticks in 4: a breaker on it breaks half as much", () => {
+  test("a plot at step 2 works at half its pace, exactly: a breaker on it breaks half as much; at step 1 a grade I one three fourths", () => {
+    // Grade III does 4 half-ticks of work a tick, a thing every 12: at step 2, 2 a tick, 16 things in 96 ticks.
+    expect(counted(3, 2000, 96)).toBe(16);
+    // Grade I does 2 a tick: at step 1, 1.5 a tick, the quarters past a half-tick carried over, 12 things in 96 ticks.
+    expect(counted(1, 1000, 96)).toBe(12);
+  });
+
+  test("with the yard short of power, smog's share and power's multiply: at step 2 and half the power drawn, a fourth, never nothing", () => {
     const y = workings();
     const at = breakers(y, 1);
-    const made = (): number => y.smog.made[WORKINGS] ?? 0;
-    while (y.tick % 100 !== 1) F.step(y);
+    // The depot gives half what is drawn (power in halves), and nothing else gives any: set by hand,
+    // for no yard's pieces draw exactly twice its power.
+    const { demand } = F.rewire(y);
+    Object.assign(y.open, { depot: demand / 4 });
+    F.rewire(y);
+    expect(F.power(y).pace).toBe(0.5);
+    while (y.tick % 100 !== 1) run(y, at, 1);
     y.smog.level[WORKINGS] = 2000;
     y.smog.made[WORKINGS] = 0;
     run(y, at, 96);
-    // 48 ticks worked of 96, a thing every 3 at grade III.
-    expect(made()).toBe(16);
-    expect([0, 1, 2, 3].map((q) => F.worksOn(2, q))).toEqual([false, true, false, true]);
-    expect([0, 1, 2, 3].map((q) => F.worksOn(1, q))).toEqual([false, true, true, true]);
-    expect([0, 1, 2, 3].map((q) => F.worksOn(3, q))).toEqual([false, false, false, true]);
+    // 48 ticks with power, each at half of grade III's pace: 96 half-ticks, 8 things of 12 each.
+    expect(y.smog.made[WORKINGS]).toBe(8);
+    expect(F.machineRate(y, at[0] ?? 0).share).toBe(0.25);
   });
 
   test("a redwood felled stops clearing at the next count, the plumbing as it was: 120 a minute less, for good", () => {

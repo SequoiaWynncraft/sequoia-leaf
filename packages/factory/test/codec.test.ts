@@ -224,7 +224,7 @@ describe("decode refuses whole", () => {
     const good = F.encode(F.create({ seed: 1 }));
     // The lowest bit; the one past the highest this Leaf keeps, as a newer Leaf keeps a part after
     // them all; and one no Leaf has ever kept. What follows each is past reading.
-    for (const bit of [1, 0x20000, 0x100000, 2 ** 40]) {
+    for (const bit of [1, 0x80000, 0x100000, 2 ** 40]) {
       const text = withCells(good, [1, 5, F.BELT | 128, ...varint(bit), 7, 7, 7]);
       expect([bit, F.decode(text), F.keptLater(text)]).toEqual([bit, null, true]);
     }

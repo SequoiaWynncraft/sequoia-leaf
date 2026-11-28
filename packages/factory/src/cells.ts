@@ -17,6 +17,8 @@
  *        sorter's right side (the same byte, as the way it puts first)   8192 a grade above 1 (byte)
  *   16384 a kind past 15: its bits above the first byte's four (byte)   32768 a by-product held (byte)
  *   65536 more of its finished thing waiting behind the first (byte, `Holders.more`)
+ *   131072 its place in a mix (byte, `Holders.mix`)   262144 the quarters of a half-tick of work
+ *        past its whole ones, for a piece smog slows (byte, `Holders.quarter`)
  *
  * A piece of more than one tile is kept once, on its own tile (`sizes.ts`), and stands over the rest
  * of its tiles again as it is read back. A yard with no kind past 15 and no by-product has exactly the
@@ -40,7 +42,7 @@ import { KIT } from "./wire.ts";
 import { held, holderOf, type Holders, tunnelOf, type Yard } from "./yard.ts";
 
 /** The parts a piece's bytes may say follow, a bit each: any other is a newer Leaf's. */
-export const PARTS = 0x3fffe;
+export const PARTS = 0x7fffe;
 /** The parts kept since a kind could pass 15 and a piece hold a by-product, after all the others. */
 const HIGH = 0x4000;
 const ALSO = 0x8000;
@@ -48,6 +50,8 @@ const ALSO = 0x8000;
 const MORE = 0x10000;
 /** A piece that breaks one thing into several: its place in its mix (`kinds/mix.ts`), kept since tier 5. */
 const MIX = 0x20000;
+/** A piece smog slows: the quarters of a half-tick of work past its whole ones (`Holders.quarter`), kept since tier 5. */
+const QUARTER = 0x40000;
 /** The most kinds of thing, and of one thing, a piece's bytes may say it holds: past these the bytes are no yard's. */
 const KINDS_MOST = 255;
 const MANY_MOST = 1_000_000;
@@ -65,6 +69,7 @@ export interface KeptPiece {
   readonly also?: number;
   readonly more?: number;
   readonly mix?: number;
+  readonly quarter?: number;
   readonly work?: number;
   readonly making?: number;
   readonly turn?: number;
@@ -98,13 +103,14 @@ const LATE = [
 
 // ---------- off the yard ----------
 
-/** What a holder's row holds ready beside its finished thing, as kept: a by-product, more of the thing, and its place in a mix, where it has any. */
+/** What a holder's row holds ready beside its finished thing, as kept: a by-product, more of the thing, its place in a mix, and its work past a whole half-tick, where it has any. */
 function heldOut(h: Holders, r: number): Partial<Building> {
-  const [also, more, mix] = [h.also[r] ?? NONE, h.more[r] ?? 0, h.mix[r] ?? 0];
+  const [also, more, mix, quarter] = [h.also[r] ?? NONE, h.more[r] ?? 0, h.mix[r] ?? 0, h.quarter[r] ?? 0];
   return {
     ...(also === NONE ? {} : { also }),
     ...(more === 0 ? {} : { more }),
     ...(mix === 0 ? {} : { mix }),
+    ...(quarter === 0 ? {} : { quarter }),
   };
 }
 
@@ -191,6 +197,7 @@ function partsOf(p: KeptPiece): number {
     [ALSO, p.also],
     [MORE, p.more],
     [MIX, p.mix],
+    [QUARTER, p.quarter],
   ];
   return has.reduce((f, [bit, v]) => (v === undefined || v === false ? f : f | bit), 0);
 }
@@ -241,6 +248,7 @@ function writeKept(o: Writer, p: KeptPiece): void {
   if (p.also !== undefined) o.byte(p.also);
   if (p.more !== undefined) o.byte(p.more);
   if (p.mix !== undefined) o.byte(p.mix);
+  if (p.quarter !== undefined) o.byte(p.quarter);
 }
 
 /** Pieces as kept (in tile order, none twice) as bytes: `unpackCells` reads back the same. */
@@ -298,11 +306,12 @@ function readParts(r: Reader, p: Building, f: number): boolean {
   return true;
 }
 
-/** Reads what a piece holds ready beside its finished thing, as `f` says follows: a by-product, more of the thing, and its place in a mix. */
+/** Reads what a piece holds ready beside its finished thing, as `f` says follows: a by-product, more of the thing, its place in a mix, and its work past a whole half-tick. */
 function readHeldOut(r: Reader, p: Building, f: number): void {
   if (f & ALSO) p.also = r.byte();
   if (f & MORE) p.more = r.byte();
   if (f & MIX) p.mix = r.byte();
+  if (f & QUARTER) p.quarter = r.byte();
 }
 
 /** Reads a kind's bits past four onto a piece, as only a kind past 15 has; false for none, which no Leaf keeps. Past 15 they make a kind past 255, which no Leaf here has. */
@@ -384,6 +393,9 @@ function underOnto(y: Yard, i: number, o: KeptPiece): void {
  */
 export function keptOnto(y: Yard, i: number, o: KeptPiece, studied: Goal | undefined): void {
   carriedOnto(y, i, o);
-  RULES[y.kind[i] ?? NONE]?.onto(KIT, y, i, holderOf(y, i), o, studied);
+  const r = holderOf(y, i);
+  RULES[y.kind[i] ?? NONE]?.onto(KIT, y, i, r, o, studied);
+  // Work past a whole half-tick, below one, on whatever works (`Holders.quarter`).
+  if (r >= 0 && RULES[y.kind[i] ?? NONE]?.work) y.holders.quarter[r] = whole(o.quarter, 3) ?? 0;
   underOnto(y, i, o);
 }

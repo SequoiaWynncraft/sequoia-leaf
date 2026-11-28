@@ -16,6 +16,9 @@ import {
   plot,
   plotPrice,
   plotState,
+  PYLON,
+  rewire,
+  STUDY,
   type Yard,
 } from "@sequoia-leaf/factory";
 
@@ -25,6 +28,7 @@ import { S } from "../state.ts";
 import { setTool } from "../tools.ts";
 import { smoggy } from "../trouble.ts";
 import type { PlotPrint } from "./land.ts";
+import { numbersOf } from "./numbers.ts";
 import { printOf } from "./prints.ts";
 import { machineRef, plotRef, tileRef } from "./refs.ts";
 import { wrongCount } from "./views.ts";
@@ -89,7 +93,7 @@ test("a plot the yard owns says its smog on its card: its level, what is made an
   y.smog.level[n] = 1240;
   await opened(y, 1_000);
   expect(plotPrint("workings").smog).toBe(
-    "Smog 1,240 of 3,000. Made 0 /min. Cleared 420 /min: the ground 300, 1 redwood 120. Machines here work 3 ticks in 4.",
+    "Smog 1,240 of 3,000. Made 0 /min. Cleared 420 /min: the ground 300, 1 redwood 120. Machines here work at 75% of their pace.",
   );
   S.world.smog.level[n] = 300;
   expect(plotPrint("workings").smog).toBe(
@@ -106,9 +110,28 @@ test("a plot at step 1 or more is in the Trouble view, by name, and counted on i
   const before = wrongCount();
   S.world.smog.level[n] = 2000;
   expect(smoggy(S.world)).toEqual([
-    { n, plot: WORKINGS, line: "Smog on The Old Workings: its machines work 2 ticks in 4." },
+    { n, plot: WORKINGS, line: "Smog on The Old Workings: its machines work at 50% of their pace." },
   ]);
   expect(wrongCount()).toBe(before + 1);
   S.world.smog.level[n] = 3000;
-  expect(smoggy(S.world)[0]?.line).toBe("Smog on The Old Workings: its machines work 1 tick in 4.");
+  expect(smoggy(S.world)[0]?.line).toBe("Smog on The Old Workings: its machines work at 25% of their pace.");
+});
+
+test("a Study slowed by smog says smog slows it, not that power is short; with power short too, both", async () => {
+  const y = workings(6);
+  // Pylons down to The Old Workings from the depot, and a Study on its clear bottom row.
+  for (const z of [46, 50, 54, 58, 62, 66]) build(y, PYLON, 58, z, 0, Infinity);
+  for (const x of [54, 50]) build(y, PYLON, x, 68, 0, Infinity);
+  const corner = y.land.plots.find((p) => p.plot === WORKINGS);
+  const [x, z] = [(corner?.x ?? 0) + 1, (corner?.y ?? 0) + 10];
+  expect(build(y, STUDY, x, z, 0, Infinity).ok).toBe(true);
+  const n = y.land.plots.findIndex((p) => p.plot === WORKINGS);
+  y.smog.level[n] = 2000;
+  await opened(y, 1_000);
+  const i = at(S.world, x, z);
+  expect(numbersOf(S.world, i)).toEqual([expect.stringMatching(/^Studies .+ \/min: smog slows it\.$/)]);
+  // The depot's power cut by hand, and the plumbing worked out again: now power is short as well.
+  Object.assign(S.world.open, { depot: 1 });
+  rewire(S.world);
+  expect(numbersOf(S.world, i)).toEqual([expect.stringMatching(/: power is short and smog slows it\.$/)]);
 });

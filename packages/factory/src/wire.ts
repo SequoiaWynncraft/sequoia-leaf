@@ -383,13 +383,13 @@ export function rewire(y: Yard): Wire {
   }
   const taken = new Uint8Array(n);
   for (let i = 0; i < n; i++) if (kind[i] !== NONE) taken[i] = sidesTaken(y, i);
-  const byPlot = workByPlot(y, work);
   const wire: Wire = {
     order: handingOrder(y),
     taken,
     carry: Int32Array.from(carry),
     mouths: Int32Array.from(carry.filter((i) => tunnelOf(y, i) >= 0)),
-    ...byPlot,
+    work: Int32Array.from(work),
+    paces: new Uint8Array(y.land.plots.length),
     burners: Int32Array.from(burners),
     recipes: ALL_KINDS.map((k) => recipesFor(y.open, k)),
     steady,
@@ -401,25 +401,6 @@ export function rewire(y: Yard): Wire {
   y.demand = demand;
   y.supply = steady + burningNow(y, burners);
   return wire;
-}
-
-/**
- * The pieces that work, in plot order and each plot's in the order found (`Wire.work`), with where
- * each plot's part begins and its plot (`smog.ts`).
- */
-function workByPlot(y: Yard, found: readonly number[]): Pick<Wire, "work" | "workFrom" | "workPlot"> {
-  const plotOf = (i: number): number => y.land.plot[i] ?? NONE;
-  const work = found.toSorted((a, b) => plotOf(a) - plotOf(b));
-  const from: number[] = [];
-  const plots: number[] = [];
-  work.forEach((i, c) => {
-    if (c === 0 || plotOf(i) !== plotOf(work[c - 1] ?? -1)) {
-      from.push(c);
-      plots.push(plotOf(i));
-    }
-  });
-  from.push(work.length);
-  return { work: Int32Array.from(work), workFrom: Int32Array.from(from), workPlot: Int32Array.from(plots) };
 }
 
 /** The power what burns gives as it stands, in halves: each burning now, as its kind says (`KindDef.burns`). */

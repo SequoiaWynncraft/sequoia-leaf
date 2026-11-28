@@ -281,15 +281,23 @@ export function check(y: Yard): number {
   return h >>> 0;
 }
 
+/**
+ * What a holder's row has that only some pieces do, each mixed in only where there is one, so a yard
+ * of pieces that have none checks as before: a by-product held; more finished things waiting behind
+ * the first (`Holders.more`, only an assembler); a place in a mix past its first (a breaker); and work
+ * past a whole half-tick (a piece smog slows).
+ */
+function mixExtras(hs: Yard["holders"], r: number, mix: (n: number) => void): void {
+  if (hs.also[r] !== NONE) mix(0x10000 | (hs.also[r] ?? 0));
+  if ((hs.more[r] ?? 0) > 0) mix(0x20000 | (hs.more[r] ?? 0));
+  if ((hs.mix[r] ?? 0) !== 0) mix(0x50000 | (hs.mix[r] ?? 0));
+  if ((hs.quarter[r] ?? 0) !== 0) mix(0x70000 | (hs.quarter[r] ?? 0));
+}
+
 /** A holder's row: what it is doing and holding, its work, and how many of each thing. */
 function mixHolder(hs: Yard["holders"], r: number, mix: (n: number) => void): void {
   mix(doingWord(hs, r));
-  // A by-product held is mixed in only where there is one, so a yard of pieces that make none checks as before.
-  if (hs.also[r] !== NONE) mix(0x10000 | (hs.also[r] ?? 0));
-  // So are more finished things waiting behind the first (`Holders.more`): only an assembler holds any.
-  if ((hs.more[r] ?? 0) > 0) mix(0x20000 | (hs.more[r] ?? 0));
-  // A piece that breaks one thing into several: its place in its mix, where it is not at the first.
-  if ((hs.mix[r] ?? 0) !== 0) mix(0x50000 | (hs.mix[r] ?? 0));
+  mixExtras(hs, r, mix);
   mix(heldWord(hs, r));
   mix(hs.work[r] ?? 0);
   for (let n = 0; n < ITEM_COUNT; n++) {

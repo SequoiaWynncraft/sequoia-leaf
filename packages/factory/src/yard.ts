@@ -63,6 +63,8 @@ export interface Holders {
   work: Uint16Array;
   /** For a piece that breaks one thing into several, its place in its mix: what it gives next (`kinds/mix.ts`). */
   mix: Uint8Array;
+  /** For a piece smog slows, the quarters of a half-tick of work done past its whole half-ticks, 0 to 3, toward its next tick's (`tick.ts`). */
+  quarter: Uint8Array;
   /** 1 while a machine has looked at what it holds and found nothing it can start on. */
   idle: Uint8Array;
   /** 1 while a crate lets things out. */
@@ -127,12 +129,10 @@ export interface Wire {
   readonly mouths: Int32Array;
   readonly work: Int32Array;
   /**
-   * The pieces that work are listed by plot (`work`): where each plot's part of the list begins, the
-   * part's plot (a place in the land's `plots`), and the list's length after the last part, so the tick
-   * passes over a plot's whole part on a tick its smog loses (`smog.ts`).
+   * Each plot's pace this tick in fourths (4, or 3, 2 and 1 at smog's steps), by its place in the
+   * land's `plots`: worked out by the tick each tick from its smog (`smogPaces`), nothing kept.
    */
-  readonly workFrom: Int32Array;
-  readonly workPlot: Int32Array;
+  readonly paces: Uint8Array;
   readonly burners: Int32Array;
   /** For each tile, the sides it takes things in from, a bit each (`sidesTaken`). */
   readonly taken: Uint8Array;
@@ -319,6 +319,7 @@ const holders = (cap: number): Holders => ({
   last: new Uint8Array(cap),
   work: new Uint16Array(cap),
   mix: new Uint8Array(cap),
+  quarter: new Uint8Array(cap),
   idle: new Uint8Array(cap),
   open: new Uint8Array(cap),
   fuel: new Uint8Array(cap),
@@ -497,6 +498,7 @@ export function holderRow(y: Yard, tile: number): number {
       "last",
       "work",
       "mix",
+      "quarter",
       "idle",
       "open",
       "fuel",
@@ -517,6 +519,7 @@ export function holderRow(y: Yard, tile: number): number {
   h.last[r] = NONE;
   h.work[r] = 0;
   h.mix[r] = 0;
+  h.quarter[r] = 0;
   h.idle[r] = 0;
   h.open[r] = 1;
   h.fuel[r] = 0;
@@ -561,6 +564,7 @@ export function dropRow(y: Yard, tile: number): void {
         "last",
         "work",
         "mix",
+        "quarter",
         "idle",
         "open",
         "fuel",

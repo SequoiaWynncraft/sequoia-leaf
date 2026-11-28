@@ -52,7 +52,7 @@ export interface KeptNames {
   readonly span: number;
   /** Whether a piece or an Undo entry in it has a bit no reader here knows (`NEWER`). */
   readonly newer: boolean;
-  /** Whether it keeps smog on any plot (`smog.ts`), which no Leaf of version 10 knew. */
+  /** Whether it keeps smog on any plot (`smog.ts`), or a piece's work past a whole half-tick that smog left (`Holders.quarter`), which no Leaf of version 10 knew. */
   readonly smog: boolean;
 }
 
@@ -117,7 +117,8 @@ export function keptNames(
     if (p === NEWER) newer = true;
     else piece(p.kind, p.span, [p.recipe]);
   items.delete(NONE);
-  const smog = isRec(raw.smog) && Object.keys(raw.smog).length > 0;
+  const slowed = pieces !== NEWER && pieces.some((p) => p.quarter !== undefined);
+  const smog = slowed || (isRec(raw.smog) && Object.keys(raw.smog).length > 0);
   return { goals, things, items, kinds, plots, span, newer, smog };
 }
 
@@ -193,6 +194,7 @@ function kindPast(y: Yard): boolean {
  */
 export function pastTen(y: Yard): boolean {
   if (y.smog.level.some((v) => v > 0) || y.smog.made.some((v) => v > 0)) return true;
+  if (y.holders.quarter.subarray(0, y.holders.size).some((v) => v > 0)) return true;
   const goals = [...y.done, ...y.line, ...y.queue, y.hand];
   if (goals.some((g) => LATER_GOAL[g] === 1) || y.got.some((got, g) => got && LATER_GOAL[g] === 1)) return true;
   const most = KNOWN_AT_10.span;

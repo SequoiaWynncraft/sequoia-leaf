@@ -117,7 +117,6 @@ export {
   smogTrouble,
   standingOn,
   stepOf,
-  worksOn,
 } from "./smog.ts";
 export { SMOG } from "./content/smog.ts";
 export { MIXES } from "./content/mixes.ts";

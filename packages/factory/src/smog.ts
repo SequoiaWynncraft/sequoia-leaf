@@ -4,9 +4,11 @@
  * (`KindInfo.smog`) adds it to the plot its own tile is on as it finishes a thing; nothing else makes
  * any, and none passes from one plot to the next. Every `SMOG.every` ticks each plot is counted: up by
  * what was made, down by what its ground clears and each redwood standing on it, held between 0 and
- * the most. At each step (`SMOG.steps`) the pieces that work on it lose ticks: at step 1 one in four,
- * at step 2 two, at step 3 three. The tick passes over a plot's whole part of the plumbing's list of
- * pieces that work on a tick it loses (`Wire.workFrom`), so smog costs one compare a plot.
+ * the most. At each step (`SMOG.steps`) the pieces that work on it work at a share of their pace: at
+ * step 1 three fourths, at step 2 two, at step 3 one. That is SPEC-2's "3 ticks in 4", "2 in 4" and "1
+ * in 4" on average, exactly (`Holders.quarter` carries what is past a whole half-tick), by pace and not
+ * by ticks lost, so with the yard short of power, which works on some ticks, the two multiply. A tick
+ * with no plot slowed reads no plot's pace (`smogPaces`).
  */
 import { perMinute, whole } from "@sequoia-leaf/core";
 
@@ -26,16 +28,25 @@ const [STEP_1, STEP_2, STEP_3] = SMOG.steps;
 /** The step a plot of smog `level` is at: 0 below the first, up to 3. */
 export const stepOf = (level: number): number => (level >= STEP_3 ? 3 : level >= STEP_2 ? 2 : level >= STEP_1 ? 1 : 0);
 
-/** Whether the pieces of a plot at step `s` work on the tick `t`: with `q` the tick modulo 4, step 1 loses q 0, step 2 q 0 and 2, step 3 all but q 3. */
-export function worksOn(s: number, t: number): boolean {
-  const q = t & 3;
-  return s === 0 || (s === 1 ? q !== 0 : s === 2 ? (q & 1) === 1 : s >= 3 ? q === 3 : true);
+/** A plot's pace in fourths with no smog slowing it. */
+export const FULL = 4;
+
+/** Each plot's pace this tick in fourths into `paces` (4 at step 0, then 3, 2 and 1), as its smog lets it; says whether any plot is slowed. Makes nothing. */
+export function smogPaces(y: Yard, paces: Uint8Array): boolean {
+  const level = y.smog.level;
+  let slowed = false;
+  for (let p = 0; p < level.length; p++) {
+    const q = FULL - stepOf(level[p] ?? 0);
+    paces[p] = q;
+    if (q < FULL) slowed = true;
+  }
+  return slowed;
 }
 
-/** The share of ticks the pieces of a plot at step `s` work at. */
+/** The share of its pace a piece on a plot at step `s` works at. */
 export const shareAt = (s: number): number => [1, 0.75, 0.5, 0.25][s] ?? 0.25;
 
-/** The share of ticks the piece on a tile works at, as the smog on its plot lets it. */
+/** The share of its pace the piece on a tile works at, as the smog on its plot lets it. */
 export const smogPace = (y: Yard, i: number): number => shareAt(stepOf(y.smog.level[y.land.plot[i] ?? NONE] ?? 0));
 
 /** What a plot clears at a count: its ground, and each redwood standing on it (`standingOn`). */
@@ -115,8 +126,9 @@ function cleared(y: Yard, n: number, of = ""): string {
   return `${perMinute(GROUND + REDWOOD * trees, of)}: the ground ${whole(GROUND)}${by}`;
 }
 
-/** How the machines on a plot at a step work, in words: "at full pace", "3 ticks in 4". */
-const paceWords = (s: number): string => (s === 0 ? "at full pace" : `${4 - s} tick${s === 3 ? "" : "s"} in 4`);
+/** How the machines on a plot at a step work, in words, as a piece's own line says it (`slow`): "at full pace", "at 75% of their pace". */
+const paceWords = (s: number): string =>
+  s === 0 ? "at full pace" : `at ${Math.floor(shareAt(s) * 100)}% of their pace`;
 
 /** A plot's smog, for its card, for a plot the yard owns: its level, what is made and cleared, and how its machines work. */
 export function smogLine(y: Yard, n: number): string {
@@ -130,7 +142,7 @@ export const clearsLine = (y: Yard, n: number): string => `Clears ${cleared(y, n
 /** What a redwood clears, for its card. */
 export const redwoodClears = (): string => `Clears ${perMinute(REDWOOD, "smog")} from this plot.`;
 
-/** The trouble a plot at step 1 or more is in, by name, or nothing: "Smog on The Old Workings: its machines work 3 ticks in 4." */
+/** The trouble a plot at step 1 or more is in, by name, or nothing: "Smog on The Old Workings: its machines work at 75% of their pace." */
 export function smogTrouble(y: Yard, n: number): string | null {
   const s = stepOf(y.smog.level[n] ?? 0);
   const plot = y.land.plots[n];
