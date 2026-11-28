@@ -11,33 +11,42 @@
       {
         "head": "Leaving every raid",
         "points": [
-          "Peep, Brew, Munch, Clutch and Orphion can no longer be bought in every raid. They can still be pulled at the Grove and bought in raids with your own figures."
+          "Leaving now: Peep, Brew, Munch, Clutch and Orphion. You can still pull them at the Grove, and buy them in raids with your own figures.",
+          "Penguin Month has closed. You can only buy Yule in raids with your own figures, if you pulled Yule."
         ]
       },
       {
         "head": "New figures",
         "points": [
-          "Vi (1 acorn, Canopy Chorus, and LHZ) gives the friend who used an ability most recently 50 mana.",
-          "Flop (2 acorns, Canopy Bulwark) falls over for 2 seconds, where nothing reaches it, then gets up with 40% of its health back, and every enemy within 2 hexes has to attack it for 2 seconds.",
-          "Bhlue (3 acorns, Canopy Mender) gives every friend in its row a shield of 180 for 4 seconds, and blocks the first enemy ability to hit each of them in that time.",
-          "Ace (4 acorns, Canopy Slinger) deals its attacks as aces, in turn: spades to the enemy with the least health, 40% harder; hearts heal the most hurt friend; diamonds to the enemy with the most armour, through it; clubs to the enemy with the most mana, taking 15 of it. Full Deck throws all four at once, 110 damage each.",
-          "Unc (5 acorns, Feather Slinger, and Canopy) pecks its target 8 times in 3 seconds, 82 damage each; if it falls, the rest go to the enemy nearest where it fell.",
-          "Leetanns, Up The Tree's top prize (5 acorns, Canopy Fang and Crafter), swings its tools in turn: the axe does 380 damage and pushes its target 1 hex, the pickaxe does 380 damage and halves its target's armour for 5 seconds, the rod pulls the enemy furthest away to a hex beside it, and the scythe does 290 damage to every enemy beside it and heals it for half of that. While Up The Tree is open, Leetanns can be bought in every raid."
+          "Vi (1 acorn, Canopy Chorus, and LHZ) gives 50 mana to the friend who last used an ability.",
+          "Flop (2 acorns, Canopy Bulwark) falls over for 2 seconds, and nothing can reach it. Then it gets up with 40% of its health back.",
+          "When Flop gets up, every enemy within 2 hexes has to attack it for 2 seconds.",
+          "Bhlue (3 acorns, Canopy Mender) shields every friend in its row: 180 for 4 seconds. In that time, the first enemy ability to hit each of them is blocked.",
+          "Ace (4 acorns, Canopy Slinger) attacks with the four aces in turn.",
+          "Spades hit the enemy with the least health, 40% harder. Hearts heal the most hurt friend.",
+          "Diamonds hit the enemy with the most armour, ignoring its armour. Clubs hit the enemy with the most mana, and take 15 of it.",
+          "Ace's ability, Full Deck, throws all four at once, 110 damage each.",
+          "Unc (5 acorns, Feather Slinger, and Canopy) pecks its target 8 times in 3 seconds, 82 damage each. If the target falls, the rest go to the enemy nearest it.",
+          "Leetanns (5 acorns, Canopy Fang, and Crafter) is Up The Tree's top prize. Each cast, it swings its next tool.",
+          "The axe does 380 damage and pushes the target 1 hex. The pickaxe does 380 damage and halves the target's armour for 5 seconds.",
+          "The rod pulls the farthest enemy to a hex beside Leetanns. The scythe does 290 damage to every enemy beside it, and heals it for half of that.",
+          "While Up The Tree is open, anyone can buy Leetanns in any raid."
         ]
       },
       {
         "head": "Traits",
         "points": [
           "Vi is LHZ too.",
-          "Canopy: with 3, Canopy figures start the fight up the tree for 2 seconds, then drop with a shield of 20% of their health and 30 mana; with 5, a shield of 35% and a full mana bar.",
-          "Crafter (Leetanns): after every 3 fights it fights on the board, a component is added to your rack.",
-          "Feather now has 4 steps: with 2, 3, 4 and 5, 4%, 6%, 8% and 11% faster after every attack.",
-          "Slinger has a third step: with 6, 20% more than the last on the same target."
+          "Canopy, with 3: Canopy figures start the fight up the tree for 2 seconds. Then they drop with a shield of 20% of their health and 30 mana.",
+          "Canopy, with 5: the shield is 35% of their health, and they drop with a full mana bar.",
+          "Crafter (Leetanns): after every 3 fights it fights on the board, you get a component.",
+          "Feather now has 4 steps, at 2, 3, 4 and 5. Feather figures attack 4%, 6%, 8% or 11% faster after every attack.",
+          "Slinger has a third step at 6. Each attack on the same target does 20% more than the last."
         ]
       },
       {
         "head": "Emblems",
-        "points": ["A Good Branch: its holder is a Canopy as well."]
+        "points": ["A Good Branch is a new charm. The figure holding it counts as Canopy."]
       }
     ]
   },
@@ -53,18 +62,24 @@
       {
         "head": "Leaving every raid",
         "points": [
-          "Hodge, Glorp, Drizzle, Eaves and Dose can no longer be bought in every raid. They can still be pulled at the Grove and bought in raids with your own figures."
+          "Leaving now: Hodge, Glorp, Drizzle, Eaves and Dose. You can still pull them at the Grove, and buy them in raids with your own figures.",
+          "Groot Night has closed. You can only buy the Commodore in raids with your own figures, if you pulled him."
         ]
       },
       {
         "head": "New figures",
         "points": [
-          "Dibs (1 acorn, Huddle Bulwark) gives itself and the most hurt friend touching it a shield of 90 for 4 seconds.",
-          "Jet (2 acorns, Huddle Sneak) slides along a line through its target: 100 physical damage to every enemy on it, and ice there for 3 seconds where enemies are 30% slower.",
-          "Larp (3 acorns, Gnome Slinger, and Huddle) throws 4 snowballs, each at a different enemy in its reach where it can: 55 physical damage each.",
-          "Flurry (4 acorns, Huddle Sage) brings snow for 4 seconds on the enemy in its reach with the most enemies touching it, and the hexes touching that one: 60 magic damage a second there, and enemies there are 25% slower.",
-          "Pomp (4 acorns, Gnome Chorus) gives every friend in its row 30 mana, and they attack 25% faster for 4 seconds.",
-          "Yule, Penguin Month's top prize (5 acorns, Huddle Mender, and LHZ), puts the most hurt friend in a bubble for 2 seconds: nothing can hurt them and they do nothing. They come out with 520 health back and a full mana bar. Each later use bubbles 1 more friend, up to 3. While Penguin Month is open, Yule can be bought in every raid."
+          "Dibs (1 acorn, Huddle Bulwark) shields itself and the most hurt friend touching it: 90 for 4 seconds.",
+          "Jet (2 acorns, Huddle Sneak) slides in a line through its target. Every enemy on the line takes 100 physical damage.",
+          "Jet leaves ice on the line for 3 seconds. Enemies on the ice are 30% slower.",
+          "Larp (3 acorns, Gnome Slinger, and Huddle) throws 4 snowballs, each at a different enemy if it can. Each does 55 physical damage.",
+          "Flurry (4 acorns, Huddle Sage) brings snow for 4 seconds. It falls on the enemy in reach with the most enemies touching it, and the hexes touching that one.",
+          "Enemies in Flurry's snow take 60 magic damage a second and are 25% slower.",
+          "Pomp (4 acorns, Gnome Chorus) gives every friend in its row 30 mana. They attack 25% faster for 4 seconds.",
+          "Yule (5 acorns, Huddle Mender, and LHZ) is Penguin Month's top prize. It puts the most hurt friend in a bubble for 2 seconds.",
+          "Nothing can hurt a friend in the bubble, and they can't act. They come out with 520 health back and a full mana bar.",
+          "Each later cast bubbles 1 more friend, up to 3.",
+          "While Penguin Month is open, anyone can buy Yule in any raid."
         ]
       },
       {
@@ -74,16 +89,20 @@
           "One LHZ figure starts the fight with 15 more mana. Two start with 25 more each.",
           "With two, each time one uses its ability, the other gets 15 mana.",
           "The Honorary Badge is a new charm. The figure holding it counts as LHZ.",
-          "Huddle: with 2 and 4, Huddle figures that start the fight touching share one shield, worth 25% and 35% of their health added together. With 5 it comes back once, 6 seconds after it breaks, worth 35% of the health of those still up.",
-          "Sage has a third step at 6: abilities 90% stronger, and each attack gives 7 more mana.",
-          "Chorus has a fourth step at 5: the party gains 4 mana a second, and Chorus figures 8."
+          "Huddle, with 2 and 4: Huddle figures that start the fight touching share one shield. It is worth 25% or 35% of their health added together.",
+          "Huddle, with 5: the shield comes back once, 6 seconds after it breaks. It is then worth 35% of the health of those still standing.",
+          "Sage has a third step at 6. Abilities are 90% stronger, and each attack gives 7 more mana.",
+          "Chorus has a fourth step at 5. The party gains 4 mana a second, and Chorus figures 8."
         ]
       },
       {
         "head": "Items",
         "points": [
-          "The Carving Knife: after you beat a boss, the second pick of components always has it. With any other component it makes an emblem of a class, with that component's stat: Wooden Tooth (Thorn, Fang), Wooden Sling (Plume, Slinger), Wooden Spectacles (Glowcap, Sage), Wooden Buckler (Bark, Bulwark) and Wooden Spoon (Chestnut, Mender). Two Knives make An Extra Chair.",
-          "Guild Onesie: a new charm, for Huddle."
+          "After you beat a boss, the second component pick always has a Carving Knife.",
+          "A Knife and any other component make a class emblem. The emblem keeps that component's stat.",
+          "The five: Wooden Tooth (Thorn, Fang), Wooden Sling (Plume, Slinger), Wooden Spectacles (Glowcap, Sage), Wooden Buckler (Bark, Bulwark) and Wooden Spoon (Chestnut, Mender).",
+          "Two Knives make An Extra Chair.",
+          "Guild Onesie is a new charm. The figure holding it counts as Huddle."
         ]
       }
     ]
@@ -100,41 +119,47 @@
       {
         "head": "Fights",
         "points": [
-          "From 20 seconds into a fight, healing and shields are 20% weaker, and all damage rises 5% each second, up to 50% more."
+          "20 seconds into a fight, healing and shields get 20% weaker.",
+          "From then on, all damage rises 5% each second, up to 50% more."
         ]
       },
       {
         "head": "Leaving every raid",
         "points": [
-          "Every raid now has 29 figures at a time: when new ones arrive, as many leave.",
-          "Flint, Toast, Shrub, Reed and Vesta can no longer be bought in every raid. They can still be pulled at the Grove and bought in raids with your own figures."
+          "Every raid now has 29 figures at a time. When new ones arrive, the same number leave.",
+          "Leaving now: Flint, Toast, Shrub, Reed and Vesta. You can still pull them at the Grove, and buy them in raids with your own figures.",
+          "gaz's banner has closed. You can only buy gaz in raids with your own figures, if you pulled gaz."
         ]
       },
       {
         "head": "New figures",
         "points": [
-          "Peep (1 acorn, Grooter Slinger) throws its hat at the enemy in reach with the most armour, and takes 10 armour and ward off it.",
+          "Peep (1 acorn, Grooter Slinger) throws its hat at the enemy in reach with the most armour. The hit takes 10 armour and ward off it.",
           "Crab #31 (3 acorns, Crab Chorus) gives its 2 nearest friends 25 mana and shields itself.",
-          "Munch (3 acorns, Grooter Fang) bites its target 3 times in 1 second, each bite taking 6 armour and ward off it.",
+          "Munch (3 acorns, Grooter Fang) bites its target 3 times in 1 second. Each bite takes 6 armour and ward off it.",
           "Clutch (4 acorns, Grooter Bulwark) hatches Hatchlings beside it, up to 3 at a time.",
-          "Crab #8 (5 acorns, Crab Sneak) hides in its shell for 1 second, then hits the enemy with the least health, and again if it falls. It takes none of your places on the board; a second Crab #8 does.",
-          "The Commodore, Groot Night's top prize, calls up to 3 grooters onto free hexes within 2 of him, and heals those still standing to full. While Groot Night is open, he can be bought in every raid, not only with your own figures, and gaz only in runs with your own figures, by whoever pulled him."
+          "Crab #8 (5 acorns, Crab Sneak) hides in its shell for 1 second. Then it hits the enemy with the least health, and again if that enemy falls.",
+          "Crab #8 doesn't take up a place on your board. A second Crab #8 does.",
+          "The Commodore (5 acorns, Grooter Chorus) is Groot Night's top prize. He calls up to 3 grooters onto free hexes within 2 of him. Grooters still standing are healed to full instead.",
+          "While Groot Night is open, anyone can buy the Commodore in any raid."
         ]
       },
       {
         "head": "Traits",
         "points": [
-          "Grooter: with 2, 3 and 4, each hit by a Grooter figure or what it summons takes 4, 6 and 8 armour and ward off its target, up to 30, 50 and 80.",
-          "Chorus: with 2, 3 and 4, the whole party gains 1, 2 and 3 mana a second, and Chorus figures 2, 4 and 6. Twig, Brew and Drizzle are Chorus as well.",
-          "Crab's top step needs 7 now, not 5: with 2 a Crab #?? joins, with 4 a Big Crab #??, and with 7 a Big Crab #?? and two Crab #??.",
-          "Sneak's first hits do 35% and 60% more, from 40% and 70%."
+          "Grooter, with 2, 3 and 4: each hit from a Grooter figure or its summons takes 4, 6 or 8 armour and ward. One enemy loses at most 30, 50 or 80.",
+          "Chorus, with 2, 3 and 4: your whole party gains 1, 2 or 3 mana a second. Chorus figures gain 2, 4 or 6.",
+          "Twig, Brew and Drizzle are Chorus too.",
+          "Crab's top step now needs 7 Crabs, not 5. With 2, a Crab #?? joins. With 4, a Big Crab #??. With 7, a Big Crab #?? and two Crab #??.",
+          "Sneak's first hits now do 35% and 60% more, down from 40% and 70%."
         ]
       },
       {
         "head": "Emblems",
         "points": [
-          "Four new charms: Grooter Ping (Grooter), Tin Whistle (Chorus), Party Finder (Graid: its holder gets back up as itself) and False Moustache (Sneak).",
-          "Every emblem gives its holder 10% more health."
+          "Four new charms: Grooter Ping (Grooter), Tin Whistle (Chorus), Party Finder (Graid) and False Moustache (Sneak).",
+          "A Party Finder holder with no true form gets back up as itself.",
+          "Every emblem now also gives 10% more health."
         ]
       }
     ]
