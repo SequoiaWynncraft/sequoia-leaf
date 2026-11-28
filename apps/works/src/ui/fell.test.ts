@@ -12,6 +12,7 @@ import {
   buyPlot,
   create,
   fell as fellTree,
+  fellPrice,
   goal,
   plot,
   plotPrice,
@@ -104,7 +105,8 @@ test("with a redwood felled before, the card's Fell is at the next one's price, 
     for (const p of y.land.plots)
       if (!y.plots.includes(p.plot) && buyPlot(y, p.plot, plotPrice(y, p.plot), Infinity).ok) more = true;
   }
-  if (!fellTree(y, ...xy(-14, -4), Infinity).ok) throw new Error("the Clay Bank's redwood was not felled");
+  if (!fellTree(y, ...xy(-14, -4), fellPrice(y), Infinity).ok)
+    throw new Error("the Clay Bank's redwood was not felled");
   await opened(y, 5_000);
   const page = aPage();
   const { print, card } = cardAt(...xy(-2, 15));

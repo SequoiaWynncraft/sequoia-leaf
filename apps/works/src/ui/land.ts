@@ -69,7 +69,8 @@ export interface LandHands {
   buy(plot: Plot, price: number): boolean;
   /** Takes on a plot's clearing. */
   clear(plot: Plot): boolean;
-  fell(x: number, y: number): boolean;
+  /** Fells a redwood at the price its card shows. */
+  fell(x: number, y: number, price: number): boolean;
   refuse(why: string): void;
 }
 
@@ -98,7 +99,7 @@ export function groundCard(p: GroundPrint, hands: Pick<LandHands, "fell" | "refu
                   ask: { again: "Press again to fell", price: fell.price },
                   on: () => {
                     // Felled, there is nothing for the card to be about: it is put away.
-                    if (hands.fell(fell.x, fell.y)) close();
+                    if (hands.fell(fell.x, fell.y, fell.price)) close();
                   },
                 }
               : { on: () => hands.refuse("Not enough Coins") }),

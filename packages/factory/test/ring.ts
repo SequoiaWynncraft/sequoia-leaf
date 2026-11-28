@@ -72,7 +72,7 @@ export function outward(): F.Yard {
   y.till = 1_000_000 * F.MILLI;
   const tree = RINGED.trees.findIndex((tiles) => RINGED.plot[tiles[0] ?? 0] === RINGED.plots.indexOf(ring));
   const first = RINGED.trees[tree]?.[0] ?? 0;
-  must(y, { do: "fell", x: first % RINGED.w, y: Math.floor(first / RINGED.w) });
+  must(y, { do: "fell", x: first % RINGED.w, y: Math.floor(first / RINGED.w), price: F.fellPrice(y) });
   must(y, { do: "build", kind: "crate", x: first % RINGED.w, y: Math.floor(first / RINGED.w), dir: 0 });
   must(y, { do: "saveYard", slot: 0 });
   return y;

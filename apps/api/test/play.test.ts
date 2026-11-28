@@ -1999,10 +1999,19 @@ describe("an Undo in the Works", () => {
     const grant = { amount: 1000, reason: "A test's grant", game: null, key: `grant:${alice}` };
     await services.run(Coins.use((coins) => coins.post(alice, grant, clock.now)));
     const tree = tileNear(-2, 15);
-    expect((await works([{ do: "fell", ...near(-14, -4) }])).results).toEqual([
+    expect((await works([{ do: "fell", ...near(-14, -4), price: 1000 }])).results).toEqual([
       { id: `u-${ids}`, refused: "cannot_fell" },
     ]);
-    expect((await works([{ do: "fell", ...near(-1, 16) }])).results).toEqual([{ id: `u-${ids}`, notes: [] }]);
+    // A fell with no price, from a page before prices were sent, is refused with its batch, and nothing is felled.
+    const opening = await send("GET", "/v1/game/play/works");
+    const { clock: tick } = yardOf(Schema.decodeUnknownSync(Shown)(await opening.json()).state);
+    const priceless = await send("POST", "/v1/game/play/works", {
+      commands: [{ id: `u-${++ids}`, tick, do: "fell", ...near(-1, 16) }],
+    });
+    expect([priceless.status, await codeOf(priceless)]).toEqual([400, "invalid_command"]);
+    expect((await works([{ do: "fell", ...near(-1, 16), price: 1000 }])).results).toEqual([
+      { id: `u-${ids}`, notes: [] },
+    ]);
     expect((await entries(alice)).slice(-1)).toEqual([
       { amount: -1000, reason: "Felled in the Works", game: "works", key: expect.any(String) },
     ]);

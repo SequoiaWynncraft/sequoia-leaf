@@ -76,7 +76,7 @@ describe("what the page writes for an act", () => {
     { do: "clearPlot", plot: F.plot("workings") },
     { do: "handClearing", plot: F.plot("workings"), start: "a-3" },
     { do: "stopClearing", plot: F.plot("workings"), start: "a-3" },
-    { do: "fell", x: 22, y: 33 },
+    { do: "fell", x: 22, y: 33, price: 1000 },
     { do: "take", node: F.goal("crates") },
     { do: "queue", node: F.goal("signs") },
     { do: "unqueue", node: F.goal("culvert") },

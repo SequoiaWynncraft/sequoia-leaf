@@ -261,7 +261,11 @@ export class Player {
         };
         const standing = y.land.trees.flatMap((tiles) => tiles.filter((i) => near(i) && F.redwoodAt(y, i)));
         const i = this.r() < 0.85 ? this.pick(standing) : undefined;
-        return { do: "fell", ...(i === undefined ? at : { x: i % y.land.w, y: Math.floor(i / y.land.w) }) };
+        return {
+          do: "fell",
+          ...(i === undefined ? at : { x: i % y.land.w, y: Math.floor(i / y.land.w) }),
+          price: F.fellPrice(y),
+        };
       }
       default:
         return (

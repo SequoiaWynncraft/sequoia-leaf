@@ -62,7 +62,7 @@ describe("what a figure walks over", () => {
     expect(why(y, -4, 12)).toBeNull();
     expect(why(y, -2, 15)).toBe(IN_THE_WAY);
     learn(y, F.goal("felling"));
-    must(y, { do: "fell", ...near(-2, 15) });
+    must(y, { do: "fell", ...near(-2, 15), price: F.fellPrice(y) });
     expect(why(y, -2, 15)).toBeNull();
     must(y, buying(y, "stream"));
     const stream = F.plot("stream");

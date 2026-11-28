@@ -122,8 +122,8 @@ interface Carries {
   clearPlot: { readonly plot: Plot };
   handClearing: { readonly plot: Plot; readonly start: string };
   stopClearing: { readonly plot: Plot; readonly start: string };
-  /** Any tile of the redwood. */
-  fell: At;
+  /** Any tile of the redwood, and the price the player was shown. */
+  fell: At & { readonly price: number };
   take: { readonly node: Goal };
   queue: { readonly node: Goal };
   unqueue: { readonly node: Goal };
@@ -452,9 +452,11 @@ export const COMMANDS: { readonly [D in Name]: Spec<D> } = {
   fell: {
     refused: "cannot_fell",
     lock: needs({ fell: true }),
-    read: (_v, f) => f.spot && { do: "fell", ...f.spot },
-    write: spot,
-    act: (y, a, coins, no) => spent(y, fell(y, a.x, a.y, coins), REASON.fell, no),
+    // A fell with no price (from a page before prices were sent) does not read, and is refused.
+    read: (v, f) =>
+      f.spot && whole(v.price, Number.MAX_SAFE_INTEGER) ? { do: "fell", ...f.spot, price: v.price } : null,
+    write: (a) => ({ ...spot(a), price: a.price }),
+    act: (y, a, coins, no) => spent(y, fell(y, a.x, a.y, a.price, coins), REASON.fell, no),
   },
   take: {
     refused: "cannot_take",

@@ -434,17 +434,23 @@ export function fellPrice(y: Yard): number {
 }
 
 /** Why the redwood on a tile cannot be felled with `coins` in the purse, or nothing if it can. */
-export function fellRefusal(y: Yard, x: number, z: number, coins: number): string | null {
+export function fellRefusal(y: Yard, x: number, z: number, coins: number, shown?: number): string | null {
   const i = at(y, x, z);
   if (i < 0 || !redwoodAt(y, i)) return "There is no redwood here";
   const plot = y.land.plots[y.land.plot[i] ?? NONE];
   if (!plot || !y.plots.includes(plot.plot)) return plot ? `${plot.name} is not the yard's yet` : "That is off the map";
-  return coins < fellPrice(y) ? "Not enough Coins" : null;
+  const now = fellPrice(y);
+  if (shown !== undefined && shown !== now) return `The price has changed: it is now ${coinsText(now)}`;
+  return coins < now ? "Not enough Coins" : null;
 }
 
-/** Fells the redwood on a tile, every tile of it, and says what it cost. It is never undone, and its Coins never come back. */
-export function fell(y: Yard, x: number, z: number, coins: number): Spent {
-  const why = fellRefusal(y, x, z, coins);
+/**
+ * Fells the redwood on a tile, every tile of it, at the price the player was shown (`shown`: refused
+ * as a plot is if it has changed since), and says what it cost. It is never undone, and its Coins
+ * never come back.
+ */
+export function fell(y: Yard, x: number, z: number, shown: number, coins: number): Spent {
+  const why = fellRefusal(y, x, z, coins, shown);
   if (why !== null) return { ok: false, why };
   const cost = fellPrice(y);
   y.felled[standingTree(y, at(y, x, z))] = 1;
