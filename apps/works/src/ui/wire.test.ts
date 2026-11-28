@@ -80,7 +80,7 @@ test("a standing breaker's card picks out the next thing of its mix it gives", a
   await opened(y, 1_000);
   const print = printOf(tileRef(i));
   const [row] = print?.card === "standing" ? (breaker.standing?.rows?.(print) ?? []) : [];
-  expect([row?.label, row?.things.flatMap((t, n) => (t.lit ? [n] : []))]).toEqual(["Gives next", [5]]);
+  expect([row?.label, row?.things.flatMap((t, n) => (t.lit ? [n] : []))]).toEqual(["Gives, in this order", [5]]);
 });
 
 test("a plot the yard owns says its smog on its card: its level, what is made and cleared, and how its machines work", async () => {

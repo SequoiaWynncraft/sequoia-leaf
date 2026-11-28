@@ -141,7 +141,7 @@ export const breaker: KindPage = {
   pointer: "bare",
   pace: (k, n): Stat => ({ label: "Breaks", value: perMinute(mixPerMinute(k, n)) }),
   rows: () => mixRow("Gives, in this order", null),
-  standing: { rows: (p) => mixRow("Gives next", p.mix) },
+  standing: { rows: (p) => mixRow("Gives, in this order", p.mix) },
   holdsUp: () => MIX_OF[BREAKER]?.holds ?? 8,
   map: [CLAY[1], CLAY[0]],
   dot: CLAY[1],

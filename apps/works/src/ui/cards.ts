@@ -444,7 +444,8 @@ function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
   const page = pageOf(k);
   const own = page?.standing;
   rows.push(...(own?.rows?.(p) ?? []));
-  rows.push(...(base.rows ?? []));
+  // Its kind's rows, but where it has its own of the same name: a breaker's mix with the next picked out.
+  rows.push(...(base.rows ?? []).filter((r) => !rows.some((o) => o.label === r.label)));
 
   const actions: Action[] = own?.actions?.(art, p, hands) ?? [];
   if (p.count > 0 && (page?.empties === true || p.spare !== null || p.state === "idle"))

@@ -19,13 +19,21 @@ import { drawShades } from "./trees.ts";
 const WASH = [0, 0.1, 0.18, 0.26] as const;
 /** The level from which a plot below step 1 shows its blots, at half strength. */
 const BLOTS_FROM = 400;
-/** How fast the wash moves toward its step's, a second: a step's change in about 2 seconds. */
-const EASE = 0.045;
+/** How long the wash takes to reach its new step's, in seconds, once the step changes. */
+const EASE = 2;
 /** How fast the blots drift east, in the yard's pixels a second. */
 const DRIFT = 0.5;
 
-/** The wash each plot shows now, by its place in the land's list, and the screen's clock it was last drawn at. */
-const eased = { of: new Float32Array(256), at: 0 };
+/**
+ * By plot, by its place in the land's list: the wash it eases from and to, and when its step last
+ * changed on the screen's clock. A plot first seen shows its step's wash at once.
+ */
+const eased = {
+  from: new Float32Array(256),
+  to: new Float32Array(256),
+  at: new Float64Array(256),
+  seen: new Uint8Array(256),
+};
 
 /** The soft blots over a plot: `n` of them, each by where it sits in the plot and how wide, from the plot's place. */
 function blots(g: Ctx, n: number, x: number, y: number, w: number, h: number, t: number, strength: number): void {
@@ -51,14 +59,23 @@ function blots(g: Ctx, n: number, x: number, y: number, w: number, h: number, t:
   g.restore();
 }
 
-/** The wash a plot shows now, eased toward its step's by up to `step`; and its corner and size in the view, or nothing off it. */
-function plotWash(y: Yard, n: number, step: number): number {
-  const level = y.smog.level[n] ?? 0;
-  const was = eased.of[n] ?? 0;
-  const to = WASH[stepOf(level)] ?? 0;
-  const now = was + Math.max(-step, Math.min(step, to - was));
-  eased.of[n] = now;
-  return now;
+/** The wash a plot shows at `t`: its step's, eased in over `EASE` seconds since the step last changed. */
+function plotWash(y: Yard, n: number, t: number): number {
+  const to = WASH[stepOf(y.smog.level[n] ?? 0)] ?? 0;
+  const shown = (): number => {
+    const from = eased.from[n] ?? 0;
+    return from + ((eased.to[n] ?? 0) - from) * Math.min(1, Math.max(0, (t - (eased.at[n] ?? 0)) / EASE));
+  };
+  if (eased.seen[n] !== 1) {
+    eased.seen[n] = 1;
+    eased.from[n] = to;
+    eased.to[n] = to;
+  } else if (eased.to[n] !== Math.fround(to)) {
+    eased.from[n] = shown();
+    eased.to[n] = to;
+    eased.at[n] = t;
+  }
+  return shown();
 }
 
 /** How strong a plot's blots are: full at step 1 or more, half from a level of 400 below it, else none. */
@@ -66,22 +83,20 @@ const blotStrength = (level: number): number => (stepOf(level) >= 1 ? 1 : level 
 
 /** Lays the haze over the ground of the view, its corner at (`cx`, `cy`) in the yard's pixels, `W` by `H`. */
 export function haze(g: Ctx, y: Yard, cx: number, cy: number, W: number, H: number, t: number): void {
-  const step = Math.min(0.25, Math.max(0, t - eased.at)) * EASE;
-  eased.at = t;
   const { land } = y;
   for (let n = 0; n < land.plots.length; n++) {
     const plot = land.plots[n];
+    if (!plot || !y.plots.includes(plot.plot)) continue;
     const level = y.smog.level[n] ?? 0;
-    if (!plot || (level === 0 && (eased.of[n] ?? 0) === 0) || !y.plots.includes(plot.plot)) continue;
-    const now = plotWash(y, n, step);
+    const now = plotWash(y, n, t);
+    const strength = blotStrength(level);
     const [x, top, w, h] = [plot.x * TILE - cx, plot.y * TILE - cy, plot.w * TILE, plot.h * TILE];
-    if (x > W || top > H || x + w < 0 || top + h < 0) continue;
+    if ((now <= 0.002 && strength === 0) || x > W || top > H || x + w < 0 || top + h < 0) continue;
     if (now > 0.002) {
       g.globalAlpha = now;
       g.fillStyle = IRON[2];
       g.fillRect(x, top, w, h);
     }
-    const strength = blotStrength(level);
     if (strength > 0) blots(g, n, x, top, w, h, t, strength);
   }
   g.globalAlpha = 1;
