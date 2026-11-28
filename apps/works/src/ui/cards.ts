@@ -430,20 +430,25 @@ export function saidOf(p: StandingPrint): string {
 /** A standing piece's pace now, where its kind gives its own (`Standing.pace`). */
 const paceNow = (own: Standing | undefined, p: StandingPrint): Stat | null => own?.pace?.(p) ?? null;
 
+/**
+ * What a standing piece holds, as a row: a machine's parts are in its recipe's slots, so what it holds
+ * besides; none where its kind's own rows say what it holds (`KindPage.holdsOwn`, a launch pad).
+ */
+function heldRows(p: StandingPrint, k: Kind): Row[] {
+  if (pageOf(k)?.holdsOwn === true) return [];
+  const holding = p.holding.filter(([t]) => !p.flow?.parts.some((part) => part.item === t));
+  if (holding.length === 0) return [];
+  const label = p.most !== null ? `Holds, of ${p.most}` : "Holds";
+  return [{ label, things: holding.map(([t, c]) => ({ ref: itemRef(t), count: `×${c}` })) }];
+}
+
 /** A machine standing in the yard: its kind's card, with what this one is doing and holds, and what can be done with it. */
 function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
   const { machine: m, x, y } = p;
   const k = m.kind;
   const base = machineCard(art, m);
   if (m.later) return base;
-  const rows: Row[] = [];
-  // A machine's parts are in its recipe's slots: what it holds besides is listed.
-  const holding = p.holding.filter(([t]) => !p.flow?.parts.some((part) => part.item === t));
-  if (holding.length > 0 && pageOf(k)?.holdsOwn !== true)
-    rows.push({
-      label: p.most !== null ? `Holds, of ${p.most}` : "Holds",
-      things: holding.map(([t, c]) => ({ ref: itemRef(t), count: `×${c}` })),
-    });
+  const rows: Row[] = heldRows(p, k);
   // Once the card says what it gathers a minute in a sentence, the row names the thing and no more.
   const per = p.numbers.length === 0 ? p.perMinute : null;
   if (p.gathering !== null) rows.push({ label: "Gathering", things: [{ ref: itemRef(p.gathering), note: per ?? "" }] });

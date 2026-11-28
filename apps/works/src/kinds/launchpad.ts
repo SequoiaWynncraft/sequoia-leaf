@@ -23,7 +23,7 @@ import {
 } from "@sequoia-leaf/factory";
 import type { Action, Block, Row } from "@sequoia-leaf/kit/card.ts";
 import { lessMotion } from "@sequoia-leaf/kit/dom.ts";
-import { whole } from "@sequoia-leaf/kit/say.ts";
+import { perMinute, whole } from "@sequoia-leaf/kit/say.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 
 import {
@@ -111,7 +111,7 @@ function said(p: StandingPrint): Block[] {
     const over = c.seconds >= 60 ? "the last minute" : `the last ${c.seconds} second${c.seconds === 1 ? "" : "s"}`;
     const holds = whole(pad.rocket.cells);
     blocks.push({
-      body: `In ${over}, ${whole(c.came)} charged cells came in. About ${whole(pad.rocket.cells * 1.1)} a minute hold ${holds}.`,
+      body: `In ${over}, ${whole(c.came)} charged cells came in. To hold ${holds} at once, it needs about ${perMinute(pad.rocket.cells * 1.1)}.`,
     });
   }
   return blocks;
@@ -131,7 +131,7 @@ function tipsOut(pad: PadReading, to: (typeof CHOICES)[number]): string {
 }
 
 /** A button for each rocket it may be set to: the one it is set to lit; each names the rocket the card shows it set to. */
-export function rocketButtons(p: StandingPrint, hands: Hands): Action[] {
+export function rocketButtons(p: StandingPrint, hands: Pick<Hands, "act">): Action[] {
   const pad = p.launch?.pad;
   if (!pad) return [];
   return CHOICES.map((r) => ({

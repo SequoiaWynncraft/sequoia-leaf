@@ -17,6 +17,7 @@ import {
   holderOf,
   type Item,
   item,
+  type Kind,
   kind,
   litAt,
   padAt,
@@ -35,7 +36,6 @@ import { S } from "../state.ts";
 import { setTool } from "../tools.ts";
 import { runOut } from "../ways.ts";
 import { runYard } from "../yard.ts";
-import type { Hands } from "./cards.ts";
 import { madeRows } from "./made.ts";
 import { printOf } from "./prints.ts";
 import { itemRef, machineRef, tileRef } from "./refs.ts";
@@ -55,6 +55,14 @@ const noted = (row: Row | undefined): string[] =>
   (row?.things ?? []).map((t) => `${t.ref} ${typeof t.note === "string" ? t.note : (t.count ?? "")}`);
 const rowsOf = (rows: readonly Row[]): (string | string[])[][] => rows.map((r) => [r.label, noted(r)]);
 
+/** A charger holding `out` ready, at rest, as its picture is given it. */
+const ready = (out: number): { out: number; working: boolean; work: number } => ({ out, working: false, work: 0 });
+/** A thing's card's rows of where it comes from, as labels and notes. */
+function madeOf(n: Item): (string | string[])[][] {
+  const print = printOf(itemRef(n));
+  return rowsOf(print?.card === "item" ? madeRows(print) : []);
+}
+
 /** A yard on the guild's land, every goal below `tier` done (9: tier 8 known), a mouse in hand. */
 function yard(tier = 9): Yard {
   const y = create({ seed: 5, tier });
@@ -70,9 +78,9 @@ function corner(y: Yard): readonly [number, number] {
   return [p?.x ?? 0, p?.y ?? 0];
 }
 /** Builds a piece facing east with its own tile `dx`, `dz` from the yard plot's corner: its tile. */
-function piece(y: Yard, k: number, dx: number, dz: number): number {
+function piece(y: Yard, k: Kind, dx: number, dz: number): number {
   const [x0, z0] = corner(y);
-  const did = build(y, k as Parameters<typeof build>[1], x0 + dx, z0 + dz, 0, Infinity);
+  const did = build(y, k, x0 + dx, z0 + dz, 0, Infinity);
   expect(did.ok).toBe(true);
   return at(y, x0 + dx, z0 + dz);
 }
@@ -92,7 +100,6 @@ test("the charger's card says it charges 60, 90 and 120 cells a minute at its gr
 });
 
 test("its pips show the bars of the cell it holds ready, fill as it charges, and are all out just after a beat", () => {
-  const ready = (out: number): { out: number; working: boolean; work: number } => ({ out, working: false, work: 0 });
   expect([THREE, TWO, ONE, CHARGED.plain].map((n) => pipsOf(150, ready(n)))).toEqual([3, 2, 1, 0]);
   expect([0, 5, 10, 19].map((work) => pipsOf(150, { out: 255, working: true, work }))).toEqual([0, 1, 2, 3]);
   expect([200, 204, 205].map((tick) => pipsOf(tick, ready(THREE)))).toEqual([0, 0, 3]);
@@ -100,17 +107,13 @@ test("its pips show the bars of the cell it holds ready, fill as it charges, and
 
 test("a charged cell's card and a rocket's name the charger and the launch pad before either is known", async () => {
   await opened(yard(8), 1_000);
-  const rows = (n: Item): (string | string[])[][] => {
-    const print = printOf(itemRef(n));
-    return rowsOf(print?.card === "item" ? madeRows(print) : []);
-  };
-  expect(rows(TWO)).toEqual([
+  expect(madeOf(TWO)).toEqual([
     ["Charged from", [`${itemRef(CHARGED.plain)} `, `${itemRef(ONE)} `, `${itemRef(TWO)} `]],
     ["In", [`${machineRef(CHARGER)} 60 /min`]],
     ["Every 20 seconds it becomes", [`${itemRef(ONE)} `]],
   ]);
-  expect(rows(ONE).at(-1)).toEqual(["Every 20 seconds it becomes", [`${itemRef(CHARGED.plain)} `]]);
-  expect(rows(item("rocket"))).toEqual([
+  expect(madeOf(ONE).at(-1)).toEqual(["Every 20 seconds it becomes", [`${itemRef(CHARGED.plain)} `]]);
+  expect(madeOf(item("rocket"))).toEqual([
     ["Launched with", [`${itemRef(HULL)} ×900`, `${itemRef(FUEL)} ×3,600`, `${itemRef(THREE)} ×1,000`]],
     ["From", [`${machineRef(PAD)} `]],
   ]);
@@ -155,7 +158,9 @@ test("a standing pad's card shows each part filling, its charged cells by bars, 
     true,
   ]);
   expect(said[0]).toMatch(/^Every charged cell loses a bar in \d+ seconds?\.$/);
-  expect(said[2]).toBe(`In the last minute, ${counted?.came} charged cells came in. About 110 a minute hold 100.`);
+  expect(said[2]).toBe(
+    `In the last minute, ${counted?.came} charged cells came in. To hold 100 at once, it needs about 110 /min.`,
+  );
   // It never held 100 at once from one charger at grade I: its picture shows its rocket whole and its pips part lit.
   expect([lookOf(reading).stage, lookOf(reading).lit > 0, (counted?.most ?? 0) < 100]).toEqual([4, true, true]);
 }, 60_000);
@@ -176,7 +181,7 @@ test("its buttons set it to each rocket that comes with it, naming the rocket th
   const print = printOf(tileRef(pad));
   if (print?.card !== "standing") throw new Error("no card");
   const sent: Act[] = [];
-  const hands = { act: (a: Act) => (sent.push(a), true) } as unknown as Hands;
+  const hands = { act: (a: Act): boolean => (sent.push(a), true) };
   const buttons = rocketButtons(print, hands);
   expect(buttons.map((b) => [b.label, b.lit, b.about])).toEqual([
     ["Test rocket", true, "It is set to this rocket."],
