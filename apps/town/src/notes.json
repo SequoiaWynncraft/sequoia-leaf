@@ -149,7 +149,8 @@
       {
         "head": "Fixed",
         "points": [
-          "A ring of belts that has filled now moves at the belt's speed while something takes things off it. Before, it lost a tick for every item that went round."
+          "A ring of belts that has filled now moves at the belt's speed while something takes things off it. Before, it lost a tick for every item that went round.",
+          "A machine whose things go into a full crate that is shut now says it has stopped, and is listed in Trouble."
         ]
       }
     ]
