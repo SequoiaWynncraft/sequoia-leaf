@@ -10,7 +10,7 @@ import {
 } from "effect/http";
 import { SqlClient } from "effect/sql";
 
-import { leafCookies, SIGN_IN_MS, SignIns } from "../auth/sign-ins.ts";
+import { frameCookie, leafCookies, SIGN_IN_MS, SignIns } from "../auth/sign-ins.ts";
 import { askBackend, logFailure } from "../backend/failure.ts";
 import { AppConfig, fromLeafPage } from "../config.ts";
 import { discordPlayer } from "../players/link.ts";
@@ -163,10 +163,13 @@ const signOut = Effect.gen(function* () {
   const { secure, session } = leafCookies(publicOrigin);
   const token = cookieOf(request.headers["cookie"], session);
   if (token !== "") yield* (yield* SignIns).end(token);
-  return HttpServerResponse.expireCookieUnsafe(HttpServerResponse.empty({ status: 204 }), session, {
-    path: "/",
-    secure,
-  });
+  // From Discord's frame, its own cookie is taken away, as it was set (`frameCookie`).
+  const inFrame = settings.activity !== undefined && request.headers["origin"] === settings.activity.origin;
+  return HttpServerResponse.expireCookieUnsafe(
+    HttpServerResponse.empty({ status: 204 }),
+    session,
+    inFrame ? frameCookie(publicOrigin).gone : { path: "/", secure },
+  );
 });
 
 export const SignInRoutes = Layer.effectDiscard(

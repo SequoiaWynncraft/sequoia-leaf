@@ -13,13 +13,13 @@ import { CHAIRS } from "@sequoia-leaf/raid/sitting/sitting.ts";
 import type { SittingView } from "@sequoia-leaf/raid/sitting/view.ts";
 
 import { glyph } from "../art/icons.ts";
-import { LAUNCH, type Launch } from "../call/launch.ts";
+import { LAUNCH } from "../call/launch.ts";
 import { snd } from "../sounds.ts";
 import { pic } from "../ui/cards.ts";
-import { command, followTables, joinCall, leave, openTable, recordIfOld, sitAt, T } from "./listing.ts";
+import { atCallTable, command, followTables, joinCall, leave, openTable, recordIfOld, sitAt, T } from "./listing.ts";
 import { placeText } from "./reads.ts";
 import { enterTable } from "./seat.ts";
-import { doneWithTable, liveView } from "./seated.ts";
+import { liveView } from "./seated.ts";
 
 export { tablesRecord } from "./listing.ts";
 
@@ -142,47 +142,44 @@ function startedFoot(view: SittingView): HTMLElement[] {
   ].filter((b) => b !== null);
 }
 
-/** The call's next table, once the last is over: its line let go, and the call's table asked for again. */
-function nextTable(call: Launch): Promise<void> {
-  doneWithTable();
-  return joinCall(call.instance);
+/**
+ * In a call: Join the table (or Next table, once one is over), when the page follows no table, or one
+ * that is not the call's (the call's would not have them); none at the call's own, or out of a call.
+ */
+function callButton(view: SittingView | null): HTMLElement | null {
+  const call = LAUNCH;
+  if (call === null || (view !== null && view.stage.at !== "over" && atCallTable())) return null;
+  const words = view?.stage.at === "over" ? "Next table" : "Join the table";
+  const id = view?.stage.at === "over" ? "live-next" : "live-join";
+  return button(id, words, () => joinCall(call.instance), "", pic(glyph("swords")));
 }
 
 /** The card's foot: its buttons, and the line under them. */
 export function tablesFoot(): HTMLElement {
   const view = liveView();
-  const call = LAUNCH;
-  let buttons: HTMLElement[];
-  let line: string;
+  let buttons: (HTMLElement | null)[];
+  let line = "";
   if (!view) {
-    buttons = [
-      call
-        ? button("live-join", "Join the table", () => joinCall(call.instance), "", pic(glyph("swords")))
-        : button("live-open", "Open a table", openTable, "", pic(glyph("swords"))),
-    ];
-    line = "";
+    buttons = [LAUNCH ? null : button("live-open", "Open a table", openTable, "", pic(glyph("swords")))];
   } else if (view.stage.at === "open") {
     const opener = view.by === T.me?.id;
     const empty = CHAIRS - view.stage.sat.length;
     buttons = [
       button("live-leave", "Leave", leave, "wood", icon("back")),
       opener ? button("live-start", "Start", () => command({ do: "start" }), "", pic(glyph("swords"))) : null,
-    ].filter((b) => b !== null);
+    ];
     const who = view.stage.sat.find((m) => m.id === view.by)?.name ?? "whoever opened it";
     line = opener
       ? `Start now, and regulars take the ${empty} empty seat${empty === 1 ? "" : "s"}.`
       : `Waiting for ${who} to start. A full table starts by itself.`;
   } else if (view.stage.at === "over") {
-    buttons = [
-      button("live-end", "See how it ended", enterTable, call ? "wood" : "", pic(glyph("play"))),
-      call ? button("live-next", "Next table", () => nextTable(call), "", pic(glyph("swords"))) : null,
-    ].filter((b) => b !== null);
-    line = "";
+    buttons = [button("live-end", "See how it ended", enterTable, LAUNCH ? "wood" : "", pic(glyph("play")))];
   } else {
     buttons = startedFoot(view);
     line = T.leaving ? "Leave? You go out, in the last place of those still in." : "";
   }
-  return el("div", "mode-foot", {}, el("div", "k-row", {}, ...buttons), el("p", "k-d", { text: T.why ?? line }));
+  const shown = [...buttons, callButton(view)].filter((b) => b !== null);
+  return el("div", "mode-foot", {}, el("div", "k-row", {}, ...shown), el("p", "k-d", { text: T.why ?? line }));
 }
 
 /** The strip along the top for the member's live table, started and not over, as a run in hand has one. */

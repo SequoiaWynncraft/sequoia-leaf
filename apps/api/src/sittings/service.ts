@@ -366,14 +366,17 @@ export class Sittings extends Context.Service<
             const sent = sentOf(commands);
             if (typeof sent === "string") return { status: "invalid", why: sent } satisfies Sending;
             // A command answered before takes nothing of the allowance: a page sends again what may have come already.
-            let fresh = 0;
+            const fresh: Sent[] = [];
             for (const one of sent)
-              if (Option.isNone(yield* playStore.answered(caller.playerId, ANSWERS, one.id))) fresh++;
-            if (!pace.take(caller.playerId, yield* Clock.currentTimeMillis, [1, fresh]))
+              if (Option.isNone(yield* playStore.answered(caller.playerId, ANSWERS, one.id))) fresh.push(one);
+            if (!pace.take(caller.playerId, yield* Clock.currentTimeMillis, [1, fresh.length]))
               return { status: "slow" } satisfies Sending;
             const sits = sent.some((one) => one.command.do === "sit");
-            // A call's sitting seats only someone Discord has in the call, whichever way they ask.
-            const call = sits ? Option.getOrNull(yield* store.callOf(id)) : null;
+            // A call's sitting seats only someone Discord has in the call, whichever way they ask: asked
+            // for a sit that will be done, not one answered before, which is answered as it was.
+            const call = fresh.some((one) => one.command.do === "sit")
+              ? Option.getOrNull(yield* store.callOf(id))
+              : null;
             const barred = call === null ? null : yield* admit(caller, call);
             if (barred !== null) return { status: barred } satisfies Sending;
             if (sits) yield* jobs.freeUp(caller.playerId, id);

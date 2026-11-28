@@ -5,6 +5,7 @@ import { CHAIRS } from "@sequoia-leaf/raid/sitting/sitting.ts";
 import { Redacted, Schema } from "effect";
 
 import { DISCORD_API } from "../src/config.ts";
+import { afterRefusedSit } from "../src/sittings/calls.ts";
 import { discordOf, fakeBackend, type Fetcher, sessionOf, testLeaf } from "./support.ts";
 
 /** Wednesday 25 November 2026, 12:00 UTC. */
@@ -29,6 +30,8 @@ interface Discord {
   failing: boolean;
   /** Seconds a 429 asks Leaf to wait, while Discord says Leaf has asked too much; 0 when it has not. */
   limited: number;
+  /** While set, each question about a launch waits here for the test to answer it. */
+  hold: ((answer: (response: Response) => void) => void) | null;
   /** The form of every code traded, as Discord got it. */
   readonly traded: URLSearchParams[];
   /** Every launch Leaf asked about, in order. */
@@ -82,6 +85,11 @@ function withDiscord(backend: Fetcher): Fetcher {
       return Response.json({ access_token: `token-of-${user.id}`, token_type: "Bearer", expires_in: 604800 });
     }
     const instance = new RegExp(`^/applications/${CLIENT}/activity-instances/(.+)$`).exec(path)?.[1];
+    const hold = discord.hold;
+    if (instance !== undefined && hold !== null) {
+      discord.asked.push(decodeURIComponent(instance));
+      return new Promise<Response>((answer) => hold(answer));
+    }
     if (instance !== undefined && request.method === "GET")
       return instanceAnswer(request, decodeURIComponent(instance));
     if (path === "/users/@me") {
@@ -107,7 +115,7 @@ function codeFor(n: number, id = `2${String(n).padStart(17, "0")}`): string {
 
 /** A Leaf with the Discord application (`activity`), and its bot's token (`bot`). */
 function start(activity = true, bot = true) {
-  discord = { codes: {}, instances: {}, down: false, failing: false, limited: 0, traded: [], asked: [] };
+  discord = { codes: {}, instances: {}, down: false, failing: false, limited: 0, hold: null, traded: [], asked: [] };
   known = {};
   clock.now = T0;
   const { fetcher } = fakeBackend({ "alice-token": () => Response.json(sessionOf(alice, "Alice")) });
@@ -634,5 +642,108 @@ describe("a call's table, whichever way someone asks", () => {
       id: mine,
       state: { stage: { at: "open", sat: [{ name: "player1" }] } },
     });
+  });
+});
+
+/** A page's report of a failure, from Discord's frame, with a cookie or none. */
+const report = (cookie: string | null) =>
+  app.request("/v1/game/page-errors", {
+    method: "POST",
+    headers: { Origin: FRAME, "Content-Type": "application/json", ...(cookie === null ? {} : { Cookie: cookie }) },
+    body: JSON.stringify({
+      page: "battler",
+      kind: "error",
+      version: "v",
+      browser: "firefox",
+      message: "m",
+      stack: "s",
+    }),
+  });
+
+/** Signing out, from a page at `origin`, with the frame's session. */
+const out = (origin: string, token: string) =>
+  app.request("/v1/game/sign-out", {
+    method: "POST",
+    headers: { Origin: origin, Cookie: `__Host-leaf_session=${token}` },
+  });
+
+/** A 429 from Discord, asking Leaf to wait `seconds`. */
+const limited = (seconds: number) =>
+  Response.json(
+    { message: "You are being rate limited.", retry_after: seconds, global: false },
+    { status: 429, headers: { "Retry-After": String(seconds) } },
+  );
+
+describe("the review's nine", () => {
+  it("counts a page's reports from Discord's frame as its player's, not as nobody's", async () => {
+    const who = await player(1);
+    // oxlint-disable-next-line no-await-in-loop -- one after another, as a page sends them
+    for (let n = 0; n < 10; n++) expect((await report(`__Host-leaf_session=${who.token}`)).status).toBe(204);
+    expect((await report(null)).status).toBe(204);
+
+    const text = await leafs.metrics();
+    expect(text).toContain('leaf_page_errors_total{page="battler",kind="error"} 11');
+    expect(text).not.toContain('leaf_page_errors_dropped_total{limit="player"}');
+  });
+
+  it("plans a coming again when the launch's table ended, or has them, just before they sat", () => {
+    expect(["table_over", "seated", "seated_elsewhere", "not_open"].map(afterRefusedSit)).toEqual([
+      "taken",
+      "taken",
+      "seated_elsewhere",
+      "started",
+    ]);
+  });
+
+  it("keeps the longer of two waits a 429 asks for, whichever came last", async () => {
+    const first = await player(1);
+    const second = await player(2);
+    const answers: ((response: Response) => void)[] = [];
+    discord.hold = (answer) => answers.push(answer);
+    const one = ask(first, "i-850-gc-1-2");
+    const two = ask(second, "i-851-gc-1-2");
+    // oxlint-disable-next-line no-await-in-loop -- until both questions are with Discord
+    while (answers.length < 2) await Bun.sleep(5);
+    discord.hold = null;
+
+    answers[0]?.(limited(30));
+    expect(await one).toEqual(CANNOT);
+    answers[1]?.(limited(1));
+    expect(await two).toEqual(CANNOT);
+
+    clock.now += 2000;
+    intoCall(first, "i-852-gc-1-2");
+    expect(await ask(first, "i-852-gc-1-2")).toEqual(CANNOT);
+    expect(discord.asked).toEqual(["i-850-gc-1-2", "i-851-gc-1-2"]);
+    clock.now += 30_000;
+    expect((await ask(first, "i-852-gc-1-2")).status).toBe(200);
+  });
+
+  it("answers a sit sent again as it was answered, though they have left the call since; a new one is checked", async () => {
+    const first = await player(1);
+    const second = await player(2);
+    for (const who of [first, second]) intoCall(who, "i-950-gc-1-2");
+    const id = seated((await join(first, "i-950-gc-1-2")).body).id;
+    const sat = await command(second, id, [{ id: "sit-1", do: "sit" }]);
+    expect(sat.status).toBe(200);
+    discord.instances["i-950-gc-1-2"] = [first.discord];
+    // Past what Leaf kept of the call, which still had them in it.
+    clock.now += 6000;
+
+    const again = await command(second, id, [{ id: "sit-1", do: "sit" }]);
+
+    expect(again.status).toBe(200);
+    expect(again.body).toMatchObject({ results: [{ id: "sit-1", notes: [] }] });
+    expect(await command(second, id, [{ id: "sit-2", do: "sit" }])).toEqual(NOT_IN);
+  });
+
+  it("takes the frame's cookie away on signing out there as it was set, and the cookie at Leaf's own address as ever", async () => {
+    const inFrame = (await out(FRAME, (await player(1)).token)).headers.getSetCookie()[0] ?? "";
+    const atLeaf = (await out(ORIGIN, (await player(2)).token)).headers.getSetCookie()[0] ?? "";
+
+    for (const attribute of ["Max-Age=0", "Path=/", "Secure", "SameSite=None", "Partitioned"])
+      expect(inFrame).toContain(attribute);
+    expect(atLeaf).toContain("Max-Age=0");
+    expect(atLeaf).not.toContain("Partitioned");
   });
 });

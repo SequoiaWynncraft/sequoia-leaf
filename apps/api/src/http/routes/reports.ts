@@ -1,4 +1,4 @@
-import { Clock, Effect, Metric, Redacted } from "effect";
+import { Clock, Effect, Metric, Option, Redacted } from "effect";
 import { HttpServerRequest } from "effect/http";
 import { HttpApiBuilder } from "effect/http-api";
 
@@ -6,8 +6,10 @@ import { Allowance, Allowances } from "../../allowance.ts";
 import { LeafApi, SessionCookie } from "../../api/api.ts";
 import { BadOrigin } from "../../api/errors.ts";
 import { Identities } from "../../auth/session.ts";
+import { leafCookies, SignIns } from "../../auth/sign-ins.ts";
 import { AppConfig, fromLeafPage } from "../../config.ts";
 import { pageErrors, pageErrorsDropped } from "../../metrics.ts";
+import { cookieOf } from "../sign-in.ts";
 import { sessionCookies } from "./middleware.ts";
 
 /** How many reports a player's pages may make: ten a minute. Pages not signed in share one such allowance. */
@@ -22,14 +24,16 @@ const drop = (limit: "player" | "overall") => Metric.update(pageErrorsDropped({ 
 
 /**
  * A page's report of its own failure (`PageError` in core), from Leaf's own pages only. Each is logged
- * as `page_error`, a warning, with who the player is when their session says so (a page that could not
- * sign in reports too), and counted by page and kind; past the player's allowance or Leaf's overall
+ * as `page_error`, a warning, with who the player is when their session says so, the website's or
+ * Leaf's own (a page that could not sign in reports too, as nobody's), and counted by page and kind; past the player's allowance or Leaf's overall
  * one it is let go of, and counted as dropped. The page is answered the same either way.
  */
 export const GameReportsHandlers = HttpApiBuilder.group(LeafApi, "gameReports", (handlers) =>
   Effect.gen(function* () {
     const identities = yield* Identities;
+    const signIns = yield* SignIns;
     const settings = yield* AppConfig;
+    const leafSession = leafCookies(settings.publicOrigin).session;
     const cookie = HttpApiBuilder.securityDecode(SessionCookie);
     const overall = new Allowance(OVERALL, yield* Clock.currentTimeMillis);
     const players = new Allowances([PER_PLAYER], KEPT);
@@ -46,7 +50,10 @@ export const GameReportsHandlers = HttpApiBuilder.group(LeafApi, "gameReports", 
         // With two session cookies, neither is believed (`sessionChecks`): the report is nobody's.
         const token = sessionCookies(request.headers["cookie"]) === 1 ? Redacted.value(yield* cookie) : "";
         const who = token === "" ? null : yield* identities.identify(token);
-        const player = who?.status === "ok" ? who.identity.playerId : null;
+        // Signed in with Discord alone, as in a call: Leaf's own session says who.
+        const leaf = token === "" ? cookieOf(request.headers["cookie"], leafSession) : "";
+        const signedIn = leaf === "" ? Option.none() : yield* signIns.identify(leaf, now);
+        const player = who?.status === "ok" ? who.identity.playerId : (Option.getOrNull(signedIn)?.playerId ?? null);
         if (!players.take(player ?? "", now, [1])) return yield* drop("player");
         yield* Metric.update(pageErrors({ page: payload.page, kind: payload.kind }), 1);
         yield* Effect.logWarning("page_error").pipe(Effect.annotateLogs({ player, ...payload }));

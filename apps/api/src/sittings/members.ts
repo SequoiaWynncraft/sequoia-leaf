@@ -95,7 +95,8 @@ export class CallMembers extends Context.Service<
                 if (response.status === 404) return Effect.succeed<readonly string[]>([]);
                 if (response.status === 429)
                   return Effect.andThen(
-                    Ref.set(quietUntil, now + quietFor(response)),
+                    // A shorter wait said later never cuts one already running short.
+                    Ref.update(quietUntil, (until) => Math.max(until, now + quietFor(response))),
                     Effect.fail(new UnexpectedStatus({ status: 429 })),
                   );
                 return HttpClientResponse.filterStatusOk(response).pipe(

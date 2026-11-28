@@ -54,6 +54,8 @@ export const T: {
   shown: () => boolean;
   /** Reads the list, one at a time, whenever one is owed. */
   follow: Follower | null;
+  /** In a Discord call: the call's table, as Leaf last seated the member at it; null until it has. */
+  callTable: string | null;
 } = {
   scope: null,
   me: null,
@@ -70,6 +72,7 @@ export const T: {
   restored: false,
   shown: () => false,
   follow: null,
+  callTable: null,
 };
 
 const RECORD_EVERY = 60_000;
@@ -186,6 +189,7 @@ function seatFrom(path: string, body: object, final = false): Promise<void> {
       body: JSON.stringify(body),
     });
     if (answer.status === 200 && isRecord(answer.body) && typeof answer.body.id === "string") {
+      if (final) T.callTable = answer.body.id;
       if (liveLine()?.id === answer.body.id) return null;
       return lineFrom(answer.body.id, answer.body, final ? T.gen : before) ? null : "That table could not be read.";
     }
@@ -201,9 +205,14 @@ export const openTable = (): Promise<void> => seatFrom("/v1/game/sittings", { pl
 /**
  * Sits down at the table of the member's Discord call (`instance`, its launch), opening it if nobody
  * has: Leaf knows which. Its answer wins over the first read's, which may give back another table.
+ * Refused, the member keeps whatever table the page follows: the one they were at, or a finished one
+ * to see how it ended. The call's next table is asked for the same way.
  */
 export const joinCall = (instance: string): Promise<void> =>
   seatFrom("/v1/game/sittings/call", { player: T.me?.id, instance }, true);
+
+/** Whether the table the page follows is the member's call's (in a call; elsewhere, never). */
+export const atCallTable = (): boolean => T.callTable !== null && liveLine()?.id === T.callTable;
 
 /** Why the last thing asked of Leaf for the tables was not done, or null. */
 export const tablesWhy = (): string | null => T.why;

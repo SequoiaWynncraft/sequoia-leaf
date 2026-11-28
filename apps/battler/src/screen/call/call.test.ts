@@ -6,6 +6,7 @@ import { sittingView } from "@sequoia-leaf/raid/sitting/view.ts";
 
 import { launchOf } from "./launch.ts";
 import { callLine } from "./line.ts";
+import { within } from "./signin.ts";
 
 /** Wednesday 25 November 2026, 12:00 UTC. */
 const T0 = Date.UTC(2026, 10, 25, 12);
@@ -63,5 +64,13 @@ describe("the call's table in one line", () => {
     );
 
     expect(callLine(sittingView(left.sitting, ann.id), T0, null)).toBe("Over");
+  });
+});
+
+describe("waiting on Discord", () => {
+  test("gives what comes in time, and null for what fails or never comes", async () => {
+    expect(await within(1000, Promise.resolve(3))).toBe(3);
+    expect(await within(1000, Promise.reject(new Error("no")))).toBeNull();
+    expect(await within(20, new Promise<number>(() => undefined))).toBeNull();
   });
 });

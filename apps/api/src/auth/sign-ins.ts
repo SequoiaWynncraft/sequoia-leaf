@@ -27,17 +27,15 @@ export const leafCookies = (publicOrigin: string) => {
  * no `Domain`) on the host the page is at, Discord's proxy for Leaf, and always `Secure`, as Discord's
  * frame is. Nothing about the cookie at Leaf's own address changes.
  */
-export const frameCookie = (publicOrigin: string) => ({
-  name: leafCookies(publicOrigin).session,
-  options: {
-    path: "/",
-    httpOnly: true,
-    secure: true,
-    sameSite: "none",
-    partitioned: true,
-    maxAge: Duration.millis(SIGN_IN_MS),
-  } as const,
-});
+export const frameCookie = (publicOrigin: string) => {
+  const kept = { path: "/", httpOnly: true, secure: true, sameSite: "none", partitioned: true } as const;
+  return {
+    name: leafCookies(publicOrigin).session,
+    options: { ...kept, maxAge: Duration.millis(SIGN_IN_MS) },
+    /** How it is taken away again: with what it was set with, or the browser keeps the one in Discord's frame. */
+    gone: kept,
+  };
+};
 
 /** Who a Leaf session is, for a player who signed in with Discord alone. */
 export interface SignedIn {

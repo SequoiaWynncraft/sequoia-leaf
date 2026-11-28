@@ -65,6 +65,14 @@ const isAt = (t: Sitting, player: string): boolean =>
     : t.seats.some((seat) => seat.who.is === "member" && seat.who.id === player);
 
 const hex = (n: number): string => n.toString(16).padStart(8, "0");
+
+/**
+ * What a launch's sitting refusing a sit means for the coming: one over meanwhile, or that has them
+ * sat already (another tab of theirs), is planned again (`taken`); one that has them at another is
+ * theirs to leave; anything else has started without them.
+ */
+export const afterRefusedSit = (code: string): "taken" | "seated_elsewhere" | "started" =>
+  code === "table_over" || code === "seated" ? "taken" : code === "seated_elsewhere" ? "seated_elsewhere" : "started";
 const isId = (id: string | null): id is string => id !== null;
 
 /**
@@ -168,8 +176,7 @@ function movesOf({ store, dice, inLane, sql }: Parts, { nameOf }: Jobs, { batch,
       const { results, ...seen } = sat;
       const refused = results.find((r) => "refused" in r);
       if (refused === undefined) return { ...seen, status: "shown" } satisfies Joining;
-      const elsewhere = "refused" in refused && refused.refused === "seated_elsewhere";
-      return yield* new Undone({ joining: { status: elsewhere ? "seated_elsewhere" : "started" } });
+      return yield* new Undone({ joining: { status: afterRefusedSit("refused" in refused ? refused.refused : "") } });
     });
 
   return (caller: Caller, instance: string, { to, leaving }: Plan) =>

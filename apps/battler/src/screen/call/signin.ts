@@ -11,6 +11,8 @@ import { scope } from "@sequoia-leaf/kit/scope.ts";
 
 /** How long Discord has to greet the page before the page says it is not in a call. */
 const GREETED_WITHIN = 15_000;
+/** How long Discord has to take the token back: its SDK waits on a command for ever. */
+const AUTHENTICATED_WITHIN = 10_000;
 
 /** Why the raid will not open in the call, as the page says it. */
 export const CALL_WORDS = {
@@ -21,7 +23,7 @@ export const CALL_WORDS = {
 } as const;
 
 /** What a promise comes to, or null when it fails or does not come within `ms`. */
-async function within<A>(ms: number, promise: Promise<A>): Promise<A | null> {
+export async function within<A>(ms: number, promise: Promise<A>): Promise<A | null> {
   const timer = { stop: (): void => undefined };
   const late = new Promise<null>((resolve) => {
     timer.stop = scope().after(ms, () => resolve(null));
@@ -63,7 +65,7 @@ export async function signInToCall(): Promise<string | null> {
   });
   const token = signed.status === 200 && isRecord(signed.body) ? signed.body.access_token : null;
   if (typeof token !== "string") return leafSays(signed.body);
-  // Discord's half of it: the raid uses nothing it gives, so a refusal here keeps nobody out.
-  await sdk.commands.authenticate({ access_token: token }).catch(() => null);
+  // Discord's half of it: the raid uses nothing it gives, so a refusal, or no answer, keeps nobody out.
+  await within(AUTHENTICATED_WITHIN, sdk.commands.authenticate({ access_token: token }));
   return null;
 }

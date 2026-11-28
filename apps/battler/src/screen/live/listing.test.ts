@@ -9,7 +9,7 @@ import { sittingView } from "@sequoia-leaf/raid/sitting/view.ts";
 
 import { hearFresh } from "./heard.ts";
 import { openLine } from "./line.ts";
-import { followTables, knowTables, leave, readList, T } from "./listing.ts";
+import { atCallTable, followTables, joinCall, knowTables, leave, readList, T } from "./listing.ts";
 import { doneWithTable, liveLine, takeUp } from "./seated.ts";
 
 const ME = { id: "leaf-0", name: "Mossback" };
@@ -148,4 +148,44 @@ test("Leave answered not_seated lets the table go even while this tab's view sti
   await leaveHereAfterThere("sat");
   expect(liveLine()).toBeNull();
   expect(T.why).toBeNull();
+});
+
+/** A sitting as Leaf answers it under its id. */
+const answerAs = (id: string, rev: number, t: Sitting) => ({ ...answer(rev, t), id });
+
+test("in a call, a refused join keeps the table the member is at and asks again later; the call's own table is then followed", async () => {
+  T.callTable = null;
+  const theirs = openSitting(call(0));
+  const calls = must(command(openSitting(call(1, OTHER)), { do: "sit" }, call(2)));
+  const joins: Reply[] = [
+    {
+      status: 409,
+      body: { code: "table_started", message: "This table has started. Join the next one when it ends" },
+    },
+    { status: 200, body: answerAs("s2", 1, calls) },
+  ];
+  world = standin({
+    "GET /v1/game/sittings": { status: 200, body: { open: [], yours: "s1" } },
+    "GET /v1/game/sittings/s1": { status: 200, body: answer(1, theirs) },
+    "POST /v1/game/sittings/call": () => joins.shift() ?? { status: 500, body: null },
+  });
+  knowTables(scope(), ME, () => undefined);
+  await readList();
+  expect(liveLine()?.id).toBe("s1");
+
+  await joinCall("i-1-gc-2-3");
+
+  // Turned away from the call's table: still at the one they had, and the call's table not theirs yet.
+  expect(liveLine()?.id).toBe("s1");
+  expect(T.why).toBe("This table has started. Join the next one when it ends.");
+  expect(atCallTable()).toBe(false);
+
+  await joinCall("i-1-gc-2-3");
+
+  expect(liveLine()?.id).toBe("s2");
+  expect(atCallTable()).toBe(true);
+  expect(world.sent.filter((s) => s.path === "/v1/game/sittings/call").map((s) => s.body)).toEqual([
+    { player: ME.id, instance: "i-1-gc-2-3" },
+    { player: ME.id, instance: "i-1-gc-2-3" },
+  ]);
 });
