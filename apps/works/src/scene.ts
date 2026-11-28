@@ -572,36 +572,8 @@ function floorFor(gr: Ground, p: Painter): Floor {
   return floored.floor;
 }
 
-/**
- * What lies flat over the belts and stays put until the yard changes, a picture a tile: the
- * splitters' arrowheads, the joiners' tops and the sorters' boards; over those on the same tile, the
- * grade's mark of each splitter, joiner and sorter above the first, as a belt wears it in its tile;
- * and where the pieces with a vane are (a splitter).
- */
-let laid: { of: Layout; at: number[]; pics: HTMLCanvasElement[]; vanes: number[] } | null = null;
-function laidOf(L: Layout, art: Art): NonNullable<typeof laid> {
-  if (laid?.of === L) return laid;
-  const y = L.yard;
-  const made: NonNullable<typeof laid> = { of: L, at: [], pics: [], vanes: [] };
-  for (let i = 0; i < L.arms.length; i++) {
-    const a = L.arms[i] ?? 0;
-    const k = y.kind[i] ?? NONE;
-    if (a === 0 || k === NONE) continue;
-    const top = (pic: HTMLCanvasElement | undefined): void => {
-      if (!pic) return;
-      made.at.push(i);
-      made.pics.push(pic);
-    };
-    const page = pageOf(k);
-    const d = dirAt(y, i);
-    if (page?.laid) page.laid(art, y, i, d, a, top);
-    else if (page?.top) top(page.top(art, y, i, d, false));
-    // The grade's mark lies over what is laid on the tile, so no arrowhead or board hides it.
-    if (page?.top) top(art.m.tilePips[(y.grade[i] ?? 0) - 2]);
-    if (page?.vane) made.vanes.push(i);
-  }
-  return (laid = made);
-}
+/** The tiles in view whose piece lies flat with something over its belt (a splitter, a joiner, a sorter), found as the belts are drawn. */
+const topped: number[] = [];
 /** The parts of carried things that lie over the tile to their left or above, to be drawn again over what tops that tile. */
 const lapping: { pic: HTMLCanvasElement; x: number; y: number; w: number; h: number }[] = [];
 
@@ -749,15 +721,18 @@ function flatLayer(f: Frame): void {
   const { art, now, g, cx, cy, w, L, tx0, ty0, tx1, ty1, steps } = f;
   const { land } = w;
   const step = steps[1] ?? 0;
+  let tops = 0;
   for (let ty = ty0; ty <= ty1; ty++)
     for (let tx = tx0; tx <= tx1; tx++) {
       const i = ty * land.w + tx;
       const a = L.arms[i] ?? 0;
-      if (a === 0 || w.kind[i] === NONE) continue;
+      const k = w.kind[i] ?? NONE;
+      if (a === 0 || k === NONE) continue;
       const grade = w.grade[i] ?? 0;
       // Its tile at this step of its grade's march.
       const tile = beltTile(a, dirAt(w, i), steps[grade] ?? step, woodOf(grade), w.tint[i] ?? 0, marksOf(grade));
       g.pic(tile, tx * TILE - cx, ty * TILE - cy);
+      if (pageOf(k)?.top) topped[tops++] = i;
     }
   let laps = 0;
   for (let ty = ty0; ty <= ty1; ty++)
@@ -804,27 +779,29 @@ function flatLayer(f: Frame): void {
           );
       }
     }
-  // Over what is carried: the arrowheads, the joiners' tops and the sorters' boards, and over those
-  // their grades' marks; then each idle splitter's vane.
-  const flat = laidOf(L, art);
-  for (let n = 0; n < flat.at.length; n++) {
-    const i = flat.at[n] ?? 0;
-    const tx = i % land.w;
-    const ty = (i - tx) / land.w;
-    const pic = flat.pics[n];
-    if (pic && tx >= tx0 && tx <= tx1 && ty >= ty0 && ty <= ty1) g.pic(pic, tx * TILE - cx, ty * TILE - cy);
+  // Over what is carried: the arrowheads, the joiners' tops and the sorters' boards (a splitter's, on
+  // its ways that lead somewhere), and over each its grade's mark, as a belt wears it in its tile.
+  for (let n = 0; n < tops; n++) {
+    const i = topped[n] ?? 0;
+    const x = (i % land.w) * TILE - cx;
+    const y = Math.floor(i / land.w) * TILE - cy;
+    const page = pageOf(w.kind[i] ?? NONE);
+    const lay = (pic: HTMLCanvasElement | undefined): void => {
+      if (pic) g.pic(pic, x, y);
+    };
+    if (page?.laid) page.laid(art, w, i, dirAt(w, i), L.arms[i] ?? 0, lay);
+    else lay(page?.top?.(art, w, i, dirAt(w, i), false));
+    lay(art.m.tilePips[(w.grade[i] ?? 0) - 2]);
   }
   for (let k = 0; k < laps; k++) {
     const over = lapping[k];
     if (over) g.part(over.pic, 0, 0, over.w, over.h, over.x, over.y);
   }
-  for (const i of flat.vanes) {
-    const a = L.arms[i] ?? 0;
-    const tx = i % land.w;
-    const ty = (i - tx) / land.w;
-    if (a === 0 || w.item[i] !== NONE || tx < tx0 || tx > tx1 || ty < ty0 || ty > ty1) continue;
-    const v = pageOf(w.kind[i] ?? NONE)?.vane?.(art, w, i, a);
-    if (v) g.pic(v, tx * TILE - cx + 5, ty * TILE - cy + 5);
+  // Then each idle splitter's vane, pointing where its next thing goes.
+  for (let n = 0; n < tops; n++) {
+    const i = topped[n] ?? 0;
+    const v = w.item[i] === NONE ? pageOf(w.kind[i] ?? NONE)?.vane?.(art, w, i, L.arms[i] ?? 0) : undefined;
+    if (v) g.pic(v, (i % land.w) * TILE - cx + 5, Math.floor(i / land.w) * TILE - cy + 5);
   }
 }
 
