@@ -109,6 +109,21 @@ describe("the breaker", () => {
     expect(F.status(y, F.at(y, 4, 4))?.line).toBe("Waiting for salvage.");
   });
 
+  test("onto a belt that carries less than it breaks, says it gives what the belt carries, and the yard counts that", () => {
+    const y = yard();
+    const i = breaker(y, 4, 4, 3);
+    must(y, { do: "build", kind: "belt", x: 6, y: 4, dir: 0 });
+    const carried = F.carried(1);
+    // Grade III breaks 200 a minute; a grade I belt carries 150: the rate is the assembler's, capped alike.
+    expect(F.machineRate(y, i)).toMatchObject({ nominal: 200, effective: carried, most: carried });
+    const made = F.counts();
+    F.flow(y, made, F.counts());
+    expect([made[F.item("copper")], made[SLAG]]).toEqual([carried * 0.4, carried * 0.15]);
+    // Onto a grade III belt it gives all it breaks.
+    must(y, { do: "upgrade", tiles: [F.at(y, 6, 4)] });
+    expect(F.machineRate(y, i)).toMatchObject({ nominal: 200, effective: 200, most: null });
+  });
+
   test("says what it is doing: breaking salvage, and at what pace when power is short", () => {
     const y = yard();
     const i = breaker(y, 4, 4, 3);

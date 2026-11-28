@@ -13,7 +13,7 @@ import { keep, stockOnto, workOnto } from "./holder.ts";
 import type { Hooks, Words } from "./kind.ts";
 import type { Kit } from "./kit.ts";
 import { outWords } from "./maker.ts";
-import { as, asItem, jammedAhead, many, NO_POWER, slow, stuckAs } from "./say.ts";
+import { as, asItem, jammedAhead, many, NO_POWER, rateOf, slow, stuckAs } from "./say.ts";
 
 /** The mix of the piece on a tile. */
 const mixOf = (k: Kit, y: Yard, i: number): Mix | null => k.MIX_OF[y.kind[i] ?? k.NONE] ?? null;
@@ -76,14 +76,15 @@ function words(k: Kit, y: Yard, i: number, state: string): Words {
     : { line: `Waiting for ${many(k, m.from)}.`, missing: [m.from] };
 }
 
-/** Its runs a minute at its grade's pace, at full power. */
-export const runsOf = (k: Kit, m: Mix, grade: number): number => (k.MINUTE * (k.PACE[grade] ?? 0)) / m.work;
-
-/** What it adds a minute to what the yard makes and needs: each thing of its mix at its share, and one of its mix's thing a run. */
+/**
+ * What it adds a minute to what the yard makes and needs: each thing of its mix at its share, and one
+ * of its mix's thing a run, its runs as every screen says them (`rateOf`): at its grade's pace, the
+ * share power and smog let it, and no more than its way out carries.
+ */
 function flow(k: Kit, y: Yard, i: number, made: Counts, needed: Counts): void {
   const m = mixOf(k, y, i);
   if (!m) return;
-  const runs = runsOf(k, m, y.grade[i] ?? 0) * k.pace(y) * k.smogPace(y, i);
+  const runs = rateOf(k, y, i, null).effective;
   for (const n of m.gives) made[n] = (made[n] ?? 0) + runs / m.gives.length;
   needed[m.from] = (needed[m.from] ?? 0) + runs;
 }

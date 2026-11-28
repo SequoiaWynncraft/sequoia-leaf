@@ -147,14 +147,16 @@ export function nowhere(k: Kit, y: Yard, i: number, n: Item, also = false): stri
 }
 
 /**
- * What a gatherer, a machine or a Study does a minute (the planner's `makes`), as every screen says
- * it: what it turns out (or a Study takes in) at full power, for `recipe` (a machine's); the share of
- * ticks it works, none where power does not reach and else the yard's pace; what it does now at
- * that share; and the power it draws now, its grade's where power reaches it and none where it does
- * not. Anything else does nothing a minute.
+ * What a gatherer, a machine, a Study or a piece that breaks a mix does a minute (the planner's
+ * `makes`), as every screen says it: what it turns out (or a Study takes in) at full power, for
+ * `recipe` (a machine's; `flatOut`); the share of its pace it works at, none where power does not
+ * reach and else the yard's pace and its plot's smog's; what it does now at that share; and the power
+ * it draws now, its grade's where power reaches it and none where it does not. Anything else does
+ * nothing a minute.
  *
  * What it does now is no more than the belt it hands to carries (`most`, null where that is not
- * less): a piece that makes faster than that (an assembler) waits for room on it the rest of the time.
+ * less): a piece that makes faster than that (an assembler, a breaker) waits for room on it the rest
+ * of the time.
  */
 export interface MachineRate {
   readonly nominal: number;
@@ -172,17 +174,24 @@ function carriedAhead(k: Kit, y: Yard, i: number): number {
   return k.carries(there) ? k.carried(y.grade[to] ?? 1) : Infinity;
 }
 
+/**
+ * What a kind of piece at a grade turns out a minute flat out, for `recipe` (a machine's): its own
+ * pace's worth (a gatherer, a Study), a thing a run for one that breaks a mix (`mixPerMinute`), or
+ * its recipe's; else nothing.
+ */
+function flatOut(k: Kit, kind: number, grade: number, recipe: Recipe | null): number {
+  if (!k.isKind(kind)) return 0;
+  if ((k.WORK_OF[kind] ?? 0) > 0) return k.makes(kind, grade, null);
+  if (k.MIX_OF[kind]) return k.mixPerMinute(kind, grade);
+  return k.isMaker(kind) && recipe ? k.makes(kind, grade, recipe) : 0;
+}
+
 export function rateOf(k: Kit, y: Yard, i: number, recipe: Recipe | null): MachineRate {
   const kind = i < 0 ? k.NONE : (y.kind[i] ?? k.NONE);
   const grade = y.grade[i] ?? 0;
   const lit = kind !== k.NONE && k.litAt(y, i);
   const share = lit ? k.pace(y) * k.smogPace(y, i) : 0;
-  const own = k.isKind(kind) && (k.WORK_OF[kind] ?? 0) > 0;
-  const nominal = own
-    ? k.makes(kind, grade, null)
-    : k.isKind(kind) && k.isMaker(kind) && recipe
-      ? k.makes(kind, grade, recipe)
-      : 0;
+  const nominal = flatOut(k, kind, grade, recipe);
   const ahead = nominal > 0 ? carriedAhead(k, y, i) : Infinity;
   const effective = Math.min(nominal * share, ahead);
   return {

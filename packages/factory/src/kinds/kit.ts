@@ -55,6 +55,7 @@ export interface Kit {
   readonly locked: typeof Tables.locked;
   readonly recipesFor: typeof Tables.recipesFor;
   readonly makes: typeof Planner.makes;
+  readonly mixPerMinute: typeof Planner.mixPerMinute;
   readonly MINUTE: typeof Planner.MINUTE;
   readonly carried: typeof Planner.carried;
   readonly BURNS: typeof Tables.BURNS;
