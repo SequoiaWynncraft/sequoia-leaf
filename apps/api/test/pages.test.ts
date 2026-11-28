@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { playerId } from "@sequoia-leaf/core";
 
 import { API_POLICY } from "../src/http/headers.ts";
-import { CALL_PAGE_POLICY, PAGE_POLICY } from "../src/http/pages.ts";
+import { CALL_PAGE_POLICY, entryPage, PAGE_POLICY } from "../src/http/pages.ts";
 import { fakeBackend, sessionOf, testLeaf } from "./support.ts";
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
@@ -190,16 +190,31 @@ describe("Leaf in a Discord call", () => {
     expect(CALL_PAGE_POLICY).not.toContain("frame-ancestors");
   });
 
-  it("sends Discord's launch of / to the town, with its query as it came", async () => {
+  it("answers Discord's launch of / with a page that goes on to the town itself, not a redirect Discord's proxy would follow", async () => {
     const app = leafServing(publicDir);
 
     const entry = await app.request(`/${LAUNCH}`);
 
-    expect(entry.status).toBe(302);
-    expect(entry.headers.get("Location")).toBe(`/play/town/${LAUNCH}`);
+    // A redirect is followed by Discord's proxy on its own server, which serves the town at `/`, where
+    // the town's relative script and style addresses find nothing: the browser must make the step.
+    expect(entry.status).toBe(200);
+    expect(entry.headers.get("Location")).toBeNull();
+    expect(entry.headers.get("Content-Type")).toContain("text/html");
+    const page = await entry.text();
+    const to = `/play/town/${LAUNCH}`.replaceAll("&", "&amp;");
+    expect(page).toContain(`<meta http-equiv="refresh" content="0; url=${to}">`);
+    // The town is then the page Discord frames, and Discord's SDK answers the address it came from: none.
+    expect(page).toContain('<meta name="referrer" content="no-referrer">');
+    expect(page).not.toContain("<script");
     expect(entry.headers.get("Content-Security-Policy")).toBe(CALL_PAGE_POLICY);
     expect(entry.headers.get("Cache-Control")).toBe("no-store");
     await app.dispose();
+  });
+
+  it("puts nothing a launch query says into the page unescaped", () => {
+    const page = entryPage(new URLSearchParams({ frame_id: '"><script>alert(1)</script>', instance_id: "i'1" }));
+    expect(page).not.toContain("<script");
+    expect(page).toContain("frame_id=%22%3E%3Cscript%3Ealert%281%29%3C%2Fscript%3E");
   });
 
   it("sends / to the town for anything but Discord's launch, framed by Leaf's own pages alone", async () => {

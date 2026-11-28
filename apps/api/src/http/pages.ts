@@ -43,6 +43,12 @@ const PAGES = "/play/";
  * Whether a request is a page opened as part of a Discord launch: its query names the frame and the
  * launch, as Discord's every launch does (and its SDK needs to start), and as Leaf's own pages
  * carry it from page to page inside the call (the kit's `withLaunch`).
+ *
+ * Anyone can write such a query, so any site can frame a page with one. That is #318's call, and it
+ * gives a framing site nothing: the page there is signed out (Leaf's own cookie is `SameSite=Lax`,
+ * not sent to another site's frame, and a call's cookie is partitioned by the site framing it), and
+ * only Discord's client can answer the sign-in the page asks for. Discord's phone app frames from a
+ * page with no origin, which no `frame-ancestors` list could name.
  */
 const launchedByDiscord = (query: URLSearchParams): boolean =>
   (query.get("frame_id") ?? "") !== "" && (query.get("instance_id") ?? "") !== "";
@@ -113,17 +119,40 @@ const logPage = (url: string, status: number) => {
   return Effect.logInfo("call_page").pipe(Effect.annotateLogs({ page: pathname, status }));
 };
 
+/** Text made safe to sit inside an HTML attribute. */
+const attribute = (text: string): string =>
+  text
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+
 /**
- * `GET /`: the town; opened by Discord in a call, with Discord's query as it came (the page reads the
- * frame and the launch from it, and carries them on). Discord maps its proxy's `/` to Leaf's.
+ * What `/` answers Discord's launch with: a page that sends the browser on to the town itself, with
+ * the query re-encoded. Not a redirect: Discord's proxy follows a redirect on its own server and serves
+ * the town's page at `/`, where the page's own relative addresses (`./index-….js`, `../guard.js`) find
+ * nothing, so the frame stays grey. A refresh is the browser's own step, so the town's page loads at
+ * its own address. It needs no script (Discord's proxy allows none but its own).
+ */
+export const entryPage = (query: URLSearchParams): string => {
+  const to = attribute(`${TOWN_PAGE}?${new URLSearchParams(query).toString()}`);
+  // No referrer: Discord's SDK on the town answers the address the town came from, which must not be this one.
+  return `<!doctype html><meta charset="utf-8"><meta name="referrer" content="no-referrer"><meta http-equiv="refresh" content="0; url=${to}"><title>Leaf</title><a href="${to}">Leaf</a>`;
+};
+
+/**
+ * `GET /`: the town; opened by Discord in a call, a page that goes on to the town with Discord's query
+ * (the page reads the frame and the launch from it, and carries them on). Discord maps its proxy's `/`
+ * to Leaf's.
  */
 const entry = Effect.gen(function* () {
   const request = yield* HttpServerRequest.HttpServerRequest;
-  const { search, searchParams } = new URL(request.url, "http://leaf.invalid");
+  const { searchParams } = new URL(request.url, "http://leaf.invalid");
   yield* logEntry(searchParams);
   if (!launchedByDiscord(searchParams)) return HttpServerResponse.redirect(TOWN_PAGE, { status: 302 });
-  return HttpServerResponse.redirect(`${TOWN_PAGE}${search}`, {
-    status: 302,
+  return HttpServerResponse.text(entryPage(searchParams), {
+    contentType: "text/html; charset=utf-8",
     headers: { "content-security-policy": CALL_PAGE_POLICY, "cache-control": "no-store" },
   });
 });
