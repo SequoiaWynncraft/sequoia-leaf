@@ -256,3 +256,58 @@ describe("a yard naming what this Leaf does not know is a newer Leaf's", () => {
     expect([back.span[F.at(back, 2, 4)], back.span[F.at(back, 15, 4)]]).toEqual([12, -12]);
   });
 });
+
+describe("the yard's 15 launch numbers", () => {
+  /** A yard that has launched: twice of any kind, with a level of a track and launches spent, kept. */
+  function launched(): { y: F.Yard; rec: Rec } {
+    const y = F.create({ seed: 1, tier: 9 });
+    y.launches.ever[0] = 2;
+    y.launches.spent[0] = 1;
+    y.launches.levels[4] = 1;
+    return { y, rec: record(F.encode(y)) };
+  }
+
+  test("are kept by name, only those above 0, and read back as they were, with the same check; a yard with none keeps none", () => {
+    const { y, rec } = launched();
+    expect(rec.launches).toEqual({ ever: { any: 2 }, spent: { any: 1 }, levels: { roots: 1 } });
+    const back = F.decode(JSON.stringify(rec), y.land);
+    expect([back && [...back.launches.ever], back && F.check(back), rec.v]).toEqual([
+      [2, 0, 0, 0, 0],
+      F.check(y),
+      F.VERSION,
+    ]);
+    expect("launches" in record(F.encode(F.create({ seed: 1, tier: 9 })))).toBe(false);
+  });
+
+  test("a kind of launch, a track or a part this Leaf does not know, in any of the three, is a newer Leaf's, never read with it let go", () => {
+    const { rec } = launched();
+    const launches = isRec(rec.launches) ? rec.launches : {};
+    for (const part of ["ever", "spent", "levels"]) {
+      const had = isRec(launches[part]) ? launches[part] : {};
+      const text = JSON.stringify({ ...rec, launches: { ...launches, [part]: { ...had, orbit: 1 } } });
+      expect([part, F.keptLater(text), F.decode(text)]).toEqual([part, true, null]);
+    }
+    for (const odd of [{ ...launches, kept: { any: 1 } }, "many", [1]]) {
+      const text = JSON.stringify({ ...rec, launches: odd });
+      expect([F.keptLater(text), F.decode(text)]).toEqual([true, null]);
+    }
+    // Known names, as kept: this Leaf's own.
+    expect([F.keptLater(JSON.stringify(rec)), F.decode(JSON.stringify(rec)) !== null]).toEqual([false, true]);
+  });
+
+  test("a yard keeping any is past what the last Leaf of version 10 knew, as the cheap rule says too", () => {
+    const y = beforeReach(staged("mid"));
+    const rec = record(F.encode(y));
+    const names = (r: Rec): boolean | null => {
+      const n = F.namesOf(r, y.land);
+      return n && F.knownAt10(n);
+    };
+    expect([names(rec), F.pastTen(y), rec.v]).toEqual([true, false, F.PLACED]);
+    y.launches.ever[0] = 1;
+    expect([names({ ...rec, launches: { ever: { any: 1 } } }), F.pastTen(y), record(F.encode(y)).v]).toEqual([
+      false,
+      true,
+      F.VERSION,
+    ]);
+  });
+});

@@ -176,6 +176,13 @@ describe("the beat", () => {
     expect(everyCell(y)).toEqual([16, 0, 0, 0]);
     // Each holder's count of different things it holds is kept right: one thing, a cell.
     expect([y.holders.kinds[F.holderOf(y, box)], y.holders.count[F.holderOf(y, box)]]).toEqual([1, 5]);
+    // A crate of plain cells and cells with 1 bar holds two things before a beat and one after it.
+    const both = crate(y, [2, 4], 0, CELL, 2, true);
+    fill(y, both, ONE ?? F.NONE, 3);
+    const r = F.holderOf(y, both);
+    expect([y.holders.kinds[r], y.holders.count[r]]).toEqual([2, 5]);
+    until(y, 800);
+    expect([y.holders.kinds[r], y.holders.count[r], holding(y, both, [CELL, ONE ?? 0])]).toEqual([1, 5, [5, 0]]);
     expect(y.holders.out[F.holderOf(y, charger)]).toBe(CELL);
   });
 
@@ -214,9 +221,15 @@ describe("the charger", () => {
     until(y, 10);
     // Its first charge, at grade I, is 10 ticks: the cell went.
     expect([y.holders.out[r], holding(y, c, [CELL, ONE ?? 0, TWO ?? 0])]).toEqual([THREE, [0, 1, 1]]);
+    // A crate of cells behind it fills it to 4 in all, and no more: 2 go in, and the crate holds 1 more ready to.
+    const behind = crate(y, [3, 4], 0, CELL, 10);
     until(y, 100);
     // Nothing is ahead of it: it holds its charged cell and charges nothing more.
-    expect([y.holders.out[r], holding(y, c, [CELL, ONE ?? 0, TWO ?? 0])]).toEqual([THREE, [0, 1, 1]]);
+    expect([y.holders.out[r], holding(y, c, [CELL, ONE ?? 0, TWO ?? 0]), holding(y, behind, [CELL])]).toEqual([
+      THREE,
+      [2, 1, 1],
+      [7],
+    ]);
     expect(F.status(y, F.at(y, 4, 4))?.line).toBe(
       "Nowhere to send its charged cells with 3 bars: nothing is on the tile it points at.",
     );
