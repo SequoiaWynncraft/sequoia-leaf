@@ -21,9 +21,12 @@ const workFor = (k: Kit, y: Yard, i: number): number => k.GATHER_WORK[y.land.dep
 /** It gathers at its grade's pace, and once a thing is gathered it holds it out to hand on. It always has something to work on. */
 function work(k: Kit, y: Yard, i: number, r: number, speed: number): boolean {
   const h = y.holders;
+  h.work[r] = (h.work[r] ?? 0) + speed;
+  // Most things take a gatherer's own time, which is the least any takes: what lies under it is read
+  // only once that is reached.
+  if ((h.work[r] ?? 0) < WORK) return true;
   const n = y.land.deposit[i] ?? k.NONE;
   const need = k.GATHER_WORK[n] ?? WORK;
-  h.work[r] = (h.work[r] ?? 0) + speed;
   if ((h.work[r] ?? 0) >= need) {
     h.work[r] = (h.work[r] ?? 0) - need;
     h.out[r] = n;

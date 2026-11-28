@@ -387,11 +387,11 @@ export function rewire(y: Yard): Wire {
   }
   const taken = new Uint8Array(n);
   for (let i = 0; i < n; i++) if (kind[i] !== NONE) taken[i] = sidesTaken(y, i);
-  const { order, rings } = handingOrder(y);
+  const { order, rings, cuts } = handingOrder(y);
   const wire: Wire = {
     order,
     rings,
-    again: new Int32Array(rings.length),
+    cuts,
     taken,
     carry: Int32Array.from(carry),
     mouths: Int32Array.from(carry.filter((i) => tunnelOf(y, i) >= 0)),
@@ -419,23 +419,29 @@ function burningNow(y: Yard, burners: readonly number[]): number {
 /** Whether a kind hands things on at all: those with a step in handing on. */
 const hands = (k: number): boolean => (RULES[k]?.hands ?? null) !== null;
 
+/** What the walk that works out the handing order knows of a tile, a bit each (`handingOrder`). */
+const OPEN = 1;
+const ON_PATH = 2;
+const ON_RING = 4;
+const CUT = 8;
+
 /**
  * The tiles that hand things on, each after the tiles it hands to, so that a full belt moves as
- * one: a walk from each tile in turn, a piece's ways in order, each tile once. And the tiles of it
- * that lie on a ring, in its order (`Wire.rings`): those the walk finds again while it is still
- * walking on from them, and every tile it walked on the way (Tarjan's walk: `low` is the first tile of
- * the walk a tile is found to lead back to, and a tile whose `low` is its own begins a part of the
- * plumbing that every tile in it leads round to; a part of more than one tile is a ring).
+ * one: a walk from each tile in turn, a piece's ways in order, each tile once. Round a ring there is
+ * no such order, and the walk cuts it: a tile that hands to one the walk is still walking on from
+ * comes before it. So with the order, the tiles of it that lie on a ring (`Wire.rings`), and those
+ * of them that carry and hand across a cut (`Wire.cuts`). A ring is found by Tarjan's walk: `low` is
+ * the first tile of the walk a tile is found to lead back to, and a tile whose `low` is its own begins
+ * a part of the plumbing that every tile in it leads round to; a part of more than one tile is a ring.
  */
-function handingOrder(y: Yard): { order: Int32Array; rings: Int32Array; count: number } {
+function handingOrder(y: Yard): { order: Int32Array; rings: Int32Array; cuts: Int32Array; count: number } {
   const n = y.kind.length;
   const at = new Int32Array(n).fill(-1);
   const low = new Int32Array(n);
   const child = new Uint8Array(n);
   const stack = new Int32Array(n);
   const open = new Int32Array(n);
-  const isOpen = new Uint8Array(n);
-  const ring = new Uint8Array(n);
+  const flags = new Uint8Array(n);
   const order: number[] = [];
   let [top, opened, walked, count] = [0, 0, 0, 0];
   // A piece of more than one tile hands on from its own tile, and is handed to on any. One that hands
@@ -444,7 +450,8 @@ function handingOrder(y: Yard): { order: Int32Array; rings: Int32Array; count: n
     const i = t < 0 ? t : pieceOf(y, t);
     if (i < 0) return;
     if (at[i] >= 0) {
-      if (from >= 0 && isOpen[i] === 1) low[from] = Math.min(low[from] ?? 0, at[i] ?? 0);
+      if (from >= 0 && ((flags[i] ?? 0) & OPEN) !== 0) low[from] = Math.min(low[from] ?? 0, at[i] ?? 0);
+      if (from >= 0 && ((flags[i] ?? 0) & ON_PATH) !== 0) flags[from] = (flags[from] ?? 0) | CUT;
       return;
     }
     at[i] = walked++;
@@ -452,7 +459,7 @@ function handingOrder(y: Yard): { order: Int32Array; rings: Int32Array; count: n
     low[i] = at[i] ?? 0;
     stack[top++] = i;
     open[opened++] = i;
-    isOpen[i] = 1;
+    flags[i] = OPEN | ON_PATH;
   };
   for (let s = 0; s < n; s++) {
     enter(s, -1);
@@ -464,6 +471,7 @@ function handingOrder(y: Yard): { order: Int32Array; rings: Int32Array; count: n
       if (c >= Math.max(1, ways)) {
         top--;
         order.push(i);
+        flags[i] = (flags[i] ?? 0) & ~ON_PATH;
         closeWalk(i, top > 0 ? (stack[top - 1] ?? -1) : -1);
         continue;
       }
@@ -478,13 +486,19 @@ function handingOrder(y: Yard): { order: Int32Array; rings: Int32Array; count: n
     const from = opened;
     for (let j = -1; j !== i;) {
       j = open[--opened] ?? i;
-      isOpen[j] = 0;
+      flags[j] = (flags[j] ?? 0) & ~OPEN;
     }
     if (from - opened < 2) return;
     count++;
-    for (let k = opened; k < from; k++) ring[open[k] ?? 0] = 1;
+    for (let k = opened; k < from; k++) flags[open[k] ?? 0] = (flags[open[k] ?? 0] ?? 0) | ON_RING;
   }
-  return { order: Int32Array.from(order), rings: Int32Array.from(order.filter((i) => ring[i] === 1)), count };
+  const has = (i: number, bit: number): boolean => ((flags[i] ?? 0) & bit) !== 0;
+  return {
+    order: Int32Array.from(order),
+    rings: Int32Array.from(order.filter((i) => has(i, ON_RING))),
+    cuts: Int32Array.from(order.filter((i) => has(i, ON_RING) && has(i, CUT) && carries(y.kind[i] ?? NONE))),
+    count,
+  };
 }
 
 /**

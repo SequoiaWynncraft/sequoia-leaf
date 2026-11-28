@@ -196,58 +196,61 @@ function workSlowed(y: Yard, wire: Wire, i: number, quarters: number): void {
  * waits. A tile that carries hands on nothing until what it carries has crossed it (each carrier's
  * step asks it first, `kinds/line.ts`), so that is asked here, without the call. A way-in mouth of
  * what runs under tiles (a tunnel's) moves what is under the ground every tick, called by name.
- *
- * Round a ring (`Wire.rings`) one tile must come before the tile it hands to, which has not yet
- * handed on: so a ring tile that waited, or was refused, at its turn tries once more after every tile
- * has had its turn, if the tile it hands to has had room made since, and those behind it in the order
- * with it. A full ring with a way off it then moves as one at the belt's pace, as a full belt does; a
- * full ring with none stays still, and the tick ends. A yard with no ring does only the first pass.
+ * Then, in a yard with rings, the ring tiles' second try (`roundAgain`).
  */
 function handOn(y: Yard, wire: Wire, waiting: Uint8Array): void {
+  const { kind, item, prog, span } = y;
   const order = wire.order;
-  if (wire.rings.length > 0) {
-    handOnRound(y, wire, waiting);
-    return;
-  }
   for (let o = 0; o < order.length; o++) {
     const i = order[o] ?? 0;
-    if (waiting[i] !== 1) handOne(y, wire, i, waiting);
-  }
-}
-
-/** Handing on in a yard with rings: every tile once in the order, then the ring tiles that waited, once more (`handOn`). */
-function handOnRound(y: Yard, wire: Wire, waiting: Uint8Array): void {
-  const { order, rings, again } = wire;
-  let r = 0;
-  let retry = 0;
-  for (let o = 0; o < order.length; o++) {
-    const i = order[o] ?? 0;
-    const round = rings[r] === i;
-    if (round) r++;
-    if (waiting[i] !== 1) handOne(y, wire, i, waiting);
-    if (round && waiting[i] === 1) again[retry++] = i;
-  }
-  for (let a = 0; a < retry; a++) {
-    const i = again[a] ?? 0;
-    if (waiting[i] !== 1) handOne(y, wire, i, waiting);
-  }
-}
-
-/** The tile `i` hands on what it has finished with, if it has anything (`handOn`). */
-function handOne(y: Yard, wire: Wire, i: number, waiting: Uint8Array): void {
-  const k = y.kind[i] ?? NONE;
-  if (CARRIES[k] === 1) {
-    // A way-in mouth moves what is under the ground every tick (`kinds/under.ts`).
-    if ((y.span[i] ?? 0) > 0) {
-      passUnder(KIT, y, i, waiting);
-      return;
+    if (waiting[i] === 1) continue;
+    const k = kind[i] ?? NONE;
+    if (CARRIES[k] === 1) {
+      // A way-in mouth moves what is under the ground every tick (`kinds/under.ts`).
+      if ((span[i] ?? 0) > 0) {
+        passUnder(KIT, y, i, waiting);
+        continue;
+      }
+      if (item[i] === NONE || (prog[i] ?? 0) < 8) continue;
     }
-    if (y.item[i] === NONE || (y.prog[i] ?? 0) < 8) return;
+    const hands = HANDS[k];
+    if (hands === carryOn) carryOn(KIT, y, i, wire);
+    else if (hands === handOut) handOut(KIT, y, i, wire);
+    else if (hands) hands(KIT, y, i, wire);
   }
-  const hands = HANDS[k];
-  if (hands === carryOn) carryOn(KIT, y, i, wire);
-  else if (hands === handOut) handOut(KIT, y, i, wire);
-  else if (hands) hands(KIT, y, i, wire);
+  if (wire.rings.length > 0) roundAgain(y, wire, waiting);
+}
+
+/**
+ * Round a ring (`Wire.rings`) one tile must come before the tile it hands to, which has not yet
+ * handed on: so once every tile has had its turn, each tile of a ring that carries, in the order,
+ * tries again if it waits no longer and still holds a thing that has crossed it (one that handed on
+ * this tick holds none: what came onto it since has not crossed it). Those behind it in the order
+ * follow it. A full ring with a way off it so moves as one at the belt's pace, as a full belt does; a
+ * full ring with none stays still, and the tick ends.
+ */
+function roundAgain(y: Yard, wire: Wire, waiting: Uint8Array): void {
+  const { kind, item, prog, span } = y;
+  const { rings, cuts } = wire;
+  // Only from a cut (`Wire.cuts`) can a ring tile have room it did not have at its turn: none of those
+  // can hand on now, and the rest have nothing to try again.
+  let any = false;
+  for (let c = 0; c < cuts.length && !any; c++) {
+    const i = cuts[c] ?? 0;
+    any = waiting[i] !== 1 && ((span[i] ?? 0) > 0 || (item[i] !== NONE && (prog[i] ?? 0) >= 8));
+  }
+  if (!any) return;
+  for (let r = 0; r < rings.length; r++) {
+    const i = rings[r] ?? 0;
+    const k = kind[i] ?? NONE;
+    if (waiting[i] === 1 || CARRIES[k] !== 1) continue;
+    if ((span[i] ?? 0) > 0) passUnder(KIT, y, i, waiting);
+    else if (item[i] !== NONE && (prog[i] ?? 0) >= 8) {
+      const hands = HANDS[k];
+      if (hands === carryOn) carryOn(KIT, y, i, wire);
+      else if (hands) hands(KIT, y, i, wire);
+    }
+  }
 }
 
 // ---------- waiting ----------

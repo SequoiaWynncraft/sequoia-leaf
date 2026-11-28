@@ -96,7 +96,7 @@ describe("a ring of belts", () => {
     const y = bare();
     for (let x = 2; x < 20; x++) must(y, { do: "build", kind: "belt", x, y: 5, dir: 0 });
     F.rewire(y);
-    expect([F.ringsOf(y), y.wire?.rings.length, y.wire?.again.length]).toEqual([{ rings: 0, tiles: 0 }, 0, 0]);
+    expect([F.ringsOf(y), y.wire?.rings.length]).toEqual([{ rings: 0, tiles: 0 }, 0]);
   });
 
   test("a piece sending into a full ring with no way off it is stopped, in trouble, and its words say so", () => {
