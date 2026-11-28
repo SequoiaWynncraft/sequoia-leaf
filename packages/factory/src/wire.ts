@@ -444,7 +444,7 @@ function handingOrder(y: Yard): { readonly order: Int32Array; readonly rings: Ri
   const real = plumbingOf(y, true);
   const walked = walk(real);
   if (walked.rings.length === 0) return { order: Int32Array.from(all.order), rings: NO_RINGS };
-  const rings = ringsFound(walked.order, walked.rings, real, {
+  const rings = ringsFound(walked.order, walked.rings, {
     plain: (i) => carries(y.kind[i] ?? NONE) && (y.span[i] ?? 0) <= 0,
     holds: (i) => holderOf(y, i) >= 0,
   });

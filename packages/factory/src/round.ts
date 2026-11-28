@@ -5,10 +5,11 @@
  * where its last tile stood (`Wire.order`): after every tile it hands to off the ring, before every
  * tile that hands to it from off the ring.
  *
- * A ring's turn: what holds things on it tries first, then its tiles backward along the ways things go
- * round it, from where things leave it (`rings.ts`), each tile after the tile it hands to has tried and
- * made room; then once more, the tiles not done, where something moved after the first of them. Two
- * times round at most, so a turn costs a few looks a tile however the ring is built. A ring of belts
+ * A ring's turn: what holds things on it tries first, then its tiles in the handing order, each after
+ * the tiles it hands to have tried and made room (`rings.ts`), begun at a tile with room so that the
+ * order's break round the ring costs nothing; then once more, the tiles not done, where something moved
+ * after the first of them. Two times round at most, so a turn costs a few looks a tile however the
+ * ring is built. A ring of belts
  * moves as one at the belt's pace while something takes things off it, wherever its free tiles are, as
  * a full line does; a full ring with no way off stays still. Where ways off and back onto a ring cross
  * it many times, a thing may move a tick late, the same on Leaf and on the page.
@@ -105,7 +106,7 @@ const SPAN = 2 ** 24;
  * Where ring `k`'s turn begins (a place in `Rings.tiles`): at a tile of it that carries nothing, which
  * needs nothing of the ring to have room, so the tiles behind it all move in the turn; looked for from
  * where the last turn began, round the ring, as a free tile goes on round it as the ring moves. With
- * none, at the first that holds things, else where its order begins: a tile with a way off it.
+ * none, at the first that holds things, else where its order begins.
  */
 function beginAt(y: Yard, wire: Wire, k: number): number {
   const { tiles, starts, begin, looked } = wire.rings;

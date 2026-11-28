@@ -3,14 +3,13 @@
  * the parts of it where things handed on come back round, found by Tarjan's walk over the ways things
  * can really go (`walk.ts`), and for each the order its turn tries its tiles in (`round.ts`).
  *
- * A ring's turn tries its tiles backward along the ways things go round it: a tile, then each tile that
- * hands to it, then each that hands to those, so that a tile has tried to hand on, and made room,
- * before the tile behind it tries. The order is worked out from a tile with a way off the ring, or a
- * ring's first in the handing order; each turn begins it where the ring has room (`round.ts`).
+ * A ring's turn tries its tiles in the handing order, each after every tile it hands to but where the
+ * walk came back round to a tile it was still walking from: so a tile has tried to hand on, and made
+ * room, before the tiles behind it try. Round a ring the order must break somewhere; each turn begins
+ * it at a tile with room (`round.ts`), where the break costs nothing.
  */
 import type { Rings } from "./plumbing.ts";
 import { CARRIES, NONE, SPAN_MOST } from "./tables.ts";
-import type { Plumbing } from "./walk.ts";
 import { tunnelOf, type Yard } from "./yard.ts";
 
 /** What makes a ring's tiles what they are, by tile: one that carries on its own tile alone; one that holds things (a crate, a grower). */
@@ -20,24 +19,23 @@ export interface RingTiles {
 }
 
 /**
- * The rings found, as the plumbing keeps them: each ring's tiles in the order its turn tries them,
- * which of them carry on their own tile alone, which hold things, and which ring each tile is on.
- * `order` is the handing order, `found` each ring's tiles, `real` the ways things can really go.
+ * The rings found, as the plumbing keeps them: each ring's tiles in the order its turn tries them (the
+ * handing order), which of them carry on their own tile alone, which hold things, and which ring each
+ * tile is on. `order` is the handing order by the ways things can go, `found` each ring's tiles.
  */
-export function ringsFound(order: readonly number[], found: readonly number[][], real: Plumbing, is: RingTiles): Rings {
+export function ringsFound(order: readonly number[], found: readonly number[][], is: RingTiles): Rings {
   const onRing = new Map<number, number>();
   found.forEach((tiles, k) => {
     for (const i of tiles) onRing.set(i, k);
   });
   const byRing = found.map(() => [] as number[]);
   for (const i of order) byRing[onRing.get(i) ?? -1]?.push(i);
-  const turns = byRing.map((tiles, k) => turnOrder(tiles, k, onRing, real));
-  const tiles = turns.flat();
+  const tiles = byRing.flat();
   const starts = [0];
-  for (const turn of turns) starts.push((starts.at(-1) ?? 0) + turn.length);
+  for (const turn of byRing) starts.push((starts.at(-1) ?? 0) + turn.length);
   const holders: number[] = [];
   const holderStarts = [0];
-  turns.forEach((_, k) => {
+  byRing.forEach((_, k) => {
     for (let t = starts[k] ?? 0; t < (starts[k + 1] ?? 0); t++) if (is.holds(tiles[t] ?? 0)) holders.push(t);
     holderStarts.push(holders.length);
   });
@@ -56,34 +54,6 @@ export function ringsFound(order: readonly number[], found: readonly number[][],
     still: new Float64Array(found.length),
     looked: new Float64Array(1),
   };
-}
-
-/**
- * The order ring `k`'s turn tries its tiles in (the module says why): from its first tile with a way
- * off the ring, or its first, each tile before the tiles that hand to it, through every tile of it.
- * `tiles` are its tiles in the handing order.
- */
-function turnOrder(tiles: readonly number[], k: number, onRing: ReadonlyMap<number, number>, real: Plumbing): number[] {
-  const behind = new Map<number, number[]>(tiles.map((i) => [i, []]));
-  let start = -1;
-  for (const i of tiles)
-    for (let c = 0; c < Math.max(1, real.ways(i)); c++) {
-      const t = real.to(i, c);
-      if (t < 0) continue;
-      if (onRing.get(t) === k) behind.get(t)?.push(i);
-      else if (start < 0) start = i;
-    }
-  const out: number[] = [];
-  const seen = new Set<number>();
-  const next = [start < 0 ? (tiles[0] ?? 0) : start];
-  for (let i = next.pop(); i !== undefined; i = next.pop()) {
-    if (seen.has(i)) continue;
-    seen.add(i);
-    out.push(i);
-    // The first that hands to it is tried next.
-    next.push(...(behind.get(i) ?? []).toReversed());
-  }
-  return out;
 }
 
 /** No rings. */

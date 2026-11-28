@@ -9,13 +9,13 @@ import type { Recipe } from "./tables.ts";
  * The rings in the plumbing: parts of it where things handed on can come back round, each tile
  * handing to the next as it stands now, on a side that takes from it (a tunnel passes under), worked
  * out by Tarjan's walk (`walk.ts`, `rings.ts`). Round a ring no order puts each tile after the tile it
- * hands to, so a ring takes its turn as one (`round.ts`): its tiles backward from where things leave
- * it, twice at most, each thing moving at most once. So a full ring with a way off it moves as one at
+ * hands to, so a ring takes its turn as one (`round.ts`): its tiles in the handing order from a tile
+ * with room, twice at most, each thing moving at most once. So a full ring with a way off it moves as one at
  * the belt's pace, as a full belt does, and a full ring with none stays still.
  */
 export interface Rings {
   readonly count: number;
-  /** Each ring's tiles, ring by ring, in the order its turn tries them: ring `k`'s from `starts[k]` to `starts[k + 1]`. */
+  /** Each ring's tiles, ring by ring, in the handing order, which its turn tries them in: ring `k`'s from `starts[k]` to `starts[k + 1]`. */
   readonly tiles: Int32Array;
   readonly starts: Int32Array;
   /** 1 for each ring tile (as `tiles`) that carries on its own tile alone: what carries, but a tunnel's way-in mouth. */
