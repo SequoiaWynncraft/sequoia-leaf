@@ -7,6 +7,7 @@
  * Each kind of number has a type of its own, so the checker keeps a thing apart from a kind or a
  * tile. A number becomes one only through its guard (`isItem`, `isKind`, ...), which checks it.
  */
+import { GROW } from "./content/grow.ts";
 import { ITEM, type ItemName, ITEMS, type Wants } from "./content/items.ts";
 import { BLUEPRINT, BUFFER, GRADES, TICKS } from "./content/machines.ts";
 import { MIXES } from "./content/mixes.ts";
@@ -232,6 +233,11 @@ export const BURNS: readonly (Burns | null)[] = KIND_DEFS.map((d: KindDef) => {
 
 /** The work in gathering one thing and in studying one folio, in half-ticks. */
 export const WORK = { gather: TICKS.gather * 2, study: TICKS.study * 2 } as const;
+/**
+ * The work in gathering one of each thing, in half-ticks: its own time where its table says
+ * (`ItemInfo.gather`: star crystal, 1,500 ticks), else a gatherer's (`WORK.gather`).
+ */
+export const GATHER_WORK = Uint16Array.from(ALL_ITEMS, (n) => (ITEM_INFO[n]?.gather ?? TICKS.gather) * 2);
 /** For each kind that runs under tiles, what each tile past so many adds to its cost (`KindDef.deeper`). */
 const DEEPER = KIND_DEFS.map((d: KindDef) => d.deeper ?? null);
 /**
@@ -314,6 +320,51 @@ export const MIXES_N: readonly Mix[] = MIXES.map((m) => ({
 }));
 /** The mix each kind makes, by its number, or null. */
 export const MIX_OF: readonly (Mix | null)[] = ALL_KINDS.map((k) => MIXES_N.find((m) => m.by === k) ?? null);
+/**
+ * What a piece that grows a thing from itself does (`content/grow.ts`): a run takes 1 of each of
+ * `takes` and gives `gives`, for `work` half-ticks at grade 1, and every `extraEvery`th run gives 2.
+ */
+export interface Grow {
+  readonly by: Kind;
+  readonly takes: readonly Item[];
+  readonly work: number;
+  readonly gives: Item;
+  readonly extraEvery: number;
+  readonly holds: number;
+}
+const GROWS: readonly Grow[] = [
+  {
+    by: kind(GROW.by),
+    takes: GROW.takes.map(item),
+    work: GROW.ticks * 2,
+    gives: item(GROW.gives),
+    extraEvery: GROW.extraEvery,
+    holds: GROW.holds,
+  },
+];
+/** What each kind grows, by its number, or null. */
+export const GROW_OF: readonly (Grow | null)[] = ALL_KINDS.map((k) => GROWS.find((g) => g.by === k) ?? null);
+/** The things a growing piece gives in every `extraEvery` runs: one each, and one more. */
+export const grownIn = (g: Grow): number => g.extraEvery + 1;
+/**
+ * A thing a piece grows, as a recipe for planning alone (no machine makes it so): its net, 1 for every
+ * `extraEvery` runs, from what those runs take beside the thing itself, at their work. So a grower is
+ * counted as making half its runs from 2 crystal feed each, and star crystal is no part of it.
+ */
+const GROWN: readonly (Recipe | null)[] = ALL_ITEMS.map((n) => {
+  const g = GROWS.find((x) => x.gives === n);
+  if (!g) return null;
+  const from = g.takes.filter((t) => t !== n);
+  return {
+    out: n,
+    also: NONE,
+    from,
+    need: from.map(() => g.extraEvery),
+    by: g.by,
+    ticks: (g.work / 2) * g.extraEvery,
+    work: g.work * g.extraEvery,
+  };
+});
 /** The mix that gives each thing, if one does. */
 const MIX_GIVING: readonly (Mix | null)[] = ALL_ITEMS.map((n) => MIXES_N.find((x) => x.gives.includes(n)) ?? null);
 /**
@@ -337,12 +388,17 @@ const MIXED: readonly (Recipe | null)[] = ALL_ITEMS.map((n) => {
 });
 /**
  * Every recipe that makes each thing: the one it is the thing of first, then those that make it beside
- * their own, then a mix's share of it; but the mix's share first where every recipe of its own only
- * turns other things of that mix into it (a cracker's creosote, from a still's pitch), so that the
- * mix is what makes it and the recipe what makes more of it.
+ * their own, then what grows it (`GROWN`), then a mix's share of it; but the mix's share first where
+ * every recipe of its own only turns other things of that mix into it (a cracker's creosote, from a
+ * still's pitch), so that the mix is what makes it and the recipe what makes more of it.
  */
 const MAKING: readonly (readonly Recipe[])[] = ALL_ITEMS.map((n) => {
-  const own = [...RECIPES_N.filter((r) => r.out === n), ...RECIPES_N.filter((r) => r.also === n)];
+  const grown = GROWN[n];
+  const own = [
+    ...RECIPES_N.filter((r) => r.out === n),
+    ...RECIPES_N.filter((r) => r.also === n),
+    ...(grown ? [grown] : []),
+  ];
   const [mixed, m] = [MIXED[n], MIX_GIVING[n]];
   if (!mixed || !m) return own;
   return own.every((r) => r.from.every((part) => m.gives.includes(part))) ? [mixed, ...own] : [...own, mixed];
@@ -355,8 +411,12 @@ const OWN: readonly (Recipe | null)[] = ALL_ITEMS.map((n) => MAKING[n]?.[0] ?? n
  * (`makeableOn`), how a thing is got (`recipeFor`), and so the planner, the work in it and its parts.
  */
 export const makersOf = (n: number): readonly Recipe[] => MAKING[n] ?? [];
-/** The recipe a thing is got by: none for a thing from the ground, which is gathered; else the first that makes it (`makersOf`). */
-export const recipeFor = (n: Item): Recipe | null => (isRaw(n) ? null : (makersOf(n)[0] ?? null));
+/**
+ * The recipe a thing is got by: the first that makes it (`makersOf`); none for a thing only gathered
+ * from the ground. Star crystal lies in the ground and is grown too, and is got by growing it: what
+ * the ground gives of it is far too slow for anything else.
+ */
+export const recipeFor = (n: Item): Recipe | null => makersOf(n)[0] ?? null;
 /**
  * For each kind, by the kind a recipe is made by, how many of that kind one piece of it is on the
  * recipe: 1 where they are the same, as many as it says for a machine that makes what another makes

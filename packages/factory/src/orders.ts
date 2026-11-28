@@ -359,7 +359,7 @@ export function fresh(y: Yard, seed: number): Standing {
   let worth = 0;
   const items = second === null ? [first] : [first, second];
   for (const k of items) {
-    const share = step(k) === 4 ? ORDER_WORK.deepest : step(k) === 0 ? ORDER_WORK.ground : 1;
+    const share = step(k) >= 4 ? ORDER_WORK.deepest : step(k) === 0 ? ORDER_WORK.ground : 1;
     const n = round((budget * share * (0.8 + roll() * 0.4)) / workOf(k));
     want[k] = n;
     worth += n * (WORTH[k] ?? 0);

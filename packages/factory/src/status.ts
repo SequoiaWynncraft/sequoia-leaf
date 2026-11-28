@@ -6,6 +6,7 @@
  * but working out its power and plumbing if a change left them unknown.
  */
 import { alight, fuelNow } from "./kinds/burner.ts";
+import { type Growth, growth } from "./kinds/grower.ts";
 import { RULES } from "./kinds/list.ts";
 import { holding as holdingOf, type MachineRate, rateOf, type State, STATES, TROUBLE } from "./kinds/say.ts";
 import { litAt } from "./power.ts";
@@ -15,6 +16,13 @@ import { KIT, rewire } from "./wire.ts";
 import { type Counts, holderOf, type Yard } from "./yard.ts";
 
 export { type MachineRate, type State, STATES, TROUBLE } from "./kinds/say.ts";
+export type { Growth } from "./kinds/grower.ts";
+
+/**
+ * What the grower on a tile holds and is doing (`kinds/grower.ts`): the one reading its status, its
+ * picture, its lamps and its card take. Nothing for a tile with no grower.
+ */
+export const growthAt = (y: Yard, i: number): Growth => growth(KIT, y, pieceOf(y, i));
 
 export interface Status {
   readonly state: State;

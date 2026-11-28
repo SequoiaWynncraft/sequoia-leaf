@@ -13,6 +13,7 @@ import { cracker } from "./cracker.ts";
 import { crate } from "./crate.ts";
 import { depot } from "./depot.ts";
 import { gatherer } from "./gatherer.ts";
+import { grower } from "./grower.ts";
 import { joiner } from "./joiner.ts";
 import { gradeKept, tintKept } from "./kept.ts";
 import type { Hooks, KindDef } from "./kind.ts";
@@ -50,6 +51,7 @@ export const KIND_DEFS = [
   still,
   cracker,
   powerhouse,
+  grower,
 ] as const satisfies readonly KindDef[];
 export type KindName = (typeof KIND_DEFS)[number]["name"];
 

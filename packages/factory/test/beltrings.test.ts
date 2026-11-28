@@ -98,4 +98,24 @@ describe("a ring of belts", () => {
     F.rewire(y);
     expect([F.ringsOf(y), y.wire?.rings.length, y.wire?.again.length]).toEqual([{ rings: 0, tiles: 0 }, 0, 0]);
   });
+
+  test("a piece sending into a full ring with no way off it is stopped, in trouble, and its words say so", () => {
+    const y = bare();
+    for (const x of [31, 27, 23, 19, 15, 11, 7, 3]) must(y, { do: "build", kind: "pylon", x, y: 10, dir: 0 });
+    const tiles = ring(y, 7, 2, 7, 7);
+    // A grower facing east beside the ring's west side: its middle way out is onto the ring's tile (7, 5).
+    must(y, { do: "build", kind: "grower", x: 5, y: 5, dir: 0 });
+    fill(y, tiles);
+    const g = F.at(y, 5, 5);
+    const r = F.holderOf(y, g);
+    y.holders.out[r] = F.item("crystal");
+    F.changed(y);
+    F.step(y);
+    expect(F.status(y, g)).toEqual({
+      state: "blocked",
+      trouble: true,
+      line: "Stopped: its star crystals cannot leave by its middle way out. It grows nothing more until they do.",
+      stuck: F.item("crystal"),
+    });
+  });
 });

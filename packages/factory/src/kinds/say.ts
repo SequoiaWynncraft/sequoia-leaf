@@ -6,6 +6,7 @@
  */
 import type { Item, Recipe } from "../tables.ts";
 import type { Yard } from "../yard.ts";
+import type { Words } from "./kind.ts";
 import type { Kit } from "./kit.ts";
 
 /** How a thing stands: doing its job, with nothing to do just now, or in trouble that will not mend itself. */
@@ -103,9 +104,10 @@ export const stuckAs = (k: Kit, y: Yard, i: number, n: Item, also = false): numb
 
 /**
  * Whether the line a piece sends a thing into (with `also`, its by-product) has stopped: every tile of
- * it ahead holds a thing at the end of its tile, waiting, up to one that is blocked (in trouble). A
- * line with room on any tile, or that runs into a piece that is not a line, still moves. Each line is
- * followed no further than the land has tiles.
+ * it ahead holds a thing at the end of its tile, waiting, up to one that is blocked (in trouble), or
+ * all the way round a ring of belts back to where it began, which nothing takes off. A line with room
+ * on any tile, or that runs into a piece that is not a line, still moves. Each line is followed no
+ * further than the land has tiles.
  */
 export function jammedAhead(k: Kit, y: Yard, i: number, n: Item, also = false): boolean {
   for (const { to } of sendings(k, y, i, n, also)) {
@@ -115,9 +117,36 @@ export function jammedAhead(k: Kit, y: Yard, i: number, n: Item, also = false): 
       if (!k.isItem(held) || (y.prog[t] ?? 0) < 8 || k.tunnelOf(y, t) >= 0) break;
       if (stuckAs(k, y, t, held) !== as("waiting")) return true;
       t = k.nextOf(y, t);
+      if (t === to) return true;
     }
   }
   return false;
+}
+
+/** The name of the way out of a piece of more than one tile that sends a thing it holds ready (`Out.name`): "left", "middle", "right". */
+export function wayFor(k: Kit, y: Yard, i: number, n: Item, also = false): string {
+  return k.outsOf(y, i).find((o) => o.also === also && k.sendsThing(o, n))?.name ?? "";
+}
+
+/**
+ * How a piece of more than one tile stands while it holds a finished thing `out` (a still, a grower):
+ * waiting while what stands ahead of its way out takes it and the line there still moves; else
+ * stopped, in trouble, with nowhere ahead to take it or the line ahead stopped.
+ */
+export function heldAs(k: Kit, y: Yard, i: number, out: Item): number {
+  const stuck = stuckAs(k, y, i, out);
+  return stuck === as("waiting") && !jammedAhead(k, y, i, out) ? stuck : as("blocked", true);
+}
+
+/**
+ * Its words for that (`heldAs`): stopped, which thing cannot leave by which way out, and `until`, what
+ * it does not do until it has; or waiting for room ahead, by that way out.
+ */
+export function heldWords(k: Kit, y: Yard, i: number, state: string, out: Item, until: string): Words {
+  const way = wayFor(k, y, i, out);
+  return state === "blocked"
+    ? { line: `Stopped: its ${many(k, out)} cannot leave by its ${way} way out. ${until}`, stuck: out }
+    : { line: `Waiting: no room ahead for its ${many(k, out)}, by its ${way} way out.` };
 }
 
 /** The sink a thing held ready would go into and that never takes it, as named: "the depot", "the cart stop"; or nothing. */
@@ -183,6 +212,9 @@ function carriedAhead(k: Kit, y: Yard, i: number): number {
   if (i < 0) return Infinity;
   const outs = k.outsOf(y, i);
   const kind = y.kind[i] ?? k.NONE;
+  // One that grows gives more than one a run, on the whole (`grownPerRun`): 3 for every 2 of a grower's.
+  const grown = k.isKind(kind) ? k.grownPerRun(kind) : 0;
+  if (grown > 0) return carriedAt(k, y, k.nextOf(y, i)) / grown;
   if (!k.isKind(kind) || outs.length === 0 || outs[0]?.only === k.NONE) return carriedAt(k, y, k.nextOf(y, i));
   let most = Infinity;
   for (let p = 0; p < outs.length; p++) {
@@ -194,14 +226,17 @@ function carriedAhead(k: Kit, y: Yard, i: number): number {
 }
 
 /**
- * What a kind of piece at a grade turns out a minute flat out, for `recipe` (a machine's): its own
- * pace's worth (a gatherer, a Study), a thing a run for one that breaks a mix (`mixPerMinute`), or
- * its recipe's; else nothing.
+ * What the piece of a kind at a grade on the tile `i` turns out a minute flat out, for `recipe` (a
+ * machine's): a gatherer what lies under it, at that thing's own pace (`gathers`); a Study its own
+ * pace's worth; a thing a run for one that breaks a mix (`mixPerMinute`); runs, for one that grows a
+ * thing (`growPerMinute`); or its recipe's; else nothing.
  */
-function flatOut(k: Kit, kind: number, grade: number, recipe: Recipe | null): number {
+function flatOut(k: Kit, y: Yard, i: number, kind: number, grade: number, recipe: Recipe | null): number {
   if (!k.isKind(kind)) return 0;
+  if (kind === k.GATHERING) return k.gathers(y.land.deposit[i] ?? k.NONE, grade);
   if ((k.WORK_OF[kind] ?? 0) > 0) return k.makes(kind, grade, null);
   if (k.MIX_OF[kind]) return k.mixPerMinute(kind, grade);
+  if (k.GROW_OF[kind]) return k.growPerMinute(kind, grade);
   return k.isMaker(kind) && recipe ? k.makes(kind, grade, recipe) : 0;
 }
 
@@ -210,7 +245,7 @@ export function rateOf(k: Kit, y: Yard, i: number, recipe: Recipe | null): Machi
   const grade = y.grade[i] ?? 0;
   const lit = kind !== k.NONE && k.litAt(y, i);
   const share = lit ? k.pace(y) * k.smogPace(y, i) : 0;
-  const nominal = flatOut(k, kind, grade, recipe);
+  const nominal = flatOut(k, y, i, kind, grade, recipe);
   const ahead = nominal > 0 ? carriedAhead(k, y, i) : Infinity;
   const effective = Math.min(nominal * share, ahead);
   return {

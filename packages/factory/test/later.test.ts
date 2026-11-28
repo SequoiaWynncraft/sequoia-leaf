@@ -7,11 +7,12 @@
  */
 import { describe, expect, test } from "bun:test";
 
-import { PARTS } from "../src/cells.ts";
+import { PARTS, unpackCells } from "../src/cells.ts";
 import { ENTRY_FLAGS, MASK_BITS, SETTING_PARTS } from "../src/history.ts";
 import * as F from "../src/index.ts";
 import { KNOWN_AT_10 } from "../src/known10.ts";
 import { beforeReach } from "./goals.ts";
+import { bareLand } from "./land.ts";
 import { near, xy } from "./near.ts";
 import { Player } from "./player.ts";
 import { bare, TIER5, tunnel } from "./tier5.ts";
@@ -175,6 +176,24 @@ describe("every bit a save keeps that this Leaf does not use", () => {
         const text = save(bit);
         expect([name, bit, F.keptLater(text), F.decode(text)]).toEqual([name, bit, true, null]);
       }
+  });
+});
+
+describe("a grower's place in its runs", () => {
+  test("is kept, with what it grew, in parts every reader since tier 5 knows (`MIX`, `MORE`): no field of bits above grows", () => {
+    const y = F.create({ land: bareLand(20, 12, [], [16, 6]), tier: 8, seed: 1 });
+    must(y, { do: "build", kind: "grower", x: 4, y: 4, dir: 0 });
+    const r = F.holderOf(y, F.at(y, 4, 4));
+    y.holders.mix[r] = 1;
+    y.holders.out[r] = F.item("crystal");
+    y.holders.more[r] = 1;
+    const text = F.encode(y);
+    const cells = unpackCells(F.fromBase64(String(record(text).cells)) ?? new Uint8Array(), y.land.w * y.land.h);
+    const kept = Array.isArray(cells) ? cells.find((p) => p.kind === F.kind("grower")) : undefined;
+    expect([kept?.mix, kept?.more, kept?.out, PARTS]).toEqual([1, 1, F.item("crystal"), 0x7fffe]);
+    const back = F.decode(text, y.land);
+    const r2 = back ? F.holderOf(back, F.at(back, 4, 4)) : -1;
+    expect([back?.holders.mix[r2], back?.holders.more[r2], back && F.check(back)]).toEqual([1, 1, F.check(y)]);
   });
 });
 

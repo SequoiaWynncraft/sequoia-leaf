@@ -38,6 +38,9 @@ export interface Kit {
   readonly SINKS: typeof Tables.SINKS;
   readonly KIND_INFO: typeof Tables.KIND_INFO;
   readonly MIX_OF: typeof Tables.MIX_OF;
+  readonly GROW_OF: typeof Tables.GROW_OF;
+  readonly GATHERING: typeof Tables.GATHERING;
+  readonly GATHER_WORK: typeof Tables.GATHER_WORK;
   readonly SMOG_OF: typeof Tables.SMOG_OF;
   readonly TINTED: typeof Tables.TINTED;
   readonly GRADED: typeof Tables.GRADED;
@@ -57,6 +60,9 @@ export interface Kit {
   readonly makes: typeof Planner.makes;
   readonly mixPerMinute: typeof Planner.mixPerMinute;
   readonly mixShare: typeof Planner.mixShare;
+  readonly gathers: typeof Planner.gathers;
+  readonly growPerMinute: typeof Planner.growPerMinute;
+  readonly grownPerRun: typeof Planner.grownPerRun;
   readonly MINUTE: typeof Planner.MINUTE;
   readonly carried: typeof Planner.carried;
   readonly BURNS: typeof Tables.BURNS;

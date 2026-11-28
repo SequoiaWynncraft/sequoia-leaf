@@ -18,7 +18,7 @@ import { room as makerRoom, wants as makerWants } from "./kinds/maker.ts";
  */
 import { besideWater, toward } from "./land.ts";
 import { deliver, giveGoal } from "./orders.ts";
-import { carried, makes, MINUTE, mixPerMinute, mixShare } from "./planner.ts";
+import { carried, gathers, grownPerRun, growPerMinute, makes, MINUTE, mixPerMinute, mixShare } from "./planner.ts";
 import { litAt, litOf } from "./power.ts";
 import { lit as litBig, outsOf, OWN, pieceOf, roomRound, sendsThing, takesAt } from "./sizes.ts";
 import { smogged, smogPace } from "./smog.ts";
@@ -31,8 +31,11 @@ import {
   drawnAt,
   FIXED,
   FOLIOS,
+  GATHER_WORK,
+  GATHERING,
   GOALS,
   GRADED,
+  GROW_OF,
   HALF,
   holdsMost,
   isFolio,
@@ -554,6 +557,9 @@ export const KIT: Kit = {
   SINKS,
   KIND_INFO,
   MIX_OF,
+  GROW_OF,
+  GATHERING,
+  GATHER_WORK,
   SMOG_OF,
   TINTED,
   GRADED,
@@ -573,6 +579,9 @@ export const KIT: Kit = {
   makes,
   mixPerMinute,
   mixShare,
+  gathers,
+  growPerMinute,
+  grownPerRun,
   MINUTE,
   carried,
   BURNS,
