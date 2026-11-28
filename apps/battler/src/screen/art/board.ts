@@ -76,11 +76,17 @@ export interface ClothTones {
 }
 /** The red of the gingham's checks. */
 const CHECK_RED = "#b0483a";
+/** The gingham's three checks as woven: cream, coral and red. */
+const WOVEN = [dusk(PAPER[2], 0.5), dusk(CORAL, 0.5), dusk(CHECK_RED, 0.3)] as const;
+/** The three checks' middle tone. */
+const WOVEN_MID = mixTone(mixTone(WOVEN[0], WOVEN[1], 1 / 2), WOVEN[2], 1 / 3);
+/** A check drawn halfway to the middle tone, so the pattern is half as strong and stays behind the figures. */
+const calmed = (tone: string): string => mixTone(tone, WOVEN_MID, 0.5);
 /**
  * The cloths a member may buy, each the board's own material: its values in the board's band, its
  * hue and ornament its own. Baize is as dark as it is because the brambles sink into any mid green;
  * velvet is the one ground no figure sinks into; gingham's checks are round and between the halves
- * only, its faces the bare board's.
+ * only, at half their woven contrast, its faces the bare board's.
  */
 export const CLOTHS = {
   baize: {
@@ -110,13 +116,13 @@ export const CLOTHS = {
   gingham: {
     near: { ...BOARD.near, groove: dusk(CHECK_RED, 0.4), edge: dusk(CHECK_RED, 0.55) },
     far: { ...BOARD.far, groove: dusk(CHECK_RED, 0.5), edge: dusk(CHECK_RED, 0.55) },
-    ground: dusk(PAPER[2], 0.5),
-    nap: dusk(CORAL, 0.5),
+    ground: calmed(WOVEN[0]),
+    nap: calmed(WOVEN[1]),
     trim: dusk(CHECK_RED, 0.3),
   },
 } as const satisfies Readonly<Record<Exclude<ClothId, "bare">, ClothTones>>;
 /** The gingham's third check, the darkest. */
-export const CHECK = dusk(CHECK_RED, 0.3);
+export const CHECK = calmed(WOVEN[2]);
 /** The board's halves as a cloth has them, or the bare board's. */
 export const halvesOf = (cloth: ClothId): { near: HexTones; far: HexTones } =>
   cloth === "bare" ? BOARD : CLOTHS[cloth];
