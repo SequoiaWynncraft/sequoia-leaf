@@ -19,7 +19,6 @@ import type { Land } from "./land.ts";
 import {
   ALL_ITEMS,
   ARRIVAL,
-  CLEARING,
   type Goal,
   GOALS,
   isNode,
@@ -111,12 +110,11 @@ export function giveGoal(y: Yard, g: Goal, thing: number, n: number): number {
 /** Gives the plot being cleared up to `n` of a thing it still wants, and tells a screen once it has all it wants; says how many it took. */
 function giveClearing(y: Yard, thing: number, n: number): number {
   const c = y.clearing;
-  const want = c ? CLEARING[c.plot] : null;
-  const need = c && want ? (want[thing] ?? 0) - (c.filled[thing] ?? 0) : 0;
-  if (!c || !want || need <= 0) return 0;
+  const need = c ? (c.want[thing] ?? 0) - (c.filled[thing] ?? 0) : 0;
+  if (!c || need <= 0) return 0;
   const took = Math.min(n, need);
   c.filled[thing] = (c.filled[thing] ?? 0) + took;
-  if (isFilled(want, c.filled)) filledClearing(y, c.plot);
+  if (isFilled(c.want, c.filled)) filledClearing(y, c.plot);
   return took;
 }
 

@@ -42,8 +42,12 @@ function shown(y: F.Yard): { plot: string; begun: number } {
   return { plot: F.plotName(c.plot), begun: c.begun };
 }
 
+/** What The Old Workings' clearing asks for, as a save keeps it. */
+const OLD = { lantern: 600, pipe: 900 };
 /** A kept clearing of The Old Workings, as a save holds it. */
-const workings = (filled: Record<string, number>, begun = 1) => ({ clearing: { plot: "workings", begun, filled } });
+const workings = (filled: Record<string, number>, begun = 1, asks: Record<string, number> = OLD) => ({
+  clearing: { plot: "workings", begun, want: asks, filled },
+});
 
 /** A yard past tier 4's commission that owns today's nine plots, with the second ring for sale round them, and nothing in hand. */
 function meadow(): F.Yard {
@@ -114,7 +118,9 @@ describe("clearing a plot", () => {
     expect([F.clearingState(y, WORKINGS), y.clearing?.plot]).toEqual(["clearing", WORKINGS]);
     expect(refused({ do: "clearPlot", plot: "workings" })).toBe("You are clearing The Old Workings already");
     expect(refused({ do: "clearPlot", plot: "flats" })).toBe("You are clearing The Old Workings already");
-    expect(refused({ do: "handClearing", ...shown(y) })).toBe("The Old Workings still wants 600 lanterns and 900 pipes");
+    expect(refused({ do: "handClearing", ...shown(y) })).toBe(
+      "The Old Workings still wants 600 lanterns and 900 pipes",
+    );
   });
 
   test("is given what the depot takes in after the node in hand and before the side orders, and no more than it wants", () => {
@@ -216,6 +222,33 @@ describe("clearing a plot", () => {
     expect(y.clearing).toBeNull();
   });
 
+  test("asks for what the table asked for when it began: the table changed since, it and a copy read back still ask for that", () => {
+    const y = meadow();
+    const pipe = F.item("pipe");
+    must(y, { do: "clearPlot", plot: "workings" });
+    const table = want(WORKINGS);
+    const was = Float64Array.from(table);
+    try {
+      // A newer Leaf asks more of The Old Workings: the clearing begun before still wants 900 pipes.
+      table[pipe] = 1200;
+      F.deliver(y, F.item("lantern"), 600);
+      F.deliver(y, pipe, 1000);
+      const back = F.decode(F.encode(y));
+      expect([
+        y.clearing?.filled[pipe],
+        F.clearingReady(y),
+        back?.clearing?.filled[pipe],
+        back && F.clearingReady(back),
+      ]).toEqual([900, true, 900, true]);
+      // One begun after the change asks for the table's new count.
+      must(y, { do: "stopClearing", ...shown(y) });
+      must(y, { do: "clearPlot", plot: "workings" });
+      expect(y.clearing?.want[pipe]).toBe(1200);
+    } finally {
+      table.set(was);
+    }
+  });
+
   test("Undo never gives its goods back: a piece built before it is undone, and the clearing keeps all it was given", () => {
     const y = meadow();
     y.till = 1000 * F.MILLI;
@@ -243,14 +276,18 @@ describe("a clearing kept", () => {
     expect(F.decode(F.encode(y))?.begun).toBe(1);
     must(y, { do: "clearPlot", plot: "workings" });
     F.deliver(y, F.item("pipe"), 300);
-    expect(JSON.parse(F.encode(y)).clearing).toEqual({ plot: "workings", begun: 2, filled: { pipe: 300 } });
+    expect(JSON.parse(F.encode(y)).clearing).toEqual({ plot: "workings", begun: 2, want: OLD, filled: { pipe: 300 } });
     const back = F.decode(F.encode(y));
     expect([back?.clearing, back?.begun, back && F.check(back)]).toEqual([y.clearing, 2, F.check(y)]);
-    // Its number is checked: two copies alike but for it do not agree.
-    const other = F.decode(F.encode(y));
-    if (!other?.clearing) throw new Error("no clearing read");
-    other.clearing = { ...other.clearing, begun: 1 };
-    expect(F.check(other)).not.toBe(F.check(y));
+    // Its number, and what it asks for, are checked: two copies alike but for one of them do not agree.
+    const other = (change: Partial<NonNullable<F.Yard["clearing"]>>): number => {
+      const copy = F.decode(F.encode(y));
+      if (!copy?.clearing) throw new Error("no clearing read");
+      copy.clearing = { ...copy.clearing, ...change };
+      return F.check(copy);
+    };
+    expect(other({ begun: 1 })).not.toBe(F.check(y));
+    expect(other({ want: F.countsOf({ lantern: 600, pipe: 901 }) })).not.toBe(F.check(y));
     // And with what was given to it, it changes the check as it changes.
     const given = F.check(y);
     F.deliver(y, F.item("pipe"), 1);
@@ -262,14 +299,23 @@ describe("a clearing kept", () => {
     expect(F.decode(F.encode(y))?.cleared).toEqual([WORKINGS]);
   });
 
-  test("read back, is no more than it wants, on a plot it could take on now; a plot no Leaf knows is a newer Leaf's", () => {
+  test("read back, asks for what it asked for, is no more than it wants, on a plot it could take on now; a plot no Leaf knows is a newer Leaf's", () => {
     const y = meadow();
     must(y, { do: "clearPlot", plot: "workings" });
     const record = JSON.parse(F.encode(y));
     const read = (more: Record<string, unknown>): F.Yard | null => F.decode(JSON.stringify({ ...record, ...more }));
     expect(read(workings({ pipe: 99_999 }))?.clearing?.filled[F.item("pipe")]).toBe(900);
-    expect(read({ clearing: { plot: "crater", begun: 1, filled: {} } })?.clearing).toBeNull();
-    expect(read({ clearing: { plot: "bank", begun: 1, filled: {} } })?.clearing).toBeNull();
+    // What it asks for is what was kept, not the table's now; and it asks for something, or it is not read.
+    const asked = read(workings({ pipe: 99_999 }, 1, { pipe: 1000, gear: 5 }))?.clearing;
+    expect([asked && F.goodsText(asked.want), asked?.filled[F.item("pipe")]]).toEqual([
+      "5 gears and 1,000 pipes",
+      1000,
+    ]);
+    expect([read(workings({}, 1, {}))?.clearing, read({ clearing: { plot: "workings", begun: 1 } })?.clearing]).toEqual(
+      [null, null],
+    );
+    expect(read({ clearing: { plot: "crater", begun: 1, want: OLD, filled: {} } })?.clearing).toBeNull();
+    expect(read({ clearing: { plot: "bank", begun: 1, want: OLD, filled: {} } })?.clearing).toBeNull();
     // Its number is one the yard has begun: none, or past the count, and it is not read.
     expect([read(workings({}, 0))?.clearing, read(workings({}, 2))?.clearing]).toEqual([null, null]);
     expect(read({ ...workings({}, 2), begun: 2 })?.clearing?.begun).toBe(2);
@@ -277,8 +323,13 @@ describe("a clearing kept", () => {
       WORKINGS,
       F.plot("crater"),
     ]);
-    const newer = JSON.stringify({ ...record, clearing: { plot: "moon", filled: {} } });
-    expect([F.keptLater(newer), F.decode(newer)]).toEqual([true, null]);
+    for (const clearing of [
+      { plot: "moon", begun: 1, want: OLD, filled: {} },
+      { plot: "workings", begun: 1, want: { ...OLD, moonstone: 5 }, filled: {} },
+    ]) {
+      const newer = JSON.stringify({ ...record, clearing });
+      expect([F.keptLater(newer), F.decode(newer)]).toEqual([true, null]);
+    }
   });
 
   test("names only plots the Leaf of version 10 did not know, so that a yard holding one is kept as version 11", () => {

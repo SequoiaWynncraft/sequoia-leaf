@@ -73,6 +73,7 @@ function recordNames(raw: Rec, goals: Set<string>, things: Set<string>, plots: S
     away.made,
     ...Object.values(got),
     ...orders.flatMap((o) => [o.want, o.filled]),
+    clearing.want,
     clearing.filled,
   ];
   for (const c of counted) for (const name of countNames(c)) things.add(name);

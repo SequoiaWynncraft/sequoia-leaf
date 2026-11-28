@@ -3,7 +3,7 @@
  * bar and a count kept up to date; its Hand over once everything is delivered, else its Stop, which
  * asks first, saying that what was delivered is not given back (`clearing.ts` in the rules).
  */
-import { CLEARING, clearingReady, type Counts, type Plot, plotPrice } from "@sequoia-leaf/factory";
+import { clearingReady, clearingWant, type Counts, type Plot, plotPrice } from "@sequoia-leaf/factory";
 import { asking, asksAgain, el, pressedTwice } from "@sequoia-leaf/kit/dom.ts";
 import { coinsText } from "@sequoia-leaf/kit/say.ts";
 import type { Scope } from "@sequoia-leaf/kit/scope.ts";
@@ -41,7 +41,7 @@ const stopKey = (plot: Plot, begun: number): ReturnType<typeof pressKey> => pres
  */
 export function clearingCard(life: Scope, again: () => void, live: Listed[]): HTMLElement[] {
   const line = clearingLine();
-  const want = line ? CLEARING[line.plot] : null;
+  const want = line ? clearingWant(S.world, line.plot) : null;
   if (!line || !want) return [];
   const rows = wantsOrder(wantsIn(want), filled);
   if (rows) live.push(rows);

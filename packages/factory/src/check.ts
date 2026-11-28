@@ -125,6 +125,7 @@ function mixLand(y: Yard, mix: (v: number) => void): void {
   if (y.clearing) {
     mix(0x30000 + y.clearing.plot);
     mix(y.clearing.begun);
+    mixTally(mix, y.clearing.want);
     mixTally(mix, y.clearing.filled);
   }
   for (let t = 0; t < y.felled.length; t++)

@@ -7,8 +7,8 @@
 import {
   aim,
   ALL_ITEMS,
-  CLEARING,
   clearingState,
+  clearingWant,
   costOf,
   fellPrice,
   fellRefusal,
@@ -284,7 +284,7 @@ function plotPrint(id: Plot): PlotPrint | null {
 /** A plot's clearing, for its card: null for a plot Coins alone buy. */
 function clearingPrint(id: Plot): ClearingPrint | null {
   const w = S.world;
-  const want = CLEARING[id];
+  const want = clearingWant(w, id);
   const state = clearingState(w, id);
   if (!want || state === "none") return null;
   const filled = state === "clearing" ? w.clearing?.filled : undefined;

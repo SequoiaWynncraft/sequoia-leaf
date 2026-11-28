@@ -48,13 +48,21 @@ export function clearRefusal(y: Yard, p: Plot): string | null {
   return y.clearing ? `You are clearing ${nameOf(y, y.clearing.plot)} already` : null;
 }
 
-/** Takes on a plot's clearing, with nothing delivered to it yet, numbered as the next the yard begins. Says whether it could. */
+/**
+ * Takes on a plot's clearing, with nothing delivered to it yet, numbered as the next the yard begins,
+ * asking for what the table asks for now, for as long as it runs. Says whether it could.
+ */
 export function takeClearing(y: Yard, p: Plot): boolean {
-  if (clearRefusal(y, p) !== null) return false;
+  const want = CLEARING[p];
+  if (!want || clearRefusal(y, p) !== null) return false;
   y.begun += 1;
-  y.clearing = { plot: p, begun: y.begun, filled: counts() };
+  y.clearing = { plot: p, begun: y.begun, want: Float64Array.from(want), filled: counts() };
   return true;
 }
+
+/** What a plot's clearing asks for: the clearing being done's own, kept from when it began; else the table's now. */
+export const clearingWant = (y: Yard, p: Plot): Float64Array | null =>
+  y.clearing?.plot === p ? y.clearing.want : (CLEARING[p] ?? null);
 
 /**
  * Why a command for the clearing on plot `p`, the `begun`th the yard began, cannot be done to the
@@ -77,8 +85,8 @@ export function stopClearing(y: Yard, p: Plot, begun: number): boolean {
 export function handRefusal(y: Yard, p: Plot, begun: number): string | null {
   const same = sameRefusal(y, p, begun);
   const c = y.clearing;
-  const want = c ? CLEARING[c.plot] : null;
-  if (same !== null || !c || !want) return same ?? "You are clearing no plot";
+  if (same !== null || !c) return same ?? "You are clearing no plot";
+  const want = c.want;
   if (isFilled(want, c.filled)) return null;
   const left = counts();
   for (const k of ALL_ITEMS) left[k] = Math.max(0, (want[k] ?? 0) - (c.filled[k] ?? 0));

@@ -238,10 +238,16 @@ export interface Yard {
   /** Plots owned, in the order they were bought. */
   plots: Plot[];
   /**
-   * The plot being cleared, one at a time, and what has been delivered to it; the plots cleared, in
+   * The plot being cleared, one at a time, what it asks for and what has been delivered to it; the plots cleared, in
    * the order they were handed over, for good (`clearing.ts`).
    */
-  clearing: { readonly plot: Plot; readonly begun: number; readonly filled: Counts } | null;
+  clearing: {
+    readonly plot: Plot;
+    readonly begun: number;
+    /** What it asks for, as the table had it when it was begun: a later change to the table does not touch it. */
+    readonly want: Counts;
+    readonly filled: Counts;
+  } | null;
   cleared: Plot[];
   /**
    * How many clearings the yard has begun, ever: each is numbered by it as it begins (`begun` above),
