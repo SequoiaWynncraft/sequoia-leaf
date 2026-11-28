@@ -14,6 +14,7 @@ import {
   TESTER,
 } from "@sequoia-leaf/kit/standin.ts";
 
+import { gameContract } from "../../../contracts/game.ts";
 import type { Happening } from "./guild.ts";
 import {
   BEGINS,
@@ -43,7 +44,7 @@ const answer = (route: string): unknown => {
   const r = isRecord(contract) ? contract[route] : null;
   return isRecord(r) ? r.body : null;
 };
-const GAME: unknown = await Bun.file(new URL("../../../contracts/leaf-game-v1.json", import.meta.url)).json();
+const GAME: unknown = gameContract();
 const QUESTS = answer("GET /v1/me/quests");
 const EVENTS = answer("GET /v1/me/events");
 /** A list, or nothing. */

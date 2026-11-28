@@ -1,39 +1,43 @@
 /**
  * A ratchet: counts that may only go down. A check (`lint.ts`, `imports.ts`, `clones.ts`) counts
- * what it finds by group and key, such as a rule's hits by file, and holds the counts to a baseline
- * kept beside this file in `baseline/`:
+ * what it finds by group and key, such as a rule's hits by file, in the working tree and, with the
+ * same counter, in the base branch's tree, and holds the one to the other:
  *
- * - a key the baseline does not have, or a count above the baseline's, fails;
- * - a count below the baseline's fails too, until the baseline is lowered in the same change, so
- *   that what was taken out cannot come back unseen. `--lower` writes it lowered: it never adds a
- *   key or raises a count, so a new hit is fixed, not written down.
+ * - a key the base does not have, or a count above the base's, fails;
+ * - a count below the base's passes, and says nothing: the next change is held to the lower count,
+ *   as the base it is held to has it.
  *
- * With no baseline file the check fails, so that deleting one cannot pass it; `--start` writes one
- * with what it finds: that is how a ratchet starts.
+ * A file moved or renamed since the base keeps its counts: git's rename detection between the base
+ * and the working tree (`git diff -M`, of what git tracks, so `git add` a moved file) gives each
+ * old path its new one, and the base's keys are read with the new paths.
  *
- * The baseline itself is held to the base branch's, so that a change cannot raise its own: a key the
- * base's baseline does not have, or a count above it, fails. The base is where HEAD left
- * origin/main, and on main itself HEAD; in a pull request's run on GitHub, where HEAD is the merge
- * commit, it is the merge's first parent (the checkout fetches two commits deep for it). A
- * baseline the base has no file of is starting, and is held to nothing. Where the base cannot be
- * read, CI fails, and a run anywhere else only warns.
+ * The base is where HEAD left origin/main, and on main itself HEAD. In a pull request's run on
+ * GitHub, where HEAD is the merge commit, it is the merge's first parent (the checkout fetches two
+ * commits deep for it), and in a run on a push to main, HEAD's first parent. Its tree is read with
+ * `git archive` into a folder of its own under the temporary folder, with the working tree's
+ * `node_modules`, and counted there. With no base to read, the check fails and says how to fetch it.
  */
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, readdirSync, rmSync, symlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-/** Whether this is CI on GitHub, not a run of it on a developer's machine (`act`, `bun run ci`). */
-const IN_CI = process.env.GITHUB_ACTIONS === "true" && process.env.ACT === undefined;
+/** The repository's root, the working tree the checks count. */
+const ROOT = join(import.meta.dir, "..", "..", "..");
 
 /** Counts by group and key: a rule's hits by file, say. */
 export type Counts = Record<string, Record<string, number>>;
 
-/** One count that is not what the baseline says. */
+/** One count that is not what the base has. */
 export interface Change {
   readonly group: string;
   readonly key: string;
   readonly was: number;
   readonly now: number;
 }
+
+/** A key read with a moved file's new path in place of its old one (`moved`): each path in it, by default. */
+export type Rekey = (group: string, key: string, moved: (path: string) => string) => string;
+const byWord: Rekey = (_group, key, moved) => key.split(" ").map(moved).join(" ");
 
 const keysOf = (a: Counts, b: Counts): [string, string][] => {
   const all = new Set<string>();
@@ -46,12 +50,12 @@ const keysOf = (a: Counts, b: Counts): [string, string][] => {
   });
 };
 
-/** What differs from the baseline: what is new or more (`worse`), and what is less (`better`). */
-export function compare(baseline: Counts, now: Counts): { worse: Change[]; better: Change[] } {
+/** What differs from the base: what is new or more (`worse`), and what is less (`better`). */
+export function compare(base: Counts, now: Counts): { worse: Change[]; better: Change[] } {
   const worse: Change[] = [];
   const better: Change[] = [];
-  for (const [group, key] of keysOf(baseline, now)) {
-    const was = baseline[group]?.[key] ?? 0;
+  for (const [group, key] of keysOf(base, now)) {
+    const was = base[group]?.[key] ?? 0;
     const is = now[group]?.[key] ?? 0;
     if (is > was) worse.push({ group, key, was, now: is });
     else if (is < was) better.push({ group, key, was, now: is });
@@ -59,27 +63,14 @@ export function compare(baseline: Counts, now: Counts): { worse: Change[]; bette
   return { worse, better };
 }
 
-/** The baseline lowered to what is so now: never a new key, never a higher count. */
-export function lowered(baseline: Counts, now: Counts): Counts {
+/** The base's counts read with moved files' new paths; two keys that come to one add up. */
+export function withMoves(base: Counts, renamed: ReadonlyMap<string, string>, rekey: Rekey = byWord): Counts {
+  const to = (path: string): string => renamed.get(path) ?? path;
   const out: Counts = {};
-  for (const [group, keys] of Object.entries(baseline))
-    for (const [key, was] of Object.entries(keys)) {
-      const is = Math.min(was, now[group]?.[key] ?? 0);
-      if (is > 0) (out[group] ??= {})[key] = is;
-    }
+  for (const [group, keys] of Object.entries(base))
+    for (const [key, n] of Object.entries(keys)) count(out, group, rekey(group, key, to), n);
   return out;
 }
-
-/** Counts in a stable order, so a baseline changes by the lines that changed. */
-const sorted = (counts: Counts): Counts =>
-  Object.fromEntries(
-    Object.keys(counts)
-      .toSorted()
-      .map((group) => [
-        group,
-        Object.fromEntries(Object.entries(counts[group] ?? {}).toSorted(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))),
-      ]),
-  );
 
 /** Adds one to a count. */
 export function count(counts: Counts, group: string, key: string, by = 1): void {
@@ -87,84 +78,84 @@ export function count(counts: Counts, group: string, key: string, by = 1): void 
   keys[key] = (keys[key] ?? 0) + by;
 }
 
+/** Runs git in the repository. */
+const git = (...args: string[]) => Bun.spawnSync(["git", ...args], { cwd: ROOT, stdout: "pipe", stderr: "pipe" });
+
+/** The base's commit, or null where there is none to read. */
+function baseCommit(): string | null {
+  const onGitHub = process.env.GITHUB_ACTIONS === "true" && process.env.ACT === undefined;
+  const pushed = onGitHub && process.env.GITHUB_EVENT_NAME === "push";
+  const against = (onGitHub && process.env.GITHUB_BASE_REF) || pushed ? "HEAD^1" : "origin/main";
+  const base = git("merge-base", "HEAD", against);
+  const sha = base.stdout.toString().trim();
+  return base.exitCode === 0 && git("cat-file", "-e", `${sha}^{tree}`).exitCode === 0 ? sha : null;
+}
+
+/** Each file renamed or moved between the base and the working tree, by its old path. */
+export function renamesSince(base: string): Map<string, string> {
+  const out = git("diff", "-M", "--name-status", "-z", base);
+  if (out.exitCode !== 0) throw new Error(`git diff -M ${base}: ${out.stderr.toString()}`);
+  const words = out.stdout.toString().split("\0");
+  const renamed = new Map<string, string>();
+  for (let i = 0; i < words.length; i++) {
+    const status = words[i] ?? "";
+    if (status.startsWith("R")) {
+      renamed.set(words[i + 1] ?? "", words[i + 2] ?? "");
+      i += 2;
+    } else if (status.startsWith("C")) i += 2;
+    else i += 1;
+  }
+  return renamed;
+}
+
 /**
- * Holds `now` to the baseline `baseline/<name>.json`, printing what differs; with `--lower` on the
- * command line, lowers the baseline first. `command` is how to run the check. Says whether it passed.
+ * The base's tree in a folder of its own, ready to count: the files of the commit, and the working
+ * tree's `node_modules` (the root's linked, each workspace's copied, as its links are relative to
+ * where they are). Given to `use`, then removed.
  */
-export function hold(name: string, now: Counts, command: string): boolean {
-  const path = join(import.meta.dir, "baseline", `${name}.json`);
-  const write = (counts: Counts): void => writeFileSync(path, `${JSON.stringify(sorted(counts), null, 2)}\n`);
-  if (!existsSync(path)) {
-    if (!process.argv.includes("--start")) {
-      console.error(`No ${name} baseline at ${path}: start one with \`${command} --start\` and commit it.`);
-      return false;
-    }
-    write(now);
-    console.log(`Started the ${name} baseline with what there is now: ${path}`);
-    return true;
+async function inTree<T>(sha: string, use: (at: string) => T | Promise<T>): Promise<T> {
+  const at = mkdtempSync(join(tmpdir(), "leaf-base-"));
+  try {
+    const archive = Bun.spawn(["git", "archive", "--format=tar", sha], { cwd: ROOT, stdout: "pipe" });
+    const tar = Bun.spawn(["tar", "-x", "-C", at], { stdin: archive.stdout, stderr: "pipe" });
+    if ((await archive.exited) !== 0 || (await tar.exited) !== 0) throw new Error(`could not read the tree of ${sha}`);
+    symlinkSync(join(ROOT, "node_modules"), join(at, "node_modules"));
+    for (const folder of ["apps", "packages"])
+      for (const w of existsSync(join(ROOT, folder)) ? readdirSync(join(ROOT, folder)) : []) {
+        const from = join(ROOT, folder, w, "node_modules");
+        if (existsSync(from) && existsSync(join(at, folder, w)))
+          cpSync(from, join(at, folder, w, "node_modules"), { recursive: true, verbatimSymlinks: true });
+      }
+    return await use(at);
+  } finally {
+    rmSync(at, { recursive: true, force: true });
   }
-  let baseline = countsIn(readFileSync(path, "utf8"), path);
-  if (!heldToBase(name, baseline)) return false;
-  if (process.argv.includes("--lower")) {
-    baseline = lowered(baseline, now);
-    write(baseline);
+}
+
+/**
+ * Holds `now`, what a check counts in the working tree, to what `counter` counts in the base's tree,
+ * printing what is new or more. `rekey` reads a key with moved files' new paths. Says whether it passed.
+ */
+export async function hold(
+  name: string,
+  now: Counts,
+  counter: (at: string) => Counts | Promise<Counts>,
+  rekey: Rekey = byWord,
+): Promise<boolean> {
+  const sha = baseCommit();
+  if (sha === null) {
+    console.error(
+      `The ${name} check holds its counts to origin/main's, and cannot read it: \`git fetch origin main\`, then run it again.`,
+    );
+    return false;
   }
-  const { worse, better } = compare(baseline, now);
+  const base = withMoves(await inTree(sha, counter), renamesSince(sha), rekey);
+  const { worse } = compare(base, now);
   for (const c of worse)
     console.error(
       c.was === 0 ? `new: ${c.group} ${c.key} (${c.now})` : `more: ${c.group} ${c.key}, ${c.now} (was ${c.was})`,
     );
-  for (const c of better) console.error(`fewer: ${c.group} ${c.key}, ${c.now} (was ${c.was})`);
   if (worse.length > 0)
-    console.error(`Fix what is new or more above: ${path} only goes down, and \`${command} --lower\` never raises it.`);
-  if (better.length > 0) console.error(`Fewer than the baseline: lower it with \`${command} --lower\` and commit it.`);
-  return worse.length === 0 && better.length === 0;
-}
-
-/** Runs git in this folder. */
-const git = (...args: string[]) =>
-  Bun.spawnSync(["git", ...args], { cwd: import.meta.dir, stdout: "pipe", stderr: "pipe" });
-
-/** The base's baseline of `name`: its counts, "starting" where the base has no file of it, or null where there is no base to read. */
-function atBase(name: string): Counts | "starting" | null {
-  const against = process.env.GITHUB_BASE_REF && process.env.ACT === undefined ? "HEAD^1" : "origin/main";
-  const base = git("merge-base", "HEAD", against);
-  if (base.exitCode !== 0) return null;
-  const file = `${base.stdout.toString().trim()}:./baseline/${name}.json`;
-  const shown = git("show", file);
-  return shown.exitCode === 0 ? countsIn(shown.stdout.toString(), file) : "starting";
-}
-
-/** Whether the baseline adds no key to the base's and raises no count of it, saying what it adds or raises. */
-function heldToBase(name: string, baseline: Counts): boolean {
-  const base = atBase(name);
-  if (base === "starting") return true;
-  if (base === null) {
-    const said = `Cannot read the base branch's ${name} baseline (no merge-base with origin/main)`;
-    if (IN_CI) console.error(`${said}: CI fails without it.`);
-    else console.warn(`${said}: not held to it. Fetch origin/main to hold it.`);
-    return !IN_CI;
-  }
-  const { worse } = compare(base, baseline);
-  for (const c of worse)
-    console.error(`raised in the baseline: ${c.group} ${c.key}, ${c.now} (the base branch has ${c.was})`);
-  if (worse.length > 0)
-    console.error(`The ${name} baseline only goes down: put back the base branch's counts and fix what is new.`);
+    console.error(`Fix what is new or more above: the ${name} counts only go down from the base branch's (${sha}).`);
   return worse.length === 0;
-}
-
-/** Counts from a baseline's text; `where` names it, should it not be counts. */
-function countsIn(text: string, where: string): Counts {
-  const parsed: unknown = JSON.parse(text);
-  if (!isCounts(parsed)) throw new Error(`${where} is not counts by group and key`);
-  return parsed;
-}
-
-const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
-
-function isCounts(x: unknown): x is Counts {
-  return (
-    isRecord(x) &&
-    Object.values(x).every((keys) => isRecord(keys) && Object.values(keys).every((n) => Number.isInteger(n)))
-  );
 }

@@ -2,10 +2,11 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { type Reply, type Standin, standin } from "@sequoia-leaf/kit/standin.ts";
 
+import { gameContract } from "../../../contracts/game.ts";
 import { type Camp, camps, fetchCamps, heldOrder, inOrder, like, named, nextAfter, readCamps } from "./camps.ts";
 import { likedLine } from "./news.ts";
 
-const GAME: unknown = await Bun.file(new URL("../../../contracts/leaf-game-v1.json", import.meta.url)).json();
+const GAME: unknown = gameContract();
 const answered = (key: string): unknown => (isObject(GAME) && isObject(GAME[key]) ? GAME[key]["body"] : undefined);
 function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;

@@ -39,7 +39,7 @@ says so.
   along the bottom opens any of them at once, the character walks there meanwhile, and the slot
   for the place they are standing at is lit.
 - **The quest board.** Two tabs: the quests, and "News", the ten newest notes on what has changed
-  in the game (`notes.json`, newest first). Every quest Leaf sends (`GET /v1/me/quests`), open and
+  in the game (`notes/<id>.json`, a file each, newest first). Every quest Leaf sends (`GET /v1/me/quests`), open and
   just finished, is a note; the panel scrolls when they do not fit. A quest says what it asks with
   the Leaf it pays beside it, and has a bar and count for each way to finish it Leaf sends (raids
   or wars, side by side). At its foot an open quest says its kind as the mod names them (Daily,

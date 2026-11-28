@@ -209,11 +209,12 @@ kit, the figures or an app or reading the DOM, and each import into review code 
 reaches, review code's own too, by build, with the whole way to it printed; a project TypeScript does
 not pass fails it too. `bun run clones` (`tools/clones.ts`) fails code copied between two apps or
 packages: a run of 70 tokens or more, comments and spacing aside. Where code today breaks those
-lines, each count is held to a baseline in `tools/baseline/` (`tools/ratchet.ts`): by file and rule,
-by import, or by pair of files sharing copied runs. Anything new or more fails, and so does anything
-fewer until the baseline is lowered with it (`bun run lint --lower`, and the same for the others),
-which never adds or raises a count; and a baseline above the base branch's (where the branch left
-origin/main, or in CI the merge commit's first parent) fails, so a change cannot raise its own. `bun
+lines, each count is held to the base branch's (`tools/ratchet.ts`): by file and rule, by import, or
+by pair of files sharing copied runs, counted alike in the working tree and in the base's tree (where
+the branch left origin/main, or in CI the merge commit's first parent), read with `git archive`.
+Anything new or more fails; anything fewer passes, and nothing is written down: the next change is
+held to the lower count. A file moved keeps its counts (git's rename detection, so `git add` it). With
+no origin/main to read, the checks fail and say to fetch it. `bun
 run budget` (`tools/budget.ts`) prints how many lines of source Bun builds for each page and the
 API, by workspace, and fails nothing.
 
@@ -410,4 +411,4 @@ else" with "Play here" (`again`, to take the room back), or the "Signed out"
 card, whose button signs in with Discord.
 
 All of it reaches the server through `net.ts`, which tests replace with `standin.ts`; the tests
-read the server's own contract files (`contracts/leaf-api-v1.json`, `contracts/leaf-game-v1.json`).
+read the server's own contract files (`contracts/leaf-api-v1.json`, and `contracts/game/` through `contracts/game.ts`).

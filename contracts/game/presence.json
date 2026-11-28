@@ -1,0 +1,183 @@
+{
+  "PUT /v1/game/presence": {
+    "request": {
+      "method": "PUT",
+      "path": "/v1/game/presence",
+      "body": {
+        "place": "town",
+        "stay": true,
+        "device": "desktop"
+      }
+    },
+    "status": 200,
+    "body": {
+      "at": "2026-11-25T12:55:00.000Z",
+      "present": [
+        {
+          "id": "10000000-0000-0000-0000-000000000001",
+          "username": "Alice",
+          "place": "town",
+          "guest": false,
+          "seen_at": "2026-11-25T12:55:00.000Z",
+          "acted_at": null
+        },
+        {
+          "id": "10000000-0000-0000-0000-000000000003",
+          "username": "Visitor",
+          "place": "town",
+          "guest": true,
+          "seen_at": "2026-11-25T12:55:00.000Z",
+          "acted_at": null
+        }
+      ],
+      "resting": [
+        {
+          "id": "10000000-0000-0000-0000-000000000002",
+          "username": "Bob",
+          "place": "works",
+          "guest": false,
+          "seen_at": "2026-11-25T12:40:00.000Z"
+        }
+      ],
+      "gone": []
+    }
+  },
+  "GET /v1/game/presence": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/presence"
+    },
+    "status": 200,
+    "body": {
+      "at": "2026-11-25T12:55:00.000Z",
+      "present": [
+        {
+          "id": "10000000-0000-0000-0000-000000000001",
+          "username": "Alice",
+          "place": "town",
+          "guest": false,
+          "seen_at": "2026-11-25T12:55:00.000Z",
+          "acted_at": null
+        },
+        {
+          "id": "10000000-0000-0000-0000-000000000003",
+          "username": "Visitor",
+          "place": "town",
+          "guest": true,
+          "seen_at": "2026-11-25T12:55:00.000Z",
+          "acted_at": null
+        }
+      ],
+      "resting": [
+        {
+          "id": "10000000-0000-0000-0000-000000000002",
+          "username": "Bob",
+          "place": "works",
+          "guest": false,
+          "seen_at": "2026-11-25T12:40:00.000Z"
+        }
+      ],
+      "gone": []
+    }
+  },
+  "PUT /v1/game/presence, without stay": {
+    "request": {
+      "method": "PUT",
+      "path": "/v1/game/presence",
+      "body": {
+        "place": "table"
+      }
+    },
+    "status": 200,
+    "body": {
+      "at": "2026-11-25T12:55:00.000Z",
+      "present": [
+        {
+          "id": "10000000-0000-0000-0000-000000000001",
+          "username": "Alice",
+          "place": "table",
+          "guest": false,
+          "seen_at": "2026-11-25T12:55:00.000Z",
+          "acted_at": null
+        },
+        {
+          "id": "10000000-0000-0000-0000-000000000003",
+          "username": "Visitor",
+          "place": "town",
+          "guest": true,
+          "seen_at": "2026-11-25T12:55:00.000Z",
+          "acted_at": null
+        }
+      ],
+      "resting": [
+        {
+          "id": "10000000-0000-0000-0000-000000000002",
+          "username": "Bob",
+          "place": "works",
+          "guest": false,
+          "seen_at": "2026-11-25T12:40:00.000Z"
+        }
+      ],
+      "gone": []
+    }
+  },
+  "PUT /v1/game/presence, visiting a camp": {
+    "request": {
+      "method": "PUT",
+      "path": "/v1/game/presence",
+      "body": {
+        "place": "camp",
+        "camp_owner": "10000000-0000-0000-0000-000000000002"
+      }
+    },
+    "status": 200,
+    "body": {
+      "at": "2026-11-25T12:55:00.000Z",
+      "present": [
+        {
+          "id": "10000000-0000-0000-0000-000000000001",
+          "username": "Alice",
+          "place": "table",
+          "guest": false,
+          "seen_at": "2026-11-25T12:55:00.000Z",
+          "acted_at": "2026-11-25T12:55:00.000Z"
+        },
+        {
+          "id": "10000000-0000-0000-0000-000000000003",
+          "username": "Visitor",
+          "place": "camp",
+          "camp_owner": "10000000-0000-0000-0000-000000000002",
+          "camp_owner_name": "Bob",
+          "guest": true,
+          "seen_at": "2026-11-25T12:55:00.000Z",
+          "acted_at": "2026-11-25T12:55:00.000Z"
+        }
+      ],
+      "resting": [
+        {
+          "id": "10000000-0000-0000-0000-000000000002",
+          "username": "Bob",
+          "place": "works",
+          "guest": false,
+          "seen_at": "2026-11-25T12:40:00.000Z"
+        }
+      ],
+      "gone": []
+    }
+  },
+  "PUT /v1/game/presence, a camp refused": {
+    "request": {
+      "method": "PUT",
+      "path": "/v1/game/presence",
+      "body": {
+        "place": "town",
+        "camp_owner": "10000000-0000-0000-0000-000000000002"
+      }
+    },
+    "status": 400,
+    "body": {
+      "code": "invalid_camp",
+      "message": "Say whose camp only with the place \"camp\""
+    }
+  }
+}

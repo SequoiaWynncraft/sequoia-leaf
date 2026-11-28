@@ -28,6 +28,7 @@ import { balance } from "@sequoia-leaf/kit/purse.ts";
 import { scope } from "@sequoia-leaf/kit/scope.ts";
 import { Listened, type Reply, type Sent, standin } from "@sequoia-leaf/kit/standin.ts";
 
+import { gameContract } from "../../../contracts/game.ts";
 import {
   act,
   clear,
@@ -143,7 +144,7 @@ async function seconds(done: () => boolean, left: number, turns = 20): Promise<v
 
 describe("the yard, on Leaf", () => {
   test("reads what Leaf really answers a batch of the Works' commands", async () => {
-    const contract: unknown = await Bun.file(new URL("../../../contracts/leaf-game-v1.json", import.meta.url)).json();
+    const contract: unknown = gameContract();
     const exchange = isRecord(contract) ? contract["POST /v1/game/play/{game}, the Works"] : null;
     const body = isRecord(exchange) ? exchange.body : null;
     const state = isRecord(body) ? body.state : null;
@@ -157,7 +158,7 @@ describe("the yard, on Leaf", () => {
   });
 
   test("reads what Leaf answers a blueprint code pasted: kept, or refused with the code the rules name, as the page reads each code", async () => {
-    const contract: unknown = await Bun.file(new URL("../../../contracts/leaf-game-v1.json", import.meta.url)).json();
+    const contract: unknown = gameContract();
     const exchange = isRecord(contract) ? contract["POST /v1/game/play/{game}, the Works, a blueprint code"] : null;
     const sent =
       isRecord(exchange) && isRecord(exchange.request) && isRecord(exchange.request.body) ? exchange.request.body : {};

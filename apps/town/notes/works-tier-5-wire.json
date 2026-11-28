@@ -1,0 +1,23 @@
+{
+  "id": "works-tier-5-wire",
+  "at": "2026-11-28T03:39Z",
+  "title": "The Works: tier 5, The wire",
+  "lines": [
+    "Tier 5 is open. Copper comes from salvage, on the new land. A breaker turns salvage into copper, ingots, glass, slag and gears, mixed on one belt. The depot does not take slag.",
+    "Breakers make smog on the plot they stand on. The ground clears 300 a minute and each redwood 120. A plot with too much slows every machine on it."
+  ],
+  "more": [
+    {
+      "head": "New",
+      "points": [
+        "A mill makes wire from copper and gravel from slag.",
+        "Coils, bulbs, telegraphs, strings of lights and the Spark folio.",
+        "A redwood's card says what it clears. Felling one loses that for good."
+      ]
+    },
+    {
+      "head": "Also",
+      "points": ["Shelves for the plan chest keep blueprints of up to 40 by 25 tiles, so all 1,000 pieces fit."]
+    }
+  ]
+}

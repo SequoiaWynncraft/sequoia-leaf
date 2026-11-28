@@ -261,7 +261,7 @@ export class GameReportsApi extends HttpApiGroup.make("gameReports")
 const GameParams = { game: Schema.String };
 
 // What only the browser game uses, open to anyone signed in, members and guests alike, but for the
-// guild's own news, in six groups. Their answers are recorded in `contracts/leaf-game-v1.json`.
+// guild's own news, in six groups. Their answers are recorded in `contracts/game/`, a file a group of routes.
 
 /** The player as the game knows them, other people (faces, cards), the banners, and the guild's news. */
 export class GamePeopleApi extends HttpApiGroup.make("gamePeople")

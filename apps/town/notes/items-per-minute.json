@@ -1,0 +1,9 @@
+{
+  "id": "items-per-minute",
+  "at": "2026-11-24T21:36Z",
+  "title": "The Items list and the depot's picture",
+  "lines": [
+    "In the Works, the Items list says /min under each column, and large numbers no longer run into each other. On narrow screens, an item's name has a line of its own above its numbers.",
+    "The depot's picture on its card shows the whole depot."
+  ]
+}

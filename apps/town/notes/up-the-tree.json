@@ -1,0 +1,51 @@
+{
+  "id": "up-the-tree",
+  "at": "2027-01-05T00:00Z",
+  "title": "Up The Tree",
+  "lines": [
+    "Up The Tree is open until 19 January. Its top prize is Leetanns. Unc, Ace, Bhlue, Flop and Vi are featured. Half the pulls of their rarity give one of them.",
+    "In The Little Raid, Canopy is a new origin. Canopy figures start the fight up the tree, where nothing can reach them. Then they drop to their seats with a shield and mana."
+  ],
+  "more": [
+    {
+      "head": "Leaving every raid",
+      "points": [
+        "Leaving now: Peep, Brew, Munch, Clutch and Orphion. You can still pull them at the Grove, and buy them in raids with your own figures.",
+        "Penguin Month has closed. You can only buy Yule in raids with your own figures, if you pulled Yule."
+      ]
+    },
+    {
+      "head": "New figures",
+      "points": [
+        "Vi (1 acorn, Canopy Chorus, and LHZ) gives 50 mana to the friend who last used an ability.",
+        "Flop (2 acorns, Canopy Bulwark) falls over for 2 seconds, and nothing can reach it. Then it gets up with 40% of its health back.",
+        "When Flop gets up, every enemy within 2 hexes has to attack it for 2 seconds.",
+        "Bhlue (3 acorns, Canopy Mender) shields every friend in its row: 180 for 4 seconds. In that time, the first enemy ability to hit each of them is blocked.",
+        "Ace (4 acorns, Canopy Slinger) attacks with the four aces in turn.",
+        "Spades hit the enemy with the least health, 40% harder. Hearts heal the most hurt friend.",
+        "Diamonds hit the enemy with the most armour, ignoring its armour. Clubs hit the enemy with the most mana, and take 15 of it.",
+        "Ace's ability, Full Deck, throws all four at once, 110 damage each.",
+        "Unc (5 acorns, Feather Slinger, and Canopy) pecks its target 8 times in 3 seconds, 82 damage each. If the target falls, the rest go to the enemy nearest it.",
+        "Leetanns (5 acorns, Canopy Fang, and Crafter) is Up The Tree's top prize. Each cast, it swings its next tool.",
+        "The axe does 380 damage and pushes the target 1 hex. The pickaxe does 380 damage and halves the target's armour for 5 seconds.",
+        "The rod pulls the farthest enemy to a hex beside Leetanns. The scythe does 290 damage to every enemy beside it, and heals it for half of that.",
+        "While Up The Tree is open, anyone can buy Leetanns in any raid."
+      ]
+    },
+    {
+      "head": "Traits",
+      "points": [
+        "Vi is LHZ too.",
+        "Canopy, with 3: Canopy figures start the fight up the tree for 2 seconds. Then they drop with a shield of 20% of their health and 30 mana.",
+        "Canopy, with 5: the shield is 35% of their health, and they drop with a full mana bar.",
+        "Crafter (Leetanns): after every 3 fights it fights on the board, you get a component.",
+        "Feather now has 4 steps, at 2, 3, 4 and 5. Feather figures attack 4%, 6%, 8% or 11% faster after every attack.",
+        "Slinger has a third step at 6. Each attack on the same target does 20% more than the last."
+      ]
+    },
+    {
+      "head": "Emblems",
+      "points": ["A Good Branch is a new charm. The figure holding it counts as Canopy."]
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "id": "works-folds",
+  "at": "2026-11-24T21:15Z",
+  "title": "Research beside projects, and lists that fold",
+  "lines": [
+    "In the Works, the tier's screen shows research the way it shows projects: what is being studied and how far it has come, or the first research you can begin, with its button.",
+    "The Research button shows how many pieces of research you can put in the line now, as the tier's button does for projects."
+  ],
+  "more": [
+    {
+      "head": "New",
+      "points": [
+        "Done on the tier's screen and Known on the research screen start folded under their label, which shows how many are in them.",
+        "Every project and every piece of research to study folds to its name with the arrow at its right. Your folds stay as you left them on this device."
+      ]
+    }
+  ]
+}

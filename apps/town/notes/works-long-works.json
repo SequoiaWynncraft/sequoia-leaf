@@ -1,0 +1,21 @@
+{
+  "id": "works-long-works",
+  "at": "2026-11-24T09:56Z",
+  "title": "The Works: long works for tier 4",
+  "lines": ["Tier 4 has seven new projects for the long run. None of them is needed for the next tier."],
+  "more": [
+    {
+      "head": "New",
+      "points": [
+        "The beacon road, in three stages: to the old mill, to the ridge and to the far camp. The ridge lets the yard run 20 hours after you leave, and the far camp gives a third cart stop.",
+        "Market day wants 500 each of ten different things. Afterwards the board holds 5 orders.",
+        "Crab roll call wants 7,777 clockwork crabs. Afterwards a crate holds 512.",
+        "An observatory on the ridge unlocks grade III Studies.",
+        "A sky for the great tree is the longest of them. The depot then gives 100 power.",
+        "Five new things, none made with a lantern: pipes, fireworks, spyglasses, clocks and orreries. Each is unlocked by research that takes Timber and Brass folios together.",
+        "A third night shift: the yard runs 24 hours after you leave.",
+        "Orders can now ask for beacons, clockwork crabs and the new things, once you have taken a project that wants them."
+      ]
+    }
+  ]
+}

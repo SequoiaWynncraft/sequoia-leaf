@@ -1,12 +1,13 @@
 import { describe, expect, it } from "bun:test";
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { leaf as leafOf, playerId } from "@sequoia-leaf/core";
+import { gameId, leaf as leafOf, playerId } from "@sequoia-leaf/core";
 import { create as createYard, FACTORY } from "@sequoia-leaf/factory";
 import { near } from "@sequoia-leaf/factory/test/near.ts";
 import { codeOfRow } from "@sequoia-leaf/factory/test/yards.ts";
 
+import { GAME_CONTRACT, gameContract, gameContractGroups } from "../../../contracts/game.ts";
 import { runAchievementSync } from "../src/achievements/run.ts";
 import { runCreditSync } from "../src/earning/run.ts";
 import { sittingExchanges } from "./sittings-contract.ts";
@@ -14,15 +15,15 @@ import { asPage, fakeBackend, fakeMojang, MINUTE, rewardQueue, sessionOf, steady
 
 /**
  * The game's routes as the game sees them, from the real routes:
- * `contracts/leaf-game-v1.json` holds what each answers for one member after a
- * day of play with a guild-mate. The game's own tests read it instead of
- * answers written by hand. Unlike `leaf-api-v1.json`, no other repository
- * keeps a copy, so changing it needs no change elsewhere first.
+ * `contracts/game/<group>.json` holds what each answers for one member after a
+ * day of play with a guild-mate, a file for each group of routes (`groupOf`).
+ * The game's own tests read it (`contracts/game.ts`) instead of answers
+ * written by hand. Unlike `leaf-api-v1.json`, no other repository keeps a
+ * copy, so changing it needs no change elsewhere first.
  *
- * Changing what a route sends fails this test until the file is written again
- * with `WRITE_CONTRACTS=1 bun test test/game-contract.test.ts`.
+ * Changing what a route sends fails this test until the files are written
+ * again with `WRITE_CONTRACTS=1 bun test test/game-contract.test.ts`.
  */
-const CONTRACT = join(import.meta.dir, "..", "..", "..", "contracts", "leaf-game-v1.json");
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
 const bob = playerId("10000000-0000-0000-0000-000000000002");
@@ -411,20 +412,40 @@ function field(value: unknown, key: string): unknown {
   return typeof value === "object" && value !== null ? Object.getOwnPropertyDescriptor(value, key)?.value : undefined;
 }
 
+/**
+ * The group of an exchange, which names its file: the route's first part after `/v1/game/`, and
+ * for a game's own routes, `/v1/game/play/{game}`, the game's (`play-raid`); a game Leaf does not
+ * have is `play`.
+ */
+function groupOf({ request }: Exchange): string {
+  const [first = "", second = ""] = request.path.replace(/^\/v1\/game\//, "").split(/[/?]/);
+  if (first !== "play") return first;
+  const game = gameId(second);
+  return game === undefined ? "play" : `play-${game}`;
+}
+
+/** The exchanges by group, as the files keep them. */
+function byGroup(all: Record<string, Exchange>): Record<string, Record<string, Exchange>> {
+  const groups: Record<string, Record<string, Exchange>> = {};
+  for (const [name, exchange] of Object.entries(all)) (groups[groupOf(exchange)] ??= {})[name] = exchange;
+  return groups;
+}
+
 describe("The game's contract", () => {
-  it("answers as contracts/leaf-game-v1.json says", async () => {
-    const actual = await exchanges();
+  it("answers as contracts/game/ says, each exchange in its group's file", async () => {
+    const actual = byGroup(await exchanges());
     if (process.env["WRITE_CONTRACTS"] === "1") {
-      writeFileSync(CONTRACT, `${JSON.stringify(actual, null, 2)}\n`);
+      mkdirSync(GAME_CONTRACT, { recursive: true });
+      for (const f of readdirSync(GAME_CONTRACT)) if (f.endsWith(".json")) rmSync(join(GAME_CONTRACT, f));
+      for (const [group, kept] of Object.entries(actual))
+        writeFileSync(join(GAME_CONTRACT, `${group}.json`), `${JSON.stringify(kept, null, 2)}\n`);
     }
 
-    const contract: unknown = JSON.parse(readFileSync(CONTRACT, "utf8"));
-
-    expect(contract).toEqual(actual);
+    expect(gameContractGroups()).toEqual(actual);
   });
 
   it("shows every kind of guild event, so the game sees each one", () => {
-    const contract: unknown = JSON.parse(readFileSync(CONTRACT, "utf8"));
+    const contract = gameContract();
     const events = field(field(field(contract, "GET /v1/game/guild/events"), "body"), "events");
     const types = Array.isArray(events) ? events.map((event: unknown) => field(event, "type")) : [];
 

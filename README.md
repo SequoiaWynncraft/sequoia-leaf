@@ -310,12 +310,16 @@ CI compares the file with the copy on Sequoia-mod's `main` when a pull request
 changes it, and fails while they differ, so merge the mod's copy with or before
 the change here.
 
-The game's routes have their own file, `contracts/leaf-game-v1.json`, written
+The game's routes have their own files, `contracts/game/<group>.json`, written
 by `apps/api/test/game-contract.test.ts` from one member's day of play with
-another member, the same way. No other repository keeps a copy, so changing it
-needs no change elsewhere first: `cd apps/api && WRITE_CONTRACTS=1 bun test
-test/game-contract.test.ts` writes it again. It has every answer except the
-skin, which is a picture.
+another member, the same way, a file for each group of routes: the route's
+first part after `/v1/game/` (`presence`, `sittings`), and a game's own for
+`/v1/game/play/{game}` (`play-raid`, `play-works`), so two changes to different
+routes change different files. The game's tests read them as one record
+(`contracts/game.ts`). No other repository keeps a copy, so changing them needs
+no change elsewhere first: `cd apps/api && WRITE_CONTRACTS=1 bun test
+test/game-contract.test.ts` writes them again. They have every answer except
+the skin, which is a picture.
 
 sequoia-backend's routes (below) have `contracts/leaf-internal-v1.json`, written
 by `apps/api/test/purchases.test.ts` the same way; the backend's tests read its

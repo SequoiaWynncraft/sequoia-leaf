@@ -1,0 +1,20 @@
+{
+  "id": "works-building-tweaks",
+  "at": "2026-11-26T11:50Z",
+  "title": "Building tweaks",
+  "lines": [
+    "In The Works, belt, splitter, joiner and tunnel take the first four toolbar slots, keys 1 to 4. Any other tool you unlock goes at the end.",
+    "A tunnel takes two clicks or taps: where it goes in, then where it comes up. The piece whose card is open is marked in the yard with gold corners."
+  ],
+  "more": [
+    {
+      "head": "Also",
+      "points": [
+        "Click where a tunnel goes in a second time and it comes up at the nearest free tile, as one click did.",
+        "On a phone, tap where the tunnel goes in, tap where it comes up, then Build.",
+        "Both ends of a tunnel are marked when its card is open. When the Trouble list takes you to a piece, the corners close in on it.",
+        "On a phone, the Trouble list takes you to the piece and marks it without opening its card over it. Tap the piece for its card."
+      ]
+    }
+  ]
+}

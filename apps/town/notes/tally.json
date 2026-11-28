@@ -1,0 +1,41 @@
+{
+  "id": "tally",
+  "at": "2026-11-23T21:59Z",
+  "title": "The Tally: leaderboards for nearly everything",
+  "lines": [
+    "A new post between the Grove and the quest board, and on the dock: boards of who has done the most, for this week and for all time.",
+    "Tap anybody on a board to see their card."
+  ],
+  "more": [
+    {
+      "head": "The guild",
+      "points": [
+        "Guild raids, and each of the five raids. Wars, and defences: wars over a territory in Sequoia's claim.",
+        "Season rating, quests finished, Leaf earned (spending does not lower it), SEQ level and milestones."
+      ]
+    },
+    {
+      "head": "The Works and The Little Raid",
+      "points": [
+        "Top yards, highest tier, orders handed over and time in the Works.",
+        "Runs won, rooms fought, bosses beaten and time at the table."
+      ]
+    },
+    {
+      "head": "The town",
+      "points": [
+        "Time in town and camp, and dozing: time there AFK.",
+        "Crab No. 7 spotted, callers greeted at your camp, camps visited and visitors to your camp. A visit counts after 30 seconds.",
+        "Waves, things tapped, logs on the fire and roll calls. One wave counts every 30 seconds, a tap or a log every 5, a roll call every 10."
+      ]
+    },
+    {
+      "head": "How a board works",
+      "points": [
+        "The top 3 stand on the podium and places 4 to 10 are under it. Your own place is at the foot when you are not in the top 10.",
+        "A tie shares a place. A week starts on Monday at 00:00 UTC, as weekly quests do.",
+        "Nothing on a board can be bought with Leaf or Coins."
+      ]
+    }
+  ]
+}

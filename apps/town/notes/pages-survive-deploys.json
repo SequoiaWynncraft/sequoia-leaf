@@ -1,0 +1,6 @@
+{
+  "id": "pages-survive-deploys",
+  "at": "2026-11-27T19:16Z",
+  "title": "Opening while Leaf updates",
+  "lines": ["A page that opens while Leaf is updating now reloads itself instead of showing without its styles."]
+}

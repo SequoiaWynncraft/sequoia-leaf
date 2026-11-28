@@ -11,11 +11,12 @@
  *   newly shipping review code another already does, or review code that imports more of it, is
  *   new; a failing check prints the whole way from the entry to each.
  *
- * Imports of types count as imports. What is found is held to `baseline/imports.json`
- * (`ratchet.ts`), which holds only what the rebuilds will take out.
+ * Imports of types count as imports. What is found is held to what the base branch has
+ * (`ratchet.ts`), which is only what the rebuilds will take out. A loop's key is its files in
+ * order, so a file moved in it keeps it.
  */
 import { built, entries, type Graph, root, typed } from "./graph.ts";
-import { type Counts, hold } from "./ratchet.ts";
+import { type Counts, hold, type Rekey } from "./ratchet.ts";
 
 /** The packages of the games' rules, which run on Leaf and on the page alike. */
 const RULES = ["core", "factory", "raid", "town", "pulls"].map((r) => `packages/${r}`);
@@ -88,12 +89,18 @@ export async function findings(at = root): Promise<{ found: Counts; ways: string
   return { found, ways };
 }
 
+/** A key with moved files' new paths: a loop's files in order again, an edge's as they were. */
+const rekey: Rekey = (group, key, moved) => {
+  const words = key.split(" ").map(moved);
+  return (group === "cycle" ? words.toSorted() : words).join(" ");
+};
+
 if (import.meta.main) {
   const { found, ways } = await findings();
-  if (!hold("imports", found, "bun run imports")) {
+  if (!(await hold("imports", found, async (at) => (await findings(at)).found, rekey))) {
     for (const way of ways) console.error(`review code reached: ${way}`);
     process.exit(1);
   }
   const n = Object.values(found).reduce((sum, keys) => sum + Object.keys(keys).length, 0);
-  console.log(`Imports: nothing new; ${n} held to the baseline.`);
+  console.log(`Imports: nothing new; ${n} held to the base branch's.`);
 }

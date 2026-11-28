@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { gameContract } from "../../../contracts/game.ts";
 import { restart, start } from "./live.ts";
 import { isRecord } from "./net.ts";
 import {
@@ -30,7 +31,7 @@ const aliceRow = (fields: Record<string, unknown>) => ({
 const BOBS = { id: "10000000-0000-0000-0000-000000000002", name: "Bob" };
 
 /** What Leaf's game routes really answer, from the contract its own tests write. */
-const GAME: unknown = await Bun.file(new URL("../../../contracts/leaf-game-v1.json", import.meta.url)).json();
+const GAME: unknown = gameContract();
 
 describe("who is here", () => {
   test("reads what Leaf really answers: who is here, and who is resting", () => {
