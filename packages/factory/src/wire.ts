@@ -390,7 +390,6 @@ export function rewire(y: Yard): Wire {
     carry: Int32Array.from(carry),
     mouths: Int32Array.from(carry.filter((i) => tunnelOf(y, i) >= 0)),
     ...byPlot,
-    standing: standingOn(y),
     burners: Int32Array.from(burners),
     recipes: ALL_KINDS.map((k) => recipesFor(y.open, k)),
     steady,
@@ -421,16 +420,6 @@ function workByPlot(y: Yard, found: readonly number[]): Pick<Wire, "work" | "wor
   });
   from.push(work.length);
   return { work: Int32Array.from(work), workFrom: Int32Array.from(from), workPlot: Int32Array.from(plots) };
-}
-
-/** The redwoods standing on each plot of the yard's land. */
-function standingOn(y: Yard): Uint8Array {
-  const out = new Uint8Array(y.land.plots.length);
-  y.land.trees.forEach((tiles, t) => {
-    const p = y.land.plot[tiles[0] ?? 0] ?? NONE;
-    if (y.felled[t] !== 1 && p !== NONE) out[p] = (out[p] ?? 0) + 1;
-  });
-  return out;
 }
 
 /** The power what burns gives as it stands, in halves: each burning now, as its kind says (`KindDef.burns`). */

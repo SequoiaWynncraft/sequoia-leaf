@@ -64,7 +64,7 @@ export function step(y: Yard): void {
   carryUnder(y, wire);
   if (works) working(y, wire);
   handOn(y, wire, waiting);
-  if (y.tick % SMOG.every === 0) countSmog(y, wire);
+  if (y.tick % SMOG.every === 0) countSmog(y);
 }
 
 /**

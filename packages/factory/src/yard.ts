@@ -133,8 +133,6 @@ export interface Wire {
    */
   readonly workFrom: Int32Array;
   readonly workPlot: Int32Array;
-  /** The redwoods standing on each plot, by its place in the land's `plots`: what clears its smog. */
-  readonly standing: Uint8Array;
   readonly burners: Int32Array;
   /** For each tile, the sides it takes things in from, a bit each (`sidesTaken`). */
   readonly taken: Uint8Array;

@@ -94,14 +94,26 @@ describe("smog on a plot", () => {
     expect([0, 1, 2, 3].map((q) => F.worksOn(3, q))).toEqual([false, false, false, true]);
   });
 
-  test("a redwood felled lowers what is cleared by 120 a minute, for good; it clears only its own plot", () => {
+  test("a redwood felled stops clearing at the next count, the plumbing as it was: 120 a minute less, for good", () => {
     const y = workings();
-    const perMinute = (): number => (F.clearsAt(F.rewire(y).standing[WORKINGS] ?? 0) * F.MINUTE) / F.SMOG.every;
-    expect(perMinute()).toBe(420);
     learn(y, F.goal("felling"));
+    // 2 breakers III make 400 a minute, and the ground and its redwood clear 420: it stays at 0.
+    const two = breakers(y, 2);
+    run(y, two, 1000);
+    expect([level(y), F.smogLine(y, WORKINGS)]).toEqual([
+      0,
+      expect.stringContaining("Cleared 420 /min: the ground 300, 1 redwood 120."),
+    ]);
+    // Felled, with nothing built since (the plumbing is not worked out again), the ground alone
+    // clears 300: 100 a minute more is made than cleared, and the card says so.
+    const plumbing = y.wire;
     const tree = F.LAND.trees.find((tiles) => F.LAND.plot[tiles[0] ?? 0] === WORKINGS)?.[0] ?? -1;
-    must(y, { do: "fell", x: tree % F.LAND.w, y: Math.floor(tree / F.LAND.w) });
-    expect(perMinute()).toBe(300);
+    must(y, { do: "fell", x: tree % F.LAND.w, y: Math.floor(tree / F.LAND.w), price: F.fellPrice(y) });
+    expect(F.smogLine(y, WORKINGS)).toContain("Cleared 300 /min: the ground 300.");
+    while (y.tick % 100 !== 1) run(y, two, 1);
+    run(y, two, 600);
+    expect(y.wire).toBe(plumbing);
+    expect(Math.abs(level(y) - 100)).toBeLessThanOrEqual(10);
     // Smog made on The Old Workings stays there: the Long Meadow next to it has none.
     const at = breakers(y, 3);
     run(y, at, 1000);

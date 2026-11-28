@@ -14,7 +14,7 @@ import { SMOG } from "./content/smog.ts";
 import { MINUTE, mixPerMinute } from "./planner.ts";
 import { pieceOf } from "./sizes.ts";
 import { isKind, NONE, plotName, SMOG_OF } from "./tables.ts";
-import type { Wire, Yard } from "./yard.ts";
+import type { Yard } from "./yard.ts";
 
 /** Adds smog to the plot the tile `i` is on (a piece's own tile), as a piece finishes a thing. */
 export function smogged(y: Yard, i: number, n: number): void {
@@ -38,14 +38,26 @@ export const shareAt = (s: number): number => [1, 0.75, 0.5, 0.25][s] ?? 0.25;
 /** The share of ticks the piece on a tile works at, as the smog on its plot lets it. */
 export const smogPace = (y: Yard, i: number): number => shareAt(stepOf(y.smog.level[y.land.plot[i] ?? NONE] ?? 0));
 
-/** What a plot clears at a count: its ground, and each redwood standing on it (`Wire.standing`). */
+/** What a plot clears at a count: its ground, and each redwood standing on it (`standingOn`). */
 export const clearsAt = (standing: number): number => SMOG.ground + SMOG.redwood * standing;
 
+/**
+ * How many of the land's redwoods stand on a plot, by its place in the land's list: from what the
+ * yard has felled as it is now, the one place both the count and every card ask, so a redwood felled
+ * stops clearing at the next count. Makes nothing.
+ */
+export function standingOn(y: Yard, n: number): number {
+  const { trees, plot } = y.land;
+  let standing = 0;
+  for (let t = 0; t < trees.length; t++) if (y.felled[t] !== 1 && plot[trees[t]?.[0] ?? 0] === n) standing++;
+  return standing;
+}
+
 /** Counts smog on every plot: up by what was made, down by what it clears, held between 0 and the most. Makes nothing. */
-export function countSmog(y: Yard, wire: Wire): void {
+export function countSmog(y: Yard): void {
   const { level, made } = y.smog;
   for (let p = 0; p < level.length; p++) {
-    const now = (level[p] ?? 0) + (made[p] ?? 0) - clearsAt(wire.standing[p] ?? 0);
+    const now = (level[p] ?? 0) + (made[p] ?? 0) - clearsAt(standingOn(y, p));
     level[p] = now < 0 ? 0 : now > SMOG.most ? SMOG.most : now;
     made[p] = 0;
   }
@@ -80,15 +92,6 @@ export function smogOnto(y: Yard, kept: unknown): void {
 /** What a plot's ground clears a minute, and each redwood standing on one. */
 const GROUND = (SMOG.ground * MINUTE) / SMOG.every;
 const REDWOOD = (SMOG.redwood * MINUTE) / SMOG.every;
-
-/** How many of the land's redwoods stand on a plot, by its place in the land's list. */
-export function standingOn(y: Yard, n: number): number {
-  let standing = 0;
-  y.land.trees.forEach((tiles, t) => {
-    if (y.felled[t] !== 1 && y.land.plot[tiles[0] ?? 0] === n) standing++;
-  });
-  return standing;
-}
 
 /**
  * What a plot's dirty pieces would make a minute, working every tick (`flow`'s way of counting, so
