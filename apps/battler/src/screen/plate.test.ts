@@ -1,28 +1,33 @@
 import { describe, expect, test } from "bun:test";
 
-import { GOLD, INK, STONE } from "@sequoia-leaf/kit/palette.ts";
+import { BARK, CREAM, GOLD, INK, STONE } from "@sequoia-leaf/kit/palette.ts";
 import { must } from "@sequoia-leaf/kit/util.ts";
+import type { RackItem } from "@sequoia-leaf/raid";
 
 import { HEX_W } from "./geometry.ts";
 import { heldAt } from "./held.ts";
 import {
   aboveHead,
+  BADGE,
+  badgeColour,
+  badgeOnly,
+  badgeTones,
+  BAR_H,
   BAR_W,
-  barTall,
   BIG_BAR_W,
   healthOf,
   type Plate,
+  PLATE_W,
   plateAt,
   plated,
   shapeOf,
-  starBoxes,
-  starColours,
-  starsWide,
   ticksOf,
 } from "./plate.ts";
 
+/** How many columns of health a bar has inside its frame. */
+const INNER = BAR_W - 2;
 /** The ticks on a figure of `hp` at full health, as where each is and whether it is the full height. */
-const ticksAt = (hp: number): string[] => ticksOf(hp, hp, BAR_W).map((t) => `${t.x}${t.full ? " full" : ""}`);
+const ticksAt = (hp: number): string[] => ticksOf(hp, INNER).map((t) => `${t.x}${t.full ? " full" : ""}`);
 const plate = (o: Partial<Plate> = {}): Plate => ({
   stars: 2,
   ours: true,
@@ -35,159 +40,181 @@ const plate = (o: Partial<Plate> = {}): Plate => ({
   big: false,
   ...o,
 });
-/** The columns a plate takes, from its leftmost to its rightmost, stars, bar and held boxes together. */
+const THREE: readonly RackItem[] = ["thorn", "plume", "glowcap"];
+
+/** The columns a plate takes, from its leftmost to its rightmost: badge, bar and held boxes together. */
 function span(p: Plate, cx: number): [number, number] {
   const at = plateAt(p, cx, 40);
-  const lefts = [at.left, ...(at.stars ? [at.stars.x] : []), ...at.held.map((h) => h.x)];
-  const rights = [
-    at.left + at.w,
-    ...(at.stars ? [at.stars.x + starsWide(p.stars)] : []),
-    ...at.held.map((h) => h.x + h.w),
-  ];
+  const lefts = [at.left, ...(at.badge ? [at.badge.x] : []), ...at.held.map((h) => h.x)];
+  const rights = [at.left + at.w, ...(at.badge ? [at.badge.x + BADGE] : []), ...at.held.map((h) => h.x + h.w)];
   return [Math.min(...lefts), Math.max(...rights)];
 }
 
-/** The stars over a plate as pixels: each star's body (its colour, its left, and its shape as rows of `X` and `.`), and whether ink edges them all round. */
-function drawn(p: Plate): { bodies: { x: number; colour: string; shape: string[] }[]; edged: boolean } {
-  const at = plateAt(p, 50, 40);
-  if (!at.stars) return { bodies: [], edged: true };
+/** The badge as pixels, measured from the top left of its square. */
+function badgePixels(stars: number, bright = false): Map<string, string> {
   const px = new Map<string, string>();
-  for (const b of starBoxes(p.stars, at.stars.x, at.stars.y))
-    for (let y = b.y; y < b.y + b.h; y++) for (let x = b.x; x < b.x + b.w; x++) px.set(`${x},${y}`, b.c);
-  const at0 = at.stars;
-  const lit = (x: number, y: number): boolean => {
-    const c = px.get(`${x},${y}`);
-    return c !== undefined && c !== INK;
-  };
-  const bodies = Array.from({ length: Math.min(p.stars, 3) }, (_, i) => {
-    const x = at0.x + 1 + i * 4;
-    const y = at0.y + 1;
-    return {
-      x,
-      colour: must(px.get(`${x + 1},${y}`)),
-      shape: [0, 1, 2].map((dy) => [0, 1, 2].map((dx) => (lit(x + dx, y + dy) ? "X" : ".")).join("")),
-    };
-  });
-  const edged = [...px.keys()].every((k) => {
-    const [x = 0, y = 0] = k.split(",").map(Number);
-    if (!lit(x, y)) return true;
-    return [
-      [1, 0],
-      [-1, 0],
-      [0, 1],
-      [0, -1],
-    ].every(([dx = 0, dy = 0]) => px.has(`${x + dx},${y + dy}`));
-  });
-  return { bodies, edged };
+  for (let y = 0; y < BADGE; y++)
+    for (let x = 0; x < BADGE; x++) {
+      const c = badgeColour(stars, bright, x, y);
+      if (c) px.set(`${x},${y}`, c);
+    }
+  return px;
 }
 
 describe("the plate over a figure", () => {
-  test("the bar is slim: 2 rows of health, 1 of mana, 1 dark row under them; 14 wide, a boss's 26", () => {
-    expect([barTall(100), barTall(0)]).toEqual([4, 3]);
+  test("the bar is an ink frame round 2 rows of health, a dark row and 1 of mana; with its badge as wide as three held items", () => {
+    expect([PLATE_W, BADGE, BAR_W, BIG_BAR_W, BAR_H]).toEqual([19, 9, 11, 23, 6]);
     const at = plateAt(plate(), 50, 40);
-    expect([at.left, at.top, at.w, at.h]).toEqual([43, 36, BAR_W, 4]);
+    expect([at.left, at.top, at.w, at.h]).toEqual([49, 33, BAR_W, BAR_H]);
     expect(plateAt(plate({ big: true }), 50, 40).w).toBe(BIG_BAR_W);
   });
 
-  test("ticks every 250 of health, in the lower row, up to 1,250; past that every 1,000, both rows, thinned where they would crowd", () => {
+  test("ticks every 250 of health while they stand 2.5 pixels apart; closer, every 1,000 and both rows, thinned where they would crowd", () => {
     expect(ticksAt(110)).toEqual([]);
-    expect(ticksAt(700)).toEqual(["5", "10"]);
-    expect(ticksAt(1250)).toEqual(["3", "6", "8", "11"]);
-    expect(ticksAt(1584)).toEqual(["9 full"]);
-    expect(ticksAt(5400)).toEqual(["3 full", "5 full", "8 full", "10 full", "13 full"]);
+    expect(ticksAt(700)).toEqual(["3", "6"]);
+    expect(ticksAt(900)).toEqual(["3", "5", "8"]);
+    expect(ticksAt(1100)).toEqual(["8 full"]);
+    expect(ticksAt(2400)).toEqual(["4 full", "8 full"]);
     // Late in an endless run: never closer than 2.5 pixels, every 5,000, 10,000, 50,000 and so on.
-    expect(ticksAt(9000)).toEqual(["8 full"]);
-    expect(ticksAt(48_000)).toEqual(["3 full", "6 full", "9 full", "12 full"]);
-    expect(ticksAt(4_000_000).length).toBeLessThanOrEqual(5);
+    expect(ticksAt(5400)).toEqual(["8 full"]);
+    expect(ticksAt(31_000)).toEqual(["3 full", "6 full"]);
+    for (const hp of [1000, 4000, 48_000, 4_000_000]) {
+      const xs = ticksOf(hp, INNER).map((t) => t.x);
+      for (let i = 1; i < xs.length; i++) expect(must(xs[i]) - must(xs[i - 1])).toBeGreaterThanOrEqual(2);
+    }
   });
 
   test("a shield comes after the health; over full health, the bar is the two together", () => {
     // Full health and a shield of 200 over it: the bar spans 700, health then shield fill it.
-    const over = healthOf({ hp: 500, maxHp: 500, shield: 200 }, BAR_W);
-    expect(over).toEqual({ hp: 10, shield: 4, whole: 700 });
-    expect(over.hp + over.shield).toBe(BAR_W);
+    const over = healthOf({ hp: 500, maxHp: 500, shield: 200 }, INNER);
+    expect(over).toEqual({ hp: 6, shield: 3, whole: 700 });
+    expect(over.hp + over.shield).toBe(INNER);
     // Hurt, the shield sits after what is left and the bar is still full health.
-    expect(healthOf({ hp: 100, maxHp: 500, shield: 100 }, BAR_W)).toEqual({ hp: 3, shield: 3, whole: 500 });
-    // The ticks are counted along the whole bar, health and shield.
-    expect(ticksOf(500, over.whole, BAR_W).map((t) => t.x)).toEqual([5, 10]);
+    expect(healthOf({ hp: 100, maxHp: 500, shield: 100 }, INNER)).toEqual({ hp: 2, shield: 2, whole: 500 });
   });
 
-  test("the stars are its level: one bronze, two silver, three gold; a summon none", () => {
-    for (const [stars, body] of [
-      [1, "#a3662a"],
-      [2, STONE[3]],
-      [3, GOLD[2]],
-    ] as const) {
-      const star = drawn(plate({ stars }));
-      expect(star.bodies.length).toBe(stars);
-      expect(star.bodies.every((b) => b.colour === body)).toBe(true);
-      // Each a star, not a square: four points round a middle, its corners ink, the middle the glint.
-      for (const b of star.bodies) expect(b.shape).toEqual([".X.", "XXX", ".X."]);
-      // An ink edge all round: nothing touches a star but ink or another star's ink.
-      expect(star.edged).toBe(true);
+  test("the badge is the level's metal: bronze for one star, silver for two, gold for three", () => {
+    const tones = [
+      [1, [GOLD[0], "#a3662a", BARK[2]]],
+      [2, [CREAM, STONE[3], STONE[1]]],
+      [3, [CREAM, GOLD[2], GOLD[1]]],
+    ] as const;
+    for (const [stars, [light, mid, shade]] of tones) {
+      const px = badgePixels(stars);
+      // A square on its point, 9 by 9: its ink edge all round, a hole in its middle.
+      expect(px.size).toBe(41);
+      for (const [x, y] of [
+        [4, 0],
+        [0, 4],
+        [8, 4],
+        [4, 8],
+        [4, 4],
+        [3, 4],
+        [5, 4],
+        [4, 3],
+        [4, 5],
+      ])
+        expect(px.get(`${x},${y}`)).toBe(INK);
+      // Lit on its top-left sides, shaded on its bottom-right, its middle tone between.
+      expect([px.get("3,2"), px.get("2,4"), px.get("5,2"), px.get("3,6"), px.get("5,6"), px.get("6,4")]).toEqual([
+        light,
+        light,
+        mid,
+        mid,
+        shade,
+        shade,
+      ]);
     }
-    expect(plateAt(plate({ stars: 0 }), 50, 40).stars).toBeNull();
-    expect(drawn(plate({ stars: 0 })).bodies).toEqual([]);
+    // Each level its own metal, and a summon's none.
+    expect(new Set([1, 2, 3].map((s) => badgeTones(s)[1])).size).toBe(3);
+    expect(plateAt(plate({ stars: 0 }), 50, 40).badge).toBeNull();
     expect(shapeOf({ summoned: true, stars: 2, items: [], manaFull: 0 }).stars).toBe(0);
     // Bright as three become one.
-    expect(starColours(3, true)).not.toEqual(starColours(3));
+    expect(badgeTones(3, true)).not.toEqual(badgeTones(3));
+    expect(badgePixels(3, true).get("5,6")).not.toBe(GOLD[1]);
   });
 
-  test("the stars are centred on the bar, their edge on its top, no wider than it, a boss's too", () => {
+  test("the badge sits at the bar's left end, taller than the bar, centred on its height, its right point the bar's frame", () => {
+    expect(BADGE).toBeGreaterThan(BAR_H);
     for (const big of [false, true])
-      for (const stars of [1, 2, 3]) {
-        const p = plate({ stars, big });
-        const at = plateAt(p, 50, 40);
-        const edge = must(at.stars);
-        const wide = starsWide(stars);
-        expect(wide).toBeLessThanOrEqual(at.w);
-        // Centred: as many columns of bar either side, or one more on the right where the two are odd and even.
-        const leftOver = edge.x - at.left;
-        const rightOver = at.left + at.w - (edge.x + wide);
-        expect(rightOver - leftOver).toBeGreaterThanOrEqual(0);
-        expect(rightOver - leftOver).toBeLessThanOrEqual(1);
-        // The stars' own colour too, each a pixel in from the edge.
-        const star = drawn(p);
-        const xs = star.bodies.flatMap((b) => [b.x, b.x + 3]);
-        expect(Math.min(...xs) - at.left).toBe(leftOver + 1);
-        // Their ink edge's foot is the row over the bar.
-        expect(edge.y + 5).toBe(at.top);
-        expect(at.peak).toBe(edge.y);
-      }
-    expect([starsWide(0), starsWide(1), starsWide(2), starsWide(3)]).toEqual([0, 5, 9, 13]);
-    // On the bench, no bar: the stars centred over what it holds.
-    const resting = plateAt(plate({ stars: 3, resting: true, items: ["thorn"] }), 50, 40);
-    expect([resting.h, resting.stars, resting.peak]).toEqual([0, { x: 44, y: 29 }, 29]);
+      for (const stars of [1, 2, 3])
+        for (const items of [[], ["thorn"], THREE] satisfies (readonly RackItem[])[]) {
+          const at = plateAt(plate({ stars, big, items }), 50, 40);
+          const badge = must(at.badge);
+          const mid = (BADGE - 1) / 2;
+          // Its right point is the column of the bar's left frame, on a row inside the bar.
+          expect(badge.x + BADGE - 1).toBe(at.left);
+          expect(badge.y + mid).toBeGreaterThan(at.top);
+          expect(badge.y + mid).toBeLessThan(at.top + at.h - 1);
+          expect(badgePixels(stars).get(`${BADGE - 1},${mid}`)).toBe(INK);
+          // Centred on the bar's height: an odd badge on an even bar, half a pixel high.
+          expect(badge.y + mid - (at.top + (at.h - 1) / 2)).toBe(-0.5);
+          expect(at.peak).toBe(badge.y);
+        }
   });
 
-  test("what it holds sits under the bar in boxes, three sharing their edges, and each is found under a point", () => {
-    const p = plate({ items: ["thorn", "plume", "glowcap"] });
-    const at = plateAt(p, 50, 40);
-    expect(at.held.map((h) => [h.item, h.x, h.y, h.w, h.h])).toEqual([
-      ["thorn", 41, 33, 7, 7],
-      ["plume", 47, 33, 7, 7],
-      ["glowcap", 53, 33, 7, 7],
+  test("a summon has no badge, and its bar is centred over it", () => {
+    const at = plateAt(plate({ stars: 0 }), 50, 40);
+    expect(at.badge).toBeNull();
+    expect(at.left + (at.w - 1) / 2).toBe(50);
+    expect(at.peak).toBe(at.top);
+  });
+
+  test("what it holds sits flush under the bar from its left edge; two or three run left under the badge to the bar's right end", () => {
+    const one = plateAt(plate({ items: ["thorn"] }), 50, 40);
+    expect(one.held.map((h) => [h.item, h.x, h.y, h.w, h.h])).toEqual([["thorn", one.left, one.top + BAR_H, 7, 7]]);
+    const three = plateAt(plate({ items: THREE }), 50, 40);
+    expect(three.held.map((h) => [h.item, h.x, h.y])).toEqual([
+      ["thorn", 41, 33],
+      ["plume", 47, 33],
+      ["glowcap", 53, 33],
     ]);
-    // The bar's dark row is the boxes' top edge.
-    expect(at.top + at.h - 1).toBe(33);
-    for (const h of at.held) expect(heldAt(at.held, h.x + 3, h.y + 3)?.item).toBe(h.item);
-    expect(heldAt(at.held, 40, 36)).toBeNull();
+    // Flush under the bar, their edges shared, from the badge's left to the bar's right end.
+    expect(three.top + three.h).toBe(33);
+    expect(must(three.held[2]).x + 7).toBe(three.left + three.w);
+    expect(must(three.held[0]).x).toBe(must(three.badge).x);
+    // The badge's lower point rests on their top edge.
+    expect(must(three.badge).y + BADGE - 1).toBe(33);
+    const two = plateAt(plate({ items: ["thorn", "plume"] }), 50, 40);
+    expect(must(two.held[1]).x + 7).toBe(two.left + two.w);
+    expect(must(two.held[0]).x).toBeLessThan(two.left);
+    // A boss's bar is wide enough for all three from its left edge.
+    const boss = plateAt(plate({ big: true, items: THREE }), 50, 40);
+    expect(must(boss.held[0]).x).toBe(boss.left);
+    // Each is found under a point, and nothing beside the row.
+    for (const h of three.held) expect(heldAt(three.held, h.x + 3, h.y + 3)?.item).toBe(h.item);
+    expect(heldAt(three.held, 40, 36)).toBeNull();
   });
 
-  test("two neighbours' plates never touch, even with three items and three stars each", () => {
-    const full = plate({ stars: 3, items: ["thorn", "plume", "glowcap"] });
-    const [l0, r0] = span(full, 50);
-    const [l1] = span(full, 50 + HEX_W);
-    expect(r0 - l0).toBeLessThan(HEX_W);
-    expect(r0).toBeLessThan(l1);
+  test("two neighbours' plates never touch, with three items and a badge each, a summon's too", () => {
+    for (const full of [plate({ stars: 3, items: THREE }), plate({ stars: 0, items: THREE })]) {
+      const [l0, r0] = span(full, 50);
+      const [l1] = span(full, 50 + HEX_W);
+      expect(r0 - l0).toBe(PLATE_W);
+      expect(r0).toBeLessThan(l1);
+    }
+  });
+
+  test("on the bench, and in the hand, the badge is centred over the figure, its lower point on what it holds", () => {
+    const resting = plateAt(plate({ stars: 3, resting: true, items: ["thorn", "plume"] }), 50, 40);
+    const badge = must(resting.badge);
+    expect([resting.h, badge.x + (BADGE - 1) / 2, badge.y + BADGE - 1, resting.peak]).toEqual([0, 50, 33, badge.y]);
+    expect(resting.held.map((h) => h.x)).toEqual([44, 50]);
+    const hand = plateAt(badgeOnly(2), 50, 40);
+    expect([hand.h, hand.held, must(hand.badge).x + (BADGE - 1) / 2, must(hand.badge).y + BADGE]).toEqual([
+      0,
+      [],
+      50,
+      40,
+    ]);
   });
 
   test("what rises over a head starts above the plate", () => {
-    // Stars 5, bar 4, and one clear row over the 3 to its foot.
+    // The badge 9 and one clear row over the 3 to its foot; held items 6 more.
     expect(aboveHead(plate())).toBe(13);
     expect(aboveHead(plate({ items: ["thorn"] }))).toBe(19);
     expect(aboveHead(plate({ stars: 1 }))).toBe(13);
-    expect(aboveHead(plate({ stars: 0 }))).toBe(8);
+    expect(aboveHead(plate({ stars: 0 }))).toBe(10);
   });
 
   test("there is none on a figure fallen, hidden or gone under the board, and one on a figure that has dropped in", () => {

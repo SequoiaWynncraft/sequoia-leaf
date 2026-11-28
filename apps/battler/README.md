@@ -32,8 +32,8 @@ kit's card: "The table needs the guild's server."
   leaf green with the acorn; two other regulars watch from logs where the window is wide enough.
 - **The figures.** Every one of the twenty-eight, the forest's trouble and bosses, and the few that
   are only ever summoned, each as its own small picture with a base the colour of what it costs and
-  a slim plate over its head: its health and mana on one bar, its stars centred on top of it
-  (one bronze, two silver, three gold), what it holds under the bar. They breathe, turn to whoever they are fighting, lunge, recoil, strike a
+  a slim plate over its head: its health and mana in one ink-framed bar, its level a badge joined
+  to the bar's left end (bronze, silver, gold), what it holds under the bar. They breathe, turn to whoever they are fighting, lunge, recoil, strike a
   pose of their own to use an ability, and tip over.
 - **Planning.** A figure may be dragged (mouse or finger) from the stall to the bench or the board,
   about the board and bench, onto another to change places, and onto the stall to sell it; the

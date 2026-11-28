@@ -3,7 +3,8 @@
  * times as big. On each ground a figure stands on (the bare board's two halves, the gingham's checks,
  * the bench), a figure under its plate in each state: planning at one, two and three stars holding
  * none to three, resting on the bench; in a fight ours and theirs, hurt, shielded, with mana full, a
- * boss, and a figure of great health. Under them every item's picture beside how a figure holds it.
+ * figure of great health, one with no mana, a summon (no badge) and a boss. Under them every item's
+ * picture beside how a figure holds it.
  * Drawn by the game's own code.
  */
 import { drawStanding, framesOf } from "@sequoia-leaf/figures/sprites.ts";
@@ -21,7 +22,7 @@ import { heldPic, itemPic } from "../src/screen/art/icons.ts";
 import { drawPlate, type Plate } from "../src/screen/plate.ts";
 
 const NOW = catalogAt(LAST_ERA);
-const CELL_W = 30;
+const CELL_W = 32;
 const CELL_H = 50;
 
 /** A plate's state, and the figure under it. */
@@ -54,6 +55,8 @@ const STATES: readonly Shown[] = [
   { kind: "greg", plate: { stars: 3, ours: false, hp: 1900, maxHp: 2600, mana: 20, items: ["wasptail", "lichen"] } },
   { kind: "kettle", plate: { stars: 2, ours: false, hp: 31_000, maxHp: 48_000, mana: 70, items: THREE } },
   { kind: "bushgnome", plate: { stars: 1, ours: false, hp: 500, maxHp: 700, manaFull: 0, items: [] } },
+  { kind: "glorplet", plate: { stars: 0, hp: 200, maxHp: 300, manaFull: 0, items: [] } },
+  { kind: "bigcrab", plate: { stars: 2, ours: false, hp: 9000, maxHp: 12_000, mana: 40, items: ["stump"], big: true } },
 ];
 
 /** The grounds a plate is seen on: each face of the bare board, the gingham's checks, the bench's plank. */

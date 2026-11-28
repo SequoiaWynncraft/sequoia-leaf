@@ -6,7 +6,7 @@ import { catalogOf, partyOf, type RackItem, type RunView, type Stars } from "@se
  * ticks show how big a figure is before the fight. Worked out once for each table (one fight opened,
  * `startPlates`), not each frame.
  */
-import { isSummonId, specOf, starScale, type UnitKind } from "@sequoia-leaf/raid/content/figures.ts";
+import { isBossId, isSummonId, specOf, starScale, type UnitKind } from "@sequoia-leaf/raid/content/figures.ts";
 
 import type { HeldAt } from "./held.ts";
 import { type StartPlate, startPlates } from "./logic.ts";
@@ -58,21 +58,20 @@ export function planPlate(
     mana: n.mana,
     manaFull: n.manaFull,
     items: who.items,
-    big: false,
+    big: isBossId(who.kind),
     resting: start === null,
   };
 }
 
-/** Where what a figure standing with its feet at `feet` holds is, on its plate over its head as it is drawn now (for pointing at). */
-export const heldOver = (
-  kind: UnitKind,
-  items: readonly RackItem[],
+/** Where what a figure standing with its feet at `feet` holds is, on its plate over its head as it is drawn now, on the board or resting on the bench (for pointing at). */
+export function heldOver(
+  who: { kind: UnitKind; stars: Stars; items: readonly RackItem[] },
+  resting: boolean,
   cx: number,
   feet: number,
   phase: number,
-): readonly HeldAt[] =>
-  plateAt(
-    shapeOf({ summoned: true, stars: 0, items, manaFull: 0 }),
-    cx,
-    feet - 3 - hoverAt(kind, V.t, phase) - framesOf(kind).tall,
-  ).held;
+): readonly HeldAt[] {
+  const shape = shapeOf({ summoned: isSummonId(who.kind), stars: who.stars, items: who.items, manaFull: 0 });
+  const plate = { ...shape, big: isBossId(who.kind), resting };
+  return plateAt(plate, cx, feet - 3 - hoverAt(who.kind, V.t, phase) - framesOf(who.kind).tall).held;
+}
