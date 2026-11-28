@@ -281,8 +281,35 @@ const MAKING: readonly (readonly Recipe[])[] = ALL_ITEMS.map((n) => [
 export const makersOf = (n: number): readonly Recipe[] => MAKING[n] ?? [];
 /** The recipe a thing is got by: none for a thing from the ground, which is gathered; else the first that makes it (`makersOf`). */
 export const recipeFor = (n: Item): Recipe | null => (isRaw(n) ? null : (makersOf(n)[0] ?? null));
-/** The recipes each kind of machine knows, in the table's order. */
-export const MADE_BY: readonly (readonly Recipe[])[] = ALL_KINDS.map((k) => RECIPES_N.filter((r) => r.by === k));
+/**
+ * For each kind, by the kind a recipe is made by, how many of that kind one piece of it is on the
+ * recipe: 1 where they are the same, as many as it says for a machine that makes what another makes
+ * (`KindDef.as`), and 0 where it does not make that kind's recipes.
+ */
+const TIMES = new Uint8Array(KIND_COUNT * KIND_COUNT);
+for (const k of ALL_KINDS) {
+  TIMES[k * KIND_COUNT + k] = 1;
+  for (const [name, n] of Object.entries(KIND_DEFS[k]?.as ?? {}))
+    TIMES[k * KIND_COUNT + sure(kindNamed(name), name)] = n;
+}
+/** How many of a recipe's own machine one piece of a kind is on it (`TIMES`): 0 for a kind that does not make it. */
+export const timesOf = (k: number, r: Recipe): number => TIMES[k * KIND_COUNT + r.by] ?? 0;
+/** Whether a kind of machine makes a thing, by the recipe the thing names (`RECIPE`). */
+export const makesThing = (k: number, n: number): n is Item => {
+  const r = isItem(n) ? RECIPE[n] : null;
+  return r !== null && r !== undefined && timesOf(k, r) > 0;
+};
+/** The kinds of machine that make a thing by the recipe it names: its own first, then those that make it as that one (`KindDef.as`). */
+export const kindsMaking = (n: Item): Kind[] => {
+  const r = RECIPE[n];
+  return r ? [r.by, ...ALL_KINDS.filter((k) => k !== r.by && timesOf(k, r) > 0)] : [];
+};
+/** For each kind, the most of any machine it is one of (`TIMES`): what its pace on a recipe is at most times its grade's. */
+export const TIMES_MOST = Uint8Array.from(ALL_KINDS, (k) =>
+  Math.max(...TIMES.subarray(k * KIND_COUNT, (k + 1) * KIND_COUNT)),
+);
+/** The recipes each kind of machine knows, in the table's order: its own, and those of the machines it makes as. */
+export const MADE_BY: readonly (readonly Recipe[])[] = ALL_KINDS.map((k) => RECIPES_N.filter((r) => timesOf(k, r) > 0));
 const MAKERS = Uint8Array.from(MADE_BY, (recipes) => (recipes.length > 0 ? 1 : 0));
 /** Whether a kind of machine is one that makes things: one some recipe is made by. */
 export const isMaker = (k: number): boolean => MAKERS[k] === 1;
@@ -291,9 +318,9 @@ export function needOf(r: Recipe, n: number): number {
   for (let p = 0; p < r.from.length; p++) if (r.from[p] === n) return r.need[p] ?? 0;
   return 0;
 }
-/** The most of a thing a machine keeps by it for some recipes: `BUFFER` recipes' worth, for the one that takes the most of it. */
-export const holdsMost = (recipes: readonly Recipe[], n: number): number =>
-  BUFFER * Math.max(0, ...recipes.map((r) => needOf(r, n)));
+/** The most of a thing a machine of a kind keeps by it for some recipes: `BUFFER` recipes' worth for each machine it is, for the one that takes the most of it. */
+export const holdsMost = (k: number, recipes: readonly Recipe[], n: number): number =>
+  BUFFER * Math.max(0, ...recipes.map((r) => needOf(r, n) * timesOf(k, r)));
 
 /** Everything that goes into a thing, all the way down to the ground, the thing itself included. */
 export function partsOf(n: Item): Item[] {

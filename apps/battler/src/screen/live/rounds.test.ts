@@ -8,7 +8,7 @@ import { CLOCK, planMs, seatsIn, type Sitting } from "@sequoia-leaf/raid/sitting
 import { type SittingView, sittingView } from "@sequoia-leaf/raid/sitting/view.ts";
 
 import { seatName } from "./reads.ts";
-import { AHEAD, bannerOf, roundsOf, stageBegan, stageClock } from "./rounds.ts";
+import { AHEAD, bannerOf, roundsOf, roundTitle, stageBegan, stageClock } from "./rounds.ts";
 
 const ME = { id: "leaf-0", name: "Mossback" };
 const call = (now: number, seed: number): Call => ({ now, seed, player: ME });
@@ -63,6 +63,10 @@ describe("the round tracker's rounds, from the sitting's schedule", () => {
     expect(rounds[3]).toMatchObject({ kind: "spar", name: `Fight: ${copy}${seatName(them)}`, against: faces });
     // Only the round being played knows whom.
     expect(rounds[4]).toMatchObject({ name: "Fight", against: null });
+    // Its card's title holds a player's name, which may break anywhere; a room's does not.
+    const fight = rounds[3];
+    const carousel = rounds[0];
+    expect([fight && roundTitle(fight).member, carousel && roundTitle(carousel).member]).toEqual([true, undefined]);
   });
 
   test("the second wing's carousel opens the second stage", () => {

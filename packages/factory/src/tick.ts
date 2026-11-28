@@ -40,7 +40,7 @@ import { carryOn } from "./kinds/line.ts";
 import { RULES } from "./kinds/list.ts";
 import { work as make } from "./kinds/maker.ts";
 import { passUnder } from "./kinds/under.ts";
-import { BURNS, CARRIES, ITEM_COUNT, NONE, PACE, SPAN_MOST } from "./tables.ts";
+import { BURNS, CARRIES, ITEM_COUNT, NONE, PACE, SPAN_MOST, TIMES_MOST } from "./tables.ts";
 import { KIT, rewire, roomAt } from "./wire.ts";
 import { holderOf, take, tunnelOf, type Wire, type Yard } from "./yard.ts";
 
@@ -121,7 +121,10 @@ function carryUnder(y: Yard, wire: Wire): void {
   }
 }
 
-/** Every piece that works does its work, at its own grade's pace: but one holding something finished it has not handed on. */
+/**
+ * Every piece that works does its work, at its own grade's pace: but one holding as many finished
+ * things as it may (one, or for a machine that stands in for several, one for each: `Holders.more`).
+ */
 function working(y: Yard, wire: Wire): void {
   const { kind, grade } = y;
   const h = y.holders;
@@ -129,8 +132,9 @@ function working(y: Yard, wire: Wire): void {
   for (let c = 0; c < workers.length; c++) {
     const i = workers[c] ?? 0;
     const r = holderOf(y, i);
-    if (h.out[r] !== NONE) continue;
-    const work = WORK[kind[i] ?? NONE];
+    const k = kind[i] ?? NONE;
+    if (h.out[r] !== NONE && (h.more[r] ?? 0) + 1 >= (TIMES_MOST[k] ?? 1)) continue;
+    const work = WORK[k];
     const speed = PACE[grade[i] ?? 0] ?? 0;
     if (work === make) make(KIT, y, i, r, speed, wire);
     else if (work) work(KIT, y, i, r, speed, wire);

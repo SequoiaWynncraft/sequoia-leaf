@@ -116,12 +116,24 @@ export function nowhere(k: Kit, y: Yard, i: number, n: Item, also = false): stri
  * ticks it works, none where power does not reach and else the yard's pace; what it does now at
  * that share; and the power it draws now, its grade's where power reaches it and none where it does
  * not. Anything else does nothing a minute.
+ *
+ * What it does now is no more than the belt it hands to carries (`most`, null where that is not
+ * less): a piece that makes faster than that (an assembler) waits for room on it the rest of the time.
  */
 export interface MachineRate {
   readonly nominal: number;
   readonly share: number;
   readonly effective: number;
   readonly draw: number;
+  /** What the belt (or what else carries) it hands to carries a minute, where that keeps it to less than it would make; else null. */
+  readonly most: number | null;
+}
+
+/** What the tile a piece hands to carries a minute, if something that carries stands there: else no limit. */
+function carriedAhead(k: Kit, y: Yard, i: number): number {
+  const to = i < 0 ? -1 : k.nextOf(y, i);
+  const there = to < 0 ? k.NONE : (y.kind[to] ?? k.NONE);
+  return k.carries(there) ? k.carried(y.grade[to] ?? 1) : Infinity;
 }
 
 export function rateOf(k: Kit, y: Yard, i: number, recipe: Recipe | null): MachineRate {
@@ -130,6 +142,18 @@ export function rateOf(k: Kit, y: Yard, i: number, recipe: Recipe | null): Machi
   const lit = kind !== k.NONE && k.litAt(y, i);
   const share = lit ? k.pace(y) : 0;
   const own = k.isKind(kind) && (k.WORK_OF[kind] ?? 0) > 0;
-  const nominal = own ? k.makes(kind, grade, null) : k.isMaker(kind) && recipe ? k.makes(recipe.by, grade, recipe) : 0;
-  return { nominal, share, effective: nominal * share, draw: lit ? k.drawnAt(kind, grade) / k.HALF : 0 };
+  const nominal = own
+    ? k.makes(kind, grade, null)
+    : k.isKind(kind) && k.isMaker(kind) && recipe
+      ? k.makes(kind, grade, recipe)
+      : 0;
+  const ahead = nominal > 0 ? carriedAhead(k, y, i) : Infinity;
+  const effective = Math.min(nominal * share, ahead);
+  return {
+    nominal,
+    share,
+    effective,
+    draw: lit ? k.drawnAt(kind, grade) / k.HALF : 0,
+    most: nominal * share > ahead ? ahead : null,
+  };
 }

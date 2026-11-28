@@ -17,6 +17,7 @@ import {
   type Kind,
   litOf,
   NONE,
+  pieceOf,
   REACH,
   REACHES,
   tilesOf,
@@ -26,7 +27,7 @@ import { CORAL, CREAM, GOLD, INK } from "@sequoia-leaf/kit/palette.ts";
 import type { Ctx } from "@sequoia-leaf/kit/util.ts";
 
 import { PAINTS, TILE } from "./art/belts.ts";
-import { aimBox, markCovers } from "./big.ts";
+import { aimBox, markCovers, pieceBox } from "./big.ts";
 import { you } from "./figure/you.ts";
 import { heldBox, takenUp } from "./held.ts";
 import type { Layout } from "./layout.ts";
@@ -126,13 +127,17 @@ function planYou(g: Ctx, dx: number, dy: number, k: number): void {
   g.fillRect(x - 1, y - 1, 2, 2);
 }
 
-/** The box of the piece on a tile, over the plan: its tile, or for the depot its nine; `out` pixels further out. */
+/** The box of the piece on a tile, over the plan: every tile it covers, or for the depot its nine; `out` pixels further out. */
 function around(o: Over, i: number, col: string, breathe: boolean, out = 0): void {
   const { land } = o.y;
   const depot = land.depot[1] * land.w + land.depot[0];
-  if (FIXED[o.y.kind[i] ?? NONE] === 1)
+  if (FIXED[o.y.kind[i] ?? NONE] === 1) {
     box(o.g, o.X(depot) - o.P, o.Y(depot) - o.P, o.P * 3, o.P * 3, col, breathe, out);
-  else box(o.g, o.X(i), o.Y(i), o.P, o.P, col, breathe, out);
+    return;
+  }
+  const b = pieceBox(o.y, i);
+  const corner = b.y * land.w + b.x;
+  box(o.g, o.X(corner), o.Y(corner), o.P * b.w, o.P * b.h, col, breathe, out);
 }
 
 /**
@@ -142,7 +147,9 @@ function around(o: Over, i: number, col: string, breathe: boolean, out = 0): voi
  */
 function pointed(o: Over, tool: Tool): void {
   const out = pinPulse();
-  for (const i of markedTiles()) {
+  // A piece of more than one tile is marked once, round all of it.
+  const marked = new Set(markedTiles().map((i) => pieceOf(o.y, i)));
+  for (const i of marked) {
     around(o, i, INK, false, out + 1);
     around(o, i, INK, false, out - 1);
     around(o, i, GOLD[2], false, out);

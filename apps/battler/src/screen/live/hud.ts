@@ -23,7 +23,7 @@ import { headOf } from "../ui/heads.ts";
 import { forgetTrack, outcomeOf } from "../ui/rooms.ts";
 import { drawTrack, type Slot } from "../ui/tracker.ts";
 import { choosingNow, clockLine, placeText, type PlayerRow, playerRows, seatName, waitingLine } from "./reads.ts";
-import { bannerOf, type Round, roundsOf, stageClock } from "./rounds.ts";
+import { bannerOf, type Round, roundsOf, roundTitle, stageClock } from "./rounds.ts";
 
 /** What the live table's parts ask of the seat: the sitting as the page has it, whose board is shown, and to show another's (null: the member's own). */
 export interface HudAsks {
@@ -93,13 +93,11 @@ function roundPic(round: Round): HTMLCanvasElement {
   return round.lead ? headOf(round.lead) : roomIcon(round.kind);
 }
 
-/** A round's card: what it is called, and its number. */
+/** A round's card: what it is called (`roundTitle`), its picture and its number. */
 function roundCard(i: number): Description | null {
   const view = HUD.asks?.view();
   const round = view ? roundsOf(view).rounds[i] : undefined;
-  return round
-    ? { name: round.name, icon: roundPic(round), tag: round.at.startsWith("Round") ? round.at : `Round ${round.at}` }
-    : null;
+  return round ? { ...roundTitle(round), icon: roundPic(round) } : null;
 }
 
 /**

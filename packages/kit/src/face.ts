@@ -127,6 +127,8 @@ export type Section =
 /** What a thing says about itself. Only the name is needed. */
 export interface Description {
   readonly name: string;
+  /** Whether its name is a member's: one word they chose, which may break anywhere; any other name breaks only between words. */
+  readonly member?: true;
   /** A canvas (sized to fit by the card) or an element, shown in a slot at the left of the head. */
   readonly icon?: Node | null;
   /** One line under the name: a role, a kind, "worked once". */
@@ -566,14 +568,20 @@ function headOf(d: Description, f: Face, small: boolean, h: Hands): HTMLElement 
     {},
     back,
     d.icon && !small ? el("span", "k-slot k-info-pic", {}, fit(d.icon, 40, 2)) : null,
+    // The name and what is at its right share a row that the latter leaves first, onto a line of its own.
     el(
       "div",
-      "k-info-who",
+      "k-info-main",
       {},
-      d.name ? el("b", "k-name", { text: d.name }) : null,
-      d.tag === undefined ? null : words(d.tag, `${tagLook(d.tag)} k-info-tag`),
+      el(
+        "div",
+        "k-info-who",
+        {},
+        d.name ? el("b", d.member ? "k-name member" : "k-name", { text: d.name }) : null,
+        d.tag === undefined ? null : words(d.tag, `${tagLook(d.tag)} k-info-tag`),
+      ),
+      d.aside ? el("span", "k-info-aside", {}, d.aside) : null,
     ),
-    d.aside ? el("span", "k-info-aside", {}, d.aside) : null,
     x,
   );
 }

@@ -226,16 +226,22 @@ export function check(y: Yard): number {
       continue;
     }
     const r = holderOf(y, i);
-    if (r < 0) continue;
-    mix(doingWord(hs, r));
-    // A by-product held is mixed in only where there is one, so a yard of pieces that make none checks as before.
-    if (hs.also[r] !== NONE) mix(0x10000 | (hs.also[r] ?? 0));
-    mix(heldWord(hs, r));
-    mix(hs.work[r] ?? 0);
-    for (let n = 0; n < ITEM_COUNT; n++) {
-      const c = hs.stock[r * ITEM_COUNT + n] ?? 0;
-      if (c > 0) mix(n | (c << 8));
-    }
+    if (r >= 0) mixHolder(hs, r, mix);
   }
   return h >>> 0;
+}
+
+/** A holder's row: what it is doing and holding, its work, and how many of each thing. */
+function mixHolder(hs: Yard["holders"], r: number, mix: (n: number) => void): void {
+  mix(doingWord(hs, r));
+  // A by-product held is mixed in only where there is one, so a yard of pieces that make none checks as before.
+  if (hs.also[r] !== NONE) mix(0x10000 | (hs.also[r] ?? 0));
+  // So are more finished things waiting behind the first (`Holders.more`): only an assembler holds any.
+  if ((hs.more[r] ?? 0) > 0) mix(0x20000 | (hs.more[r] ?? 0));
+  mix(heldWord(hs, r));
+  mix(hs.work[r] ?? 0);
+  for (let n = 0; n < ITEM_COUNT; n++) {
+    const c = hs.stock[r * ITEM_COUNT + n] ?? 0;
+    if (c > 0) mix(n | (c << 8));
+  }
 }

@@ -186,6 +186,12 @@ export interface KindDef<N extends string = string> {
   readonly owns?: readonly string[];
   /** What it does a minute, in a sentence of what a higher grade does more (`gradeSays`): the verb, and what it does it to. */
   readonly does?: readonly [verb: string, things: string];
+  /**
+   * For a machine that makes what other machines make, those machines by name, each with how many of
+   * them one is (the assembler: 9 benches, or 9 workshops). On their recipes it works that many times
+   * their pace, at the same grade, and keeps that many times their parts by it (`timesOf`).
+   */
+  readonly as?: Readonly<Record<string, number>>;
   /** Whether its price is said as a tile's: a belt, laid a run at a time. */
   readonly perTile?: true;
   /** The number of what is open that says how many of it may stand: none for no limit. */

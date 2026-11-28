@@ -5,6 +5,7 @@
  */
 import { ALL_KINDS, type KindName, kindName } from "@sequoia-leaf/factory";
 
+import { assembler } from "./assembler.ts";
 import { belt } from "./belt.ts";
 import { bench } from "./bench.ts";
 import { boiler } from "./boiler.ts";
@@ -40,6 +41,7 @@ export const PAGES: Readonly<Record<KindName, KindPage>> = {
   study,
   stop,
   sorter,
+  assembler,
 };
 
 /** Each kind's page module, by the kind's number. */

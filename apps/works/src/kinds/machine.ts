@@ -17,10 +17,14 @@ import type { KindPage } from "./kind.ts";
 
 const many = (k: Item): string => ITEM_INFO[k]?.many ?? "";
 
-/** What a machine makes a minute at a grade: from its quickest recipe to its slowest. */
+/**
+ * What a machine makes a minute at a grade: from its slowest recipe to its quickest, said as by
+ * recipe where they differ. A machine standing says its own, of what it is making (`cards.ts`).
+ */
 export function makesA(k: Kind, grade: number): Stat {
   const often = (MADE_BY[k] ?? []).map((r) => makes(k, grade, r));
-  return { label: "Makes", value: perMinute([Math.min(...often), Math.max(...often)]) };
+  const [least, most] = [Math.min(...often), Math.max(...often)];
+  return { label: least === most ? "Makes" : "Makes, by recipe", value: perMinute([least, most]) };
 }
 
 /** What a machine can make, of what is open. */

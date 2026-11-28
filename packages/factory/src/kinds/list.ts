@@ -4,6 +4,7 @@
  * is the one list of them, and the one place a kind is made whole (`RULES`): what its module leaves
  * out of how it plays, it does not do.
  */
+import { assembler } from "./assembler.ts";
 import { belt } from "./belt.ts";
 import { bench } from "./bench.ts";
 import { boiler } from "./boiler.ts";
@@ -40,6 +41,7 @@ export const KIND_DEFS = [
   study,
   stop,
   sorter,
+  assembler,
 ] as const satisfies readonly KindDef[];
 export type KindName = (typeof KIND_DEFS)[number]["name"];
 

@@ -111,6 +111,26 @@
     ]
   },
   {
+    "id": "works-assembler",
+    "at": "2026-11-27T23:25Z",
+    "title": "The assembler",
+    "lines": [
+      "In The Works, the assembler is a tier 5 research: a crafting hall of 3 by 3 tiles that makes anything a bench or a workshop makes, as fast as 9 of them.",
+      "It takes parts in on its back and both sides."
+    ],
+    "more": [
+      {
+        "head": "Numbers",
+        "points": [
+          "The research takes 8,000 Timber folios and 6,000 Brass folios.",
+          "An assembler costs 400 Coins at grade I, 1,200 at grade II and 3,200 at grade III, and draws 36, 54 and 72 power.",
+          "It holds 9 times as many parts as a bench or a workshop.",
+          "Its items leave from the middle tile of its front. Where it makes more a minute than the belt there carries, its card says up to what the belt carries."
+        ]
+      }
+    ]
+  },
+  {
     "id": "versus-tracker",
     "at": "2026-11-27T23:06Z",
     "title": "Live tables show the round",

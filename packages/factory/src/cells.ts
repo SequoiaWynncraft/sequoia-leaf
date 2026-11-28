@@ -16,6 +16,7 @@
  *   4096 a splitter's ways (byte: its shut ways, the way it puts first and its ways in, `packWays`), or a
  *        sorter's right side (the same byte, as the way it puts first)   8192 a grade above 1 (byte)
  *   16384 a kind past 15: its bits above the first byte's four (byte)   32768 a by-product held (byte)
+ *   65536 more of its finished thing waiting behind the first (byte, `Holders.more`)
  *
  * A piece of more than one tile is kept once, on its own tile (`sizes.ts`), and stands over the rest
  * of its tiles again as it is read back. A yard with no kind past 15 and no by-product has exactly the
@@ -37,10 +38,12 @@ import { KIT } from "./wire.ts";
 import { held, holderOf, type Holders, tunnelOf, type Yard } from "./yard.ts";
 
 /** The parts a piece's bytes may say follow, a bit each. */
-const PARTS = 0xfffe;
+const PARTS = 0x1fffe;
 /** The parts kept since a kind could pass 15 and a piece hold a by-product, after all the others. */
 const HIGH = 0x4000;
 const ALSO = 0x8000;
+/** The part kept since a machine could hold more than one finished thing (an assembler). */
+const MORE = 0x10000;
 /** The most kinds of thing, and of one thing, a piece's bytes may say it holds: past these the bytes are no yard's. */
 const KINDS_MOST = 255;
 const MANY_MOST = 1_000_000;
@@ -56,6 +59,7 @@ export interface KeptPiece {
   readonly held?: readonly (readonly [number, number])[];
   readonly out?: number;
   readonly also?: number;
+  readonly more?: number;
   readonly work?: number;
   readonly making?: number;
   readonly turn?: number;
@@ -94,10 +98,12 @@ function heldBy(h: Holders, r: number): Partial<Building> {
   const kinds = ALL_ITEMS.filter((n) => held(h, r, n) > 0);
   const [out, work, making, fuel] = [h.out[r] ?? NONE, h.work[r] ?? 0, h.making[r] ?? NONE, h.fuel[r] ?? 0];
   const also = h.also[r] ?? NONE;
+  const more = h.more[r] ?? 0;
   return {
     ...(kinds.length > 0 ? { held: kinds.map((n): [number, number] => [n, held(h, r, n)]) } : {}),
     ...(out === NONE ? {} : { out }),
     ...(also === NONE ? {} : { also }),
+    ...(more === 0 ? {} : { more }),
     ...(work === 0 ? {} : { work }),
     ...(making === NONE ? {} : { making }),
     ...(fuel === 0 ? {} : { fuel }),
@@ -171,6 +177,7 @@ function partsOf(p: KeptPiece): number {
     [1024, p.free],
     [HIGH, p.kind > 15 ? true : undefined],
     [ALSO, p.also],
+    [MORE, p.more],
   ];
   return has.reduce((f, [bit, v]) => (v === undefined || v === false ? f : f | bit), 0);
 }
@@ -219,6 +226,7 @@ function writeKept(o: Writer, p: KeptPiece): void {
   writeNumbers(o, p, LATE);
   if (f & HIGH) o.byte(p.kind >> 4);
   if (p.also !== undefined) o.byte(p.also);
+  if (p.more !== undefined) o.byte(p.more);
 }
 
 /** Pieces as kept (in tile order, none twice) as bytes: `unpackCells` reads back the same. */
@@ -272,8 +280,14 @@ function readParts(r: Reader, p: Building, f: number): boolean {
   for (const [bit, key] of LATE) if (f & bit) p[key] = r.byte();
   Object.assign(p, f & 256 ? { closed: true } : {}, f & 1024 ? { free: true } : {});
   if (f & HIGH && !readHigh(r, p)) return false;
-  if (f & ALSO) p.also = r.byte();
+  readHeldOut(r, p, f);
   return true;
+}
+
+/** Reads what a piece holds ready beside its finished thing, as `f` says follows: a by-product, and more of the thing. */
+function readHeldOut(r: Reader, p: Building, f: number): void {
+  if (f & ALSO) p.also = r.byte();
+  if (f & MORE) p.more = r.byte();
 }
 
 /** Reads a kind's bits past four onto a piece: 1 to 15, as only a kind past 15 has (none past 255); false for any other. */

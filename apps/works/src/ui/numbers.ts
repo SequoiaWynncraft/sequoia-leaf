@@ -16,9 +16,11 @@ import {
   highest,
   holderOf,
   isItem,
+  isKind,
   type Item,
   ITEM_INFO,
   type Kind,
+  lastRecipe,
   locked,
   machineRate,
   needs,
@@ -83,11 +85,14 @@ export interface FlowPart {
  * minute, as the rules' `machineRate` says it now. Short of power (`slow`), it makes what it makes
  * now, and its parts are of the same moment; where power does not reach it (`dark`), that is nothing.
  * While it waits for its parts (`waiting`), those it holds too few of are short. Until the yard
- * counts (`counts`), its parts have no numbers a minute, as every recipe is one of each.
+ * counts (`counts`), its parts have no numbers a minute, as every recipe is one of each. Where the belt
+ * it hands to carries less than it would make, `most` is what that belt carries (`machineRate`), and
+ * what it makes, its parts and the machines before them are all of that; else null.
  */
 export interface Flow {
   readonly out: Item;
   readonly perMinute: number;
+  readonly most: number | null;
   readonly slow: boolean;
   readonly dark: boolean;
   readonly waiting: boolean;
@@ -96,18 +101,27 @@ export interface Flow {
 
 /** The recipe of the machine standing on a tile, or null for a piece with none in mind. */
 export function flowOf(w: Yard, i: number, counts: boolean): Flow | null {
-  const recipe = aim(w, i);
+  // Between batches it holds nothing to aim at: it is counted for what it last began, as the yard's
+  // Items are (`flow`), so its card says the same between batches as during them.
+  const recipe = aim(w, i) ?? lastRecipe(w, i);
   if (!recipe) return null;
   const grade = w.grade[i] ?? 0;
-  const { share, effective } = machineRate(w, i, recipe);
+  const here = w.kind[i] ?? recipe.by;
+  const maker = isKind(here) ? here : recipe.by;
+  const { nominal, share, effective, most } = machineRate(w, i, recipe);
   const h = w.holders;
   const r = holderOf(w, i);
   const state = status(w, i)?.state;
-  const first = feeders(grade, recipe, 1);
-  const rates = needs(grade, recipe);
+  // What it makes now, the power's share first and then the belt it hands to (`machineRate`): its parts
+  // a minute are of that, and the machines before them are counted for it at the same share of power,
+  // as what they make flat out over the share (where no power reaches it, flat out, to its belt).
+  const made = share > 0 ? effective / share : Math.min(nominal, most ?? Infinity);
+  const first = feeders(grade, recipe, 1, maker, made);
+  const rates = needs(grade, recipe, maker, effective);
   return {
     out: recipe.out,
     perMinute: effective,
+    most,
     slow: share < 1,
     dark: state === "unpowered",
     waiting: state === "waiting" || state === "starved",
@@ -118,13 +132,13 @@ export function flowOf(w: Yard, i: number, counts: boolean): Flow | null {
         item,
         need: recipe.need[part] ?? 1,
         have: r < 0 ? 0 : held(h, r, item),
-        perMinute: counts ? (rates[part]?.perMinute ?? 0) * share : null,
+        perMinute: counts ? (rates[part]?.perMinute ?? 0) : null,
         by:
           counts && by
             ? {
                 kind: by.kind,
                 count: by.count,
-                top: top > 1 ? { grade: top, count: feeders(grade, recipe, top)[part]?.count ?? 0 } : null,
+                top: top > 1 ? { grade: top, count: feeders(grade, recipe, top, maker, made)[part]?.count ?? 0 } : null,
               }
             : null,
       };

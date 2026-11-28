@@ -181,6 +181,7 @@ export function people(opts: {
     const coming = first.get(id);
     return {
       name: head.name,
+      member: true,
       icon: head.face,
       ...(head.line === "" ? {} : { tag: head.line }),
       ...(said ? numbersOf(said, opts.stats) : {}),

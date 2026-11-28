@@ -5,7 +5,7 @@
  */
 
 import { BARK, CREAM, GOLD, GREEN, INK, PAPER, SKY, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
-import { bitmap, ell, flipped, outlined, paint, R, rgb } from "@sequoia-leaf/kit/pix.ts";
+import { bitmap, ell, flipped, outlined, paint, R, rgb, shingles } from "@sequoia-leaf/kit/pix.ts";
 import { type Ctx, hash, makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
 import { bm, CLAY, DARK, IRON, PAL, spr, type Sprite } from "./pal.ts";
@@ -49,36 +49,10 @@ function stones(g: Ctx, x: number, y: number, w: number, h: number, seed: number
   }
 }
 
-const PURPLE = [SKY[0], SKY[1], SKY[2], SKY[3]] as const;
-
-/** Rows of shingles on a roof that narrows towards its ridge. `cols`: shadow, two body tones, light. */
-function shingles(
-  g: Ctx,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  inset: (row: number) => number,
-  cols: readonly [string, string, string, string],
-  seed: number,
-): void {
-  for (let r = 0; r * 4 < h; r++) {
-    const by = y + r * 4;
-    const bh = Math.min(4, y + h - by);
-    const ins = inset(by - y);
-    const bx = x + ins;
-    const bw = w - ins * 2;
-    R(g, bx, by, bw, bh, r % 2 ? cols[1] : cols[2]);
-    R(g, bx, by + bh - 1, bw, 1, cols[0]);
-    for (let sx = bx + (r % 2 ? 3 : 0); sx < bx + bw - 1; sx += 6) {
-      R(g, sx, by, 1, bh - 1, cols[0]);
-      if (hash(sx, r, seed) > 0.55 && sx + 4 < bx + bw) R(g, sx + 1, by, 3, 1, cols[3]);
-    }
-  }
-}
+export const PURPLE = [SKY[0], SKY[1], SKY[2], SKY[3]] as const;
 
 /** A doorway with a rounded head. */
-function arch(g: Ctx, x: number, y: number, w: number, h: number, col: string): void {
+export function arch(g: Ctx, x: number, y: number, w: number, h: number, col: string): void {
   R(g, x + 3, y, w - 6, 1, col);
   R(g, x + 2, y + 1, w - 4, 1, col);
   R(g, x + 1, y + 2, w - 2, 1, col);
@@ -86,7 +60,7 @@ function arch(g: Ctx, x: number, y: number, w: number, h: number, col: string): 
 }
 
 /** A toothed wheel; `turn` is how far round it has gone, as a share of one tooth. */
-function gear(
+export function gear(
   g: Ctx,
   cx: number,
   cy: number,
@@ -246,7 +220,7 @@ const BRASS = [GOLD[0], GOLD[1], GOLD[2]] as const;
  * becomes the same step of `IRON`, in place, over the whole picture drawn so far; with `stone`, its
  * stone too (a kiln's foot and chimney, a tunnel's hood). Its brass stays brass.
  */
-function ironClad(g: Ctx, grade: number, stone = false): void {
+export function ironClad(g: Ctx, grade: number, stone = false): void {
   if (grade < 3) return;
   const from = [...BARK, ...(stone ? STONE : [])].map(rgb);
   const to = [...IRON, ...(stone ? IRON.slice(1) : [])].map(rgb);
@@ -269,7 +243,7 @@ function ironClad(g: Ctx, grade: number, stone = false): void {
  * What a machine of the second grade and up wears: a brass band, two pixels deep, across it from `x`
  * for `w` at row `y`, and a small plate at (`px`, `py`). Grade 1 wears nothing.
  */
-function fitted(g: Ctx, grade: number, x: number, y: number, w: number, px: number, py: number): void {
+export function fitted(g: Ctx, grade: number, x: number, y: number, w: number, px: number, py: number): void {
   if (grade < 2) return;
   R(g, x, y, w, 2, BRASS[0]);
   R(g, x, y, w, 1, BRASS[1]);

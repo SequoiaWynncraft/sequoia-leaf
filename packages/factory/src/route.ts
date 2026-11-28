@@ -5,6 +5,7 @@
 import { at, digsUnder, type Dir, DX, DY } from "./build.ts";
 import { toward } from "./land.ts";
 import type { Piece } from "./pieces.ts";
+import { pieceOf } from "./sizes.ts";
 import { BELT, FIXED, type Kind, locked, NONE, TUNNEL } from "./tables.ts";
 import { nextOf, takes } from "./wire.ts";
 import { redwoodAt, type Yard } from "./yard.ts";
@@ -93,13 +94,15 @@ interface Into {
 }
 
 /**
- * Whether a run on tile `i` ends there, pointing into the piece on `j`: the piece it goes to (or any
- * tile of the depot), from a side that piece takes things by, and not where a maker puts out what it
- * makes unless that is allowed or the run begins there.
+ * Whether a run on tile `i` ends there, pointing into the piece on `j`: the piece it goes to (any
+ * tile of it, for one of more than one tile, and of the depot), from a side that piece takes things
+ * by, and not where a maker puts out what it makes unless that is allowed or the run begins there. So
+ * a run aimed at any tile of a big piece ends at the nearest tile-side that takes things in.
  */
 function endsInto(y: Yard, i: number, j: number, to: Into): boolean {
   const k = y.kind[j] ?? NONE;
-  if (j !== to.target && !(fixed(k) && y.kind[to.target] === k)) return false;
+  const same = j === to.target || (to.target >= 0 && y.part[j] !== 0 && pieceOf(y, j) === pieceOf(y, to.target));
+  if (!same && !(fixed(k) && y.kind[to.target] === k)) return false;
   if (!takes(y, j, i)) return false;
   return to.fronts || i === to.start || nextOf(y, j) !== i;
 }

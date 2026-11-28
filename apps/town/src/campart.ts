@@ -6,7 +6,7 @@
 
 import { framesOf, portrait } from "@sequoia-leaf/figures/sprites.ts";
 import { BARK, CREAM, EARTH, GOLD, GREEN, INK, PAPER, SKY, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
-import { bitmap, ell, flipped, outlined, R } from "@sequoia-leaf/kit/pix.ts";
+import { bitmap, ell, flipped, outlined, R, shingles } from "@sequoia-leaf/kit/pix.ts";
 import { type Body, type Dir, FOOT_X, FOOT_Y, FRAME_H, FRAME_W } from "@sequoia-leaf/kit/skin.ts";
 import { type Ctx, hash, makeCanvas, must, type Pt } from "@sequoia-leaf/kit/util.ts";
 import { everySetDrawn, type FigureId } from "@sequoia-leaf/raid/content/catalog.ts";
@@ -15,19 +15,7 @@ import { figureThing, isMemberThing, SET_MEMBERS, THINGS } from "@sequoia-leaf/t
 
 import { dirOf } from "./actors.ts";
 import { drawFern } from "./ground.ts";
-import {
-  bush,
-  lantern,
-  PAL,
-  rock,
-  shingles,
-  spr,
-  type Sprite,
-  type Sprites,
-  stall,
-  stones,
-  windowLit,
-} from "./sprites.ts";
+import { bush, lantern, PAL, rock, spr, type Sprite, type Sprites, stall, stones, windowLit } from "./sprites.ts";
 
 /** The town's letters, and a few more the camp's things want. */
 const P: Readonly<Record<string, string>> = {

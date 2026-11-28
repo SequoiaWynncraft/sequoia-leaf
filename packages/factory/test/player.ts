@@ -117,7 +117,15 @@ export class Player {
     const things = [...F.ITEMS, "moss"];
     switch (this.int(28)) {
       case 0:
-        return { do: "build", kind: this.pick([...F.KINDS, "cart"]), dir: this.int(4), ...this.grade(), ...at };
+        // Any name, of a kind or none: the names of the first sixteen kinds, so a kind added later
+        // changes no play it is not open in (it is built where it may stand, by `where`).
+        return {
+          do: "build",
+          kind: this.pick([...F.KINDS.slice(0, 16), "cart"]),
+          dir: this.int(4),
+          ...this.grade(),
+          ...at,
+        };
       case 1:
         return { do: "build", ...this.where(), ...this.grade() };
       case 2:

@@ -1,3 +1,4 @@
+import { BUFFER } from "./content/machines.ts";
 import { keep } from "./kinds/holder.ts";
 import type { Kit } from "./kinds/kit.ts";
 import { anything, empty, lay } from "./kinds/line.ts";
@@ -16,7 +17,7 @@ import { room as makerRoom, wants as makerWants } from "./kinds/maker.ts";
  */
 import { besideWater, toward } from "./land.ts";
 import { deliver, giveGoal } from "./orders.ts";
-import { makes, MINUTE } from "./planner.ts";
+import { carried, makes, MINUTE } from "./planner.ts";
 import { litAt, litOf } from "./power.ts";
 import { lit as litBig, outsOf, OWN, pieceOf, roomRound, takesAt } from "./sizes.ts";
 import {
@@ -41,12 +42,15 @@ import {
   ITEM_INFO,
   type Kind,
   locked,
+  makesThing,
   NONE,
   PACE,
   RECIPE,
   recipesFor,
   SPAN_MOST,
   SPANS,
+  TIMES_MOST,
+  timesOf,
   TINTED,
   TINTS,
   TOP,
@@ -74,6 +78,7 @@ import {
   enough,
   held,
   holderOf,
+  type Holders,
   insTo,
   place,
   put,
@@ -310,8 +315,15 @@ export function sendOut(y: Yard, i: number, r: number, wire: Wire): void {
     return;
   }
   handTo(y, to, n, side, 0, wire);
-  h.out[r] = NONE;
+  left(h, r);
   roomAt(y, i, wire.waiting);
+}
+
+/** A finished thing has left a holder's row: the next of the same it holds is ready (`Holders.more`), or none is. */
+function left(h: Holders, r: number): void {
+  const more = h.more[r] ?? 0;
+  if (more > 0) h.more[r] = more - 1;
+  else h.out[r] = NONE;
 }
 
 /**
@@ -329,7 +341,8 @@ export function sendPort(y: Yard, i: number, r: number, port: number, wire: Wire
   const side = (o.way + 2) & 3;
   if (!accepts(y, to, n, side, wire)) return false;
   handTo(y, to, n, side, 0, wire);
-  slot[r] = NONE;
+  if (o.also) slot[r] = NONE;
+  else left(y.holders, r);
   roomRound(y, i, wire.waiting);
   return true;
 }
@@ -498,10 +511,15 @@ export const KIT: Kit = {
   isMaker,
   drawnAt,
   holdsMost,
+  timesOf,
+  makesThing,
+  TIMES_MOST,
+  BUFFER,
   locked,
   recipesFor,
   makes,
   MINUTE,
+  carried,
   BURNS,
   whole,
   // The yard's reads and writes.
@@ -534,6 +552,7 @@ export const KIT: Kit = {
   otherMouth,
   // Who hands to whom, and the one rule of handing a thing on.
   nextOf,
+  carries,
   closedOf: closedWays,
   wayOut,
   waysOf,
