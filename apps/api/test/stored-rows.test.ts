@@ -3,12 +3,12 @@ import { describe, expect, test } from "bun:test";
 import { Pinned } from "@sequoia-leaf/core/review/pins.ts";
 import { Schema } from "effect";
 
-import { StoodAlso } from "../src/play/store.ts";
+import { Own } from "../src/play/store.ts";
 
 /**
  * Each game's stored standings (`review/.../stored/standing-*.json`, written by the game's writer
- * cases, `@sequoia-leaf/core/review/pins.ts`) read as Leaf reads a standing back: its score a whole
- * number, and what is shown beside it as the board's own reader takes it from the stored JSON.
+ * cases, `@sequoia-leaf/core/review/pins.ts`) read as Leaf reads a standing back off its board's row
+ * (`Own`): its score as the score column holds it, and what is shown beside it as the JSON stored.
  */
 const GAMES = [
   ["works", new URL("../../../packages/factory/review/golden/", import.meta.url)],
@@ -25,8 +25,10 @@ describe("every game's stored standing", () => {
   });
   test.each(rows)("%s reads as the board reads a standing", (_, row) => {
     const stood: { score: unknown; also: unknown } = JSON.parse(row.text);
-    expect(Number.isSafeInteger(stood.score)).toBe(true);
-    const also = Schema.decodeUnknownSync(StoodAlso)(JSON.stringify(stood.also));
-    expect(row.read).toEqual({ score: stood.score, also });
+    // The row as the board's query gives it: a place, the score column, and `also` as stored.
+    const read = Schema.decodeUnknownSync(Own)({ place: 1, score: stood.score, also: JSON.stringify(stood.also) });
+    const { place, ...standing } = read;
+    expect(place).toBe(1);
+    expect(row.read).toEqual(standing);
   });
 });

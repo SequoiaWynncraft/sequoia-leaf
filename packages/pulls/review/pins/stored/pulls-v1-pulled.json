@@ -173,6 +173,7 @@
       { "prize": "figure:leafling", "pool": "banner-1", "at": 1795608000000, "top": 1 },
       { "prize": "figure:crab7", "pool": "banner-1", "at": 1795608000000, "top": 2 },
       { "prize": "figure:emberkit", "pool": "banner-1", "at": 1795608000000, "top": 3 }
-    ]
+    ],
+    "rng": 53709371
   }
 }

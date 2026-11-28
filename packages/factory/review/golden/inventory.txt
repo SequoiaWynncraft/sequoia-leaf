@@ -31,6 +31,7 @@ yard 11 stored/yard-v11-part-high.json
 yard 11 stored/yard-v11-part-also.json
 yard 11 stored/yard-v11-part-more.json
 yard 11 stored/yard-v11-part-mix.json
+yard 11 stored/yard-v11-part-mix-still.json
 yard 11 stored/yard-v11-part-quarter.json
 works_plot 1 stored/works_plot-v1-meadow.json
 works_order 1 stored/works_order-v1-handed.json

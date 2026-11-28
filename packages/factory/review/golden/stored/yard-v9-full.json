@@ -1,16 +1,18 @@
 {
-  "text": "{\"v\":9,\"land\":{\"w\":112,\"h\":84,\"x\":48,\"y\":36},\"seed\":20261122,\"tick\":254627,\"charge\":0,\"at\":0,\"till\":664,\"bank\":47,\"told\":30,\"away\":{\"seconds\":900,\"coins\":12,\"made\":{\"plank\":40}},\"seen\":{\"tick\":254627,\"till\":664,\"depot\":{\"plank\":17256,\"brick\":16953,\"ingot\":17044,\"pot\":200,\"glass\":700,\"tool\":12828,\"gear\":190,\"frame\":670,\"hamper\":380,\"shell\":100,\"lantern\":400,\"engine\":60,\"pole\":60,\"brass\":60}},\"plots\":[\"yard\",\"meadow\",\"bank\",\"stream\"],\"done\":[\"planks\",\"ingots\",\"tools\",\"gears\",\"banners\",\"boiler\",\"crates\",\"culvert\",\"signs\",\"hall\",\"stew\",\"chain\",\"drawing\",\"wax\",\"rakes\",\"windows\",\"shells\",\"oilpress\",\"workshop\",\"flywheel\",\"tooling\",\"sorter\",\"planchest\",\"carttrack\",\"nightshift\",\"upgrading\",\"brassfolio\",\"lanterns\",\"shelves\",\"wholeyard\"],\"hand\":\"kits\",\"queue\":[\"flags\",\"longculvert\"],\"line\":[],\"got\":{\"kits\":{\"engine\":1}},\"board\":[{\"id\":0,\"title\":\"Engines for the Treasury\",\"from\":\"The Treasury\",\"line\":\"The vault's winch gave out again. Cinfy has been looking at it and sighing.\",\"want\":{\"engine\":55},\"pay\":170,\"filled\":{\"engine\":1},\"starts\":760},{\"id\":1,\"title\":\"Tools for Pipwick\",\"from\":\"Pipwick\",\"line\":\"Pipwick borrowed a hammer, and now nobody can find Pipwick's hammer.\",\"want\":{\"tool\":110},\"pay\":120,\"filled\":{\"tool\":110},\"starts\":760},{\"id\":2,\"title\":\"Frames for the market stalls\",\"from\":\"The market stalls\",\"line\":\"New stalls for market day. The old ones have been leaning on each other.\",\"want\":{\"frame\":120},\"pay\":110,\"filled\":{},\"starts\":760}],\"serial\":3,\"handed\":0,\"swapAt\":0,\"depot\":{\"plank\":17256,\"brick\":16953,\"ingot\":17044,\"pot\":200,\"glass\":700,\"tool\":12828,\"gear\":190,\"frame\":670,\"hamper\":380,\"shell\":100,\"lantern\":400,\"engine\":60,\"pole\":60,\"brass\":60},\"sold\":311664,\"paid\":10500000,\"cells\":\"RfwfEACiGgECAQIIAKEIAmVABigAkxoCBgQIAQQMACAAIAAgACAApaAgAgQAIABgCEBmAQCyBgEABAYAAAAAAAAAUAwwAVAIRgGQgAgAohoBAgEGCAChCAZkgYgIBgCCmggBAAEGBgCAgFgCAgDABjSAWAICAJCAWAICABABEAAJANAIRIAIZZEEAASQgBgCABABEAGQgAhk0AYYgAgAogYBAAQGB+AIEoAIAKCACACggAhhjQIBFxQACQFQBkhss0YCCQQOBBcXAGAOGABgDhgAo0YCBgQHBA4OaoEEAwCCBgEDBAkAcAk4AnAHKAUwBYuCBAEACAJjsgYBAQQHAIEIBgCCGgEBAQYHAICACADFBzSgIAECAAAAMAOLggQBAAgCAKEEAACxBABjsQQBA5gGAQd/BwSHgAEK/wD/AAKHgAEGZQk=\",\"blueprints\":[\"AAAACAIAAQAIAgACAAkC\",{\"whole\":\"ADwkAQI9JAIBPiQCADQlAAM1JQEANiUCADclAgA4JQIAOSUCBTolEgQAOyUCADwlAgEzJgACNCYDADUmAAA2JgAANyYAADgmAQA6JgEAPCYBAj0mAgE+JgIBMycAAjQnAAA1JwgCADYnCAIANycJAgA4JwEAOicBCTsnAAA8JwEBMigBADcoCQIAOCgBADooAQA8KAEAMSkBAjIpAgA6KQIAOykCADwpAg0uKgAJLyoAADEqAQMuK0MXAC8rAgAwKwIDMStCDgEsLAACLSwAAC4sAwAxLAMANywDCz0sAAIxLQMBMi0AAjMtAAA0LQAFNS0QAgA2LQAANy0DCzstAAE8LQIBPS0DATEuAwg1LgEHOi4EAgkzLwA=\"},null,null],\"history\":[\"AAANq8oHJQABAQHqICA=\",\"AAAFB1nJ2APaIW9vAAA=\",\"AAAAv5AnZwABIAHqICU=\",\"CGNhc2UtMTEzAAtlYU8TAAMEBAQDxSLABAIAwAQCANAEAg==\"],\"stamp\":\"05f694b9383e58.iksko7\"}",
+  "text": "{\"v\":9,\"land\":{\"w\":112,\"h\":84,\"x\":48,\"y\":36},\"seed\":20261122,\"tick\":254628,\"charge\":0,\"at\":0,\"till\":8020134,\"bank\":47,\"told\":30,\"away\":{\"seconds\":900,\"coins\":12,\"made\":{\"plank\":40}},\"seen\":{\"tick\":254627,\"till\":664,\"depot\":{\"plank\":17256,\"brick\":16953,\"ingot\":17044,\"pot\":200,\"glass\":700,\"tool\":12828,\"gear\":190,\"frame\":670,\"hamper\":380,\"shell\":100,\"lantern\":400,\"engine\":60,\"pole\":60,\"brass\":60}},\"plots\":[\"yard\",\"meadow\",\"bank\",\"stream\"],\"done\":[\"planks\",\"ingots\",\"tools\",\"gears\",\"banners\",\"boiler\",\"crates\",\"culvert\",\"signs\",\"hall\",\"stew\",\"chain\",\"drawing\",\"wax\",\"rakes\",\"windows\",\"shells\",\"oilpress\",\"workshop\",\"flywheel\",\"tooling\",\"sorter\",\"planchest\",\"carttrack\",\"nightshift\",\"upgrading\",\"brassfolio\",\"lanterns\",\"shelves\",\"wholeyard\",\"kits\"],\"hand\":\"flags\",\"queue\":[\"longculvert\"],\"line\":[],\"got\":{\"flags\":{\"tool\":1}},\"board\":[{\"id\":0,\"title\":\"Engines for the Treasury\",\"from\":\"The Treasury\",\"line\":\"The vault's winch gave out again. Cinfy has been looking at it and sighing.\",\"want\":{\"engine\":55},\"pay\":170,\"filled\":{\"engine\":1},\"starts\":760},{\"id\":1,\"title\":\"Tools for Pipwick\",\"from\":\"Pipwick\",\"line\":\"Pipwick borrowed a hammer, and now nobody can find Pipwick's hammer.\",\"want\":{\"tool\":110},\"pay\":120,\"filled\":{\"tool\":110},\"starts\":760},{\"id\":2,\"title\":\"Frames for the market stalls\",\"from\":\"The market stalls\",\"line\":\"New stalls for market day. The old ones have been leaning on each other.\",\"want\":{\"frame\":120},\"pay\":110,\"filled\":{},\"starts\":760}],\"serial\":3,\"handed\":0,\"swapAt\":0,\"depot\":{\"plank\":17256,\"brick\":16953,\"ingot\":17044,\"pot\":200,\"glass\":700,\"tool\":12828,\"gear\":190,\"frame\":670,\"hamper\":380,\"shell\":100,\"lantern\":400,\"engine\":209,\"pole\":60,\"kit\":300,\"brass\":60},\"sold\":331134,\"paid\":18500000,\"cells\":\"SfwfEACiGgECAQQIAKEIBGVABigAkxoCBgQIAQYMACAAIAAgACAApaAgAgQAIABgCEJmgQgCALIGAQAEBgAAAAAAAABQDDIBEAGQgAgAohoBAgEICAChCAhkgYgICACCmggBAAEIBgCAgFgCAgDABjeAWAICAJCAWAICABABUAhAAAkA0AhGgAhlkQQABJCAGAIAEAEQAZCACGTQBhiACACiBgEABAYH4AgUgAgAoIAIAKCACGGNAgEXFAAJAVAGSGyzRgIJBA4EFxcAYA4YAGAOGACjRgIGBAcEDg5qgQQDAIIGAQMECQBwCTgCcAcoBTAFi4IEAQAIAWOyBgEBBAcAgQgIAIIaAQEBCAcAgIAIAMUHNqAgAQIAAAAwA4uCBAEACAEAoQQAALEEAGOxBAEDmAYBB38HAICAUAMCAIWAIAIAg0AMAIiAAgCHgAEK/wD/AAKHgAEGZQk=\",\"blueprints\":[\"AAAAiAICAAEAiAICAAIAiQIC\",{\"whole\":\"ADwkAQI9JAIBPiQCADQlAAM1JQEANiUCADclAgA4JQIAOSUCBTolEgQAOyUCADwlAgEzJgACNCYDADUmAAA2JgAANyYAADgmAQA6JgEAPCYBAj0mAgE+JgIBMycAAjQnAAA1J4gCAgA2J4gCAgA3J4kCAgA4JwEAOicBCTsnAAA8JwEBMigBADcoCQIAOCgBADooAQA8KAEAMSkBAjIpAgA6KQIAOykCADwpAg0uKgAJLyoAADEqAQMuK0MXAC8rAgAwKwIDMStCDgEsLAACLSwAAC4sAwAxLAMANywDCz0sAAIxLQMBMi0AAjMtAAA0LQAFNS0QAgA2LQAANy0DCzstAAE8LQIBPS0DATEuAwg1LgEANi6IAwIFNy4QAgM4LkAMCDkuIAc6LgQCCTMvAA==\"},\"AAAAiAMCBQEAEAIDAgBADAgDACAHBAAEAg==\",null],\"history\":[\"AAANq8oHJQABAQHqICA=\",\"AAAFB1nJ2APaIW9vAAA=\",\"AAAAv5AnZwABIAHqICU=\",\"CGNhc2UtMTExAAtlYU8TAAMEBAQDxSLABAIAwAQCANAEAg==\"],\"stamp\":\"05f694b9383e58.iksko7\"}",
   "read": {
-    "coins": { "till": 664, "bank": 47, "paid": 10500000, "sold": 311664, "handed": 0, "serial": 3 },
+    "coins": { "till": 8020134, "bank": 47, "paid": 18500000, "sold": 331134, "handed": 0, "serial": 3 },
+    "told": 30,
     "depot": [
       ["brass", 60],
       ["brick", 16953],
-      ["engine", 60],
+      ["engine", 209],
       ["frame", 670],
       ["gear", 190],
       ["glass", 700],
       ["hamper", 380],
       ["ingot", 17044],
+      ["kit", 300],
       ["lantern", 400],
       ["plank", 17256],
       ["pole", 60],
@@ -76,13 +78,14 @@
         "brassfolio",
         "lanterns",
         "shelves",
-        "wholeyard"
+        "wholeyard",
+        "kits"
       ],
-      "hand": "kits",
-      "queue": ["flags", "longculvert"],
+      "hand": "flags",
+      "queue": ["longculvert"],
       "line": []
     },
-    "got": [["kits", [["engine", 1]]]],
+    "got": [["flags", [["tool", 1]]]],
     "board": {
       "orders": [
         [
@@ -128,15 +131,15 @@
             [
               [
                 ["belt", 0, 0, 0, 0, null],
-                [true, 2, 0, 0, 0, 1]
+                [true, 2, 0, 0, 0, 2]
               ],
               [
                 ["belt", 1, 0, 0, 0, null],
-                [true, 2, 0, 0, 0, 1]
+                [true, 2, 0, 0, 0, 2]
               ],
               [
                 ["belt", 2, 0, 1, 0, null],
-                [true, 2, 0, 0, 0, 1]
+                [true, 2, 0, 0, 0, 2]
               ]
             ]
           ]
@@ -147,275 +150,319 @@
             true,
             [
               [
-                ["belt", 60, 36, 1, 0, null],
+                ["belt", 12, 0, 1, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["mill", 61, 36, 2, 0, null],
+                ["mill", 13, 0, 2, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["gatherer", 62, 36, 2, 0, null],
+                ["gatherer", 14, 0, 2, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["belt", 52, 37, 0, 0, null],
+                ["belt", 4, 1, 0, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["bench", 53, 37, 1, 0, null],
+                ["bench", 5, 1, 1, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["belt", 54, 37, 2, 0, null],
+                ["belt", 6, 1, 2, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["belt", 55, 37, 2, 0, null],
+                ["belt", 7, 1, 2, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["belt", 56, 37, 2, 0, null],
+                ["belt", 8, 1, 2, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["belt", 57, 37, 2, 0, null],
+                ["belt", 9, 1, 2, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["splitter", 58, 37, 2, 0, null],
+                ["splitter", 10, 1, 2, 0, null],
                 [true, 0, 4, 0, 0, 1]
               ],
               [
-                ["belt", 59, 37, 2, 0, null],
+                ["belt", 11, 1, 2, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["belt", 60, 37, 2, 0, null],
+                ["belt", 12, 1, 2, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["gatherer", 51, 38, 0, 0, null],
+                ["gatherer", 3, 2, 0, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["mill", 52, 38, 3, 0, null],
+                ["mill", 4, 2, 3, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["belt", 53, 38, 0, 0, null],
+                ["belt", 5, 2, 0, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["belt", 54, 38, 0, 0, null],
+                ["belt", 6, 2, 0, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["belt", 55, 38, 0, 0, null],
+                ["belt", 7, 2, 0, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["belt", 56, 38, 1, 0, null],
+                ["belt", 8, 2, 1, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["belt", 58, 38, 1, 0, null],
+                ["belt", 10, 2, 1, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["belt", 60, 38, 1, 0, null],
+                ["belt", 12, 2, 1, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["mill", 61, 38, 2, 0, null],
+                ["mill", 13, 2, 2, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["gatherer", 62, 38, 2, 0, null],
+                ["gatherer", 14, 2, 2, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["gatherer", 51, 39, 0, 0, null],
+                ["gatherer", 3, 3, 0, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["mill", 52, 39, 0, 0, null],
+                ["mill", 4, 3, 0, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["belt", 53, 39, 0, 0, null],
+                ["belt", 5, 3, 0, 0, null],
+                [true, 2, 0, 0, 0, 2]
+              ],
+              [
+                ["belt", 6, 3, 0, 0, null],
+                [true, 2, 0, 0, 0, 2]
+              ],
+              [
+                ["belt", 7, 3, 1, 0, null],
+                [true, 2, 0, 0, 0, 2]
+              ],
+              [
+                ["belt", 8, 3, 1, 0, null],
+                [true, 0, 0, 0, 0, 1]
+              ],
+              [
+                ["belt", 10, 3, 1, 0, null],
+                [true, 0, 0, 0, 0, 1]
+              ],
+              [
+                ["pylon", 11, 3, 0, 0, null],
+                [true, 0, 0, 0, 0, 1]
+              ],
+              [
+                ["belt", 12, 3, 1, 0, null],
+                [true, 0, 0, 0, 0, 1]
+              ],
+              [
+                ["gatherer", 2, 4, 1, 0, null],
+                [true, 0, 0, 0, 0, 1]
+              ],
+              [
+                ["belt", 7, 4, 1, 0, null],
                 [true, 2, 0, 0, 0, 1]
               ],
               [
-                ["belt", 54, 39, 0, 0, null],
-                [true, 2, 0, 0, 0, 1]
-              ],
-              [
-                ["belt", 55, 39, 1, 0, null],
-                [true, 2, 0, 0, 0, 1]
-              ],
-              [
-                ["belt", 56, 39, 1, 0, null],
+                ["belt", 8, 4, 1, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["belt", 58, 39, 1, 0, null],
+                ["belt", 10, 4, 1, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["pylon", 59, 39, 0, 0, null],
+                ["belt", 12, 4, 1, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["belt", 60, 39, 1, 0, null],
+                ["belt", 1, 5, 1, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["gatherer", 50, 40, 1, 0, null],
+                ["mill", 2, 5, 2, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["belt", 55, 40, 1, 0, null],
-                [true, 2, 0, 0, 0, 1]
-              ],
-              [
-                ["belt", 56, 40, 1, 0, null],
+                ["belt", 10, 5, 2, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["belt", 58, 40, 1, 0, null],
+                ["belt", 11, 5, 2, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["belt", 60, 40, 1, 0, null],
+                ["belt", 12, 5, 2, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["belt", 49, 41, 1, 0, null],
+                ["study", -2, 6, 0, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["mill", 50, 41, 2, 0, null],
+                ["pylon", -1, 6, 0, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["belt", 58, 41, 2, 0, null],
+                ["belt", 1, 6, 1, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["belt", 59, 41, 2, 0, null],
+                ["bench", -2, 7, 3, 0, "timber"],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["belt", 60, 41, 2, 0, null],
+                ["belt", -1, 7, 2, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["study", 46, 42, 0, 0, null],
+                ["belt", 0, 7, 2, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["pylon", 47, 42, 0, 0, null],
+                ["bench", 1, 7, 2, 0, "frame"],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["belt", 49, 42, 1, 0, null],
+                ["gatherer", -4, 8, 0, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["bench", 46, 43, 3, 0, "timber"],
+                ["mill", -3, 8, 0, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["belt", 47, 43, 2, 0, null],
+                ["belt", -2, 8, 3, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["belt", 48, 43, 2, 0, null],
+                ["belt", 1, 8, 3, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["bench", 49, 43, 2, 0, "frame"],
+                ["belt", 7, 8, 3, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["gatherer", 44, 44, 0, 0, null],
+                ["boiler", 13, 8, 0, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["mill", 45, 44, 0, 0, null],
+                ["mill", 1, 9, 3, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["belt", 46, 44, 3, 0, null],
+                ["gatherer", 2, 9, 0, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["belt", 49, 44, 3, 0, null],
+                ["mill", 3, 9, 0, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["belt", 55, 44, 3, 0, null],
+                ["belt", 4, 9, 0, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["boiler", 61, 44, 0, 0, null],
-                [true, 0, 0, 0, 0, 1]
-              ],
-              [
-                ["mill", 49, 45, 3, 0, null],
-                [true, 0, 0, 0, 0, 1]
-              ],
-              [
-                ["gatherer", 50, 45, 0, 0, null],
-                [true, 0, 0, 0, 0, 1]
-              ],
-              [
-                ["mill", 51, 45, 0, 0, null],
-                [true, 0, 0, 0, 0, 1]
-              ],
-              [
-                ["belt", 52, 45, 0, 0, null],
-                [true, 0, 0, 0, 0, 1]
-              ],
-              [
-                ["splitter", 53, 45, 0, 0, null],
+                ["splitter", 5, 9, 0, 0, null],
                 [true, 0, 2, 0, 0, 1]
               ],
               [
-                ["belt", 54, 45, 0, 0, null],
+                ["belt", 6, 9, 0, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["belt", 55, 45, 3, 0, null],
+                ["belt", 7, 9, 3, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["boiler", 59, 45, 0, 0, null],
+                ["boiler", 11, 9, 0, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["gatherer", 60, 45, 2, 0, null],
+                ["gatherer", 12, 9, 2, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["gatherer", 61, 45, 3, 0, null],
+                ["gatherer", 13, 9, 3, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["gatherer", 49, 46, 3, 0, null],
+                ["gatherer", 1, 10, 3, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["crate", 53, 46, 1, 0, null],
+                ["crate", 5, 10, 1, 0, null],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["tunnel", 58, 46, 0, 2, null],
+                ["belt", 6, 10, 0, 0, null],
+                [true, 3, 0, 0, 0, 2]
+              ],
+              [
+                ["splitter", 7, 10, 0, 0, null],
+                [true, 0, 2, 0, 0, 1]
+              ],
+              [
+                ["bench", 8, 10, 0, 0, "tool"],
                 [true, 0, 0, 0, 0, 1]
               ],
               [
-                ["pylon", 51, 47, 0, 0, null],
+                ["crate", 9, 10, 0, 0, null],
+                [false, 0, 0, 0, 0, 1]
+              ],
+              [
+                ["tunnel", 10, 10, 0, 2, null],
+                [true, 0, 0, 0, 0, 1]
+              ],
+              [
+                ["pylon", 3, 11, 0, 0, null],
+                [true, 0, 0, 0, 0, 1]
+              ]
+            ]
+          ]
+        ],
+        [
+          2,
+          [
+            false,
+            [
+              [
+                ["belt", 0, 0, 0, 0, null],
+                [true, 3, 0, 0, 0, 2]
+              ],
+              [
+                ["splitter", 1, 0, 0, 0, null],
+                [true, 0, 2, 0, 0, 1]
+              ],
+              [
+                ["bench", 2, 0, 0, 0, "tool"],
+                [true, 0, 0, 0, 0, 1]
+              ],
+              [
+                ["crate", 3, 0, 0, 0, null],
+                [false, 0, 0, 0, 0, 1]
+              ],
+              [
+                ["tunnel", 4, 0, 0, 2, null],
                 [true, 0, 0, 0, 0, 1]
               ]
             ]
@@ -447,7 +494,7 @@
           "also": null,
           "more": 0,
           "making": "ingot",
-          "work": 2,
+          "work": 4,
           "mix": 0,
           "quarter": 0,
           "open": 1,
@@ -468,7 +515,7 @@
           "also": null,
           "more": 0,
           "making": null,
-          "work": 2,
+          "work": 4,
           "mix": 0,
           "quarter": 0,
           "open": 1,
@@ -499,7 +546,7 @@
           "also": null,
           "more": 0,
           "making": "tool",
-          "work": 4,
+          "work": 6,
           "mix": 0,
           "quarter": 0,
           "open": 1,
@@ -577,7 +624,7 @@
         "set": [2, 1, 0, 0, 0, 0, 0, null],
         "free": 0,
         "span": 0,
-        "carries": ["ingot", 0],
+        "carries": ["ingot", 2],
         "holds": null,
         "under": null
       },
@@ -593,7 +640,7 @@
           "also": null,
           "more": 0,
           "making": null,
-          "work": 0,
+          "work": 2,
           "mix": 0,
           "quarter": 0,
           "open": 1,
@@ -659,7 +706,7 @@
         "set": [1, 1, 0, 0, 0, 0, 0, null],
         "free": 0,
         "span": 0,
-        "carries": ["tool", 0],
+        "carries": ["tool", 2],
         "holds": null,
         "under": null
       },
@@ -669,7 +716,7 @@
         "set": [1, 1, 0, 0, 0, 0, 0, null],
         "free": 0,
         "span": 0,
-        "carries": ["ingot", 6],
+        "carries": [null, 0],
         "holds": null,
         "under": null
       },
@@ -695,7 +742,7 @@
           "also": null,
           "more": 0,
           "making": "ingot",
-          "work": 6,
+          "work": 8,
           "mix": 0,
           "quarter": 0,
           "open": 1,
@@ -716,7 +763,7 @@
           "also": null,
           "more": 0,
           "making": null,
-          "work": 6,
+          "work": 8,
           "mix": 0,
           "quarter": 0,
           "open": 1,
@@ -737,7 +784,7 @@
           "also": null,
           "more": 0,
           "making": null,
-          "work": 6,
+          "work": 8,
           "mix": 0,
           "quarter": 0,
           "open": 1,
@@ -758,7 +805,7 @@
           "also": null,
           "more": 0,
           "making": "plank",
-          "work": 6,
+          "work": 8,
           "mix": 0,
           "quarter": 0,
           "open": 1,
@@ -783,7 +830,7 @@
         "set": [0, 2, 2, 0, 0, 0, 0, null],
         "free": 1,
         "span": 0,
-        "carries": ["plank", 4],
+        "carries": ["plank", 7],
         "holds": null,
         "under": null
       },
@@ -813,7 +860,7 @@
         "set": [1, 1, 0, 0, 0, 0, 0, null],
         "free": 0,
         "span": 0,
-        "carries": [null, 0],
+        "carries": ["ingot", 0],
         "holds": null,
         "under": null
       },
@@ -833,7 +880,7 @@
         "set": [1, 1, 0, 0, 0, 0, 0, null],
         "free": 1,
         "span": 0,
-        "carries": ["ingot", 4],
+        "carries": ["ingot", 6],
         "holds": null,
         "under": null
       },
@@ -935,7 +982,7 @@
         "set": [2, 1, 0, 0, 0, 0, 0, null],
         "free": 1,
         "span": 0,
-        "carries": ["ingot", 2],
+        "carries": ["ingot", 4],
         "holds": null,
         "under": null
       },
@@ -1156,7 +1203,7 @@
           "mix": 0,
           "quarter": 0,
           "open": 1,
-          "fuel": 2,
+          "fuel": 1,
           "stock": [["deadfall", 8]]
         },
         "under": null
@@ -1194,7 +1241,7 @@
           "also": null,
           "more": 0,
           "making": null,
-          "work": 6,
+          "work": 8,
           "mix": 0,
           "quarter": 0,
           "open": 1,
@@ -1215,7 +1262,7 @@
           "also": null,
           "more": 0,
           "making": "brick",
-          "work": 6,
+          "work": 8,
           "mix": 0,
           "quarter": 0,
           "open": 1,
@@ -1240,7 +1287,7 @@
         "set": [0, 1, 0, 1, 2, 0, 0, null],
         "free": 0,
         "span": 0,
-        "carries": ["brick", 4],
+        "carries": ["brick", 6],
         "holds": null,
         "under": null
       },
@@ -1280,7 +1327,7 @@
           "mix": 0,
           "quarter": 0,
           "open": 1,
-          "fuel": 2,
+          "fuel": 1,
           "stock": [["deadfall", 8]]
         },
         "under": null
@@ -1366,6 +1413,68 @@
           "open": 1,
           "fuel": 0,
           "stock": [["brick", 127]]
+        },
+        "under": null
+      },
+      {
+        "at": [6, 10],
+        "kind": "belt",
+        "set": [0, 2, 3, 0, 0, 0, 0, null],
+        "free": 0,
+        "span": 0,
+        "carries": [null, 0],
+        "holds": null,
+        "under": null
+      },
+      {
+        "at": [7, 10],
+        "kind": "splitter",
+        "set": [0, 1, 0, 0, 2, 0, 0, null],
+        "free": 0,
+        "span": 0,
+        "carries": [null, 0],
+        "holds": null,
+        "under": null
+      },
+      {
+        "at": [8, 10],
+        "kind": "bench",
+        "set": [0, 1, 0, 0, 0, 0, 0, "tool"],
+        "free": 0,
+        "span": 0,
+        "carries": [null, 0],
+        "holds": {
+          "out": null,
+          "also": null,
+          "more": 0,
+          "making": null,
+          "work": 0,
+          "mix": 0,
+          "quarter": 0,
+          "open": 1,
+          "fuel": 0,
+          "stock": []
+        },
+        "under": null
+      },
+      {
+        "at": [9, 10],
+        "kind": "crate",
+        "set": [0, 0, 0, 0, 0, 0, 0, null],
+        "free": 0,
+        "span": 0,
+        "carries": [null, 0],
+        "holds": {
+          "out": null,
+          "also": null,
+          "more": 0,
+          "making": null,
+          "work": 0,
+          "mix": 0,
+          "quarter": 0,
+          "open": 0,
+          "fuel": 0,
+          "stock": []
         },
         "under": null
       },

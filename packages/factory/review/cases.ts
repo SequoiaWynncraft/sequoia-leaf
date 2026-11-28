@@ -21,6 +21,7 @@ import { fromBase64 } from "../src/bytes.ts";
 import { unpackCells } from "../src/cells.ts";
 import * as F from "../src/index.ts";
 import { keptOn } from "../src/keptland.ts";
+import { bareLand } from "../test/land.ts";
 import { near } from "../test/near.ts";
 import { boardFilled } from "../test/player.ts";
 import { bought, buying, fillHand, must, staged } from "../test/yards.ts";
@@ -97,8 +98,7 @@ export function pinValue(text: string, land: F.Land = F.LAND): unknown {
   return rec;
 }
 /** What Leaf stores of a yard, as its writers write it: the yard (a row kept as `kept`, if given), its standing and its postcard. */
-export function watch(seen: Seen, y: F.Yard, kept?: string): void {
-  const read = material(y);
+export function watch(seen: Seen, y: F.Yard, kept?: string, read: unknown = material(y)): void {
   const text = F.FACTORY.encode(y);
   const as = (row: Row): ({ readonly as: string } & Row) | undefined =>
     kept === undefined ? undefined : { as: kept, ...row };
@@ -137,45 +137,66 @@ function everyField(y: F.Yard): void {
   const nodes = F.NODES.filter((n) => n.tier === y.open.tier && ready(n.id)).map((n) => n.id);
   if (y.hand === -1 && nodes[0]) sent(y, { do: "take", node: nodes[0] });
   const hand = y.hand;
-  if (hand !== -1) {
-    const got = F.counts();
-    const wanted = F.ALL_ITEMS.find((k) => (F.GOALS[hand]?.want[k] ?? 0) > 1);
-    if (wanted !== undefined) got[wanted] = 1;
-    y.got[hand] = got;
-  }
+  given(y);
   for (const node of nodes.filter((id) => F.goal(id) !== hand).slice(0, 2)) sent(y, { do: "queue", node });
   // An order part filled once it counts.
   while (y.board.some((b) => b.starts > y.tick)) F.step(y);
   const o = y.board[0];
   const n = o && F.ALL_ITEMS.find((k) => (o.want[k] ?? 0) > 1);
   if (o && n !== undefined) o.filled[n] = 1;
-  // A tunnel under two tiles, south-east of the depot.
-  const [tx, tz] = xyOf(y, 2, 4);
-  const dug = F.build(y, F.TUNNEL, tx, tz, 0, Infinity, { span: 2, grade: 1 });
-  if (!dug.ok) throw new Error(`the case's tunnel is refused: ${dug.why}`);
-  // Three belts north-west of the depot, where none stand: kept as a blueprint, and raised a grade.
+  // Three belts north-west of the depot, where none stand, raised a grade.
   for (const dx of [-3, -2, -1]) {
     const [x, z] = xyOf(y, dx, -3);
     if (y.kind[F.at(y, x, z)] === F.NONE) F.build(y, F.BELT, x, z, 0, Infinity);
   }
-  const tiles = F.within(y, ...xyOf(y, -3, -3), ...xyOf(y, -1, -3));
-  sent(y, { do: "saveBlueprint", slot: 0, tiles });
+  const belts = F.within(y, ...xyOf(y, -3, -3), ...xyOf(y, -1, -3));
+  sent(y, { do: "upgrade", tiles: belts });
+  // South of the depot, a piece with each thing a blueprint keeps of one: a belt painted and raised,
+  // a splitter with a way shut, a bench told to make, a crate shut, a tunnel under two tiles.
+  stood(y, "belt", -2, 4, { grade: 2 });
+  y.tint[F.at(y, ...xyOf(y, -2, 4))] = 3;
+  stood(y, "splitter", -1, 4);
+  y.shut[F.at(y, ...xyOf(y, -1, 4))] = 2;
+  stood(y, "bench", 0, 4);
+  y.set[F.at(y, ...xyOf(y, 0, 4))] = F.item("tool");
+  stood(y, "crate", 1, 4);
+  y.holders.open[F.holderOf(y, F.at(y, ...xyOf(y, 1, 4)))] = 0;
+  stood(y, "tunnel", 2, 4, { span: 2, grade: 1 });
+  sent(y, { do: "saveBlueprint", slot: 0, tiles: belts });
+  sent(y, { do: "saveBlueprint", slot: 2, tiles: F.within(y, ...xyOf(y, -2, 4), ...xyOf(y, 5, 4)) });
   sent(y, { do: "saveYard", slot: 1 });
-  sent(y, { do: "upgrade", tiles });
+}
+/** A piece stood from the depot, or the case fails. */
+function stood(y: F.Yard, kind: F.KindName, dx: number, dy: number, lay: F.Lay = {}): void {
+  const did = F.build(y, F.kind(kind), ...xyOf(y, dx, dy), 0, Infinity, lay);
+  if (!did.ok) throw new Error(`the case's ${kind} is refused: ${did.why}`);
 }
 const xyOf = (y: F.Yard, dx: number, dy: number): [number, number] => [y.land.depot[0] + dx, y.land.depot[1] + dy];
 
+/** The node in hand given one of something it wants. */
+function given(y: F.Yard): void {
+  const hand = y.hand;
+  if (hand === -1) return;
+  const got = F.counts();
+  const wanted = F.ALL_ITEMS.find((k) => (F.GOALS[hand]?.want[k] ?? 0) > 1);
+  if (wanted !== undefined) got[wanted] = 1;
+  y.got[hand] = got;
+}
 /** Goals done as the case says, not by play: the node or research a field needs open. */
 function opened(y: F.Yard, ids: readonly string[]): void {
   for (const id of ids) if (!y.done.includes(F.goal(id))) y.done.push(F.goal(id));
   F.reopen(y);
   if (y.hand === -1 || y.done.includes(y.hand)) F.hold(y, F.nextHand(y.open));
 }
-/** A yard kept as version 9: the gate's, tier 4 open, a plan of the whole yard studied. */
+/** A yard kept as version 9: the gate's, tier 4 open, a plan of the whole yard studied, and a node finished that the next command logs. */
 function fullV9(): F.Yard {
   const y = staged("gate");
   opened(y, ["shelves", "wholeyard"]);
   everyField(y);
+  // The node in hand finished by what arrives at the depot, between commands: not logged yet (`told`).
+  fillHand(y);
+  F.step(y);
+  given(y);
   return y;
 }
 /**
@@ -217,6 +238,11 @@ interface Part {
   /** For a tunnel, how many tiles it passes under. */
   readonly span?: number;
   readonly grade?: number;
+  /**
+   * The part can be written but no piece the rules have now puts it back (no recipe has a by-product
+   * yet): what the row must read as is the piece before it was set, and the part is held by its bytes alone.
+   */
+  readonly wire?: true;
 }
 /** A machine told to make a thing and making it, holding what its recipe takes, `work` half-ticks on. */
 function making(y: F.Yard, i: number, r: number, n: F.Item, work: number): void {
@@ -253,7 +279,7 @@ export const PART_CASES: readonly Part[] = [
   { bit: 4096, name: "ways", kind: "splitter", set: (y, i) => (y.shut[i] = 2) },
   { bit: 8192, name: "grade", kind: "belt", grade: 3 },
   { bit: 16384, name: "high", kind: "assembler" },
-  { bit: 32768, name: "also", kind: "still", set: (y, _, r) => (y.holders.also[r] = F.item("creosote")) },
+  { bit: 32768, name: "also", kind: "still", set: (y, _, r) => (y.holders.also[r] = F.item("creosote")), wire: true },
   {
     bit: 65536,
     name: "more",
@@ -264,12 +290,22 @@ export const PART_CASES: readonly Part[] = [
     },
   },
   { bit: 131072, name: "mix", kind: "breaker", set: (y, _, r) => (y.holders.mix[r] = 2) },
+  { bit: 131072, name: "mix-still", kind: "still", set: (y, _, r) => (y.holders.mix[r] = 2) },
   { bit: 262144, name: "quarter", kind: "mill", set: (y, _, r) => (y.holders.quarter[r] = 3) },
 ];
 
-/** A yard of the one piece a part is set on, three tiles south-east of the depot, facing east, on the guild's land with tier 6 open. */
-export function partYard(part: Part): F.Yard {
-  const y = F.create({ seed: 1, tier: 6 });
+/**
+ * The small bare land the part yards' bytes are pinned on, so that the whole of them (how many pieces,
+ * the tiles between them) is the same for ever, as no more land round the guild's moves it.
+ */
+export const PART_LAND = bareLand(24, 16, [], [5, 8]);
+
+/**
+ * A yard of the one piece a part is set on, three tiles south-east of the depot, facing east, with
+ * tier 6 open: on the guild's land, or another (`PART_LAND`); and what it must read as.
+ */
+export function partYard(part: Part, land: F.Land = F.LAND): { y: F.Yard; read: unknown } {
+  const y = F.create({ seed: 1, tier: 6, land });
   // Every research of tier 6 and below known, so that every kind may stand.
   opened(
     y,
@@ -288,9 +324,10 @@ export function partYard(part: Part): F.Yard {
     y.free[i] = 0;
     y.spare[k] = (y.spare[k] ?? 0) + 1;
   }
-  part.set?.(y, i, F.holderOf(y, i));
   y.history = [];
-  return y;
+  const before = part.wire ? material(y) : null;
+  part.set?.(y, i, F.holderOf(y, i));
+  return { y, read: before ?? material(y) };
 }
 
 /** A varint at `at` in the bytes, and where the bytes go on after it. */
@@ -305,9 +342,9 @@ function varint(bytes: Uint8Array, at: number): [number, number] {
   return [v, to];
 }
 /**
- * A part yard's piece bytes as the writer writes them, from the piece's own byte on (where it stands
- * is the land's, and left out): its kind and way, what it carries, the parts said to follow (a bit
- * each) and their payload, as hex; and the parts, by their bits.
+ * A part yard's pieces' bytes as the writer writes them, whole, as hex: how many pieces, then each
+ * piece's tiles since the last, its kind and way, what it carries, the parts said to follow (a bit
+ * each) and their payload; and the first piece's parts, by their bits.
  */
 export function bytesOf(text: string): { hex: string; bits: number } {
   const raw: unknown = JSON.parse(text);
@@ -319,7 +356,7 @@ export function bytesOf(text: string): { hex: string; bits: number } {
   const head = bytes[from] ?? 0;
   const carried = (head & 64) !== 0 ? 2 : 0;
   const [bits] = (head & 128) !== 0 ? varint(bytes, from + 1 + carried) : [0];
-  const hex = [...bytes.subarray(from)].map((b) => b.toString(16).padStart(2, "0")).join(" ");
+  const hex = [...bytes].map((b) => b.toString(16).padStart(2, "0")).join(" ");
   return { hex, bits: bits | ((head & 64) !== 0 ? 1 : 0) };
 }
 
@@ -330,9 +367,9 @@ export function cases(seen: Seen): void {
   watch(seen, fullV9(), "full");
   watch(seen, fullV11(), "full");
   for (const part of PART_CASES) {
-    const y = partYard(part);
-    watch(seen, y, `part-${part.name}`);
-    const { hex } = bytesOf(F.FACTORY.encode(y));
+    const { y, read } = partYard(part);
+    watch(seen, y, `part-${part.name}`, read);
+    const { hex } = bytesOf(F.FACTORY.encode(partYard(part, PART_LAND).y));
     seen.saw("cells", F.VERSION, { [`${part.name}: ${hex}`]: 1 });
   }
   // What the Works logs: a plot bought, an order handed over, a story node finished.

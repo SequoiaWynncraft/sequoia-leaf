@@ -150,26 +150,34 @@ const longYard = (): F.Yard => staged("gate");
 const SLICE = 5000;
 export const WAYS = ["one go", "slices", "stored slices"] as const;
 
-/** Brings a yard on 8 hours: in one go, in `tend`'s slices, or in slices with the yard stored and read back between each, as Leaf may. */
-export function broughtOn(way: (typeof WAYS)[number]): F.Yard {
+/**
+ * Brings a yard on 8 hours: in one go, in `tend`'s slices, or in slices with the yard stored and read
+ * back between each, as Leaf may. Each yard it stores, and the end, are seen written (`seen`).
+ */
+export function broughtOn(way: (typeof WAYS)[number], seen: Seen): F.Yard {
   let y = longYard();
   const ctx = ctxAt(y.at + 8 * HOUR_MS, 1, 1e9);
-  if (way === "one go") return F.FACTORY.advance(y, ctx);
+  if (way === "one go") return seenAt(seen, F.FACTORY.advance(y, ctx));
   for (let further = true; further;) {
     let left = SLICE;
     further = F.FACTORY.tend?.(y, ctx, () => left-- > 0) ?? false;
     if (way === "stored slices" && further) {
+      watch(seen, y);
       const read = F.FACTORY.decode(F.FACTORY.encode(y));
       if (!read) throw new Error("a yard stored between slices does not read");
       y = read;
     }
   }
-  return F.FACTORY.advance(y, ctx);
+  return seenAt(seen, F.FACTORY.advance(y, ctx));
 }
+const seenAt = (seen: Seen, y: F.Yard): F.Yard => {
+  watch(seen, y);
+  return y;
+};
 /** The three ways' ends, each as the goldens see a yard, and the parts in which a way ends otherwise than in one go. */
-export function longRuns(): { lines: Golden[]; apart: string[] } {
+export function longRuns(seen: Seen): { lines: Golden[]; apart: string[] } {
   const ends = WAYS.map((way) => {
-    const y = broughtOn(way);
+    const y = broughtOn(way, seen);
     return { way, y, state: yardState(y) };
   });
   const [first] = ends;
@@ -207,7 +215,7 @@ export function goldensNow(): Goldens {
   const played = seenNow();
   const yards = yardLines(played);
   const scripts = scriptLines(played);
-  const { lines, apart } = longRuns();
+  const { lines, apart } = longRuns(played);
   const seen = seenNow();
   cases(seen);
   return { yards, scripts, long: lines, apart, cases: seen, played };
@@ -223,9 +231,15 @@ if (import.meta.main) {
   tell("yards", written("yards"), now.yards);
   tell("scripts", written("scripts"), now.scripts);
   tell("long", written("long"), now.long);
+  // Nothing is written unless everything holds: what play writes is all in the cases, and the pins stand.
   const missed = uncovered(now.cases.pins(), now.played);
-  for (const line of missed) console.log(`  ${line}`);
-  if (!writePins(PINS, now.cases, VERSIONS, write) || missed.length > 0) process.exit(1);
+  if (missed.length > 0) {
+    console.log(
+      `What the goldens see written that no writer case writes, so nothing is written:\n  ${missed.join("\n  ")}`,
+    );
+    process.exit(1);
+  }
+  if (!writePins(PINS, now.cases, VERSIONS, write)) process.exit(1);
   if (write) {
     writeFileSync(new URL("yards.txt", GOLDEN), goldensText(now.yards));
     writeFileSync(new URL("scripts.txt", GOLDEN), goldensText(now.scripts));

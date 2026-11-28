@@ -12,6 +12,7 @@
  * would tell its owner of their time away, for the goldens.
  */
 import * as F from "../src/index.ts";
+import { OWN } from "../src/sizes.ts";
 
 export const itemOf = (n: number): string | null => (F.isItem(n) ? F.itemName(n) : null);
 const goalOf = (g: number): string => F.GOALS[g]?.id ?? `goal ${g}`;
@@ -83,10 +84,21 @@ const order = (o: F.Standing): unknown => [
   tallied(o.want),
   tallied(o.filled),
 ];
-const print = (b: F.Print): unknown => [
+/**
+ * A blueprint: a plain one's pieces from the corner of their box, as kept; a plan of the whole
+ * yard's from the yard plot's corner, as its tiles are, so that more land round the yard moves none.
+ */
+const print = (y: F.Yard, b: F.Print): unknown => [
   b.whole,
   F.piecesOf(b.pieces).map((p) => [
-    [F.kindName(p.kind), p.x, p.y, p.dir, p.span, itemOf(p.recipe ?? F.NONE)],
+    [
+      F.kindName(p.kind),
+      b.whole ? p.x - y.land.origin[0] : p.x,
+      b.whole ? p.y - y.land.origin[1] : p.y,
+      p.dir,
+      p.span,
+      itemOf(p.recipe ?? F.NONE),
+    ],
     [p.open ?? true, p.tint ?? 0, p.shut ?? 0, p.first ?? 0, p.ins ?? 0, p.grade ?? 1],
   ]),
 ];
@@ -94,13 +106,19 @@ const print = (b: F.Print): unknown => [
 /** What a stored yard must read as, by part (`material`). */
 export type Material = Readonly<Record<string, unknown>>;
 
+/** The tiles of the pieces a yard keeps, as its writer keeps them: each once, on its own tile (`OWN` for one of more than one tile), the depot left out. */
+export function ownTiles(y: F.Yard): number[] {
+  const own = (i: number): boolean => y.part[i] === 0 || y.part[i] === OWN;
+  return Array.from(y.kind.keys()).filter((i) => y.kind[i] !== F.NONE && F.FIXED[y.kind[i] ?? F.NONE] !== 1 && own(i));
+}
+
 export function material(y: F.Yard): Material {
-  const pieces: unknown[] = [];
-  for (let i = 0; i < y.kind.length; i++)
-    if (y.kind[i] !== F.NONE && F.FIXED[y.kind[i] ?? F.NONE] !== 1 && y.part[i] === 0) pieces.push(piece(y, i));
+  const pieces = ownTiles(y).map((i) => piece(y, i));
   const c = y.clearing;
   return {
     coins: { till: y.till, bank: y.bank, paid: y.paid, sold: y.sold, handed: y.handed, serial: y.serial },
+    // How many of the goals done the yard has logged: those past it are logged with the next command.
+    told: y.told,
     depot: tallied(y.depot),
     seen: { tick: y.seen.tick, till: y.seen.till, depot: tallied(y.seen.depot) },
     plots: y.plots.map(plotOf),
@@ -125,7 +143,7 @@ export function material(y: F.Yard): Material {
     // The places the yard may keep a blueprint in, and each that holds one, by its place.
     blueprints: {
       open: y.open.blueprints,
-      kept: y.blueprints.flatMap((b, slot) => (b ? [[slot, print(b)]] : [])),
+      kept: y.blueprints.flatMap((b, slot) => (b ? [[slot, print(y, b)]] : [])),
     },
     away: y.away && { seconds: y.away.seconds, coins: y.away.coins, made: tallied(y.away.made) },
     pieces,
@@ -147,8 +165,7 @@ export function yardState(y: F.Yard): Readonly<Record<string, unknown>> {
 
 /** A yard in words: its tier, its pieces, what it has earned and what it has done. */
 export function inWords(y: F.Yard): string {
-  let pieces = 0;
-  for (let i = 0; i < y.kind.length; i++) if (y.kind[i] !== F.NONE && y.part[i] === 0) pieces++;
+  const pieces = ownTiles(y).length;
   const delivered = tallied(y.depot).reduce((a, [, n]) => a + n, 0);
   const coins = Math.floor((y.paid + y.sold) / F.MILLI);
   return `tier ${y.open.tier}, ${pieces} pieces, ${y.done.length} goals done, ${Math.floor(delivered)} delivered, ${coins} Coins earned, ${Math.floor(y.till / F.MILLI)} in the till`;

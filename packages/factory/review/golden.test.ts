@@ -1,12 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
-import { readPostcard } from "@sequoia-leaf/core";
+import { LOGGED, type Logged, readPostcard } from "@sequoia-leaf/core";
 import { pinTests } from "@sequoia-leaf/core/review/checks.ts";
 import { changes, type Golden } from "@sequoia-leaf/core/review/golden.ts";
 import { keysOf, readsOtherwise, uncovered } from "@sequoia-leaf/core/review/pins.ts";
 
-import { PARTS } from "../src/cells.ts";
+import { fromBase64 } from "../src/bytes.ts";
+import { PARTS, unpackCells } from "../src/cells.ts";
 import * as F from "../src/index.ts";
+import { RINGED } from "../test/ring.ts";
 import { bytesOf, cases, PART_CASES, partYard, pinValue, seenNow, VERSIONS } from "./cases.ts";
 import { longRuns, PINS, scriptLine, TIERS, written, yardLine, YARDS } from "./golden.ts";
 import { SCRIPTS } from "./scripts.ts";
@@ -29,6 +31,12 @@ const scripts: Golden[] = [];
 const scriptsNow = (): Golden[] => {
   if (scripts.length === 0) scripts.push(...SCRIPTS.map((s) => scriptLine(s, played)));
   return scripts;
+};
+const long: ReturnType<typeof longRuns>[] = [];
+const longNow = (): ReturnType<typeof longRuns> => {
+  const [run = longRuns(played)] = long;
+  long[0] = run;
+  return run;
 };
 const writers = seenNow();
 cases(writers);
@@ -53,17 +61,18 @@ describe("the command scripts, off the wire", () => {
 
 describe("a yard brought on 8 hours", () => {
   test("ends as one yard in one go, in slices and in slices stored between, to its power and its letter", () => {
-    expect(longRuns().apart).toEqual([]);
+    expect(longNow().apart).toEqual([]);
   });
   test("goes as written", () => {
-    expect(changes(written("long"), longRuns().lines)).toEqual([]);
+    expect(changes(written("long"), longNow().lines)).toEqual([]);
   });
 });
 
 describe("the keys each stored shape is written with", () => {
-  test("hold everything the goldens see written: the cases miss no branch play takes", () => {
+  test("hold everything the goldens see written, the long run's stored slices too: the cases miss no branch play takes", () => {
     yardsNow();
     scriptsNow();
+    longNow();
     expect(uncovered(writers.pins(), played)).toEqual([]);
   });
   test("of a plan of the whole yard keep every key beside its packed pieces", () => {
@@ -77,12 +86,19 @@ describe("the keys each stored shape is written with", () => {
 
 describe("a piece's bytes", () => {
   test.each(PART_CASES.map((p) => [p.name, p] as const))("%s is written with its bit", (_, part) => {
-    const { bits } = bytesOf(F.FACTORY.encode(partYard(part)));
+    const { bits } = bytesOf(F.FACTORY.encode(partYard(part).y));
     expect(part.bit === 0 ? bits & 1 : bits & part.bit).toBe(part.bit === 0 ? 1 : part.bit);
   });
   test("every part this Leaf reads is one the writer cases write", () => {
-    const bits = PART_CASES.reduce((all, p) => all | bytesOf(F.FACTORY.encode(partYard(p))).bits, 0);
+    const bits = PART_CASES.reduce((all, p) => all | bytesOf(F.FACTORY.encode(partYard(p).y)).bits, 0);
     expect(PARTS & ~bits).toBe(0);
+  });
+  test("a by-product held, which no piece puts back yet, is written and read off its bytes as it was set", () => {
+    const row = PINS.rows("yard").find((r) => r.path.endsWith("yard-v11-part-also.json"));
+    if (!row) throw new Error("no row of a by-product");
+    const raw: { cells: string } = JSON.parse(row.row.text);
+    const pieces = unpackCells(fromBase64(raw.cells) ?? new Uint8Array(), F.LAND.w * F.LAND.h);
+    expect(Array.isArray(pieces) && pieces.map((p) => p.also)).toEqual([F.item("creosote")]);
   });
 });
 
@@ -104,6 +120,33 @@ describe("every yard row kept", () => {
       expect(F.FACTORY.decode(F.FACTORY.encode(y))).not.toBeNull();
     },
   );
+  test.each(yardRows.filter((r) => r.path.includes("-full")).map((r) => [r.path, r.row] as const))(
+    "%s reads as the same yard on a land with more plots round it, and a plan of the whole yard with it",
+    (_, row) => {
+      const here = F.FACTORY.decode(row.text);
+      const wider = F.decode(row.text, RINGED);
+      if (!here || !wider) throw new Error("does not read");
+      expect(wider.land.origin).not.toEqual(here.land.origin);
+      expect(readsOtherwise(material(here), material(wider))).toEqual([]);
+    },
+  );
+  test("a node finished and not yet logged is logged by the next command, once", () => {
+    const row = yardRows.find((r) => r.path.endsWith("yard-v9-full.json"));
+    const y = row && F.FACTORY.decode(row.row.text);
+    if (!y) throw new Error("no full row of version 9");
+    const pending = y.done
+      .slice(y.told)
+      .filter((g) => F.isNode(g))
+      .map((g) => F.GOALS[g]?.id);
+    expect(pending.length).toBeGreaterThan(0);
+    const told = (): readonly Logged[] => {
+      const c = F.FACTORY.command({ tick: y.tick, do: "collect" });
+      const done = c && F.play(y, c);
+      return done && !("refused" in done) ? (done.log ?? []).filter((l) => l.kind === LOGGED.worksStory) : [];
+    };
+    expect(told().map((l) => l.data["node"])).toEqual(pending);
+    expect(told()).toEqual([]);
+  });
   test("are of every version a Leaf ever wrote, and of each version the writer writes now", () => {
     const versions = new Set(yardRows.map((r) => r.version));
     // 10 no Leaf wrote: it kept a yard as 10 only for a kind past 15, and none was there to keep.

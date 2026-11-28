@@ -42,10 +42,11 @@ const ctx = (now: number, seed: number): Ctx => ({
 
 /**
  * What a player's pulls must read as for ever: what they have won, their Seeds, how many pulls and
- * which; not the counters or free pulls, which today's numbers bring under their own when read.
+ * which, and the stream the next pull draws from; not the counters or free pulls, which today's
+ * numbers bring under their own when read.
  */
 export const pullsMaterial = (s: Pulls): unknown =>
-  JSON.parse(JSON.stringify({ have: s.have, seeds: s.seeds, pulls: s.pulls, history: s.history }));
+  JSON.parse(JSON.stringify({ have: s.have, seeds: s.seeds, pulls: s.pulls, history: s.history, rng: s.rng }));
 /**
  * What Leaf stores of a player's pulls, as `PULLS.encode` writes them: the pulls, kept as a row
  * called `kept` if given; and their standing, kept beside the last.
