@@ -447,6 +447,7 @@ const plain = (): F.Yard => beforeReach(F.create({ land, tier: 5, seed: 1 }));
 /** A yard with the assembler's research forgotten: what it keeps past 10 is the rest of it alone. */
 function forget(y: F.Yard): F.Yard {
   y.done = y.done.filter((g) => g !== F.goal("assembler"));
+  y.told = Math.min(y.told, y.done.length);
   F.reopen(y);
   return y;
 }
@@ -491,11 +492,27 @@ describe("a yard with the assembler is a later Leaf's", () => {
     expect(Object.fromEntries(Object.entries(yards).map(([n, y]) => [n, versionOf(y)]))).toEqual(
       Object.fromEntries(Object.keys(yards).map((n) => [n, F.VERSION])),
     );
-    // Asked cheaply, each says what the whole scan says.
-    for (const y of Object.values(yards)) {
-      const names = F.namesOf(JSON.parse(F.encode(y)), y.land);
-      expect([F.pastTen(y), names && F.knownAt10(names)]).toEqual([true, false]);
+    // Asked cheaply, each says what the whole scan says; and read back from what is kept (Undo's entry
+    // too), it is still that version, kept byte for byte the same.
+    for (const [name, y] of Object.entries(yards)) {
+      const text = F.encode(y);
+      const names = F.namesOf(JSON.parse(text), y.land);
+      expect([name, F.pastTen(y), names && F.knownAt10(names)]).toEqual([name, true, false]);
+      const read = F.decode(text, y.land);
+      if (!read) throw new Error(`${name} does not read back`);
+      // A yard standing a piece it may not build is no yard play makes, and reads back without it.
+      if (name === "built") continue;
+      expect([name, F.pastTen(read), versionOf(read), F.encode(read) === text]).toEqual([name, true, F.VERSION, true]);
     }
+    expect(F.decode(F.encode(undoable), land)?.history.map((e) => e.id)).toEqual(["h1"]);
+    // One standing with its research known reads back standing, kept as this version.
+    const stands = standing();
+    const back = F.decode(F.encode(stands), land);
+    expect([
+      back && covers(back, 19, 9, 21, 11, 20, 10),
+      back && versionOf(back),
+      back && F.encode(back) === F.encode(stands),
+    ]).toEqual([true, F.VERSION, true]);
     // And with nothing of it, kept as version 9.
     expect(versionOf(plain())).toBe(F.PLACED);
   });
