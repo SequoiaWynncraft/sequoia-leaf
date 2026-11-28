@@ -7,6 +7,7 @@ import { expect, test } from "bun:test";
 
 import {
   at,
+  BREAKER,
   build,
   buyPlot,
   create,
@@ -17,15 +18,19 @@ import {
   plotPrice,
   plotState,
   PYLON,
+  setLevel,
+  smogPace,
   type Yard,
 } from "@sequoia-leaf/factory";
 import type { Row } from "@sequoia-leaf/kit/card.ts";
 
 import { opened, useFakeLeaf } from "../../test/fake-leaf.ts";
+import { breaker } from "../kinds/breaker.ts";
 import { powerhouse } from "../kinds/powerhouse.ts";
 import { still } from "../kinds/still.ts";
 import { S } from "../state.ts";
 import { setTool } from "../tools.ts";
+import { ownPace } from "./flow.ts";
 import { madeRows } from "./made.ts";
 import { printOf } from "./prints.ts";
 import { itemRef, machineRef, tileRef } from "./refs.ts";
@@ -88,25 +93,41 @@ test("the still's card says what it distils a minute at each grade, its mix of 6
   ]);
 });
 
-test("a standing still's card gives each way out's share of what it distils now, the next of its mix picked out", async () => {
+test("a standing still's and breaker's headline is the rate its rows are of: on a plot at half pace, a still III distils 120 a minute, not 240", async () => {
   const y = workings();
   pylons(y);
   const corner = y.land.plots.find((p) => p.plot === WORKINGS);
   const [x, z] = [(corner?.x ?? 0) + 4, (corner?.y ?? 0) + 10];
-  expect(build(y, STILL, x, z, 0, Infinity).ok).toBe(true);
+  const [bx, bz] = [(corner?.x ?? 0) + 8, (corner?.y ?? 0) + 2];
+  expect([build(y, STILL, x, z, 0, Infinity).ok, build(y, BREAKER, bx, bz, 0, Infinity).ok]).toEqual([true, true]);
   y.grade[at(y, x, z)] = 3;
+  y.grade[at(y, bx, bz)] = 3;
+  // The Old Workings' smog at step 2: its machines work 1 tick in 2.
+  setLevel(y, WORKINGS, 2500);
   await opened(y, 1_000);
+  expect(smogPace(S.world, at(S.world, x, z))).toBe(0.5);
   const standing = printOf(tileRef(at(S.world, x, z)));
-  const rows = standing?.card === "standing" ? (still.standing?.rows?.(standing) ?? []) : [];
-  expect([standing?.card === "standing" && standing.rate, rows.slice(1).map(noted)]).toEqual([
-    240,
+  if (standing?.card !== "standing") throw new Error("no standing card");
+  const rows = still.standing?.rows?.(standing) ?? [];
+  const headline = ownPace([still.pace?.(STILL, 3) ?? "none"], null, still.standing?.pace?.(standing) ?? null);
+  expect([standing.rate, headline, rows.slice(1).map(noted)]).toEqual([
+    120,
+    [{ label: "Distils", value: "120 /min" }],
     [
-      [`${itemRef(item("pitch"))} 120 /min`],
-      [`${itemRef(item("creosote"))} 80 /min`],
-      [`${itemRef(item("spirit"))} 40 /min`],
+      [`${itemRef(item("pitch"))} 60 /min`],
+      [`${itemRef(item("creosote"))} 40 /min`],
+      [`${itemRef(item("spirit"))} 20 /min`],
     ],
   ]);
   expect(rows[0]?.things.findIndex((t) => t.lit)).toBe(0);
+  // The breaker the same: 200 a minute flat out at grade III, 100 at half pace, headline and rows alike.
+  const broken = printOf(tileRef(at(S.world, bx, bz)));
+  if (broken?.card !== "standing") throw new Error("no standing card");
+  const [, each] = breaker.standing?.rows?.(broken) ?? [];
+  expect([
+    ownPace([breaker.pace?.(BREAKER, 3) ?? "none"], null, breaker.standing?.pace?.(broken) ?? null),
+    noted(each)[0],
+  ]).toEqual([[{ label: "Breaks", value: "100 /min" }], `${itemRef(item("copper"))} 40 /min`]);
 });
 
 test("the powerhouse's card says what it burns a minute of each fuel, heaviest first, and the smog each makes", async () => {

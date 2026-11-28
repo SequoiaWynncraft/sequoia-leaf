@@ -7,21 +7,21 @@
  * breaks a minute and shows its mix of 20, the next picked out.
  */
 import { BREAKER, isItem, MIX_OF, mixPerMinute, outsAs } from "@sequoia-leaf/factory";
-import type { Stat } from "@sequoia-leaf/kit/card.ts";
 import { lessMotion } from "@sequoia-leaf/kit/dom.ts";
-import { perMinute } from "@sequoia-leaf/kit/say.ts";
 import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
 import { TILE } from "../art/belts.ts";
 import { CLAY, IRON } from "../art/pal.ts";
 import { puff } from "../fx.ts";
 import type { KindPage } from "./kind.ts";
-import { mixRows } from "./mix.ts";
+import { mixPace, mixRows } from "./mix.ts";
 
 /** How far the picture reaches past the piece's box on each side, for its chute, and above it, for its height. */
 const PAD = 6;
 const TALL = 6;
 const BOX = TILE * 2;
+/** What its card says it breaks a minute: its kind's flat out, and a standing one's now. */
+const BREAKS = mixPace("Breaks");
 /** The drums' frames while it breaks. */
 const FRAMES = 3;
 
@@ -130,9 +130,9 @@ export const breaker: KindPage = {
     return at.top - TALL;
   },
   pointer: "bare",
-  pace: (k, n): Stat => ({ label: "Breaks", value: perMinute(mixPerMinute(k, n)) }),
+  pace: BREAKS.kind,
   rows: (p) => mixRows(BREAKER, null, mixPerMinute(BREAKER, p.grade)),
-  standing: { rows: (p) => mixRows(BREAKER, p.mix, p.rate ?? 0) },
+  standing: { rows: (p) => mixRows(BREAKER, p.mix, p.rate ?? 0), pace: BREAKS.now },
   holdsUp: () => MIX_OF[BREAKER]?.holds ?? 8,
   map: [CLAY[1], CLAY[0]],
   dot: CLAY[1],

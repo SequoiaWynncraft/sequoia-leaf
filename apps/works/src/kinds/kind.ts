@@ -100,6 +100,8 @@ export interface Standing {
   readonly blocks?: (p: StandingPrint) => Block[];
   /** What it says of itself under its name while nothing is wrong, where its rules' line would say what every belt says. */
   readonly said?: (p: StandingPrint) => string;
+  /** Its pace now, in place of its kind's flat-out one (`KindPage.pace`) of the same name: a piece whose rows say a rate the rules' `rateOf` gives. */
+  readonly pace?: (p: StandingPrint) => Stat;
 }
 
 /**

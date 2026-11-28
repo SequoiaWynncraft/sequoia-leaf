@@ -6,17 +6,16 @@
  * Its card shows its mix of 6, the next picked out, and what each way out sends a minute.
  */
 import { isItem, kind, MIX_OF, mixPerMinute, outsAs } from "@sequoia-leaf/factory";
-import type { Stat } from "@sequoia-leaf/kit/card.ts";
 import { lessMotion } from "@sequoia-leaf/kit/dom.ts";
-import { perMinute } from "@sequoia-leaf/kit/say.ts";
 
 import { IRON } from "../art/pal.ts";
 import { columnTop, PAD, stillIcon, stillOf, TALL } from "../art/still.ts";
 import { puff } from "../fx.ts";
 import type { KindPage } from "./kind.ts";
-import { mixRows } from "./mix.ts";
+import { mixPace, mixRows } from "./mix.ts";
 
 const STILL = kind("still");
+const DISTILS = mixPace("Distils");
 /** Its copper, on the map and in a blueprint's picture. */
 const COPPER = ["#b86a4a", "#7a3f2e"] as const;
 
@@ -43,9 +42,9 @@ export const still: KindPage = {
     if (at.working(i)) out.push({ x, y: foot - 6, r: 22, power: 0.7, reach: false });
   },
   pointer: "bare",
-  pace: (k, n): Stat => ({ label: "Distils", value: perMinute(mixPerMinute(k, n)) }),
+  pace: DISTILS.kind,
   rows: (p) => mixRows(STILL, null, mixPerMinute(STILL, p.grade)),
-  standing: { rows: (p) => mixRows(STILL, p.mix, p.rate ?? 0) },
+  standing: { rows: (p) => mixRows(STILL, p.mix, p.rate ?? 0), pace: DISTILS.now },
   holdsUp: () => MIX_OF[STILL]?.holds ?? 8,
   map: COPPER,
   dot: COPPER[0],

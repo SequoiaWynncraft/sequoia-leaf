@@ -3,11 +3,24 @@
  * of its mix in order as a row of pictures, and what it gives of each a minute. One whose ways out
  * each send one thing (the still's three) says it by way out, naming each.
  */
-import { isItem, type Item, type Kind, MIX_OF, mixShare, outsAs, wayNames } from "@sequoia-leaf/factory";
-import type { Row } from "@sequoia-leaf/kit/card.ts";
+import { isItem, type Item, type Kind, MIX_OF, mixPerMinute, mixShare, outsAs, wayNames } from "@sequoia-leaf/factory";
+import type { Row, Stat } from "@sequoia-leaf/kit/card.ts";
 import { perMinute } from "@sequoia-leaf/kit/say.ts";
 
+import type { StandingPrint } from "../ui/cards.ts";
 import { itemRef } from "../ui/refs.ts";
+
+/**
+ * A mix's pace, by what it does to what goes in (`label`: "Breaks", "Distils"): its kind's, at a grade
+ * flat out; and a standing one's, what it does now (`StandingPrint.rate`, the rules' `rateOf`, with
+ * power, smog and what its ways out carry), the rate its rows are of.
+ */
+export const mixPace = (
+  label: string,
+): { readonly kind: (k: Kind, grade: number) => Stat; readonly now: (p: StandingPrint) => Stat } => ({
+  kind: (k, grade) => ({ label, value: perMinute(mixPerMinute(k, grade)) }),
+  now: (p) => ({ label, value: perMinute(p.rate ?? 0) }),
+});
 
 /** A word with its first letter made a capital: "Left". */
 const capital = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
