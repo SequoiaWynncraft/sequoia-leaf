@@ -19,8 +19,8 @@ export interface Script {
   readonly name: string;
   readonly yard: () => F.Yard;
   readonly steps: readonly Step[];
-  /** What the yard it leaves is called as a stored row, if it is kept as one. */
-  readonly kept?: string;
+  /** How many more Coins the player may earn (`Ctx.room`): as good as no end, but where a script plays at the earnings cap. */
+  readonly room?: number;
 }
 
 const send = (c: Rec | ((y: F.Yard) => Rec)): Step => ({ send: c });
@@ -67,7 +67,6 @@ export const SCRIPTS: readonly Script[] = [
       wait(6000),
       send({ do: "collect" }),
     ],
-    kept: "first",
   },
   {
     name: "a line built",
@@ -137,7 +136,6 @@ export const SCRIPTS: readonly Script[] = [
       wait(2000),
       send({ do: "collect" }),
     ],
-    kept: "blueprints",
   },
   {
     name: "the gate's blueprints and grades",
@@ -153,7 +151,6 @@ export const SCRIPTS: readonly Script[] = [
       wait(3000),
       send({ do: "collect" }),
     ],
-    kept: "gate-blueprints",
   },
   {
     name: "orders and plots",
@@ -184,7 +181,6 @@ export const SCRIPTS: readonly Script[] = [
       wait(1000),
       send({ do: "collect" }),
     ],
-    kept: "felled",
   },
   {
     name: "a delivering yard",
@@ -195,6 +191,21 @@ export const SCRIPTS: readonly Script[] = [
       send((y) => ({ do: "upgrade", tiles: F.within(y, ...xy(1, 2), ...xy(4, 2)) })),
       wait(6000),
       send({ do: "collect" }),
+    ],
+  },
+  {
+    name: "at the earnings cap",
+    // The player may earn nothing more: a till paid in, a piece taken up and Undo's Coins back are
+    // each free of the cap, or Leaf would pay them nothing.
+    room: 0,
+    yard: () => staged("small"),
+    steps: [
+      wait(3000),
+      send({ do: "collect" }),
+      send({ do: "remove", ...near(-1, -3) }),
+      send({ do: "undo", entry: "c2" }),
+      send({ do: "build", kind: "belt", ...near(-1, -5), dir: 0 }),
+      send({ do: "remove", ...near(-1, -5) }),
     ],
   },
 ];

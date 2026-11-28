@@ -1,7 +1,22 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
-import { changes, goldensIn, goldensText } from "./golden.ts";
-import { keysOf, pinned, type Pins, pinsText, readPins, rowName, Seen } from "./pins.ts";
+import { canonical, changes, goldensIn, goldensText, hashOf } from "./golden.ts";
+import {
+  keysOf,
+  Pinned,
+  pinned,
+  type Pins,
+  pinsNow,
+  pinsText,
+  readPins,
+  readsOtherwise,
+  rowName,
+  Seen,
+  uncovered,
+} from "./pins.ts";
 
 describe("the keys a value is written with", () => {
   test("are paths, a list's items under `[]`, and a record keyed by ids as one key, `*`", () => {
@@ -10,8 +25,8 @@ describe("the keys a value is written with", () => {
   });
   test("are gathered by shape and version, and the first row of each case is the one kept", () => {
     const seen = new Seen();
-    seen.saw("yard", 9, { a: 1 }, { as: "small", text: "first" });
-    seen.saw("yard", 9, { b: 1 }, { as: "small", text: "second" });
+    seen.saw("yard", 9, { a: 1 }, { as: "small", text: "first", read: 1 });
+    seen.saw("yard", 9, { b: 1 }, { as: "small", text: "second", read: 2 });
     seen.saw("yard", 11, { c: 1 });
     expect(seen.pins()).toEqual(
       new Map([
@@ -24,7 +39,9 @@ describe("the keys a value is written with", () => {
         ],
       ]),
     );
-    expect([...seen.rows]).toEqual([[rowName("yard", 9, "small"), "first"]]);
+    expect([...seen.rows]).toEqual([
+      [rowName("yard", 9, "small"), { shape: "yard", version: 9, row: { text: "first", read: 1 } }],
+    ]);
   });
 });
 
@@ -75,5 +92,52 @@ describe("how goldens differ", () => {
       "- c | lost | start 1 end 2",
     ]);
     expect(goldensIn(goldensText(now))).toEqual(now);
+  });
+});
+
+/** An empty folder for a game's pins. */
+const folder = (): Pinned => new Pinned(pathToFileURL(`${mkdtempSync(join(process.env.TMPDIR ?? "/tmp", "pins-"))}/`));
+
+describe("a game's pins on disk", () => {
+  test("stop at a shape seen at a version not said, or said and never seen, and at a row listed and gone", () => {
+    const at = folder();
+    writeFileSync(new URL("inventory.txt", at.dir), "yard 9 stored/yard-v9-gone.json\n");
+    const seen = new Seen();
+    seen.saw("yard", 9, { a: 1 });
+    seen.saw("pulls_new", 1, { b: 1 });
+    expect(pinsNow(at, seen, { yard: [9, 11] })).toEqual({
+      refused: [],
+      undeclared: ["pulls_new 1 is written, and not said", "yard 11 is said, and never seen written"],
+      unpinned: ["yard 9 is not pinned yet", "yard 11 is not pinned yet"],
+      unkept: [],
+      lost: ["stored/yard-v9-gone.json is listed, and gone"],
+    });
+  });
+  test("what other writers write is held to the cases': a key no case writes, a version none writes", () => {
+    const cases = new Seen();
+    cases.saw("yard", 9, { a: 1 });
+    const other = new Seen();
+    other.saw("yard", 9, { a: 1, b: 2 });
+    other.saw("yard", 11, { a: 1 });
+    expect(uncovered(cases.pins(), other)).toEqual([
+      "yard 9 is written with b, which no case writes",
+      "yard 11 is written, and no case writes it",
+    ]);
+  });
+});
+
+describe("a stored row read", () => {
+  test("is as it says where it says, and may have more beside", () => {
+    expect(readsOtherwise({ a: 1, b: [{ c: 2 }] }, { a: 1, b: [{ c: 2, d: 3 }], e: 4 })).toEqual([]);
+    expect(readsOtherwise({ a: 1, b: [{ c: 2 }] }, { a: 2, b: [] })).toEqual(["a", "b"]);
+    expect(readsOtherwise({ b: [{ c: 2 }] }, { b: [{ c: 3 }] })).toEqual(["b[0].c"]);
+  });
+});
+
+describe("a hash", () => {
+  test("is of a record's keys in order, whatever order they were written in, and of a list's in its own", () => {
+    expect(hashOf({ order: 1, title: "a", pay: 2 })).toBe(hashOf({ pay: 2, title: "a", order: 1 }));
+    expect(hashOf([1, 2])).not.toBe(hashOf([2, 1]));
+    expect(canonical({ b: { d: 1, c: 2 }, a: [3] })).toEqual({ a: [3], b: { c: 2, d: 1 } });
   });
 });

@@ -1,9 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import { type Ctx, DAY_MS } from "@sequoia-leaf/core";
-import { pinsNow } from "@sequoia-leaf/core/review/pins.ts";
+import { pinTests } from "@sequoia-leaf/core/review/checks.ts";
+import { readsOtherwise } from "@sequoia-leaf/core/review/pins.ts";
 
-import { decodeTown, encodeTown, TOWN } from "../src/game.ts";
+import { TOWN } from "../src/game.ts";
 import { PINS, played, seenNow, VERSIONS } from "./pins.ts";
 
 const ctx = (now: number): Ctx => ({
@@ -14,18 +15,23 @@ const ctx = (now: number): Ctx => ({
   awards: [],
   postcards: {},
 });
+const seen = () => {
+  const s = seenNow();
+  played(s);
+  return s;
+};
 
 describe("the town's stored shapes", () => {
-  test("are written with the keys pinned beside their versions, and every row first seen is kept", () => {
-    const seen = seenNow();
-    played(seen);
-    expect(pinsNow(PINS, seen, VERSIONS)).toEqual({ refused: [], unpinned: [], unkept: [] });
-  });
-  test.each(PINS.rows("town"))("%s reads, reads the same once stored again, and goes on a week", (_, text) => {
-    const s = decodeTown(text);
-    if (!s) throw new Error("does not read");
-    expect(encodeTown(s)).toBe(JSON.stringify(JSON.parse(text)));
-    const later = TOWN.advance(s, ctx(s.nextCall + 7 * DAY_MS));
-    expect(decodeTown(encodeTown(later))).toEqual(later);
-  });
+  pinTests(PINS, seen, VERSIONS, "town_");
+  test.each(PINS.rows("town").map((r) => [r.path, r.row] as const))(
+    "%s reads as the town it was written from, reads the same once stored again, and goes on a week",
+    (_, row) => {
+      const s = TOWN.decode(row.text);
+      if (!s) throw new Error("does not read");
+      expect(readsOtherwise(row.read, s)).toEqual([]);
+      expect(TOWN.decode(TOWN.encode(s))).toEqual(s);
+      const later = TOWN.advance(s, ctx(s.nextCall + 7 * DAY_MS));
+      expect(TOWN.decode(TOWN.encode(later))).toEqual(later);
+    },
+  );
 });

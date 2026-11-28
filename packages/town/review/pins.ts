@@ -10,21 +10,21 @@
  * bringing a caller and awards from the other games, so that every field is written.
  */
 import { type Ctx, isRefused } from "@sequoia-leaf/core";
-import { Pinned, Seen, writePins } from "@sequoia-leaf/core/review/pins.ts";
+import { Pinned, sawLogs, Seen, versionOf, writePins } from "@sequoia-leaf/core/review/pins.ts";
 
 import { STALLS } from "../src/catalogue.ts";
-import { encodeTown, TOWN, type Town, TOWN_VERSION } from "../src/game.ts";
+import { TOWN, type Town, TOWN_VERSION } from "../src/game.ts";
 import { letter } from "../src/mail.ts";
 
 export const PINS = new Pinned(new URL("pins/", import.meta.url));
-/** Each shape's version now. The standing and the logs keep none of their own: their number stands for one. */
-export const VERSIONS: Readonly<Record<string, number>> = {
-  town: TOWN_VERSION,
-  standing: 1,
-  town_bought: 1,
-  town_pet: 1,
-  town_crab: 1,
-  town_greeted: 1,
+/** For each shape, the versions the town's writers write now. The standing and the logs keep none of their own: their 1 stands for one. */
+export const VERSIONS: Readonly<Record<string, readonly number[]>> = {
+  town: [TOWN_VERSION],
+  standing: [1],
+  town_bought: [1],
+  town_pet: [1],
+  town_crab: [1],
+  town_greeted: [1],
 };
 /** The tray is keyed by things. */
 export const seenNow = (): Seen => new Seen({ town: new Set(["camp.tray"]) });
@@ -42,11 +42,17 @@ const ctx = (now: number, awards: readonly string[] = []): Ctx => ({
 /** What a pull and the raid gave the member, for the camp. */
 const AWARDS = ["pull:thing:fountain", "pull:headliner:banner-1", "model-crab"];
 
-/** What Leaf stores of a town: the town (kept as a row called `kept`, if given) and its standing. */
+/**
+ * What Leaf stores of a town, as `TOWN.encode` writes it: the town, kept as a row called `kept` if
+ * given, which must read as the town it was written from; and its standing, kept beside the last.
+ */
 function watch(seen: Seen, s: Town, kept?: string): void {
-  const text = encodeTown(s);
-  seen.saw("town", TOWN_VERSION, JSON.parse(text), kept === undefined ? undefined : { as: kept, text });
-  seen.saw("standing", VERSIONS.standing ?? 1, TOWN.standing?.(s));
+  const text = TOWN.encode(s);
+  const read: unknown = JSON.parse(JSON.stringify(s));
+  seen.saw("town", versionOf(text), JSON.parse(text), kept === undefined ? undefined : { as: kept, text, read });
+  const standing = TOWN.standing?.(s);
+  const row = { as: "played", text: JSON.stringify(standing), read: standing };
+  seen.saw("standing", 1, standing, kept === "played" ? row : undefined);
 }
 
 /** A member's town played from new, every command off the wire; what Leaf stores of it seen at every step. */
@@ -63,7 +69,7 @@ export function played(seen: Seen): Town {
     const done = TOWN.apply(s, c, ctx(now, AWARDS));
     if (isRefused(done)) throw new Error(`${JSON.stringify(raw)} was refused: ${done.refused}`);
     s = done.state;
-    for (const l of done.log ?? []) seen.saw(l.kind, VERSIONS[l.kind] ?? 0, l.data);
+    sawLogs(seen, done.log ?? [], "played");
     watch(seen, s);
   };
   send({ do: "welcome", cursor: null });

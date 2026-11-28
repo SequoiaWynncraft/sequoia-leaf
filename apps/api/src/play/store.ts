@@ -63,11 +63,13 @@ const Activity = Schema.Struct({
 });
 export type ActivityRow = typeof Activity.Type;
 
+/** What is shown beside a score, as a standing keeps it: a number by name, as JSON. */
+export const StoodAlso = Schema.fromJsonString(Schema.Record(Schema.String, Schema.Number));
 /** Where somebody stands, as read back: their place, their score and what is shown beside it. */
 const Own = Schema.Struct({
   place: Schema.Int,
   score: Schema.Int,
-  also: Schema.fromJsonString(Schema.Record(Schema.String, Schema.Number)),
+  also: StoodAlso,
 });
 /** Somebody on a game's board, as read back. */
 const Stood = Schema.Struct({ ...Own.fields, playerId: PlayerUuid, guest: Schema.BooleanFromBit });

@@ -25,11 +25,26 @@ export function goldensIn(text: string): Golden[] {
   return out;
 }
 
-/** A short hash of plain values, each written out as JSON as it is added. */
+/**
+ * A value with every object's keys in order, so that the order a writer happens to give a record's
+ * fields in hashes as nothing; a list keeps its order, which means something.
+ */
+export function canonical(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(canonical);
+  if (ArrayBuffer.isView(v)) return v;
+  if (typeof v !== "object" || v === null) return v;
+  return Object.fromEntries(
+    Object.entries(v)
+      .toSorted(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([k, x]) => [k, canonical(x)]),
+  );
+}
+
+/** A short hash of plain values, each written out as JSON, its records' keys in order (`canonical`), as it is added. */
 export class Hash {
   readonly #sha = new Bun.CryptoHasher("sha1");
   add(v: unknown): this {
-    this.#sha.update(JSON.stringify(v));
+    this.#sha.update(JSON.stringify(canonical(v)));
     return this;
   }
   short(): string {

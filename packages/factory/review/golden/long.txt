@@ -1,3 +1,3 @@
-long one go | tier 4, 67 pieces, 28 goals done, 143668 delivered, 11109 Coins earned, 299 in the till | end 54a935e3ac46 power dcb0572415a7
-long slices | as in one go: tier 4, 67 pieces, 28 goals done, 143668 delivered, 11109 Coins earned, 299 in the till | end 54a935e3ac46 power dcb0572415a7
-long stored slices | as in one go but its power: tier 4, 67 pieces, 28 goals done, 143668 delivered, 11109 Coins earned, 299 in the till | end 54a935e3ac46 power bcff0c6334d6
+long one go | tier 4, 67 pieces, 28 goals done, 143668 delivered, 11109 Coins earned, 299 in the till | end 30c23704d475
+long slices | tier 4, 67 pieces, 28 goals done, 143668 delivered, 11109 Coins earned, 299 in the till | end 30c23704d475
+long stored slices | tier 4, 67 pieces, 28 goals done, 143668 delivered, 11109 Coins earned, 299 in the till | end 30c23704d475

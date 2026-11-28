@@ -1,0 +1,217 @@
+{
+  "text": "{\"v\":11,\"land\":{\"w\":112,\"h\":84,\"x\":48,\"y\":36},\"seed\":1,\"tick\":0,\"charge\":0,\"at\":0,\"till\":0,\"bank\":0,\"told\":76,\"seen\":{\"tick\":0,\"till\":0,\"depot\":{}},\"plots\":[\"yard\"],\"done\":[\"planks\",\"ingots\",\"tools\",\"gears\",\"boiler\",\"crates\",\"culvert\",\"signs\",\"banners\",\"stew\",\"chain\",\"drawing\",\"wax\",\"rakes\",\"windows\",\"shells\",\"hall\",\"oilpress\",\"workshop\",\"flywheel\",\"tooling\",\"sorter\",\"planchest\",\"carttrack\",\"nightshift\",\"upgrading\",\"brassfolio\",\"lanterns\",\"flags\",\"longculvert\",\"secondcart\",\"brassfittings\",\"shelves\",\"kits\",\"roadmill\",\"rollcall\",\"survey\",\"stakes\",\"tooling3\",\"flywheel2\",\"nightshift2\",\"studydesk\",\"waysin\",\"pipework\",\"fireworks\",\"roadridge\",\"market\",\"lenses\",\"roadcamp\",\"clockmaking\",\"observatory\",\"orreryplans\",\"sky\",\"nightshift3\",\"wholeyard\",\"felling\",\"deepculvert\",\"widemouths\",\"assembler\",\"longreach\",\"longerreach\",\"breaker\",\"firstcopper\",\"windings\",\"ballast\",\"bulbs\",\"sparkfolio\",\"telegraphy\",\"farwire\",\"lightstrings\",\"townlight\",\"marketlights\",\"wholewood\",\"breaker2\",\"breaker3\",\"planroom\",\"still\",\"powerhouse\",\"cracker\",\"tarring\",\"sleepers\",\"varnishing\",\"still2\",\"still3\",\"deeperculvert\"],\"hand\":\"roadbed\",\"line\":[],\"got\":{\"roadbed\":{}},\"board\":[{\"id\":0,\"title\":\"Frames and engines for the market stalls\",\"from\":\"The market stalls\",\"line\":\"New stalls for market day. The old ones have been leaning on each other.\",\"want\":{\"frame\":175,\"engine\":75},\"pay\":445,\"filled\":{},\"starts\":50},{\"id\":1,\"title\":\"Frames for the quest board\",\"from\":\"The quest board\",\"line\":\"Somebody painted the quest notes, and now they want frames.\",\"want\":{\"frame\":340},\"pay\":370,\"filled\":{},\"starts\":50},{\"id\":2,\"title\":\"Ingots and banner poles for the campfire\",\"from\":\"The campfire\",\"line\":\"Somebody bent every spoon at the fire. These are for new spoons.\",\"want\":{\"ingot\":460,\"pole\":85},\"pay\":490,\"filled\":{},\"starts\":50},{\"id\":3,\"title\":\"Banner poles and gears for Tindra\",\"from\":\"Tindra\",\"line\":\"Tindra wants a pole by her stall. For a banner. A small one. With a moth on it.\",\"want\":{\"gear\":190,\"pole\":90},\"pay\":500,\"filled\":{},\"starts\":50},{\"id\":4,\"title\":\"Bricks and tools for the gnomes\",\"from\":\"The gnomes\",\"line\":\"The wall is knee high now. The gnomes have plans.\",\"want\":{\"brick\":470,\"tool\":160},\"pay\":350,\"filled\":{},\"starts\":50},{\"id\":5,\"title\":\"Engines and frames for the Treasury\",\"from\":\"The Treasury\",\"line\":\"The vault's winch gave out again. Cinfy has been looking at it and sighing.\",\"want\":{\"frame\":230,\"engine\":85},\"pay\":575,\"filled\":{},\"starts\":50}],\"serial\":6,\"handed\":0,\"swapAt\":0,\"depot\":{},\"sold\":0,\"paid\":0,\"cells\":\"AesngloBAAEDBgY=\"}",
+  "read": {
+    "coins": { "till": 0, "bank": 0, "paid": 0, "sold": 0, "handed": 0, "serial": 6 },
+    "depot": [],
+    "seen": { "tick": 0, "till": 0, "depot": [] },
+    "plots": ["yard"],
+    "cleared": [],
+    "clearing": null,
+    "begun": 0,
+    "smog": [],
+    "felled": [],
+    "spare": [
+      ["belt", 12],
+      ["gatherer", 1],
+      ["mill", 1]
+    ],
+    "goals": {
+      "done": [
+        "planks",
+        "ingots",
+        "tools",
+        "gears",
+        "boiler",
+        "crates",
+        "culvert",
+        "signs",
+        "banners",
+        "stew",
+        "chain",
+        "drawing",
+        "wax",
+        "rakes",
+        "windows",
+        "shells",
+        "hall",
+        "oilpress",
+        "workshop",
+        "flywheel",
+        "tooling",
+        "sorter",
+        "planchest",
+        "carttrack",
+        "nightshift",
+        "upgrading",
+        "brassfolio",
+        "lanterns",
+        "flags",
+        "longculvert",
+        "secondcart",
+        "brassfittings",
+        "shelves",
+        "kits",
+        "roadmill",
+        "rollcall",
+        "survey",
+        "stakes",
+        "tooling3",
+        "flywheel2",
+        "nightshift2",
+        "studydesk",
+        "waysin",
+        "pipework",
+        "fireworks",
+        "roadridge",
+        "market",
+        "lenses",
+        "roadcamp",
+        "clockmaking",
+        "observatory",
+        "orreryplans",
+        "sky",
+        "nightshift3",
+        "wholeyard",
+        "felling",
+        "deepculvert",
+        "widemouths",
+        "assembler",
+        "longreach",
+        "longerreach",
+        "breaker",
+        "firstcopper",
+        "windings",
+        "ballast",
+        "bulbs",
+        "sparkfolio",
+        "telegraphy",
+        "farwire",
+        "lightstrings",
+        "townlight",
+        "marketlights",
+        "wholewood",
+        "breaker2",
+        "breaker3",
+        "planroom",
+        "still",
+        "powerhouse",
+        "cracker",
+        "tarring",
+        "sleepers",
+        "varnishing",
+        "still2",
+        "still3",
+        "deeperculvert"
+      ],
+      "hand": "roadbed",
+      "queue": [],
+      "line": []
+    },
+    "got": [],
+    "board": {
+      "orders": [
+        [
+          0,
+          "Frames and engines for the market stalls",
+          "The market stalls",
+          "New stalls for market day. The old ones have been leaning on each other.",
+          445,
+          50,
+          [
+            ["engine", 75],
+            ["frame", 175]
+          ],
+          []
+        ],
+        [
+          1,
+          "Frames for the quest board",
+          "The quest board",
+          "Somebody painted the quest notes, and now they want frames.",
+          370,
+          50,
+          [["frame", 340]],
+          []
+        ],
+        [
+          2,
+          "Ingots and banner poles for the campfire",
+          "The campfire",
+          "Somebody bent every spoon at the fire. These are for new spoons.",
+          490,
+          50,
+          [
+            ["ingot", 460],
+            ["pole", 85]
+          ],
+          []
+        ],
+        [
+          3,
+          "Banner poles and gears for Tindra",
+          "Tindra",
+          "Tindra wants a pole by her stall. For a banner. A small one. With a moth on it.",
+          500,
+          50,
+          [
+            ["gear", 190],
+            ["pole", 90]
+          ],
+          []
+        ],
+        [
+          4,
+          "Bricks and tools for the gnomes",
+          "The gnomes",
+          "The wall is knee high now. The gnomes have plans.",
+          350,
+          50,
+          [
+            ["brick", 470],
+            ["tool", 160]
+          ],
+          []
+        ],
+        [
+          5,
+          "Engines and frames for the Treasury",
+          "The Treasury",
+          "The vault's winch gave out again. Cinfy has been looking at it and sighing.",
+          575,
+          50,
+          [
+            ["engine", 85],
+            ["frame", 230]
+          ],
+          []
+        ]
+      ],
+      "swapAt": 0
+    },
+    "blueprints": { "open": 6, "kept": [] },
+    "away": null,
+    "pieces": [
+      {
+        "at": [11, 9],
+        "kind": "mill",
+        "set": [0, 1, 0, 0, 0, 0, 0, "plank"],
+        "free": 0,
+        "span": 0,
+        "carries": [null, 0],
+        "holds": {
+          "out": null,
+          "also": null,
+          "more": 0,
+          "making": "plank",
+          "work": 3,
+          "mix": 0,
+          "quarter": 0,
+          "open": 1,
+          "fuel": 0,
+          "stock": [["deadfall", 1]]
+        },
+        "under": null
+      }
+    ]
+  }
+}

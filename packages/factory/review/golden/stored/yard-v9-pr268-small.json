@@ -1,39 +1,330 @@
 {
-  "v": 9,
-  "land": { "w": 48, "h": 36, "x": 16, "y": 12 },
-  "seed": 20261122,
-  "tick": 381,
-  "charge": 0,
-  "at": 0,
-  "till": 240207,
-  "bank": 7,
-  "told": 0,
-  "seen": { "tick": 381, "till": 240207, "depot": { "plank": 23, "brick": 23, "ingot": 23 } },
-  "plots": ["yard"],
-  "done": ["planks", "ingots"],
-  "hand": "tools",
-  "line": [],
-  "got": { "tools": {} },
-  "board": [],
-  "serial": 0,
-  "handed": 0,
-  "swapAt": 0,
-  "depot": { "plank": 23, "brick": 23, "ingot": 23 },
-  "sold": 207,
-  "paid": 240000,
-  "cells": "F7wFkIAIAKIaAQIBDAgAoQgMJIGICAwAgpoIAQABDAYAgIAIAICACADQBjKACAMJAJCACCqQgAgE0AhCgAgtoIAIAKCACACggAiKATAqgQgMAIIaAQEBDAcAgIAIAICACABABzIAMFsJ",
-  "history": [
-    "AAAAx2DnzwHjBQAA",
-    "AAAA0aBcCgHkBQAA",
-    "AAAARlp78QTlBQAALwAA",
-    "AAALn5Bd5AHrBQAA",
-    "AAATY/NCtgG+BQAA",
-    "AAAnrQk6AQG9BQAA",
-    "AAAAp3LcdAa8BS8vLQAAAAA=",
-    "AAALR7rupwHjCAAA",
-    "AAAT3Y4fFwGCCAAA",
-    "AAAnASWvRwGDCAAA",
-    "AAAFx7oooQXXBywAAAAAAA=="
-  ],
-  "stamp": "07432446011679.106fsyo"
+  "text": "{\"v\":9,\"land\":{\"w\":48,\"h\":36,\"x\":16,\"y\":12},\"seed\":20261122,\"tick\":381,\"charge\":0,\"at\":0,\"till\":240207,\"bank\":7,\"told\":0,\"seen\":{\"tick\":381,\"till\":240207,\"depot\":{\"plank\":23,\"brick\":23,\"ingot\":23}},\"plots\":[\"yard\"],\"done\":[\"planks\",\"ingots\"],\"hand\":\"tools\",\"line\":[],\"got\":{\"tools\":{}},\"board\":[],\"serial\":0,\"handed\":0,\"swapAt\":0,\"depot\":{\"plank\":23,\"brick\":23,\"ingot\":23},\"sold\":207,\"paid\":240000,\"cells\":\"F7wFkIAIAKIaAQIBDAgAoQgMJIGICAwAgpoIAQABDAYAgIAIAICACADQBjKACAMJAJCACCqQgAgE0AhCgAgtoIAIAKCACACggAiKATAqgQgMAIIaAQEBDAcAgIAIAICACABABzIAMFsJ\",\"history\":[\"AAAAx2DnzwHjBQAA\",\"AAAA0aBcCgHkBQAA\",\"AAAARlp78QTlBQAALwAA\",\"AAALn5Bd5AHrBQAA\",\"AAATY/NCtgG+BQAA\",\"AAAnrQk6AQG9BQAA\",\"AAAAp3LcdAa8BS8vLQAAAAA=\",\"AAALR7rupwHjCAAA\",\"AAAT3Y4fFwGCCAAA\",\"AAAnASWvRwGDCAAA\",\"AAAFx7oooQXXBywAAAAAAA==\"],\"stamp\":\"07432446011679.106fsyo\"}",
+  "read": {
+    "coins": { "till": 240207, "bank": 7, "paid": 240000, "sold": 207, "handed": 0, "serial": 0 },
+    "depot": [
+      ["brick", 23],
+      ["ingot", 23],
+      ["plank", 23]
+    ],
+    "seen": {
+      "tick": 381,
+      "till": 240207,
+      "depot": [
+        ["brick", 23],
+        ["ingot", 23],
+        ["plank", 23]
+      ]
+    },
+    "plots": ["yard"],
+    "cleared": [],
+    "clearing": null,
+    "begun": 0,
+    "smog": [],
+    "felled": [],
+    "spare": [],
+    "goals": { "done": ["planks", "ingots"], "hand": "tools", "queue": [], "line": [] },
+    "got": [],
+    "board": { "orders": [], "swapAt": 0 },
+    "blueprints": { "open": 0, "kept": [] },
+    "away": null,
+    "pieces": [
+      {
+        "at": [12, 2],
+        "kind": "belt",
+        "set": [1, 1, 0, 0, 0, 0, 0, null],
+        "free": 1,
+        "span": 0,
+        "carries": [null, 0],
+        "holds": null,
+        "under": null
+      },
+      {
+        "at": [13, 2],
+        "kind": "mill",
+        "set": [2, 1, 0, 0, 0, 0, 0, null],
+        "free": 0,
+        "span": 0,
+        "carries": [null, 0],
+        "holds": {
+          "out": null,
+          "also": null,
+          "more": 0,
+          "making": "ingot",
+          "work": 12,
+          "mix": 0,
+          "quarter": 0,
+          "open": 1,
+          "fuel": 0,
+          "stock": [["ore", 1]]
+        },
+        "under": null
+      },
+      {
+        "at": [14, 2],
+        "kind": "gatherer",
+        "set": [2, 1, 0, 0, 0, 0, 0, null],
+        "free": 0,
+        "span": 0,
+        "carries": [null, 0],
+        "holds": {
+          "out": null,
+          "also": null,
+          "more": 0,
+          "making": null,
+          "work": 12,
+          "mix": 0,
+          "quarter": 0,
+          "open": 1,
+          "fuel": 0,
+          "stock": []
+        },
+        "under": null
+      },
+      {
+        "at": [3, 3],
+        "kind": "gatherer",
+        "set": [0, 1, 0, 0, 0, 0, 0, null],
+        "free": 1,
+        "span": 0,
+        "carries": [null, 0],
+        "holds": {
+          "out": null,
+          "also": null,
+          "more": 0,
+          "making": null,
+          "work": 12,
+          "mix": 0,
+          "quarter": 0,
+          "open": 1,
+          "fuel": 0,
+          "stock": []
+        },
+        "under": null
+      },
+      {
+        "at": [4, 3],
+        "kind": "mill",
+        "set": [0, 1, 0, 0, 0, 0, 0, null],
+        "free": 1,
+        "span": 0,
+        "carries": [null, 0],
+        "holds": {
+          "out": null,
+          "also": null,
+          "more": 0,
+          "making": "plank",
+          "work": 12,
+          "mix": 0,
+          "quarter": 0,
+          "open": 1,
+          "fuel": 0,
+          "stock": [["deadfall", 1]]
+        },
+        "under": null
+      },
+      {
+        "at": [5, 3],
+        "kind": "belt",
+        "set": [0, 1, 0, 0, 0, 0, 0, null],
+        "free": 1,
+        "span": 0,
+        "carries": [null, 0],
+        "holds": null,
+        "under": null
+      },
+      {
+        "at": [6, 3],
+        "kind": "belt",
+        "set": [0, 1, 0, 0, 0, 0, 0, null],
+        "free": 1,
+        "span": 0,
+        "carries": [null, 0],
+        "holds": null,
+        "under": null
+      },
+      {
+        "at": [7, 3],
+        "kind": "belt",
+        "set": [1, 1, 0, 0, 0, 0, 0, null],
+        "free": 1,
+        "span": 0,
+        "carries": ["plank", 2],
+        "holds": null,
+        "under": null
+      },
+      {
+        "at": [11, 3],
+        "kind": "pylon",
+        "set": [0, 0, 0, 0, 0, 0, 0, null],
+        "free": 0,
+        "span": 0,
+        "carries": [null, 0],
+        "holds": null,
+        "under": null
+      },
+      {
+        "at": [12, 3],
+        "kind": "belt",
+        "set": [1, 1, 0, 0, 0, 0, 0, null],
+        "free": 1,
+        "span": 0,
+        "carries": [null, 0],
+        "holds": null,
+        "under": null
+      },
+      {
+        "at": [7, 4],
+        "kind": "belt",
+        "set": [1, 1, 0, 0, 0, 0, 0, null],
+        "free": 1,
+        "span": 0,
+        "carries": [null, 0],
+        "holds": null,
+        "under": null
+      },
+      {
+        "at": [12, 4],
+        "kind": "belt",
+        "set": [1, 1, 0, 0, 0, 0, 0, null],
+        "free": 1,
+        "span": 0,
+        "carries": ["ingot", 2],
+        "holds": null,
+        "under": null
+      },
+      {
+        "at": [10, 5],
+        "kind": "belt",
+        "set": [2, 1, 0, 0, 0, 0, 0, null],
+        "free": 1,
+        "span": 0,
+        "carries": [null, 0],
+        "holds": null,
+        "under": null
+      },
+      {
+        "at": [11, 5],
+        "kind": "belt",
+        "set": [2, 1, 0, 0, 0, 0, 0, null],
+        "free": 1,
+        "span": 0,
+        "carries": [null, 0],
+        "holds": null,
+        "under": null
+      },
+      {
+        "at": [12, 5],
+        "kind": "belt",
+        "set": [2, 1, 0, 0, 0, 0, 0, null],
+        "free": 1,
+        "span": 0,
+        "carries": [null, 0],
+        "holds": null,
+        "under": null
+      },
+      {
+        "at": [7, 8],
+        "kind": "belt",
+        "set": [3, 1, 0, 0, 0, 0, 0, null],
+        "free": 0,
+        "span": 0,
+        "carries": [null, 0],
+        "holds": null,
+        "under": null
+      },
+      {
+        "at": [2, 9],
+        "kind": "gatherer",
+        "set": [0, 1, 0, 0, 0, 0, 0, null],
+        "free": 0,
+        "span": 0,
+        "carries": [null, 0],
+        "holds": {
+          "out": null,
+          "also": null,
+          "more": 0,
+          "making": null,
+          "work": 12,
+          "mix": 0,
+          "quarter": 0,
+          "open": 1,
+          "fuel": 0,
+          "stock": []
+        },
+        "under": null
+      },
+      {
+        "at": [3, 9],
+        "kind": "mill",
+        "set": [0, 1, 0, 0, 0, 0, 0, null],
+        "free": 0,
+        "span": 0,
+        "carries": [null, 0],
+        "holds": {
+          "out": null,
+          "also": null,
+          "more": 0,
+          "making": "brick",
+          "work": 12,
+          "mix": 0,
+          "quarter": 0,
+          "open": 1,
+          "fuel": 0,
+          "stock": [["stone", 1]]
+        },
+        "under": null
+      },
+      {
+        "at": [4, 9],
+        "kind": "belt",
+        "set": [0, 1, 0, 0, 0, 0, 0, null],
+        "free": 1,
+        "span": 0,
+        "carries": [null, 0],
+        "holds": null,
+        "under": null
+      },
+      {
+        "at": [5, 9],
+        "kind": "belt",
+        "set": [0, 1, 0, 0, 0, 0, 0, null],
+        "free": 1,
+        "span": 0,
+        "carries": [null, 0],
+        "holds": null,
+        "under": null
+      },
+      {
+        "at": [6, 9],
+        "kind": "belt",
+        "set": [0, 1, 0, 0, 0, 0, 0, null],
+        "free": 0,
+        "span": 0,
+        "carries": ["brick", 2],
+        "holds": null,
+        "under": null
+      },
+      {
+        "at": [7, 9],
+        "kind": "belt",
+        "set": [3, 1, 0, 0, 0, 0, 0, null],
+        "free": 0,
+        "span": 0,
+        "carries": [null, 0],
+        "holds": null,
+        "under": null
+      },
+      {
+        "at": [3, 11],
+        "kind": "pylon",
+        "set": [0, 0, 0, 0, 0, 0, 0, null],
+        "free": 0,
+        "span": 0,
+        "carries": [null, 0],
+        "holds": null,
+        "under": null
+      }
+    ]
+  }
 }

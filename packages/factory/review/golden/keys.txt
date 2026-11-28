@@ -1,22 +1,23 @@
 cells 11
-  also
-  closed
-  free
-  fuel
-  grade
-  held
-  high
-  making
-  mix
-  more
-  out
-  quarter
-  recipe
-  span
-  tint
-  turn
-  ways
-  work
+  also: 82 80 80 03 01 2a
+  carried: 40 06 05
+  closed: 88 80 02
+  free: 80 80 08
+  fuel: 8b 80 04 09
+  grade: 80 80 40 03
+  held: 88 02 01 06 03
+  high: 80 80 80 01 01
+  making: 83 52 02 06 01 08 01 0c 0c
+  mix: 81 80 80 09 01 02
+  more: 80 84 80 05 0d 01 02
+  out: 82 04 06
+  quarter: 82 80 80 10 03
+  recipe: 83 40 0c
+  span: 87 80 01 0b ff 00 ff 00 ff 00 03 87 80 01 05
+  tint: 80 80 10 03
+  turn: 85 20 02
+  ways: 85 80 20 02
+  work: 82 5a 01 00 01 03 06 06
 postcard 1
   till
   waiting
@@ -37,8 +38,18 @@ works_story 1
   title
 yard 9
   at
+  away
+  away.coins
+  away.made
+  away.made.*
+  away.seconds
   bank
   blueprints
+  blueprints[].whole
+  blueprints[].whole[].recipe
+  blueprints[].whole[].span
+  blueprints[].whole[].tint
+  blueprints[].whole[].ways
   blueprints[][].tint
   board
   board[].filled
@@ -107,9 +118,16 @@ yard 9
   v
 yard 11
   at
+  away
+  away.coins
+  away.made
+  away.made.*
+  away.seconds
   bank
   begun
   blueprints
+  blueprints[].whole
+  blueprints[].whole[].span
   board
   board[].filled
   board[].filled.*
@@ -123,6 +141,8 @@ yard 11
   board[].want.*
   cells
   cells[].along
+  cells[].also
+  cells[].closed
   cells[].dir
   cells[].free
   cells[].fuel
@@ -133,8 +153,10 @@ yard 11
   cells[].kind
   cells[].making
   cells[].mix
+  cells[].more
   cells[].out
   cells[].prog
+  cells[].quarter
   cells[].recipe
   cells[].span
   cells[].tile
@@ -145,8 +167,10 @@ yard 11
   cells[].ways
   cells[].work
   charge
+  cleared
   clearing
   clearing.filled
+  clearing.filled.*
   clearing.plot
   clearing.start
   clearing.want
@@ -169,6 +193,7 @@ yard 11
   line
   paid
   plots
+  queue
   seed
   seen
   seen.depot
