@@ -54,7 +54,7 @@ export function clearedFor(y: F.Yard, plot: string): void {
   if (p === null || !want || y.cleared.includes(p)) return;
   must(y, { do: "clearPlot", plot });
   y.clearing?.filled.set(y.clearing.want);
-  must(y, { do: "handClearing", plot, begun: y.clearing?.begun });
+  must(y, { do: "handClearing", plot, start: y.clearing?.start });
 }
 /** Clears a plot if it needs it, and buys it at its price now. */
 export function bought(y: F.Yard, plot: string): void {

@@ -112,10 +112,16 @@ function mixKept(y: Yard, mix: (v: number) => void): void {
   for (const { bytes } of y.history) mixBytes(bytes, mix);
 }
 
+/** Mixes in some text: how long it is, then each of its characters. */
+function mixText(mix: (v: number) => void, text: string): void {
+  mix(text.length);
+  for (let k = 0; k < text.length; k++) mix(text.charCodeAt(k));
+}
+
 /**
  * Mixes in the plots owned, in the order they were bought; those cleared, in the order they were
- * handed over, how many were begun, and the one being cleared with its number and what it has been
- * given, only where there are any; and
+ * handed over, how many were begun, and the one being cleared with its name, what it asks for and
+ * what it has been given, only where there are any; and
  * each redwood felled by its first tile; making nothing.
  */
 function mixLand(y: Yard, mix: (v: number) => void): void {
@@ -124,7 +130,7 @@ function mixLand(y: Yard, mix: (v: number) => void): void {
   if (y.begun > 0) mix(0x60000 + y.begun);
   if (y.clearing) {
     mix(0x30000 + y.clearing.plot);
-    mix(y.clearing.begun);
+    mixText(mix, y.clearing.start);
     mixTally(mix, y.clearing.want);
     mixTally(mix, y.clearing.filled);
   }

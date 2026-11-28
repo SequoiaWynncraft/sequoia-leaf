@@ -55,7 +55,7 @@ test("prices every plot for sale that touches the yard's land, cleared or not, a
   give(y, { do: "clearPlot", plot: "workings" });
   expect(priced(y)).toEqual(forSale.map((p) => `${plotName(p.plot)} ${whole(plotPrice(y, p.plot))}`));
   y.clearing?.filled.set(CLEARING[workings] ?? []);
-  give(y, { do: "handClearing", plot: "workings", begun: y.begun });
+  give(y, { do: "handClearing", plot: "workings", start: y.clearing?.start });
   expect(priced(y).filter((s) => s.endsWith(" ready"))).toEqual([`workings ${whole(plotPrice(y, workings))} ready`]);
   expect(priced(y).length).toBe(forSale.length);
 });

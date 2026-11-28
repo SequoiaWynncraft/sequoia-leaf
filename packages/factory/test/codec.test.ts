@@ -415,7 +415,7 @@ const and =
   (more: (c: F.Yard) => void = () => {}) =>
   (c: F.Yard): void => {
     const want = F.countsOf({ lantern: 600, pipe: 900 });
-    c.clearing = { plot: F.plot("workings"), begun: 2, want, filled: F.countsOf({ pipe: 3 }) };
+    c.clearing = { plot: F.plot("workings"), start: "a-2", want, filled: F.countsOf({ pipe: 3 }) };
     c.cleared = [F.plot("flats")];
     c.begun = 2;
     more(c);

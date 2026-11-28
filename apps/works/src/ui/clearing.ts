@@ -16,7 +16,7 @@ import { button } from "./parts.ts";
 /** The plot being cleared, as Orders prints it: which, whether everything is delivered, and what buying it costs now. */
 export function clearingLine(): {
   readonly plot: Plot;
-  readonly begun: number;
+  readonly start: string;
   readonly name: string;
   readonly full: boolean;
   readonly price: number;
@@ -25,7 +25,7 @@ export function clearingLine(): {
   const c = w.clearing;
   const plot = c ? w.land.plots.find((p) => p.plot === c.plot) : undefined;
   return c && plot
-    ? { plot: c.plot, begun: c.begun, name: plot.name, full: clearingReady(w), price: plotPrice(w, c.plot) }
+    ? { plot: c.plot, start: c.start, name: plot.name, full: clearingReady(w), price: plotPrice(w, c.plot) }
     : null;
 }
 
@@ -33,7 +33,7 @@ export function clearingLine(): {
 const filled = (): Counts | null => S.world.clearing?.filled ?? null;
 
 /** Stopping the clearing, as a spend to be pressed twice for: one key for that clearing as it stands. */
-const stopKey = (plot: Plot, begun: number): ReturnType<typeof pressKey> => pressKey(`stop-clearing:${plot}:${begun}`);
+const stopKey = (plot: Plot, start: string): ReturnType<typeof pressKey> => pressKey(`stop-clearing:${plot}:${start}`);
 
 /**
  * The card of the plot being cleared, its rows put in `live` to be kept up to date; nothing while no
@@ -45,11 +45,11 @@ export function clearingCard(life: Scope, again: () => void, live: Listed[]): HT
   if (!line || !want) return [];
   const rows = wantsOrder(wantsIn(want), filled);
   if (rows) live.push(rows);
-  const ask = stopKey(line.plot, line.begun);
+  const ask = stopKey(line.plot, line.start);
   const act = line.full
-    ? button("sm", ["Hand over"], () => void handClearing(line.plot, line.begun))
+    ? button("sm", ["Hand over"], () => void handClearing(line.plot, line.start))
     : button(`wood sm${asking(ask) ? " asking" : ""}`, [asksAgain(ask, ["Stop"], "Stop?")], () => {
-        if (pressedTwice(life, ask, again)) stopClearing(line.plot, line.begun);
+        if (pressedTwice(life, ask, again)) stopClearing(line.plot, line.start);
       });
   const node = el(
     "div",

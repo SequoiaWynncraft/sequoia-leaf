@@ -243,15 +243,16 @@ export interface Yard {
    */
   clearing: {
     readonly plot: Plot;
-    readonly begun: number;
+    /** Its name: the id of the command that took it on, or for one taken on with none, `#` and the count of starts (`begun`). */
+    readonly start: string;
     /** What it asks for, as the table had it when it was begun: a later change to the table does not touch it. */
     readonly want: Counts;
     readonly filled: Counts;
   } | null;
   cleared: Plot[];
   /**
-   * How many clearings the yard has begun, ever: each is numbered by it as it begins (`begun` above),
-   * so a command for a clearing stopped since, even one begun again on the same plot, is refused.
+   * How many clearings the yard has taken on, ever: a start with no command id is named by it
+   * (`start` above), so that it too has a name no other start of the yard has.
    */
   begun: number;
   /**

@@ -25,7 +25,7 @@ import {
   tipOut,
   turn,
 } from "./build.ts";
-import { clearRefusal, handClearing, handRefusal, sameRefusal, stopClearing, takeClearing } from "./clearing.ts";
+import { clearRefusal, handClearing, isStart, stopClearing, takeClearing } from "./clearing.ts";
 import { isCode, pasteBlueprint } from "./code.ts";
 import { STAND_MOST } from "./content/machines.ts";
 import { type Did, done, doneUnless, payIn, priced, refunded, spent, type Turned } from "./did.ts";
@@ -120,8 +120,8 @@ interface Carries {
    * refused if that is not the clearing being done.
    */
   clearPlot: { readonly plot: Plot };
-  handClearing: { readonly plot: Plot; readonly begun: number };
-  stopClearing: { readonly plot: Plot; readonly begun: number };
+  handClearing: { readonly plot: Plot; readonly start: string };
+  stopClearing: { readonly plot: Plot; readonly start: string };
   /** Any tile of the redwood. */
   fell: At;
   take: { readonly node: Goal };
@@ -164,8 +164,8 @@ interface Spec<D extends Name> {
   readonly read: (v: Record<string, unknown>, f: Fields) => ActOf<D> | null;
   /** What it carries as the wire names it. */
   readonly write: (a: ActOf<D>) => Record<string, unknown>;
-  /** Does it to a yard at its tick, with `coins` to spend: the purse's and the till's whole Coins. Nothing changes unless it is done. */
-  readonly act: (y: Yard, a: ActOf<D>, coins: number, no: (why: string) => Turned) => Did;
+  /** Does it to a yard at its tick, with `coins` to spend (the purse's and the till's whole Coins), its id `id` ("" for none). Nothing changes unless it is done. */
+  readonly act: (y: Yard, a: ActOf<D>, coins: number, no: (why: string) => Turned, id: string) => Did;
 }
 
 const needs = (lock: Lock) => (): Lock | null => lock;
@@ -180,16 +180,16 @@ const writeItem = (a: At & { readonly item: Item | null }): Record<string, unkno
   ...spot(a),
 });
 
-/** Reads a command for one clearing: its plot, and the number it was begun as. */
+/** Reads a command for one clearing: its plot, and its name (`start`, not `id`, which on the wire is each command's own). */
 const oneClearing =
   <D extends "handClearing" | "stopClearing">(name: D) =>
   (v: Record<string, unknown>): ActOf<D> | null => {
     const plot = plotNamed(v.plot);
-    return plot !== null && whole(v.begun, 1e9) ? { do: name, plot, begun: v.begun } : null;
+    return plot !== null && isStart(v.start) ? { do: name, plot, start: v.start } : null;
   };
-const writeClearing = (a: { readonly plot: Plot; readonly begun: number }): Record<string, unknown> => ({
+const writeClearing = (a: { readonly plot: Plot; readonly start: string }): Record<string, unknown> => ({
   plot: plotName(a.plot),
-  begun: a.begun,
+  start: a.start,
 });
 
 /** Every command, by its name. */
@@ -435,19 +435,19 @@ export const COMMANDS: { readonly [D in Name]: Spec<D> } = {
       return p === null ? null : { do: "clearPlot", plot: p };
     },
     write: (a) => ({ plot: plotName(a.plot) }),
-    act: (y, a, _coins, no) => doneUnless(clearRefusal(y, a.plot), no, () => takeClearing(y, a.plot)),
+    act: (y, a, _coins, no, id) => doneUnless(clearRefusal(y, a.plot), no, () => takeClearing(y, a.plot, id)),
   },
   handClearing: {
     refused: "not_cleared",
     read: oneClearing("handClearing"),
     write: writeClearing,
-    act: (y, a, _coins, no) => doneUnless(handRefusal(y, a.plot, a.begun), no, () => handClearing(y, a.plot, a.begun)),
+    act: (y, a, _coins, no) => doneUnless(handClearing(y, a.plot, a.start), no),
   },
   stopClearing: {
     refused: "not_clearing",
     read: oneClearing("stopClearing"),
     write: writeClearing,
-    act: (y, a, _coins, no) => doneUnless(sameRefusal(y, a.plot, a.begun), no, () => stopClearing(y, a.plot, a.begun)),
+    act: (y, a, _coins, no) => doneUnless(stopClearing(y, a.plot, a.start), no),
   },
   fell: {
     refused: "cannot_fell",
@@ -532,12 +532,12 @@ export const REFUSED: Readonly<Record<string, string>> = Object.fromEntries(
 const isName = (v: unknown): v is Name => typeof v === "string" && Object.hasOwn(COMMANDS, v);
 
 /** Does one command, as its entry has it: refused `LOCKED` first if the yard has not unlocked what it needs. */
-function actOne<D extends Name>(y: Yard, a: ActOf<D>, coins: number): Did {
+function actOne<D extends Name>(y: Yard, a: ActOf<D>, coins: number, id: string): Did {
   const spec: Spec<D> = COMMANDS[a.do];
   const lock = spec.lock?.(a) ?? null;
   const why = lock === null ? null : locked(y.open, lock);
   if (why !== null) return { refused: LOCKED, why };
-  return spec.act(y, a, coins, (said) => ({ refused: spec.refused ?? LOCKED, why: said }));
+  return spec.act(y, a, coins, (said) => ({ refused: spec.refused ?? LOCKED, why: said }), id);
 }
 
 /**
@@ -547,7 +547,7 @@ function actOne<D extends Name>(y: Yard, a: ActOf<D>, coins: number): Did {
  */
 export function act(y: Yard, a: Act, coins: number, id = ""): Did {
   const was = before(y, a);
-  const did = actOne(y, a, coins);
+  const did = actOne(y, a, coins, id);
   if (!("refused" in did)) after(y, a, was, did.coins, id);
   return did;
 }

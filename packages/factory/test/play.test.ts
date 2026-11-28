@@ -132,7 +132,7 @@ describe("what a visitor is told", () => {
         });
         const tipped = batch % 20 === 10 ? [{ do: "tipOut", item: null, ...player.of(F.MILL, F.BENCH, F.CRATE) }] : [];
         const ready = batch % 20 === 5 && F.clearingReady(y) ? y.clearing : null;
-        const handed = ready ? [{ do: "handClearing", plot: F.plotName(ready.plot), begun: ready.begun }] : [];
+        const handed = ready ? [{ do: "handClearing", plot: F.plotName(ready.plot), start: ready.start }] : [];
         // Each stamped as the owner's page stamps them: about Leaf's clock, now and then behind it or ahead.
         const commands = [
           ...Array.from({ length: 1 + player.int(6) }, () => player.command()),

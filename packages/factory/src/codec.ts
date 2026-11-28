@@ -27,7 +27,7 @@
 import { build, isDir, plotState, refusal } from "./build.ts";
 import { fromBase64, toBase64 } from "./bytes.ts";
 import { keptOnto, type KeptPiece, keptPieces, packKept, unpackCells } from "./cells.ts";
-import { clearRefusal } from "./clearing.ts";
+import { clearRefusal, isStart } from "./clearing.ts";
 import { here } from "./clock.ts";
 import { NODES } from "./content/nodes.ts";
 import { historyOf, stampOf } from "./history.ts";
@@ -232,16 +232,16 @@ export function keptUnknown(raw: unknown, land: Land = LAND): boolean {
   return names !== null && !knownHere(names);
 }
 
-/** The plot being cleared, the number it was begun as, what it asks for and what it has been given; the plots cleared, by name; and how many clearings were begun: nothing for a yard that has begun none. */
+/** The plot being cleared, its name, what it asks for and what it has been given; the plots cleared, by name; and how many clearings were begun: nothing for a yard that has begun none. */
 function keptClearing(y: Yard): {
-  clearing?: { plot: string; begun: number; want: Record<string, number>; filled: Record<string, number> };
+  clearing?: { plot: string; start: string; want: Record<string, number>; filled: Record<string, number> };
   cleared?: string[];
   begun?: number;
 } {
   const c = y.clearing;
   return {
     ...(c
-      ? { clearing: { plot: plotName(c.plot), begun: c.begun, want: tally(c.want), filled: tally(c.filled) } }
+      ? { clearing: { plot: plotName(c.plot), start: c.start, want: tally(c.want), filled: tally(c.filled) } }
       : {}),
     ...(y.cleared.length > 0 ? { cleared: y.cleared.map(plotName) } : {}),
     ...(y.begun > 0 ? { begun: y.begun } : {}),
@@ -550,24 +550,24 @@ function clearedOnto(y: Yard, cleared: unknown): void {
 
 /**
  * Puts back how many clearings the yard has begun, and the plot being cleared, if it could be taken
- * on now: by the number it was begun as (one the count has reached), asking for what it asked for
- * when it began (something), and with what it was given, no more than it wants.
+ * on now: by its name (`isStart`), asking for what it asked for when it began (something), and with
+ * what it was given, no more than it wants.
  */
 function clearingOnto(y: Yard, kept: unknown, begun: unknown): void {
   y.begun = whole(begun, 1e9) ?? 0;
   y.clearing = isRec(kept) ? clearingOf(y, kept) : null;
 }
 
-/** A kept clearing as `clearingOnto` puts it back, once the count begun is back; nothing for one it does not. */
+/** A kept clearing as `clearingOnto` puts it back, by its name; nothing for one it does not. */
 function clearingOf(y: Yard, kept: Record<string, unknown>): Yard["clearing"] {
   const p = plotNamed(kept.plot);
-  const n = whole(kept.begun, y.begun);
+  const start = isStart(kept.start) ? kept.start : null;
   const want = untally(kept.want, 1e6);
-  if (p === null || !n || clearRefusal(y, p) !== null || !want.some((k) => k > 0)) return null;
+  if (p === null || start === null || clearRefusal(y, p) !== null || !want.some((k) => k > 0)) return null;
   const given = untally(kept.filled, 1e6);
   const filled = counts();
   for (const k of ALL_ITEMS) filled[k] = Math.min(given[k] ?? 0, want[k] ?? 0);
-  return { plot: p, begun: n, want, filled };
+  return { plot: p, start, want, filled };
 }
 
 /**
