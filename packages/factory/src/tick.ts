@@ -42,7 +42,7 @@ import { carryOn } from "./kinds/line.ts";
 import { RULES } from "./kinds/list.ts";
 import { work as make } from "./kinds/maker.ts";
 import { passUnder } from "./kinds/under.ts";
-import { countSmog, FULL, smogPaces } from "./smog.ts";
+import { countSmog, FULL } from "./smog.ts";
 import { BURNS, CARRIES, ITEM_COUNT, NONE, PACE, SPAN_MOST, TIMES_MOST } from "./tables.ts";
 import { KIT, rewire, roomAt } from "./wire.ts";
 import { holderOf, take, tunnelOf, type Wire, type Yard } from "./yard.ts";
@@ -128,43 +128,51 @@ function carryUnder(y: Yard, wire: Wire): void {
 /**
  * Every piece that works does its work, at its own grade's pace, in the plumbing's order: but one
  * holding as many finished things as it may (one, or for a machine that stands in for several, one for
- * each: `Holders.more`). A piece on a plot its smog slows works at its share of that pace (`smogPaces`,
- * read from each plot's pace only on a tick some plot is slowed).
+ * each: `Holders.more`). While no plot is slowed (`Yard.smog.slowed`) that is all; while one is, each
+ * piece reads its plot's pace, and one slowed works at its share of its pace (`workSlowed`).
  */
 function working(y: Yard, wire: Wire): void {
   const workers = wire.work;
-  if (!smogPaces(y, wire.paces)) {
-    for (let c = 0; c < workers.length; c++) workOne(y, wire, workers[c] ?? 0, FULL);
+  if (y.smog.slowed === 0) {
+    for (let c = 0; c < workers.length; c++) workOne(y, wire, workers[c] ?? 0);
     return;
   }
-  const { paces } = wire;
+  const { pace } = y.smog;
   const plot = y.land.plot;
   for (let c = 0; c < workers.length; c++) {
     const i = workers[c] ?? 0;
-    workOne(y, wire, i, paces[plot[i] ?? 0] ?? FULL);
+    const quarters = pace[plot[i] ?? 0] ?? FULL;
+    if (quarters < FULL) workSlowed(y, wire, i, quarters);
+    else workOne(y, wire, i);
   }
 }
 
-/**
- * The piece on the tile `i` does its work, unless it holds as many finished things as it may, at
- * `quarters` of its grade's pace in fourths: at less than all four, the quarters of a half-tick past
- * the whole ones are carried on its row (`Holders.quarter`) to its next tick's work, so it does exactly
- * that share of its work over time.
- */
-function workOne(y: Yard, wire: Wire, i: number, quarters: number): void {
+/** The piece on the tile `i` does its work at its grade's pace, unless it holds as many finished things as it may. */
+function workOne(y: Yard, wire: Wire, i: number): void {
   const h = y.holders;
   const r = holderOf(y, i);
   const k = y.kind[i] ?? NONE;
   if (h.out[r] !== NONE && (h.more[r] ?? 0) + 1 >= (TIMES_MOST[k] ?? 1)) return;
   const work = WORK[k];
-  let speed = PACE[y.grade[i] ?? 0] ?? 0;
-  if (quarters < FULL) {
-    const q = speed * quarters + (h.quarter[r] ?? 0);
-    speed = q >> 2;
-    h.quarter[r] = q & 3;
-  }
+  const speed = PACE[y.grade[i] ?? 0] ?? 0;
   if (work === make) make(KIT, y, i, r, speed, wire);
   else if (work) work(KIT, y, i, r, speed, wire);
+}
+
+/**
+ * The piece on the tile `i`, on a plot its smog slows, does its work at `quarters` fourths of its
+ * grade's pace, unless it holds as many finished things as it may: the quarters of a half-tick past
+ * the whole ones are carried on its row (`Holders.quarter`) to its next tick's work, only on a tick it
+ * works (one with nothing to work on carries nothing over), so it does exactly that share of its work.
+ */
+function workSlowed(y: Yard, wire: Wire, i: number, quarters: number): void {
+  const h = y.holders;
+  const r = holderOf(y, i);
+  const k = y.kind[i] ?? NONE;
+  if (h.out[r] !== NONE && (h.more[r] ?? 0) + 1 >= (TIMES_MOST[k] ?? 1)) return;
+  const work = WORK[k];
+  const q = (PACE[y.grade[i] ?? 0] ?? 0) * quarters + (h.quarter[r] ?? 0);
+  if (work?.(KIT, y, i, r, q >> 2, wire)) h.quarter[r] = q & 3;
 }
 
 /**

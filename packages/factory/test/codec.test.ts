@@ -354,6 +354,10 @@ const LEFT_OUT = new Set([
   "supply",
   "demand",
   "holders.idle",
+  // Worked out from the smog levels, which are mixed in: each plot's pace, how many are slowed, and a place to count redwoods.
+  "smog.pace",
+  "smog.slowed",
+  "smog.standing",
   // Read only by a screen, and never kept: the recipe a machine last began.
   "holders.last",
   // Which row of a side table holds a piece's parts: reading a yard back may change it.

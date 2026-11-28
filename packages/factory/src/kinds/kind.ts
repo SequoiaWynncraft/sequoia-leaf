@@ -92,9 +92,10 @@ export interface Hooks {
   readonly ready?: (k: Kit, y: Yard, i: number, to: number) => boolean;
   /**
    * Its work in a tick it works, at `speed` half-ticks, in its holder's row `r`: a piece with one
-   * draws its power and works where power reaches it.
+   * draws its power and works where power reaches it. Says whether its work went on this tick (what
+   * it gathers, makes, studies or breaks): not when it has nothing to work on.
    */
-  readonly work?: (k: Kit, y: Yard, i: number, r: number, speed: number, wire: Wire) => void;
+  readonly work?: (k: Kit, y: Yard, i: number, r: number, speed: number, wire: Wire) => boolean;
   /** Power it gives every tick where power reaches it, in halves: counted when the plumbing is worked out. */
   readonly steady?: (k: Kit, y: Yard, i: number) => number;
 

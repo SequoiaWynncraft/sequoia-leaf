@@ -30,14 +30,14 @@ function room(k: Kit, y: Yard, i: number, n: number): boolean {
 /**
  * Its step in the tick's work (the tick passes over it while it holds something finished): with its
  * mix's thing to hand, work at its grade's pace; a run done uses one, gives the next of its mix, moves
- * its place on, and adds its smog to its plot.
+ * its place on, and adds its smog to its plot. Says whether it had its mix's thing to work on.
  */
-export function work(k: Kit, y: Yard, i: number, r: number, speed: number, wire: Wire): void {
+export function work(k: Kit, y: Yard, i: number, r: number, speed: number, wire: Wire): boolean {
   const m = mixOf(k, y, i);
   const h = y.holders;
-  if (!m || (h.stock[r * k.ITEM_COUNT + m.from] ?? 0) === 0) return;
+  if (!m || (h.stock[r * k.ITEM_COUNT + m.from] ?? 0) === 0) return false;
   h.work[r] = (h.work[r] ?? 0) + speed;
-  if ((h.work[r] ?? 0) < m.work) return;
+  if ((h.work[r] ?? 0) < m.work) return true;
   h.work[r] = (h.work[r] ?? 0) - m.work;
   k.take(h, r, m.from);
   const place = h.mix[r] ?? 0;
@@ -45,6 +45,7 @@ export function work(k: Kit, y: Yard, i: number, r: number, speed: number, wire:
   h.mix[r] = (place + 1) % m.gives.length;
   k.smogged(y, i, k.SMOG_OF[y.kind[i] ?? k.NONE] ?? 0);
   k.roomBeside(y, i, wire.waiting);
+  return true;
 }
 
 /**

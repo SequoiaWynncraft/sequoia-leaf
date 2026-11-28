@@ -30,22 +30,22 @@ function wanted(k: Kit, y: Yard, g: Goal, h: Holders, r: number): number {
   return k.NONE;
 }
 
-/** It studies a folio the research first in the line still wants, and when it is done the folio goes toward the research. */
-function work(k: Kit, y: Yard, i: number, r: number, speed: number, wire: Wire): void {
+/** It studies a folio the research first in the line still wants, and when it is done the folio goes toward the research. Says whether it had one to study. */
+function work(k: Kit, y: Yard, i: number, r: number, speed: number, wire: Wire): boolean {
   const g = y.line[0];
-  if (g === undefined) return;
+  if (g === undefined) return false;
   const h = y.holders;
   if (h.making[r] === k.NONE) {
-    if (h.idle[r] === 1) return;
+    if (h.idle[r] === 1) return false;
     const found = wanted(k, y, g, h, r);
     if (found === k.NONE) {
       h.idle[r] = 1;
-      return;
+      return false;
     }
     h.making[r] = found;
   }
   h.work[r] = (h.work[r] ?? 0) + speed;
-  if ((h.work[r] ?? 0) < WORK) return;
+  if ((h.work[r] ?? 0) < WORK) return true;
   h.work[r] = (h.work[r] ?? 0) - WORK;
   const n = h.making[r] ?? k.NONE;
   h.making[r] = k.NONE;
@@ -53,6 +53,7 @@ function work(k: Kit, y: Yard, i: number, r: number, speed: number, wire: Wire):
     k.take(h, r, n);
     k.roomBeside(y, i, wire.waiting);
   }
+  return true;
 }
 
 /** The folios the research first in the line still wants. */

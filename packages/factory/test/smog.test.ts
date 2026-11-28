@@ -55,7 +55,7 @@ function counted(grade: number, smog: number, ticks: number): number {
   const y = workings();
   const at = breakers(y, 1, grade);
   while (y.tick % 100 !== 1) run(y, at, 1);
-  y.smog.level[WORKINGS] = smog;
+  F.setLevel(y, WORKINGS, smog);
   y.smog.made[WORKINGS] = 0;
   run(y, at, ticks);
   return y.smog.made[WORKINGS] ?? 0;
@@ -113,6 +113,41 @@ describe("smog on a plot", () => {
     expect(counted(1, 1000, 96)).toBe(12);
   });
 
+  test("a plot's pace changes only where its level is set, and a tick with no plot slowed reads no plot's pace", () => {
+    const y = workings();
+    const at = breakers(y, 1);
+    expect([y.smog.slowed, Array.from(y.smog.pace).every((q) => q === 4)]).toEqual([0, true]);
+    F.setLevel(y, WORKINGS, 2500);
+    F.setLevel(y, WORKINGS, 2600);
+    F.setLevel(y, 0, 1000);
+    expect([y.smog.slowed, y.smog.pace[WORKINGS], y.smog.pace[0]]).toEqual([2, 2, 3]);
+    F.setLevel(y, 0, 0);
+    expect(y.smog.slowed).toBe(1);
+    // Read back, the paces are worked out again from the levels kept.
+    expect(F.decode(F.encode(y))?.smog.slowed).toBe(1);
+    // With none slowed, a pace left wrong in the table is never read: the breaker breaks at full pace.
+    F.setLevel(y, WORKINGS, 0);
+    y.smog.pace[WORKINGS] = 1;
+    while (y.tick % 100 !== 1) run(y, at, 1);
+    y.smog.made[WORKINGS] = 0;
+    run(y, at, 96);
+    expect([y.smog.slowed, y.smog.made[WORKINGS]]).toEqual([0, 32]);
+  });
+
+  test("a slowed machine with nothing to work on carries no quarters over: they go on only as it works", () => {
+    const y = workings();
+    const i = breakers(y, 1, 1)[0] ?? 0;
+    const r = F.holderOf(y, i);
+    // Grade I does 2 half-ticks a tick; at step 1, 1.5: with no salvage it works on nothing, and carries nothing.
+    F.setLevel(y, WORKINGS, 1000);
+    for (let k = 0; k < 7; k++) F.step(y);
+    expect([F.held(y.holders, r, SALVAGE), y.holders.quarter[r], y.holders.work[r]]).toEqual([0, 0, 0]);
+    // Given salvage, it works: a quarter carried each tick that leaves one past a whole half-tick.
+    F.put(y.holders, r, SALVAGE);
+    F.step(y);
+    expect([y.holders.work[r], y.holders.quarter[r]]).toEqual([1, 2]);
+  });
+
   test("with the yard short of power, smog's share and power's multiply: at step 2 and half the power drawn, a fourth, never nothing", () => {
     const y = workings();
     const at = breakers(y, 1);
@@ -123,7 +158,7 @@ describe("smog on a plot", () => {
     F.rewire(y);
     expect(F.power(y).pace).toBe(0.5);
     while (y.tick % 100 !== 1) run(y, at, 1);
-    y.smog.level[WORKINGS] = 2000;
+    F.setLevel(y, WORKINGS, 2000);
     y.smog.made[WORKINGS] = 0;
     run(y, at, 96);
     // 48 ticks with power, each at half of grade III's pace: 96 half-ticks, 8 things of 12 each.
@@ -163,7 +198,7 @@ describe("smog on a plot", () => {
     const clean = F.encode(y);
     expect(JSON.parse(clean)).not.toHaveProperty("smog");
     const check = F.check(y);
-    y.smog.level[WORKINGS] = 1240;
+    F.setLevel(y, WORKINGS, 1240);
     y.smog.made[WORKINGS] = 7;
     expect(JSON.parse(F.encode(y)).smog).toEqual({ workings: [1240, 7] });
     expect(F.check(y)).not.toBe(check);

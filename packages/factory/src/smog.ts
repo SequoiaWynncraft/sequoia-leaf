@@ -7,8 +7,9 @@
  * the most. At each step (`SMOG.steps`) the pieces that work on it work at a share of their pace: at
  * step 1 three fourths, at step 2 two, at step 3 one. That is SPEC-2's "3 ticks in 4", "2 in 4" and "1
  * in 4" on average, exactly (`Holders.quarter` carries what is past a whole half-tick), by pace and not
- * by ticks lost, so with the yard short of power, which works on some ticks, the two multiply. A tick
- * with no plot slowed reads no plot's pace (`smogPaces`).
+ * by ticks lost, so with the yard short of power, which works on some ticks, the two multiply. A
+ * plot's pace changes only where its level is set (`setLevel`), and a tick with no plot slowed reads
+ * none, and does just what it did before smog.
  */
 import { perMinute, whole } from "@sequoia-leaf/core";
 
@@ -31,16 +32,19 @@ export const stepOf = (level: number): number => (level >= STEP_3 ? 3 : level >=
 /** A plot's pace in fourths with no smog slowing it. */
 export const FULL = 4;
 
-/** Each plot's pace this tick in fourths into `paces` (4 at step 0, then 3, 2 and 1), as its smog lets it; says whether any plot is slowed. Makes nothing. */
-export function smogPaces(y: Yard, paces: Uint8Array): boolean {
-  const level = y.smog.level;
-  let slowed = false;
-  for (let p = 0; p < level.length; p++) {
-    const q = FULL - stepOf(level[p] ?? 0);
-    paces[p] = q;
-    if (q < FULL) slowed = true;
-  }
-  return slowed;
+/**
+ * Sets a plot's smog level: the one place a level is set, at a count, as a yard is read, or by a test.
+ * Where the plot's step changes, so does its pace in fourths (4 at step 0, then 3, 2 and 1) and the
+ * count of plots slowed, which the tick reads (`Yard.smog`). Makes nothing.
+ */
+export function setLevel(y: Yard, p: number, level: number): void {
+  const s = y.smog;
+  s.level[p] = level;
+  const q = FULL - stepOf(level);
+  const was = s.pace[p] ?? FULL;
+  if (q === was) return;
+  s.pace[p] = q;
+  s.slowed += (q < FULL ? 1 : 0) - (was < FULL ? 1 : 0);
 }
 
 /** The share of its pace a piece on a plot at step `s` works at. */
@@ -53,23 +57,38 @@ export const smogPace = (y: Yard, i: number): number => shareAt(stepOf(y.smog.le
 export const clearsAt = (standing: number): number => SMOG.ground + SMOG.redwood * standing;
 
 /**
- * How many of the land's redwoods stand on a plot, by its place in the land's list: from what the
- * yard has felled as it is now, the one place both the count and every card ask, so a redwood felled
- * stops clearing at the next count. Makes nothing.
+ * Counts the land's redwoods standing on each plot into `out`, by the plot's place in the land's list,
+ * in one pass over them: from what the yard has felled as it is now, the one place both the count and
+ * every card ask, so a redwood felled stops clearing at the next count. Makes nothing.
  */
-export function standingOn(y: Yard, n: number): number {
+export function standingInto(y: Yard, out: Uint8Array): void {
   const { trees, plot } = y.land;
-  let standing = 0;
-  for (let t = 0; t < trees.length; t++) if (y.felled[t] !== 1 && plot[trees[t]?.[0] ?? 0] === n) standing++;
-  return standing;
+  out.fill(0);
+  for (let t = 0; t < trees.length; t++) {
+    const p = y.felled[t] === 1 ? NONE : (plot[trees[t]?.[0] ?? 0] ?? NONE);
+    if (p !== NONE) out[p] = (out[p] ?? 0) + 1;
+  }
 }
 
-/** Counts smog on every plot: up by what was made, down by what it clears, held between 0 and the most. Makes nothing. */
+/** How many of the land's redwoods stand on a plot, by its place in the land's list (`standingInto`). */
+export function standingOn(y: Yard, n: number): number {
+  standingInto(y, y.smog.standing);
+  return y.smog.standing[n] ?? 0;
+}
+
+/**
+ * Counts smog on every plot: up by what was made, down by what it clears, held between 0 and the
+ * most. A yard with no smog on any plot, and none made, has nothing to count. Makes nothing.
+ */
 export function countSmog(y: Yard): void {
-  const { level, made } = y.smog;
+  const { level, made, standing } = y.smog;
+  let any = false;
+  for (let p = 0; p < level.length && !any; p++) any = level[p] !== 0 || made[p] !== 0;
+  if (!any) return;
+  standingInto(y, standing);
   for (let p = 0; p < level.length; p++) {
-    const now = (level[p] ?? 0) + (made[p] ?? 0) - clearsAt(standingOn(y, p));
-    level[p] = now < 0 ? 0 : now > SMOG.most ? SMOG.most : now;
+    const now = (level[p] ?? 0) + (made[p] ?? 0) - clearsAt(standing[p] ?? 0);
+    setLevel(y, p, now < 0 ? 0 : now > SMOG.most ? SMOG.most : now);
     made[p] = 0;
   }
 }
@@ -93,7 +112,7 @@ export function smogOnto(y: Yard, kept: unknown): void {
   y.land.plots.forEach((p, n) => {
     const v: unknown = Reflect.get(kept, plotName(p.plot));
     if (!Array.isArray(v)) return;
-    y.smog.level[n] = upTo(v[0], SMOG.most);
+    setLevel(y, n, upTo(v[0], SMOG.most));
     y.smog.made[n] = upTo(v[1], 0xffff);
   });
 }

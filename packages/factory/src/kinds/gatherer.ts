@@ -12,14 +12,15 @@ import { as, asItem, many, NO_POWER, rateOf, slow, stuckAs } from "./say.ts";
 /** The work in gathering one thing, in half-ticks. */
 const WORK = TICKS.gather * 2;
 
-/** It gathers at its grade's pace, and once a thing is gathered it holds it out to hand on. */
-function work(k: Kit, y: Yard, i: number, r: number, speed: number): void {
+/** It gathers at its grade's pace, and once a thing is gathered it holds it out to hand on. It always has something to work on. */
+function work(k: Kit, y: Yard, i: number, r: number, speed: number): boolean {
   const h = y.holders;
   h.work[r] = (h.work[r] ?? 0) + speed;
   if ((h.work[r] ?? 0) >= WORK) {
     h.work[r] = (h.work[r] ?? 0) - WORK;
     h.out[r] = y.land.deposit[i] ?? k.NONE;
   }
+  return true;
 }
 
 function condition(k: Kit, y: Yard, i: number, lit: boolean): number {

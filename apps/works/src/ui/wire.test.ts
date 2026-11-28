@@ -21,6 +21,7 @@ import {
   plotState,
   PYLON,
   rewire,
+  setLevel,
   STUDY,
   type Yard,
 } from "@sequoia-leaf/factory";
@@ -95,12 +96,12 @@ test("a standing breaker's card picks out the next thing of its mix it gives", a
 test("a plot the yard owns says its smog on its card: its level, what is made and cleared, and how its machines work", async () => {
   const y = workings();
   const n = y.land.plots.findIndex((p) => p.plot === WORKINGS);
-  y.smog.level[n] = 1240;
+  setLevel(y, n, 1240);
   await opened(y, 1_000);
   expect(plotPrint("workings").smog).toBe(
     "Smog 1,240 of 3,000. Made 0 /min. Cleared 420 /min: the ground 300, 1 redwood 120. Machines here work at 75% of their pace.",
   );
-  S.world.smog.level[n] = 300;
+  setLevel(S.world, n, 300);
   expect(plotPrint("workings").smog).toBe(
     "Smog 300 of 3,000. Made 0 /min. Cleared 420 /min: the ground 300, 1 redwood 120. Machines here work at full pace.",
   );
@@ -113,12 +114,12 @@ test("a plot at step 1 or more is in the Trouble view, by name, and counted on i
   const n = y.land.plots.findIndex((p) => p.plot === WORKINGS);
   await opened(y, 1_000);
   const before = wrongCount();
-  S.world.smog.level[n] = 2000;
+  setLevel(S.world, n, 2000);
   expect(smoggy(S.world)).toEqual([
     { n, plot: WORKINGS, line: "Smog on The Old Workings: its machines work at 50% of their pace." },
   ]);
   expect(wrongCount()).toBe(before + 1);
-  S.world.smog.level[n] = 3000;
+  setLevel(S.world, n, 3000);
   expect(smoggy(S.world)[0]?.line).toBe("Smog on The Old Workings: its machines work at 25% of their pace.");
 });
 
@@ -130,7 +131,7 @@ test("a Study slowed by smog says smog slows it, not that power is short; with p
   const [x, z] = [(corner?.x ?? 0) + 1, (corner?.y ?? 0) + 10];
   expect(build(y, STUDY, x, z, 0, Infinity).ok).toBe(true);
   const n = y.land.plots.findIndex((p) => p.plot === WORKINGS);
-  y.smog.level[n] = 2000;
+  setLevel(y, n, 2000);
   await opened(y, 1_000);
   const i = at(S.world, x, z);
   expect(numbersOf(S.world, i)).toEqual([expect.stringMatching(/^Studies .+ \/min: smog slows it\.$/)]);

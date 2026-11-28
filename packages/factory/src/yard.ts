@@ -119,6 +119,21 @@ export interface Seen {
   readonly depot: Counts;
 }
 
+/**
+ * Smog on each plot, by its place in the land's `plots` (`smog.ts`): its level, 0 to `SMOG.most`, and
+ * what was made on it since it was last counted, both kept and checked. Worked out from the level, and
+ * neither kept nor checked: each plot's pace in fourths (4, or 3, 2 and 1 at smog's steps) and how many
+ * plots are slowed, changed only where a level is set (`setLevel`), so the tick reads a plot's pace
+ * only while some plot is slowed; and a place to count the redwoods standing on each plot (`standingInto`).
+ */
+export interface Smog {
+  readonly level: Uint16Array;
+  readonly made: Uint16Array;
+  readonly pace: Uint8Array;
+  slowed: number;
+  readonly standing: Uint8Array;
+}
+
 /** The yard's plumbing, worked out from what stands where (`wire.ts`). */
 export interface Wire {
   /** Tiles that hand things on, each after the tiles it hands to. */
@@ -128,11 +143,6 @@ export interface Wire {
   /** Tunnels' way-in mouths, which carry things under the ground too. */
   readonly mouths: Int32Array;
   readonly work: Int32Array;
-  /**
-   * Each plot's pace this tick in fourths (4, or 3, 2 and 1 at smog's steps), by its place in the
-   * land's `plots`: worked out by the tick each tick from its smog (`smogPaces`), nothing kept.
-   */
-  readonly paces: Uint8Array;
   readonly burners: Int32Array;
   /** For each tile, the sides it takes things in from, a bit each (`sidesTaken`). */
   readonly taken: Uint8Array;
@@ -268,7 +278,7 @@ export interface Yard {
    * Smog on each plot, by its place in the land's `plots` (`smog.ts`): its level, 0 to `SMOG.most`,
    * and what was made on it since it was last counted.
    */
-  readonly smog: { readonly level: Uint16Array; readonly made: Uint16Array };
+  readonly smog: Smog;
   /**
    * 1 for each of the land's redwoods the yard has felled (`fell`), by its place in the land's
    * `trees`. Every rule asks whether one stands on a tile through `redwoodAt`, never the land alone.
@@ -386,7 +396,13 @@ export function emptyYard(land: Land, tier = 0): Yard {
     clearing: null,
     cleared: [],
     begun: 0,
-    smog: { level: new Uint16Array(land.plots.length), made: new Uint16Array(land.plots.length) },
+    smog: {
+      level: new Uint16Array(land.plots.length),
+      made: new Uint16Array(land.plots.length),
+      pace: new Uint8Array(land.plots.length).fill(4),
+      slowed: 0,
+      standing: new Uint8Array(land.plots.length),
+    },
     felled: new Uint8Array(land.trees.length),
     spare: Uint8Array.from(STARTING),
     blueprints: Array.from({ length: BLUEPRINTS_MOST }, () => null),

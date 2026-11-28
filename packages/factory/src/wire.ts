@@ -389,7 +389,6 @@ export function rewire(y: Yard): Wire {
     carry: Int32Array.from(carry),
     mouths: Int32Array.from(carry.filter((i) => tunnelOf(y, i) >= 0)),
     work: Int32Array.from(work),
-    paces: new Uint8Array(y.land.plots.length),
     burners: Int32Array.from(burners),
     recipes: ALL_KINDS.map((k) => recipesFor(y.open, k)),
     steady,

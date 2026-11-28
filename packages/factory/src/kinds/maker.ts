@@ -111,12 +111,12 @@ function choose(k: Kit, h: Holders, r: number, recipes: readonly Recipe[], only:
   return best ? best.out : k.NONE;
 }
 
-/** A machine makes, at its grade's pace: it chooses a recipe it holds the parts for, and works on it until it is made. */
-export function work(k: Kit, y: Yard, i: number, r: number, speed: number, wire: Wire): void {
+/** A machine makes, at its grade's pace: it chooses a recipe it holds the parts for, and works on it until it is made. Says whether it had one to work on. */
+export function work(k: Kit, y: Yard, i: number, r: number, speed: number, wire: Wire): boolean {
   const h = y.holders;
-  if (h.making[r] === k.NONE && !begin(k, y, i, r, wire)) return;
+  if (h.making[r] === k.NONE && !begin(k, y, i, r, wire)) return false;
   const rec = k.RECIPE[h.making[r] ?? k.NONE];
-  if (!rec) return;
+  if (!rec) return false;
   h.work[r] = (h.work[r] ?? 0) + speed * k.timesOf(y.kind[i] ?? k.NONE, rec);
   if ((h.work[r] ?? 0) >= rec.work) {
     h.work[r] = (h.work[r] ?? 0) - rec.work;
@@ -128,6 +128,7 @@ export function work(k: Kit, y: Yard, i: number, r: number, speed: number, wire:
     h.making[r] = k.NONE;
     k.roomBeside(y, i, wire.waiting);
   }
+  return true;
 }
 
 /**

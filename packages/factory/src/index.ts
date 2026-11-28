@@ -112,6 +112,7 @@ export {
   countSmog,
   madeOn,
   redwoodClears,
+  setLevel,
   shareAt,
   smogLine,
   smogPace,

@@ -65,19 +65,20 @@ function room(k: Kit, y: Yard, i: number): boolean {
   return (y.holders.count[r] ?? 0) === 0 && y.holders.out[r] === k.NONE;
 }
 
-/** It works on what it holds for a second, and then holds it out to hand on. */
-function work(k: Kit, y: Yard, _i: number, r: number, speed: number): void {
+/** It works on what it holds for a second, and then holds it out to hand on. Says whether it held anything to work on. */
+function work(k: Kit, y: Yard, _i: number, r: number, speed: number): boolean {
   const h = y.holders;
-  if ((h.count[r] ?? 0) === 0) return;
+  if ((h.count[r] ?? 0) === 0) return false;
   h.work[r] = (h.work[r] ?? 0) + speed;
-  if ((h.work[r] ?? 0) < 20) return;
+  if ((h.work[r] ?? 0) < 20) return true;
   h.work[r] = 0;
   for (let n = 0; n < k.ITEM_COUNT; n++)
     if (k.held(h, r, n) > 0) {
       k.take(h, r, n);
       h.out[r] = n;
-      return;
+      return true;
     }
+  return true;
 }
 
 export const sieve = kind({
