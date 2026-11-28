@@ -6,8 +6,7 @@
  * Times are medians, in milliseconds. Nothing is asserted here; the budgets are tests.
  *
  * Then the work of catching a yard up, as Leaf does for one its owner left: each staged yard, the
- * generated yard of about 1,000 pieces, a ring of 40 belts with 4 growers on it (tier 7), a folded ring
- * of 6,000 tiles with one free, its sorters set to nothing and set to stone (`test/folded.ts`), and each
+ * generated yard of about 1,000 pieces, a ring of 40 belts with 4 growers on it (tier 7), and each
  * save run on for eight hours of ticks, in
  * milliseconds of work for each hour of the yard's time, the best of three. And lines that never
  * wait: three of 41 belts each, from crates full of planks into the depot, in milliseconds for 1,500
@@ -17,7 +16,6 @@
 import { heapStats } from "bun:jsc";
 
 import * as F from "./src/index.ts";
-import { folded } from "./test/folded.ts";
 import { generate } from "./test/gen.ts";
 import { ringOfGrowers } from "./test/growers.ts";
 import { bareLand, makeLand } from "./test/land.ts";
@@ -106,8 +104,6 @@ function hours(): void {
     ...STAGES.map((s): [string, F.Yard] => [`staged ${s}`, staged(s)]),
     ["generated", generated().y],
     ["a ring of 40 belts with 4 growers", ringOfGrowers()],
-    ["a folded ring of 6,000 belts and sorters, one tile free", folded().y],
-    ["the same, its sorters set to stone", folded(true).y],
     ...SAVES.map((s): [string, F.Yard] => [`save ${s}`, saved(s)]),
   ];
   console.log("| yard | pieces | ms an hour |");

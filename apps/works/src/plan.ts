@@ -258,34 +258,23 @@ function look(y: Yard): Seen {
       if (age > FORGET) s.carried[i] = NONE;
       else s.age[i] = age;
     }
-  // Down each line, from where things come: the plumbing lists each tile after those it hands to, and
-  // where a ring takes its turn, -1 less its number (`Wire.order`), its tiles listed with the rings'.
-  const wire = y.wire;
-  if (wire)
-    for (let o = wire.order.length - 1; o >= 0; o--) {
-      const i = wire.order[o] ?? 0;
-      if (i >= 0) carryOn(s, y, i);
-      else {
-        const { tiles, starts } = wire.rings;
-        const k = -1 - i;
-        for (let t = (starts[k + 1] ?? 0) - 1; t >= (starts[k] ?? 0); t--) carryOn(s, y, tiles[t] ?? 0);
-      }
+  // Down each line, from where things come: the plumbing lists each tile after those it hands to.
+  const order = y.wire?.order;
+  if (order)
+    for (let o = order.length - 1; o >= 0; o--) {
+      const i = order[o] ?? 0;
+      const k = y.kind[i] ?? NONE;
+      // A piece that sends each thing by what it is (a sorter) carries no line on.
+      if (s.carried[i] === NONE || !carries(k) || pageOf(k)?.sorts) continue;
+      const ways = waysOf(k);
+      if (ways > 0) for (let way = 0; way < ways; way++) hand(s, y, i, wayOut(y, i, way));
+      else hand(s, y, i, nextOf(y, i));
     }
   s.yard = y;
   s.rev = y.rev;
   s.second = second;
   s.turn++;
   return s;
-}
-
-/** The line through a tile goes on to the tiles it hands to, as it was last seen carrying (`hand`). */
-function carryOn(s: Seen, y: Yard, i: number): void {
-  const k = y.kind[i] ?? NONE;
-  // A piece that sends each thing by what it is (a sorter) carries no line on.
-  if (s.carried[i] === NONE || !carries(k) || pageOf(k)?.sorts) return;
-  const ways = waysOf(k);
-  if (ways > 0) for (let way = 0; way < ways; way++) hand(s, y, i, wayOut(y, i, way));
-  else hand(s, y, i, nextOf(y, i));
 }
 
 /**

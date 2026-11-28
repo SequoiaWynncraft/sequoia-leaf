@@ -130,8 +130,11 @@ export interface Kit {
   readonly wireOf: typeof Wire.wireOf;
   readonly waysAt: typeof Wire.waysAt;
   readonly realTo: typeof Wire.realTo;
+  readonly takesNow: typeof Wire.takesNow;
+  readonly sendsNow: typeof Wire.sendsNow;
+  readonly heldFor: typeof Wire.heldFor;
+  readonly inTrouble: typeof Wire.inTrouble;
   readonly ringOn: typeof Wire.ringOn;
-  readonly ringFull: typeof Wire.ringFull;
   readonly ringTiles: typeof Wire.ringTiles;
 
   // What reaches the depot and the research; power.

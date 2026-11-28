@@ -6,8 +6,7 @@ import { SMOG } from "./content/smog.ts";
  * A tick has three parts. Power: what burns for power burns (a boiler), and what there is is set
  * against what is drawn. Work: things on belts move along their tile, and every piece that works does
  * its work (a gatherer gathers, a machine makes, a Study studies). Handing on: every tile hands on
- * what it has finished with, each after the tile it hands to (`wire.ts`), so a full belt moves as one;
- * round a ring of the plumbing no order does that, so each ring takes its turn as one (`round.ts`).
+ * what it has finished with, each after the tile it hands to (`wire.ts`), so a full belt moves as one.
  * Each step of a piece is its kind's (`kinds/`): this runs down the plumbing's lists and asks each
  * piece's kind for its step, and names no kind.
  *
@@ -44,7 +43,6 @@ import { carryOn } from "./kinds/line.ts";
 import { RULES } from "./kinds/list.ts";
 import { work as make } from "./kinds/maker.ts";
 import { passUnder } from "./kinds/under.ts";
-import { handOnRings } from "./round.ts";
 import { countSmog, FULL, smogged } from "./smog.ts";
 import { CARRIES, ITEM_COUNT, NONE, PACE, SPAN_MOST, TIMES_MOST } from "./tables.ts";
 import { KIT, rewire, roomAt } from "./wire.ts";
@@ -67,9 +65,7 @@ export function step(y: Yard): void {
   carry(y, wire);
   carryUnder(y, wire);
   if (works) working(y, wire);
-  // A yard with rings in its plumbing hands on by its own loop (`round.ts`), so a yard with none pays nothing for them.
-  if (wire.rings.count > 0) handOnRings(y, wire, waiting);
-  else handOn(y, wire, waiting);
+  handOn(y, wire, waiting);
   if (y.tick % SMOG.every === 0) countSmog(y);
 }
 

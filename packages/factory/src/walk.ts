@@ -114,19 +114,3 @@ export function walk(p: Plumbing): { readonly order: number[]; readonly rings: r
   w.all();
   return { order: w.order, rings: w.rings };
 }
-
-/** The handing order (`walk`) with each ring's tiles taken out, and -1 less the ring's number where its last stood. */
-export function orderAround(order: readonly number[], ringOf: (i: number) => number, count: number): Int32Array {
-  const last = new Int32Array(count).fill(-1);
-  order.forEach((i, o) => {
-    const k = ringOf(i);
-    if (k >= 0) last[k] = o;
-  });
-  const out: number[] = [];
-  order.forEach((i, o) => {
-    const k = ringOf(i);
-    if (k < 0) out.push(i);
-    else if (last[k] === o) out.push(-1 - k);
-  });
-  return Int32Array.from(out);
-}

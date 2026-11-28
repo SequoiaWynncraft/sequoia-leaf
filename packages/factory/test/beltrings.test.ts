@@ -1,16 +1,17 @@
 /**
  * Rings of belts (SPEC-2 0.5, item 2): the handing order walks each tile once, so round a ring one
- * tile comes before the tile it hands to. A ring takes its turn as one (`round.ts`): a full ring with
- * no way off it does not move, and every tick ends; with a way off it, it moves as one at the belt's
- * own pace, as a full belt does, whatever stands on it and wherever the order breaks round it. The
- * plumbing names the rings it has (`ringsOf`), only those things can go round, and a yard with none
- * hands on exactly as before. More rings, built at random, in `ringround.test.ts`.
+ * tile comes before the tile it hands to. Every yard hands on in that one order, rings or not: a full
+ * ring with no way off it does not move, and every tick ends; a full ring with a way off it loses a
+ * tick where the order breaks round it. A ring's own turn, so that it moves as a full belt does, is
+ * later work, on its own (`works/ring-turn`). The plumbing names the rings it has (`ringsOf`), only
+ * those things can go round, for status: the tick reads none of it. A grower's line that runs into a
+ * full ring is judged by what the yard holds now (`kinds/say.ts`); more of those in `ringshapes.test.ts`.
  */
 import { describe, expect, test } from "bun:test";
 
 import * as F from "../src/index.ts";
 import { bareLand } from "./land.ts";
-import { bare, drain, drained, DX, DZ, fill, PLANK, ring, stock, STOPPED } from "./ringyard.ts";
+import { bare, drain, drained, fill, ring, stock, STOPPED } from "./ringyard.ts";
 import { must } from "./yards.ts";
 
 /** What is on each tile and how far across it, in order. */
@@ -27,89 +28,18 @@ describe("a ring of belts", () => {
     expect([y.tick, where(y, tiles)]).toEqual([2000, was]);
   });
 
-  test("with a way off it moves as one at the belt's pace: 150, 225 and 300 a minute at grades I, II and III", () => {
-    for (const grade of [1, 2, 3]) {
-      const y = bare();
-      const tiles = ring(y, 2, 4, 21, 21, grade);
-      // A splitter on the ring's top row sends everything that reaches it off the ring first, north to a shut crate.
-      must(y, { do: "build", kind: "splitter", x: 8, y: 4, dir: 0, grade });
-      must(y, { do: "build", kind: "belt", x: 8, y: 3, dir: 3, grade });
-      must(y, { do: "build", kind: "crate", x: 8, y: 2, dir: 0 });
-      must(y, { do: "crate", x: 8, y: 2, open: false });
-      must(y, { do: "first", x: 8, y: 4, way: 1 });
-      fill(y, tiles);
-      const bin = F.holderOf(y, F.at(y, 8, 2));
-      const after = (seconds: number): number => {
-        while (y.tick < seconds * 10) F.step(y);
-        return F.held(y.holders, bin, PLANK);
-      };
-      // Six seconds once it is moving: a belt carries 8 eighths of a tile a thing, at its grade's pace a tick.
-      const [from, to] = [after(2), after(8)];
-      const pace = (F.MINUTE * (F.PACE[grade] ?? 0)) / 8;
-      expect([grade, tiles.length, Math.abs(to - from - pace / 10) <= 1]).toEqual([grade, 80, true]);
-    }
-  });
-
-  test("with one tile free turns as one at the belt's pace: every thing on it moves on a tile each 4 ticks at grade I", () => {
+  test("full, with a way off it, loses a tick where the order breaks round it: 120 a minute at grade I, not the belt's 150", () => {
+    // What every yard's one handing order does with a ring (`tick.ts`): round a ring one tile must come
+    // before the tile it hands to, so where the order breaks a full ring's thing waits a tick. A ring's
+    // own turn, on `works/ring-turn`, makes this 150; that work changes this number knowingly.
     const y = bare();
-    const tiles = ring(y, 2, 2, 11, 11);
-    fill(y, tiles.slice(1));
-    // Where the free tile is every 4 ticks: the whole ring has moved on one tile, so it has too. A full
-    // belt moves as one, each thing as soon as the tile ahead of it is freed, and a ring is a belt that
-    // closes on itself; SPEC-2 0.5's "one item a tick" was how the old cut through it played.
-    const free: number[] = [];
-    for (let k = 1; k <= 120; k++) {
-      F.step(y);
-      if (k % 4 === 0) free.push(tiles.findIndex((i) => y.item[i] === F.NONE));
-    }
-    expect([free, tiles.filter((i) => y.item[i] === PLANK).length]).toEqual([
-      Array.from({ length: 30 }, (_, n) => n + 1),
-      39,
-    ]);
-  });
-
-  test("a crate on the ring lets the ring move at the belt's pace, wherever the order breaks: 150 a minute at grade I (Astra's first case)", () => {
-    const y = bare();
-    // A ring of 40, and in its place just below its north-west corner a stocked open crate facing north.
-    const tiles = ring(y, 2, 2, 11, 11);
-    must(y, { do: "remove", x: 2, y: 3 });
-    must(y, { do: "build", kind: "crate", x: 2, y: 3, dir: 3 });
-    const crate = F.at(y, 2, 3);
-    stock(y, crate, 100);
-    // A splitter on the top edge sends all it can north into a shut crate.
-    const bin = drain(y, 7, 2, 0);
-    fill(
-      y,
-      tiles.filter((i) => i !== crate),
-    );
-    expect([F.ringsOf(y), drained(y, bin, 2, 8)]).toEqual([{ rings: 1, tiles: 40 }, 15]);
-  });
-
-  test("a ring the order breaks round in several places moves at the belt's pace: 150 a minute at grade I (Astra's second case)", () => {
-    const y = bare();
-    // A ring traced from (6, 6): east, south, east, north, east, south, south, south, west, west, north, west, north, north.
-    const [ox, oz] = [6, 6];
-    let [x, z] = [0, 0];
-    for (const c of "ESENESSSWWNWNN") {
-      const dir = "ESWN".indexOf(c);
-      const [at, way] = [{ x: ox + x, y: oz + z }, { dir }];
-      // Sorters at (1, 0) and (1, 2) send planks south and west; their straight ways out run on into the ring too.
-      if (x === 1 && z === 0) {
-        must(y, { do: "build", kind: "sorter", ...at, dir: 0 });
-        must(y, { do: "side", ...at, right: true });
-      } else if (x === 1 && z === 2) must(y, { do: "build", kind: "sorter", ...at, dir: 3 });
-      else if (x !== 3 || z !== 2) must(y, { do: "build", kind: "belt", ...at, ...way });
-      if (x === 1 && (z === 0 || z === 2)) must(y, { do: "sort", ...at, item: "plank" });
-      x += DX[dir] ?? 0;
-      z += DZ[dir] ?? 0;
-    }
-    // The splitter facing south at (3, 2) sends all it can east first, into a shut crate.
-    const bin = drain(y, ox + 3, oz + 2, 1);
-    // Fed at (0, 1) from the west, by a stocked crate.
-    must(y, { do: "build", kind: "crate", x: ox - 2, y: oz + 1, dir: 0 });
-    must(y, { do: "build", kind: "belt", x: ox - 1, y: oz + 1, dir: 0 });
-    stock(y, F.at(y, ox - 2, oz + 1), 400);
-    expect([[x, z], F.ringsOf(y), drained(y, bin, 10, 20)]).toEqual([[0, 0], { rings: 1, tiles: 14 }, 25]);
+    const tiles = ring(y, 2, 4, 21, 21);
+    // A splitter on the ring's top row sends everything that reaches it off the ring first, north to a shut crate.
+    const bin = drain(y, 8, 4, 0);
+    fill(y, tiles);
+    // 37 in the 18 seconds before its 80 run low: about 120 a minute, one each 5 ticks, where a belt
+    // carries one each 4. Main's rules give the same, to the plank.
+    expect([tiles.length, drained(y, bin, 2, 20)]).toEqual([80, 37]);
   });
 
   test("a yard with no ring hands on exactly as main did: lines through a splitter, a joiner, a sorter and a tunnel, belts facing, splitters side by side", () => {
@@ -182,7 +112,7 @@ describe("a ring of belts", () => {
     expect([F.ringsOf(y), seen.join(" ")]).toEqual([{ rings: 0, tiles: 0 }, MAIN]);
   });
 
-  test("names only rings things can go round: not two belts facing, a line into a gatherer, nor splitters beside each other", () => {
+  test("names only rings things can go round: not two belts facing, a line into a gatherer, splitters beside each other, nor benches facing that take nothing of each other's", () => {
     const y = F.create({ land: bareLand(40, 30, [[20, 20, "stone"]], [35, 5]), tier: 8, seed: 1 });
     // Two belts facing each other.
     must(y, { do: "build", kind: "belt", x: 2, y: 10, dir: 0 });
@@ -193,8 +123,12 @@ describe("a ring of belts", () => {
     // Two splitters side by side, facing apart, each a way out into the other.
     must(y, { do: "build", kind: "splitter", x: 2, y: 14, dir: 0 });
     must(y, { do: "build", kind: "splitter", x: 2, y: 15, dir: 2 });
-    F.rewire(y);
-    const none = [F.ringsOf(y), (y.wire?.order ?? []).every((i) => i >= 0)];
+    // Two benches facing each other, each making what the other does not take.
+    must(y, { do: "build", kind: "bench", x: 5, y: 20, dir: 0 });
+    must(y, { do: "build", kind: "bench", x: 6, y: 20, dir: 2 });
+    must(y, { do: "recipe", x: 5, y: 20, item: "tool" });
+    must(y, { do: "recipe", x: 6, y: 20, item: "feed" });
+    const none = F.ringsOf(y);
     // A ring of four belts things go round.
     for (const [bx, bz, dir] of [
       [10, 2, 0],
@@ -203,7 +137,10 @@ describe("a ring of belts", () => {
       [10, 3, 3],
     ] as const)
       must(y, { do: "build", kind: "belt", x: bx, y: bz, dir });
-    expect([none, F.ringsOf(y)]).toEqual([[{ rings: 0, tiles: 0 }, true], { rings: 1, tiles: 4 }]);
+    expect([none, F.ringsOf(y)]).toEqual([
+      { rings: 0, tiles: 0 },
+      { rings: 1, tiles: 4 },
+    ]);
   });
 
   test("a piece sending into a full ring with no way off it is stopped, in trouble, and its words say so", () => {
