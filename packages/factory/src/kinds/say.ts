@@ -104,20 +104,22 @@ export const stuckAs = (k: Kit, y: Yard, i: number, n: Item, also = false): numb
 
 /**
  * Whether the line a piece sends a thing into (with `also`, its by-product) has stopped: every tile of
- * it ahead holds a thing at the end of its tile, waiting, up to one that is blocked (in trouble), or
- * all the way round a ring of belts back to where it began, which nothing takes off. A line with room
- * on any tile, or that runs into a piece that is not a line, still moves. Each line is followed no
- * further than the land has tiles.
+ * it ahead holds a thing at the end of its tile, waiting, up to one that is blocked (in trouble), or up
+ * to a ring of the plumbing that has stopped for good, full with nothing taking things off it, as the
+ * rings the tick moves say (`ringHalted`). A line with room on any tile, that runs into a piece that is
+ * not a line, or into a ring that still moves, still moves. Each line is followed no further than the
+ * land has tiles.
  */
 export function jammedAhead(k: Kit, y: Yard, i: number, n: Item, also = false): boolean {
   for (const { to } of sendings(k, y, i, n, also)) {
     let t = to;
     for (let step = 0; step < y.kind.length && t >= 0 && k.carries(y.kind[t] ?? k.NONE); step++) {
+      const ring = k.ringHalted(y, t);
+      if (ring !== null) return ring;
       const held = y.item[t] ?? k.NONE;
       if (!k.isItem(held) || (y.prog[t] ?? 0) < 8 || k.tunnelOf(y, t) >= 0) break;
       if (stuckAs(k, y, t, held) !== as("waiting")) return true;
       t = k.nextOf(y, t);
-      if (t === to) return true;
     }
   }
   return false;

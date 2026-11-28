@@ -6,7 +6,8 @@ import { SMOG } from "./content/smog.ts";
  * A tick has three parts. Power: what burns for power burns (a boiler), and what there is is set
  * against what is drawn. Work: things on belts move along their tile, and every piece that works does
  * its work (a gatherer gathers, a machine makes, a Study studies). Handing on: every tile hands on
- * what it has finished with, each after the tile it hands to (`wire.ts`), so a full belt moves as one.
+ * what it has finished with, each after the tile it hands to (`wire.ts`), so a full belt moves as one;
+ * round a ring of the plumbing no order does that, so each ring takes its turn as one (`round.ts`).
  * Each step of a piece is its kind's (`kinds/`): this runs down the plumbing's lists and asks each
  * piece's kind for its step, and names no kind.
  *
@@ -43,6 +44,7 @@ import { carryOn } from "./kinds/line.ts";
 import { RULES } from "./kinds/list.ts";
 import { work as make } from "./kinds/maker.ts";
 import { passUnder } from "./kinds/under.ts";
+import { handOnRings } from "./round.ts";
 import { countSmog, FULL, smogged } from "./smog.ts";
 import { CARRIES, ITEM_COUNT, NONE, PACE, SPAN_MOST, TIMES_MOST } from "./tables.ts";
 import { KIT, rewire, roomAt } from "./wire.ts";
@@ -65,8 +67,9 @@ export function step(y: Yard): void {
   carry(y, wire);
   carryUnder(y, wire);
   if (works) working(y, wire);
-  handOn(y, wire, waiting);
-  if (wire.rings.tiles.length > 0) roundAgain(y, wire.rings, waiting);
+  // A yard with rings in its plumbing hands on by its own loop (`round.ts`), so a yard with none pays nothing for them.
+  if (wire.rings.count > 0) handOnRings(y, wire, waiting);
+  else handOn(y, wire, waiting);
   if (y.tick % SMOG.every === 0) countSmog(y);
 }
 
@@ -218,45 +221,6 @@ function handOn(y: Yard, wire: Wire, waiting: Uint8Array): void {
     if (hands === carryOn) carryOn(KIT, y, i, wire);
     else if (hands === handOut) handOut(KIT, y, i, wire);
     else if (hands) hands(KIT, y, i, wire);
-  }
-}
-
-/**
- * Round a ring (`Wire.rings`) one tile must come before the tile it hands to, which has not yet
- * handed on: so once every tile has had its turn, each tile of a ring that carries, in the order,
- * tries again if it waits no longer and still holds a thing that has crossed it (one that handed on
- * this tick holds none: what came onto it since has not crossed it). Those behind it in the order
- * follow it. Only a tile at a cut can find room it did not have at its turn, so the second try is
- * made only on a tick one of those can hand on (`cutReady`). A full ring with a way off it so moves as
- * one at the belt's pace, as a full belt does; a full ring with none stays still, and the tick ends.
- */
-function roundAgain(y: Yard, rings: Wire["rings"], waiting: Uint8Array): void {
-  if (!cutReady(y, rings.cuts, waiting)) return;
-  const { tiles } = rings;
-  for (let r = 0; r < tiles.length; r++) handAgain(y, tiles[r] ?? 0, waiting);
-}
-
-/** Whether any tile at a cut waits no longer and holds a thing that has crossed it (a way-in mouth always moves what is under it). */
-function cutReady(y: Yard, cuts: Int32Array, waiting: Uint8Array): boolean {
-  for (let c = 0; c < cuts.length; c++) {
-    const i = cuts[c] ?? 0;
-    if (waiting[i] === 1) continue;
-    if ((y.span[i] ?? 0) > 0 || (y.item[i] !== NONE && (y.prog[i] ?? 0) >= 8)) return true;
-  }
-  return false;
-}
-
-/** A ring tile's second try (`roundAgain`): one that carries, waits no longer and holds a thing that has crossed it hands it on. */
-function handAgain(y: Yard, i: number, waiting: Uint8Array): void {
-  const k = y.kind[i] ?? NONE;
-  if (waiting[i] === 1 || CARRIES[k] !== 1) return;
-  const wire = y.wire;
-  if (!wire) return;
-  if ((y.span[i] ?? 0) > 0) passUnder(KIT, y, i, waiting);
-  else if (y.item[i] !== NONE && (y.prog[i] ?? 0) >= 8) {
-    const hands = HANDS[k];
-    if (hands === carryOn) carryOn(KIT, y, i, wire);
-    else hands?.(KIT, y, i, wire);
   }
 }
 

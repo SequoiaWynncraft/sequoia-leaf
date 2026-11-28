@@ -30,6 +30,7 @@ import {
   mixPerMinute,
   mixShare,
 } from "./planner.ts";
+import type { Rings } from "./plumbing.ts";
 import { litAt, litOf } from "./power.ts";
 import { lit as litBig, outsOf, OWN, pieceOf, roomRound, sendsThing, takesAt } from "./sizes.ts";
 import { smogged, smogPace } from "./smog.ts";
@@ -90,7 +91,7 @@ import {
   wayIn,
   wayTo,
 } from "./tiles.ts";
-import { walk, type Walked } from "./walk.ts";
+import { NO_RINGS, orderAround, type Plumbing, ringAt, ringsFound, ringStopped, walk } from "./walk.ts";
 import {
   changed,
   counts,
@@ -397,10 +398,10 @@ export function rewire(y: Yard): Wire {
   }
   const taken = new Uint8Array(n);
   for (let i = 0; i < n; i++) if (kind[i] !== NONE) taken[i] = sidesTaken(y, i);
-  const { order, rings, cuts } = handingOrder(y);
+  const { order, rings } = handingOrder(y);
   const wire: Wire = {
     order,
-    rings: { tiles: rings, cuts },
+    rings,
     taken,
     carry: Int32Array.from(carry),
     mouths: Int32Array.from(carry.filter((i) => tunnelOf(y, i) >= 0)),
@@ -430,35 +431,70 @@ const hands = (k: number): boolean => (RULES[k]?.hands ?? null) !== null;
 
 /**
  * The yard's plumbing walked (`walk.ts`): the tiles that hand things on, each after the tiles it hands
- * to, so that a full belt moves as one; and, where the walk had to cut a ring, its rings and cuts.
+ * to, so that a full belt moves as one, by every way a piece hands by, as before rings had a turn of
+ * their own; and the rings in it (`Rings`), by only the ways things can really go, each ring's tiles
+ * taken out of the order for its turn as one where its last stood. The rings are looked for only where
+ * the first walk found the plumbing come back round, which most yards' never does.
  */
-function handingOrder(y: Yard): Walked {
+function handingOrder(y: Yard): { readonly order: Int32Array; readonly rings: Rings } {
+  const all = walk(plumbingOf(y, false));
+  if (all.rings.length === 0) return { order: Int32Array.from(all.order), rings: NO_RINGS };
+  const real = plumbingOf(y, true);
+  const rings = ringsFound(all.order, walk(real).rings, real);
+  if (rings.count === 0) return { order: Int32Array.from(all.order), rings };
+  return { order: orderAround(all.order, (i) => ringAt(rings, i), rings.count), rings };
+}
+
+/**
+ * The plumbing as a walk reads it (`Plumbing`): with `real`, by only the ways things can really go, a
+ * tile handing to one that takes things from that side (`takes`), or under the ground to a tunnel's far
+ * mouth. Two belts facing each other, a gatherer a line runs into, a splitter beside a splitter that
+ * takes nothing from it, hand nothing round.
+ */
+function plumbingOf(y: Yard, real: boolean): Plumbing {
   const outsAt = (i: number): number => (y.part[i] === 0 ? 0 : outsOf(y, i).length);
-  const to = (i: number, c: number): number => {
+  const tileTo = (i: number, c: number): number => {
     const outs = outsAt(i);
     return outs > 0 ? portTo(y, i, c) : waysOf(y.kind[i] ?? NONE) > 0 ? wayOut(y, i, c) : nextOf(y, i);
   };
-  return walk({
+  return {
     tiles: y.kind.length,
     own: (t) => (t < 0 ? t : pieceOf(y, t)),
     ways: (i) => outsAt(i) || waysOf(y.kind[i] ?? NONE),
     to: (i, c) => {
-      const t = to(i, c);
-      return t < 0 ? t : pieceOf(y, t);
+      const t = tileTo(i, c);
+      return t < 0 || (real && !goesTo(y, i, c, t)) ? -1 : pieceOf(y, t);
     },
     hands: (i) => hands(y.kind[i] ?? NONE),
-    carries: (i) => carries(y.kind[i] ?? NONE),
-  });
+  };
+}
+
+/** Whether a thing a piece (its own tile `i`) hands by its way `c` goes onto the tile `t`: taken from the tile it leaves by, or under the ground. */
+function goesTo(y: Yard, i: number, c: number, t: number): boolean {
+  if ((y.span[i] ?? 0) > 0 && SPANS[y.kind[i] ?? NONE] === 1) return farMouth(y, i) === t;
+  const o = y.part[i] === 0 ? undefined : outsOf(y, i)[c];
+  return takes(y, t, o ? i + o.dx + o.dy * y.land.w : i);
 }
 
 /**
- * The rings in a yard's plumbing (`handingOrder`): how many parts of it things handed on come back
- * round in, and the tiles on them. For a look over kept yards (`tools/resave.ts`): a ring's tick
- * changed with tier 7, so a yard with none plays as it did.
+ * The rings in a yard's plumbing (`Rings`): how many there are, and the tiles on them. For a look over
+ * kept yards (`tools/resave.ts`): a ring's turn is new with tier 7, so a yard with none plays as it did.
  */
 export function ringsOf(y: Yard): { readonly rings: number; readonly tiles: number } {
-  const { rings, count } = handingOrder(y);
-  return { rings: count, tiles: rings.length };
+  const { rings } = wireOf(y);
+  return { rings: rings.count, tiles: rings.tiles.length };
+}
+
+/**
+ * Whether the ring the piece on a tile stands on has stopped for good (`ringStopped`): nothing takes
+ * things off it, and it is full. Null where the piece is on no ring. The one answer the words read
+ * (`kinds/say.ts`), from the rings the tick moves.
+ */
+export function ringHalted(y: Yard, i: number): boolean | null {
+  const { rings } = wireOf(y);
+  if (rings.count === 0) return null;
+  const k = ringAt(rings, pieceOf(y, i));
+  return k < 0 ? null : ringStopped(y, rings, k);
 }
 
 /** The tile a piece of more than one tile's way out `port` sends to, or -1. */
@@ -603,6 +639,7 @@ export const KIT: Kit = {
   refused,
   roomBeside: roomAt,
   wireOf,
+  ringHalted,
   // What reaches the depot and the research; power.
   deliver,
   giveGoal,

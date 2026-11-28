@@ -1,17 +1,19 @@
 /**
- * The walk that works out the handing order (`wire.ts`), over plumbing as it reads it (`Plumbing`):
- * the tiles that hand things on, each after the tiles it hands to, so that a full belt moves as one;
- * a walk from each tile in turn, a piece's ways in order, each tile once.
+ * The walks that work out the plumbing's order and its rings (`wire.ts`), over the plumbing as it
+ * reads it (`Plumbing`): the tiles that hand things on, each after the tiles it hands to, so that a
+ * full belt moves as one; a walk from each tile in turn, a piece's ways in order, each tile once.
  *
- * Round a ring there is no such order, and the walk cuts it: a tile that hands to one the walk is
- * still walking on from comes before it. So with the order the walk gives the tiles of it that lie
- * on a ring, and those of them that carry and hand across a cut (`Walked`). A ring is found by
- * Tarjan's walk: `low` is the first tile of the walk a tile is found to lead back to, and a tile
- * whose `low` is its own begins a part of the plumbing that every tile in it leads round to; a part
- * of more than one tile is a ring.
+ * The same walk, over only the ways things can really go (each tile handing to one that takes from
+ * that side, or under the ground to a tunnel's far mouth), finds the rings: parts of the plumbing
+ * where things handed on come back round (`Rings`). By Tarjan's walk: `low` is the first tile of the
+ * walk a tile is found to lead back to, and a tile whose `low` is its own begins a part of the
+ * plumbing that every tile in it leads round to; a part of more than one tile is a ring.
  */
+import type { Rings } from "./plumbing.ts";
+import { CARRIES, NONE, SPAN_MOST } from "./tables.ts";
+import { tunnelOf, type Yard } from "./yard.ts";
 
-/** How the walk reads the plumbing, by tile. */
+/** How a walk reads the plumbing, by tile. */
 export interface Plumbing {
   readonly tiles: number;
   /** The own tile of the piece on a tile (`sizes.ts`): a piece of more than one tile is walked from its own. */
@@ -20,24 +22,9 @@ export interface Plumbing {
   readonly ways: (i: number) => number;
   /** The own tile of what a tile hands to by its way `c`, or -1. */
   readonly to: (i: number, c: number) => number;
-  /** Whether what stands on a tile hands things on at all; and whether it carries them across it. */
+  /** Whether what stands on a tile hands things on at all. */
   readonly hands: (i: number) => boolean;
-  readonly carries: (i: number) => boolean;
 }
-
-/** The handing order, the tiles of it on a ring and those that hand across a cut, in its order; and how many rings. */
-export interface Walked {
-  readonly order: Int32Array;
-  readonly rings: Int32Array;
-  readonly cuts: Int32Array;
-  readonly count: number;
-}
-
-/** What the walk knows of a tile, a bit each. */
-const OPEN = 1;
-const ON_PATH = 2;
-const ON_RING = 4;
-const CUT = 8;
 
 class Walk {
   readonly p: Plumbing;
@@ -45,15 +32,16 @@ class Walk {
   readonly at: Int32Array;
   readonly low: Int32Array;
   readonly child: Uint8Array;
-  /** The tiles walked on from, and those of the part of the plumbing not yet closed. */
+  /** The tiles walked on from, and those of the part of the plumbing not yet closed (and whether each is). */
   readonly stack: Int32Array;
   readonly open: Int32Array;
-  readonly flags: Uint8Array;
+  readonly isOpen: Uint8Array;
   readonly order: number[] = [];
+  /** The rings found, each its tiles. */
+  readonly rings: number[][] = [];
   top = 0;
   opened = 0;
   walked = 0;
-  count = 0;
 
   constructor(p: Plumbing) {
     this.p = p;
@@ -63,7 +51,7 @@ class Walk {
     this.child = new Uint8Array(n);
     this.stack = new Int32Array(n);
     this.open = new Int32Array(n);
-    this.flags = new Uint8Array(n);
+    this.isOpen = new Uint8Array(n);
   }
 
   /** Walks from every tile in turn. */
@@ -86,14 +74,11 @@ class Walk {
     this.enter(this.p.to(i, c), i);
   }
 
-  /** The tile `i`, handed to from `from` (-1 for none): walked to, unless it was; a tile walked before marks a ring or a cut. */
+  /** The tile `i`, handed to from `from` (-1 for none): walked to, unless it was, and then what `from` leads back to. */
   enter(i: number, from: number): void {
     if (i < 0) return;
-    const f = this.flags[i] ?? 0;
     if ((this.at[i] ?? -1) >= 0) {
-      if (from < 0) return;
-      if ((f & OPEN) !== 0) this.low[from] = Math.min(this.low[from] ?? 0, this.at[i] ?? 0);
-      if ((f & ON_PATH) !== 0) this.flags[from] = (this.flags[from] ?? 0) | CUT;
+      if (from >= 0 && this.isOpen[i] === 1) this.low[from] = Math.min(this.low[from] ?? 0, this.at[i] ?? 0);
       return;
     }
     this.at[i] = this.walked++;
@@ -102,14 +87,13 @@ class Walk {
     this.low[i] = this.at[i] ?? 0;
     this.stack[this.top++] = i;
     this.open[this.opened++] = i;
-    this.flags[i] = OPEN | ON_PATH;
+    this.isOpen[i] = 1;
   }
 
   /** A tile walked from in full: in the order; what it leads back to, its walker does too; and one that begins a part closes it. */
   leave(i: number): void {
     this.top--;
     this.order.push(i);
-    this.flags[i] = (this.flags[i] ?? 0) & ~ON_PATH;
     const by = this.top > 0 ? (this.stack[this.top - 1] ?? -1) : -1;
     if (by >= 0) this.low[by] = Math.min(this.low[by] ?? 0, this.low[i] ?? 0);
     if (this.low[i] === this.at[i]) this.close(i);
@@ -117,31 +101,119 @@ class Walk {
 
   /** Closes the part of the plumbing the tile `i` begins: a ring if it is more than itself. */
   close(i: number): void {
-    const from = this.opened;
+    const part: number[] = [];
     for (let j = -1; j !== i;) {
       j = this.open[--this.opened] ?? i;
-      this.flags[j] = (this.flags[j] ?? 0) & ~OPEN;
+      this.isOpen[j] = 0;
+      part.push(j);
     }
-    if (from - this.opened < 2) return;
-    this.count++;
-    for (let k = this.opened; k < from; k++)
-      this.flags[this.open[k] ?? 0] = (this.flags[this.open[k] ?? 0] ?? 0) | ON_RING;
-  }
-
-  has(i: number, bit: number): boolean {
-    return ((this.flags[i] ?? 0) & bit) !== 0;
+    if (part.length > 1) this.rings.push(part);
   }
 }
 
-/** Walks the plumbing: its handing order, its rings and their cuts. */
-export function walk(p: Plumbing): Walked {
+/** Walks the plumbing: its order (each tile after the tiles it hands to), and the rings in it. */
+export function walk(p: Plumbing): { readonly order: number[]; readonly rings: readonly number[][] } {
   const w = new Walk(p);
   w.all();
-  const { order } = w;
+  return { order: w.order, rings: w.rings };
+}
+
+/** The handing order (`walk`) with each ring's tiles taken out, and -1 less the ring's number where its last stood. */
+export function orderAround(order: readonly number[], ringOf: (i: number) => number, count: number): Int32Array {
+  const last = new Int32Array(count).fill(-1);
+  order.forEach((i, o) => {
+    const k = ringOf(i);
+    if (k >= 0) last[k] = o;
+  });
+  const out: number[] = [];
+  order.forEach((i, o) => {
+    const k = ringOf(i);
+    if (k < 0) out.push(i);
+    else if (last[k] === o) out.push(-1 - k);
+  });
+  return Int32Array.from(out);
+}
+
+/**
+ * The rings found (`walk` over the ways things can really go), as the plumbing keeps them: each ring's
+ * tiles in the handing order, which ring each tile is on, and whether each has a way off it (`real`
+ * from one of its tiles to a tile off it).
+ */
+export function ringsFound(order: readonly number[], found: readonly number[][], real: Plumbing): Rings {
+  const onRing = new Map<number, number>();
+  found.forEach((tiles, k) => {
+    for (const i of tiles) onRing.set(i, k);
+  });
+  const byRing = found.map(() => [] as number[]);
+  for (const i of order) byRing[onRing.get(i) ?? -1]?.push(i);
+  const starts = [0];
+  for (const tiles of byRing) starts.push((starts.at(-1) ?? 0) + tiles.length);
+  const exits = byRing.map((tiles, k) =>
+    tiles.some((i) => {
+      for (let c = 0; c < Math.max(1, real.ways(i)); c++) {
+        const t = real.to(i, c);
+        if (t >= 0 && onRing.get(t) !== k) return true;
+      }
+      return false;
+    })
+      ? 1
+      : 0,
+  );
+  const sorted = [...onRing.keys()].toSorted((a, b) => a - b);
   return {
-    order: Int32Array.from(order),
-    rings: Int32Array.from(order.filter((i) => w.has(i, ON_RING))),
-    cuts: Int32Array.from(order.filter((i) => w.has(i, ON_RING) && w.has(i, CUT) && p.carries(i))),
-    count: w.count,
+    count: found.length,
+    tiles: Int32Array.from(byRing.flat()),
+    starts: Int32Array.from(starts),
+    exits: Uint8Array.from(exits),
+    sorted: Int32Array.from(sorted),
+    ringOf: Int32Array.from(sorted, (i) => onRing.get(i) ?? -1),
+    done: new Uint8Array(onRing.size),
   };
+}
+
+/** No rings. */
+export const NO_RINGS: Rings = {
+  count: 0,
+  tiles: new Int32Array(0),
+  starts: Int32Array.of(0),
+  exits: new Uint8Array(0),
+  sorted: new Int32Array(0),
+  ringOf: new Int32Array(0),
+  done: new Uint8Array(0),
+};
+
+/** The ring a piece's own tile is on, or -1. */
+export function ringAt(rings: Rings, i: number): number {
+  let lo = 0;
+  let hi = rings.sorted.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    const t = rings.sorted[mid] ?? 0;
+    if (t === i) return rings.ringOf[mid] ?? -1;
+    if (t < i) lo = mid + 1;
+    else hi = mid - 1;
+  }
+  return -1;
+}
+
+/**
+ * Whether a ring has stopped for good: it has no way off it, and every tile of it carries a thing that
+ * has crossed it (a tunnel's way-in mouth, every tile under the ground full too). A ring with a holder
+ * on it, which may take more in, has not.
+ */
+export function ringStopped(y: Yard, rings: Rings, k: number): boolean {
+  if (k < 0 || rings.exits[k] === 1) return false;
+  for (let t = rings.starts[k] ?? 0; t < (rings.starts[k + 1] ?? 0); t++)
+    if (!fullAt(y, rings.tiles[t] ?? 0)) return false;
+  return true;
+}
+
+/** Whether what carries on a tile holds a thing that has crossed it, and, a way-in mouth, every tile under the ground one too. */
+function fullAt(y: Yard, i: number): boolean {
+  if (CARRIES[y.kind[i] ?? NONE] !== 1 || y.item[i] === NONE || (y.prog[i] ?? 0) < 8) return false;
+  const span = y.span[i] ?? 0;
+  const { under, along } = y.tunnels;
+  const at = tunnelOf(y, i) * SPAN_MOST;
+  for (let t = at; t < at + span; t++) if (under[t] === NONE || (along[t] ?? 0) < 8) return false;
+  return true;
 }
