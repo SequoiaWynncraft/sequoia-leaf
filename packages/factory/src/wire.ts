@@ -1,4 +1,5 @@
 import { BUFFER } from "./content/machines.ts";
+import { alight } from "./kinds/burner.ts";
 import { keep } from "./kinds/holder.ts";
 import type { Kit } from "./kinds/kit.ts";
 import { anything, empty, lay } from "./kinds/line.ts";
@@ -17,9 +18,9 @@ import { room as makerRoom, wants as makerWants } from "./kinds/maker.ts";
  */
 import { besideWater, toward } from "./land.ts";
 import { deliver, giveGoal } from "./orders.ts";
-import { carried, makes, MINUTE, mixPerMinute } from "./planner.ts";
+import { carried, makes, MINUTE, mixPerMinute, mixShare } from "./planner.ts";
 import { litAt, litOf } from "./power.ts";
-import { lit as litBig, outsOf, OWN, pieceOf, roomRound, takesAt } from "./sizes.ts";
+import { lit as litBig, outsOf, OWN, pieceOf, roomRound, sendsThing, takesAt } from "./sizes.ts";
 import { smogged, smogPace } from "./smog.ts";
 import {
   ALL_ITEMS,
@@ -96,7 +97,7 @@ import {
 
 export { sortWay } from "./kinds/sorter.ts";
 export { ahead, behind, WAY_TURN, wayIn } from "./tiles.ts";
-export { outsOf, pieceOf, takesAt } from "./sizes.ts";
+export { outsOf, pieceOf, sendsThing, takesAt } from "./sizes.ts";
 
 // ---------- who hands to whom ----------
 
@@ -340,7 +341,7 @@ export function sendPort(y: Yard, i: number, r: number, port: number, wire: Wire
   const o = outsOf(y, i)[port];
   const slot = o?.also ? y.holders.also : y.holders.out;
   const n = slot[r] ?? NONE;
-  if (!o || n === NONE) return false;
+  if (!o || n === NONE || !sendsThing(o, n)) return false;
   const w = y.land.w;
   const to = toward(y.land, i + o.dx + o.dy * w, o.way);
   const side = (o.way + 2) & 3;
@@ -402,11 +403,10 @@ export function rewire(y: Yard): Wire {
   return wire;
 }
 
-/** The power what burns gives as it stands, in halves: each burning now, as its kind says (`KindDef.burns`). */
+/** The power what burns gives as it stands, in halves: each burning now (`alight`), as its kind says (`KindDef.burns`). */
 function burningNow(y: Yard, burners: readonly number[]): number {
   let burning = 0;
-  for (const i of burners)
-    if ((y.holders.fuel[holderOf(y, i)] ?? 0) > 0) burning += BURNS[y.kind[i] ?? NONE]?.halves ?? 0;
+  for (const i of burners) if (alight(KIT, y, i)) burning += BURNS[y.kind[i] ?? NONE]?.halves ?? 0;
   return burning;
 }
 
@@ -528,6 +528,7 @@ export const KIT: Kit = {
   recipesFor,
   makes,
   mixPerMinute,
+  mixShare,
   MINUTE,
   carried,
   BURNS,
@@ -580,6 +581,7 @@ export const KIT: Kit = {
   sendPort,
   portTo,
   outsOf,
+  sendsThing,
   takesAt,
   refused,
   roomBeside: roomAt,

@@ -24,3 +24,7 @@ export const backAndSides = (w: number, h: number): Ports["in"] => sides(w, h, 0
 
 /** A tile of its front, from its left as it faces: 0 the leftmost. */
 export const front = (w: number, fromLeft: number): readonly [number, number] => [w - 1, fromLeft];
+
+/** What a piece's ways out are called, by how many it has, from its left as it faces: "left", "middle", "right". */
+export const wayNames = (n: number): readonly string[] =>
+  n === 3 ? ["left", "middle", "right"] : n === 2 ? ["left", "right"] : ["front"];

@@ -9,6 +9,7 @@
  * (`thewire.test.ts`) is what holds the tables.
  */
 import * as F from "../src/index.ts";
+import { type SmogFigure, smogFigure } from "./smog.ts";
 
 /** What SPEC-2 section 8 means tiers 5 to 8 to take, in minutes from the opening to the commission done, and the part of that spent building. */
 export const TARGETS_FROM: Readonly<
@@ -67,17 +68,20 @@ export interface Estimate {
   readonly research: number;
   readonly building: number;
   readonly minutes: number;
+  /** The smog on the plot its dirty work stands on, with no second plot (`smog.ts`), for a tier with one named. */
+  readonly smog: SmogFigure | null;
 }
 
 /**
  * The estimate for a tier: its nodes in the tables' order up to its commission (the long works after
- * it are no part of the path), beside the research on the commission's path.
+ * it are no part of the path), beside the research those nodes need (a node before the commission
+ * may need some the commission does not: tier 6's gate path, the powerhouse).
  */
 export function estimate(tier: number): Estimate {
   const all = F.ALL_GOALS.filter((g) => F.isNode(g) && F.GOALS[g]?.tier === tier);
   const commission = all.find((g) => F.GOALS[g]?.kind === "commission");
   const nodes = commission === undefined ? all : all.slice(0, all.indexOf(commission) + 1);
-  const research = commission === undefined ? [] : path(commission).filter((g) => F.GOALS[g]?.tier === tier);
+  const research = [...new Set(nodes.flatMap((g) => path(g)))].filter((g) => F.GOALS[g]?.tier === tier);
   const per = MINUTES_FROM[tier] ?? 20;
   const rows = [...nodes, ...research].map((g) => {
     const want = F.GOALS[g]?.want ?? F.counts();
@@ -102,11 +106,16 @@ export function estimate(tier: number): Estimate {
   const building = ((sum((r) => r.pieces, true) + folioPieces) * PIECE_SECONDS) / 60;
   const onNodes = sum((r) => r.minutes, true) + building;
   const onResearch = sum((r) => r.minutes, false);
-  return { tier, rows, nodes: onNodes, research: onResearch, building, minutes: Math.max(onNodes, onResearch) };
+  const smog = smogFigure(tier, nodes, per, kinds, FOLIOS_FROM, onResearch);
+  return { tier, rows, nodes: onNodes, research: onResearch, building, minutes: Math.max(onNodes, onResearch), smog };
 }
 
 /** A number of the table, whole. */
 const n = (v: number): string => String(Math.round(v));
+
+/** The smog figure in a sentence, against SPEC-2's target. */
+const smogText = (s: SmogFigure): string =>
+  `Smog on ${s.plot}, with every dirty machine of the tier's lines on it and no second plot: the most ${n(s.most)} of ${F.SMOG.most}; its machines lose ${(s.lost * 100).toFixed(1)}% of their ticks; the target ${s.target[0]}% to ${s.target[1]}%.`;
 
 /** The estimate as a table, against SPEC-2's targets. */
 export function estimateText(e: Estimate): string {
@@ -120,5 +129,6 @@ export function estimateText(e: Estimate): string {
     "",
     `Nodes and their building: ${n(e.nodes)} minutes (building ${n(e.building)}). Research on the commission's path: ${n(e.research)} minutes.`,
     `The tier, opening to commission: ${n(e.minutes)} minutes${t ? `; the target ${t.minutes[0]} to ${t.minutes[1]}, building ${t.building[0]} to ${t.building[1]}` : ""}.`,
+    ...(e.smog ? [smogText(e.smog)] : []),
   ].join("\n");
 }

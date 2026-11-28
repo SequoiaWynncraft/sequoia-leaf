@@ -9,7 +9,7 @@
  * of what a card prints (`prints.ts`), worked out from the yard it is handed.
  */
 import {
-  aim,
+  countedFor,
   DOES,
   feeders,
   GATHERING,
@@ -21,7 +21,6 @@ import {
   type Item,
   ITEM_INFO,
   type Kind,
-  lastRecipe,
   locked,
   machineRate,
   needs,
@@ -117,9 +116,9 @@ export interface Flow {
 
 /** The recipe of the machine standing on a tile, or null for a piece with none in mind. */
 export function flowOf(w: Yard, i: number, counts: boolean): Flow | null {
-  // Between batches it holds nothing to aim at: it is counted for what it last began, as the yard's
-  // Items are (`flow`), so its card says the same between batches as during them.
-  const recipe = aim(w, i) ?? lastRecipe(w, i);
+  // Between batches it holds nothing to aim at: it is counted for what it last began (`countedFor`),
+  // as the yard's Items and its plot's smog are, so its card says the same between batches as during them.
+  const recipe = countedFor(w, i);
   if (!recipe) return null;
   const grade = w.grade[i] ?? 0;
   const here = w.kind[i] ?? recipe.by;

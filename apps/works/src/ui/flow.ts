@@ -92,15 +92,18 @@ export function flowNode(art: Art, f: Flow): HTMLElement {
 }
 
 /**
- * A machine's own pace in place of its kind's (from its quickest recipe to its slowest), where it has a
- * recipe in mind (`f`): what it makes
- * a minute of what it is making, the number its recipe shows, "up to" what its belt carries where
- * that holds it back.
+ * A standing piece's own pace in place of its kind's, so that its headline is the rate its rows say:
+ * for a machine with a recipe in mind (`f`), what it makes a minute of what it is making, the number
+ * its recipe shows, "up to" what its belt carries where that holds it back; for a piece whose kind
+ * says its own (`now`, a breaker's or a still's: what it breaks or distils a minute now), that, in
+ * place of the stat of the same name.
  */
-export const ownPace = (stats: Description["stats"], f: Flow | null): (Stat | string)[] =>
-  (stats ?? []).map((st) =>
-    f && typeof st !== "string" && st.label.startsWith("Makes") ? { label: "Makes", value: madeSays(f) } : st,
-  );
+export const ownPace = (stats: Description["stats"], f: Flow | null, now: Stat | null = null): (Stat | string)[] =>
+  (stats ?? []).map((st) => {
+    if (typeof st === "string") return st;
+    if (f && st.label.startsWith("Makes")) return { label: "Makes", value: madeSays(f) };
+    return now && st.label === now.label ? now : st;
+  });
 /** What a machine makes a minute, as its card says it. */
 export const madeSays = (f: Flow): string =>
   f.most === null ? perMinute(f.perMinute) : `up to ${perMinute(f.perMinute)}`;

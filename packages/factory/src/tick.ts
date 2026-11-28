@@ -42,8 +42,8 @@ import { carryOn } from "./kinds/line.ts";
 import { RULES } from "./kinds/list.ts";
 import { work as make } from "./kinds/maker.ts";
 import { passUnder } from "./kinds/under.ts";
-import { countSmog, FULL } from "./smog.ts";
-import { BURNS, CARRIES, ITEM_COUNT, NONE, PACE, SPAN_MOST, TIMES_MOST } from "./tables.ts";
+import { countSmog, FULL, smogged } from "./smog.ts";
+import { BURNS, type Burns, CARRIES, ITEM_COUNT, NONE, PACE, SPAN_MOST, TIMES_MOST } from "./tables.ts";
 import { KIT, rewire, roomAt } from "./wire.ts";
 import { holderOf, take, tunnelOf, type Wire, type Yard } from "./yard.ts";
 
@@ -70,7 +70,7 @@ export function step(y: Yard): void {
 
 /**
  * Power: what burns for power burns what it holds, as its kind says it burns (`KindDef.burns`): once
- * the last piece has burned out it takes another of its fuel, and gives its power each tick one
+ * the last piece has burned out it takes another (`takeFuel`), and gives its power each tick one
  * burns. What there is is set against what is drawn. Says whether the pieces that work work this tick.
  */
 function power(y: Yard, wire: Wire, waiting: Uint8Array): boolean {
@@ -82,11 +82,7 @@ function power(y: Yard, wire: Wire, waiting: Uint8Array): boolean {
     const burns = BURNS[y.kind[i] ?? NONE];
     if (!burns) continue;
     const r = holderOf(y, i);
-    if ((h.fuel[r] ?? 0) <= 0 && (h.stock[r * ITEM_COUNT + burns.fuel] ?? 0) > 0) {
-      take(h, r, burns.fuel);
-      h.fuel[r] = burns.ticks;
-      roomAt(y, i, waiting);
-    }
+    if ((h.fuel[r] ?? 0) <= 0) takeFuel(y, i, r, burns, waiting);
     if ((h.fuel[r] ?? 0) > 0) {
       h.fuel[r] = (h.fuel[r] ?? 1) - 1;
       supply += burns.halves;
@@ -98,6 +94,26 @@ function power(y: Yard, wire: Wire, waiting: Uint8Array): boolean {
   const works = store >= demand;
   y.charge = supply >= demand ? 0 : works ? store - demand : store;
   return works;
+}
+
+/**
+ * A burner with nothing burning takes a piece of the first of its fuels it holds, if it holds any: it
+ * burns for that fuel's ticks, adds its smog to the plot, and one with more than one fuel notes which
+ * it burns (`Holders.making`), for its words.
+ */
+function takeFuel(y: Yard, i: number, r: number, burns: Burns, waiting: Uint8Array): void {
+  const h = y.holders;
+  const { fuels } = burns;
+  for (let f = 0; f < fuels.length; f++) {
+    const fuel = fuels[f];
+    if (!fuel || (h.stock[r * ITEM_COUNT + fuel.fuel] ?? 0) === 0) continue;
+    take(h, r, fuel.fuel);
+    h.fuel[r] = fuel.ticks;
+    if (fuels.length > 1) h.making[r] = fuel.fuel;
+    if (fuel.smog > 0) smogged(y, i, fuel.smog);
+    roomAt(y, i, waiting);
+    return;
+  }
 }
 
 /** Things on what carries (belts, splitters, joiners, sorters and tunnel mouths) move along, in eighths of a tile, each at its own grade's pace. */

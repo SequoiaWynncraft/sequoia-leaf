@@ -6,11 +6,14 @@
 import { perMinute, whole } from "@sequoia-leaf/core";
 
 import { SMOG } from "./content/smog.ts";
+import { fuelNow } from "./kinds/burner.ts";
 import { MINUTE } from "./planner.ts";
+import { litAt } from "./power.ts";
 import { pieceOf } from "./sizes.ts";
 import { shareAt, standingOn, stepOf } from "./smog.ts";
 import { machineRate } from "./status.ts";
-import { isKind, NONE, SMOG_OF } from "./tables.ts";
+import { BURNS, isKind, NONE, SMOG_OF } from "./tables.ts";
+import { KIT } from "./wire.ts";
 import type { Yard } from "./yard.ts";
 
 /** What a plot's ground clears a minute, and each redwood standing on one. */
@@ -18,17 +21,29 @@ const GROUND = (SMOG.ground * MINUTE) / SMOG.every;
 const REDWOOD = (SMOG.redwood * MINUTE) / SMOG.every;
 
 /**
- * What a plot's dirty pieces make a minute: each piece's things a minute as its own card says it
- * (`machineRate`: at its grade's pace, the share power and smog let it, and no more than its way out
- * carries), times what each adds.
+ * What the piece standing on its own tile `i` makes of smog a minute, as its own card says it: a
+ * burner, what its fuel adds a piece for each piece it burns a minute, of the fuel it burns now
+ * (`fuelNow`, as the yard's needs count it), while power reaches it; any other piece, what it adds for
+ * each thing it finishes times its things a minute (`machineRate`: at its grade's pace, the share
+ * power and smog let it, and no more than its way out carries).
  */
+export function smogRate(y: Yard, i: number): number {
+  const k = y.kind[i] ?? NONE;
+  if (BURNS[k]) {
+    const fuel = fuelNow(KIT, y, i);
+    return fuel && fuel.smog > 0 && litAt(y, i) ? (fuel.smog * MINUTE) / fuel.ticks : 0;
+  }
+  const each = SMOG_OF[k] ?? 0;
+  return each === 0 ? 0 : each * machineRate(y, i).effective;
+}
+
+/** What a plot's dirty pieces make a minute, each as its own card says it (`smogRate`). */
 export function madeOn(y: Yard, n: number): number {
   let made = 0;
   for (let i = 0; i < y.kind.length; i++) {
     const k = y.kind[i] ?? NONE;
-    const each = SMOG_OF[k] ?? 0;
-    if (each === 0 || !isKind(k) || y.land.plot[i] !== n || pieceOf(y, i) !== i) continue;
-    made += each * machineRate(y, i).effective;
+    if ((SMOG_OF[k] === 0 && !BURNS[k]) || !isKind(k) || y.land.plot[i] !== n || pieceOf(y, i) !== i) continue;
+    made += smogRate(y, i);
   }
   return made;
 }

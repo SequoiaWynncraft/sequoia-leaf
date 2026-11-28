@@ -5,8 +5,10 @@
  * pipes and fireworks, spyglasses and clocks, and the orrery made of them. Tier 5 adds salvage from
  * the old workings and what a breaker breaks it into: copper and slag among things the yard already
  * makes; wire and gravel from those, coils and bulbs, the Spark folio, telegraphs and strings of
- * lights. Slag is the first thing the town does not buy (`unsold`). Nothing here fells a living
- * tree: wood is deadfall, picked up off the forest floor.
+ * lights. Slag is the first thing the town does not buy (`unsold`). Tier 6 adds tar, and the three
+ * things a still parts it into, pitch, creosote and spirit, none of which the town buys either; and
+ * tarmac, sleepers and varnish, each made of one of them. Nothing here fells a living tree: wood is
+ * deadfall, picked up off the forest floor.
  *
  * A new thing goes at the end of the list: a thing riding a belt is kept by its place in it.
  */
@@ -50,6 +52,13 @@ export const ITEMS = [
   "spark",
   "telegraph",
   "lights",
+  "tar",
+  "pitch",
+  "creosote",
+  "spirit",
+  "tarmac",
+  "sleeper",
+  "varnish",
 ] as const;
 export type ItemName = (typeof ITEMS)[number];
 
@@ -113,4 +122,11 @@ export const ITEM: Record<ItemName, ItemInfo> = {
   spark: { name: "Spark folio", many: "Spark folios", step: 4, worth: 7, folio: true },
   telegraph: { name: "Telegraph", many: "telegraphs", step: 4, worth: 18 },
   lights: { name: "String of lights", many: "strings of lights", step: 4, worth: 21 },
+  tar: { name: "Tar", many: "tar", step: 0, worth: 0.1 },
+  pitch: { name: "Pitch", many: "pitch", step: 1, worth: 0, unsold: true, work: 20 },
+  creosote: { name: "Creosote", many: "creosote", step: 1, worth: 0, unsold: true, work: 20 },
+  spirit: { name: "Spirit", many: "spirit", step: 1, worth: 0, unsold: true, work: 20 },
+  tarmac: { name: "Tarmac", many: "tarmac", step: 3, worth: 1.8 },
+  sleeper: { name: "Sleeper", many: "sleepers", step: 2, worth: 2.4 },
+  varnish: { name: "Varnish", many: "varnish", step: 2, worth: 1.7 },
 };

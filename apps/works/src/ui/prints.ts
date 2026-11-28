@@ -40,6 +40,7 @@ import {
   type MachineRate,
   machineRate,
   makeable,
+  makersOf,
   MIX_OF,
   MOST,
   NODES,
@@ -130,7 +131,11 @@ function itemPrint(k: Item): ItemPrint {
       if (plot) found.push([plot.plot, tiles, w.plots.includes(plot.plot)]);
     }
   }
-  const makers = kindsMaking(k).filter((m, n) => n === 0 || locked(w.open, { build: m }) === null);
+  // Each recipe's own machine and each mix's, unlocked or not, so that a card says what to research
+  // next (creosote names the cracker before it is known); another kind that makes it too (an
+  // assembler, as a bench), once it is unlocked.
+  const own = new Set(makersOf(k).map((r) => r.by));
+  const makers = kindsMaking(k).filter((m) => own.has(m) || locked(w.open, { build: m }) === null);
   return { card: "item", item: k, lock: RECIPE[k] ? locked(w.open, { make: k }) : null, found, asked, makers };
 }
 

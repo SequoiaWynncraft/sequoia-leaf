@@ -73,6 +73,7 @@ import type { Art } from "../art/index.ts";
 import { FLAG_AT } from "../art/machines.ts";
 import { stump } from "../art/nature.ts";
 import { pageOf } from "../kinds/index.ts";
+import type { Standing } from "../kinds/kind.ts";
 import { yardSfx } from "../sound.ts";
 import { flowNode, ownPace } from "./flow.ts";
 import {
@@ -429,6 +430,9 @@ export function saidOf(p: StandingPrint): string {
   return pageOf(k)?.standing?.said?.(p) ?? p.line ?? KIND_INFO[k]?.what ?? "";
 }
 
+/** A standing piece's pace now, where its kind gives its own (`Standing.pace`). */
+const paceNow = (own: Standing | undefined, p: StandingPrint): Stat | null => own?.pace?.(p) ?? null;
+
 /** A machine standing in the yard: its kind's card, with what this one is doing and holds, and what can be done with it. */
 function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
   const { machine: m, x, y } = p;
@@ -498,7 +502,7 @@ function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
   const said = saidOf(p);
   return {
     ...base,
-    stats: ownPace(base.stats, p.flow),
+    stats: ownPace(base.stats, p.flow, paceNow(own, p)),
     tag: el("span", p.trouble ? "k-coral" : "", { text: said }),
     // What is wrong and what to do about it comes first; the numbers are under it.
     blocks: [

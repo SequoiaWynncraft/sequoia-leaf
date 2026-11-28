@@ -100,6 +100,13 @@ const HUE: Readonly<Record<ItemName, string>> = {
   spark: "#d9c27a",
   telegraph: "#9c8a6a",
   lights: "#e6d9a8",
+  tar: "#1f1b24",
+  pitch: "#2a2530",
+  creosote: "#5a4636",
+  spirit: "#c9b98a",
+  tarmac: "#353039",
+  sleeper: "#6b5040",
+  varnish: "#b8873f",
 };
 const HUES = ALL_ITEMS.map((n) => HUE[itemName(n)]);
 
@@ -116,7 +123,7 @@ const EDGES = GROUNDS.map((g) => mix(g, INK, 0.45));
 const QUIET = [0.5, 0.34, 0.22] as const;
 /** The things that lie in the ground, a raw each (a thing of step 0), in the tables' order. */
 export const LYING: readonly Item[] = ALL_ITEMS.filter(isRaw);
-/** What lies on a tile as the map keeps it in 3 bits: a thing's place among those that lie in the ground, from 1; 0 for nothing. */
+/** What lies on a tile as the map keeps it in 4 bits: a thing's place among those that lie in the ground, from 1; 0 for nothing. */
 const LIES_AT = Uint8Array.from(ALL_ITEMS, (n) => LYING.indexOf(n) + 1);
 export const liesOf = (n: number): number => LIES_AT[n] ?? 0;
 const LIES = GROUNDS.map((g, of) => LYING.map((n) => mix(g, HUE[itemName(n)], QUIET[of] ?? 0.3)));
@@ -124,7 +131,7 @@ const LIES = GROUNDS.map((g, of) => LYING.map((n) => mix(g, HUE[itemName(n)], QU
 const BED = mix(BARK[0], INK, 0.45);
 const WOOD = BARK[2];
 /**
- * A line's paint or, unpainted, what it carries, as the map keeps it in 8 bits (never both drawn): 0
+ * A line's paint or, unpainted, what it carries, as the map keeps it in 7 bits (never both drawn): 0
  * for neither, a paint as itself (1 to 7), a thing as 8 more than its number.
  */
 export const lineField = (tint: number, load: number): number => (tint > 0 ? tint : load === NONE ? 0 : 8 + load);
@@ -328,8 +335,8 @@ export function makePlan(px: number): Plan {
 
 /**
  * A tile as one number: everything its picture is painted from. From the low bits: whose ground (2),
- * a plot's edges (2), water, a redwood, what lies in it (3, `liesOf`), what stands on it (5), a belt's
- * arms or which part of the depot (8), a line's paint or what it carries (8, `lineField`), a tunnel
+ * a plot's edges (2), water, a redwood, what lies in it (4, `liesOf`), what stands on it (5), a belt's
+ * arms or which part of the depot (8), a line's paint or what it carries (7, `lineField`), a tunnel
  * under it (2).
  */
 function numberOf(s: Seen, y: Yard, L: Layout, i: number, depot: number): number {
@@ -344,15 +351,15 @@ function numberOf(s: Seen, y: Yard, L: Layout, i: number, depot: number): number
     (liesOf(lies) << 6) |
     ((s.under[i] ?? 0) << 30);
   if (k === NONE) return n >>> 0;
-  n |= (k + 1) << 9;
+  n |= (k + 1) << 10;
   if (carries(k)) {
     const tint = y.tint[i] ?? 0;
     const load = s.carried[i] ?? NONE;
     // A kind the picture near does not draw yet has no arms in the layout: they are worked out here.
-    n |= ((L.arms[i] || armsAt(y, i)) << 14) | (lineField(tint, load) << 22);
+    n |= ((L.arms[i] || armsAt(y, i)) << 15) | (lineField(tint, load) << 23);
   } else if (FIXED[k] === 1) {
     const W = land.w;
-    n |= ((i % W) - (depot % W) + 1 + (Math.floor(i / W) - Math.floor(depot / W) + 1) * 3) << 14;
+    n |= ((i % W) - (depot % W) + 1 + (Math.floor(i / W) - Math.floor(depot / W) + 1) * 3) << 15;
   }
   return n >>> 0;
 }
@@ -361,9 +368,9 @@ function numberOf(s: Seen, y: Yard, L: Layout, i: number, depot: number): number
 function tile(g: Ctx, P: number, x: number, y: number, n: number): void {
   const ground = n & 3;
   const edge = (n >> 2) & 3;
-  const lies = (n >> 6) & 7;
-  const kind = ((n >> 9) & 31) - 1;
-  const detail = (n >> 14) & 255;
+  const lies = (n >> 6) & 15;
+  const kind = ((n >> 10) & 31) - 1;
+  const detail = (n >> 15) & 255;
   // A line's width and the ground left either side of it: 1 and 1 of 3 pixels, 2 and 1 of 4, 4 and 2 of 8.
   const m = Math.floor(P / 3);
   const t = P - m * 2;
@@ -387,7 +394,7 @@ function tile(g: Ctx, P: number, x: number, y: number, n: number): void {
     return;
   }
   if (carries(kind)) {
-    const line = lineColour((n >> 22) & 255);
+    const line = lineColour((n >> 23) & 127);
     // The bed, a pixel wider than the line each side, and then the line: the middle, and an arm to each side it joins.
     for (let pass = 0; pass < 2; pass++) {
       const grow = pass === 0 ? 1 : 0;

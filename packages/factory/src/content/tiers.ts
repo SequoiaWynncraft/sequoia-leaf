@@ -11,4 +11,5 @@ export const TIERS: readonly TierInfo[] = [
   { name: "The Study" },
   { name: "The gate" },
   { name: "The wire" },
+  { name: "The still" },
 ];

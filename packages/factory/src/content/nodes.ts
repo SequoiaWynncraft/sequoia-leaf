@@ -9,6 +9,7 @@ import type { KindName } from "../kinds/list.ts";
 import type { ItemName, Wants } from "./items.ts";
 import { OUTER_IDS, type PlotName } from "./plots.ts";
 import { TIER_5 } from "./tier5.ts";
+import { TIER_6 } from "./tier6.ts";
 
 /** `whole`: a blueprint of the whole yard, kept and put back with Select (`whole.ts`). */
 export const TOOLS = ["paint", "select", "upgrade", "whole"] as const;
@@ -476,4 +477,5 @@ export const NODES: readonly NodeInfo[] = [
     needs: ["observatory", "orreryplans"],
   },
   ...TIER_5,
+  ...TIER_6,
 ];

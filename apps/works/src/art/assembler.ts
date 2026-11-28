@@ -23,13 +23,13 @@ const FOOT = 50;
 const DOOR = { x: 17, w: 14 } as const;
 
 /** Tar on timber, darkest first: the darkest things in the yard but pitch. */
-const TAR = [DARK, BARK[0], BARK[1]] as const;
+export const TAR = [DARK, BARK[0], BARK[1]] as const;
 /** The cold cream light of the Spark machines, in two strengths; and their glass unlit. */
-const LIGHT = [PAPER[2], CREAM] as const;
-const UNLIT = [IRON[1], IRON[2]] as const;
+export const LIGHT = [PAPER[2], CREAM] as const;
+export const UNLIT = [IRON[1], IRON[2]] as const;
 
 /** Courses of brick, three pixels a course, offset every other, the mortar dark. */
-function bricks(g: Ctx, x: number, y: number, w: number, h: number, seed: number): void {
+export function bricks(g: Ctx, x: number, y: number, w: number, h: number, seed: number): void {
   R(g, x, y, w, h, BARK[0]);
   for (let r = 0; r * 3 < h; r++) {
     const by = y + r * 3;

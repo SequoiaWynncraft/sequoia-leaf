@@ -56,6 +56,7 @@ export interface Kit {
   readonly recipesFor: typeof Tables.recipesFor;
   readonly makes: typeof Planner.makes;
   readonly mixPerMinute: typeof Planner.mixPerMinute;
+  readonly mixShare: typeof Planner.mixShare;
   readonly MINUTE: typeof Planner.MINUTE;
   readonly carried: typeof Planner.carried;
   readonly BURNS: typeof Tables.BURNS;
@@ -115,6 +116,7 @@ export interface Kit {
   readonly sendPort: typeof Wire.sendPort;
   readonly portTo: typeof Wire.portTo;
   readonly outsOf: typeof Wire.outsOf;
+  readonly sendsThing: typeof Wire.sendsThing;
   readonly takesAt: typeof Wire.takesAt;
   readonly refused: typeof Wire.refused;
   readonly roomBeside: typeof Wire.roomBeside;

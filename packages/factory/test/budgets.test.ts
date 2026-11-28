@@ -103,12 +103,13 @@ const kindOf = (m: string): string => m.split(": ").slice(0, 2).join(": ");
  * What a yard of about 6,000 pieces may hold: every array it reaches but its land, as the page and
  * Leaf hold it after building it (its side tables grown as they were built, not as read back).
  * 440 KB since tier 5: each holder's row keeps a count of each of 40 things, not 30 (28 KB at this
- * yard's 1,395 rows), and two parts of its own, a mix's place and work past a half-tick (3 KB).
+ * yard's 1,395 rows), and two parts of its own, a mix's place and work past a half-tick (3 KB). 460 KB
+ * since tier 6: 47 things, not 40 (14 bytes more a row: 20 KB at 1,395 rows).
  */
-const HELD_MOST = 440 * 1024;
+const HELD_MOST = 460 * 1024;
 
 describe("memory", () => {
-  test("a yard of about 6,000 pieces, as built, holds under 440 KB: every array it reaches but its land", () => {
+  test("a yard of about 6,000 pieces, as built, holds under 460 KB: every array it reaches but its land", () => {
     const y = remade(land.w, land.h);
     saveBlueprints(y);
     expect(F.bytesHeld(y)).toBeLessThan(HELD_MOST);

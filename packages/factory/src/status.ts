@@ -5,11 +5,12 @@
  * both for itself (`kinds/`), in the words they share (`kinds/say.ts`). Nothing here changes the yard
  * but working out its power and plumbing if a change left them unknown.
  */
+import { alight, fuelNow } from "./kinds/burner.ts";
 import { RULES } from "./kinds/list.ts";
 import { holding as holdingOf, type MachineRate, rateOf, type State, STATES, TROUBLE } from "./kinds/say.ts";
 import { litAt } from "./power.ts";
 import { pieceOf } from "./sizes.ts";
-import { ALL_KINDS, BURNS, isMaker, type Item, type Kind, NONE, type Recipe } from "./tables.ts";
+import { ALL_KINDS, BURNS, type Fuel, isMaker, type Item, type Kind, NONE, type Recipe } from "./tables.ts";
 import { KIT, rewire } from "./wire.ts";
 import { type Counts, holderOf, type Yard } from "./yard.ts";
 
@@ -60,13 +61,20 @@ export function keepLast(from: Yard, into: Yard): void {
 }
 
 /**
+ * The recipe a machine is counted for, by its card, the yard's Items and its plot's smog alike: what it
+ * is working toward (`aim`), or between batches, holding nothing and told nothing, what it last began
+ * (`lastRecipe`). None for a piece that makes nothing by recipe, or a machine that has begun nothing.
+ */
+export const countedFor = (y: Yard, i: number): Recipe | null => aim(y, i) ?? lastRecipe(y, i);
+
+/**
  * What a gatherer, a machine or a Study does a minute (the planner's `makes`), as every screen says
- * it: what it turns out (or a Study takes in) at full power, for what it is making (`aim`, or the
- * recipe given); the share of ticks it works, none where power does not reach and else the yard's
+ * it: what it turns out (or a Study takes in) at full power, for what it is counted for (`countedFor`,
+ * or the recipe given); the share of ticks it works, none where power does not reach and else the yard's
  * pace; what it does now at that share; and the power it draws now, its grade's where power reaches
  * it and none where it does not. Anything else does nothing a minute.
  */
-export const machineRate = (y: Yard, i: number, recipe: Recipe | null = aim(y, i)): MachineRate =>
+export const machineRate = (y: Yard, i: number, recipe: Recipe | null = countedFor(y, i)): MachineRate =>
   rateOf(KIT, y, i < 0 ? i : pieceOf(y, i), recipe);
 
 /**
@@ -88,15 +96,23 @@ export function flow(y: Yard, made: Counts, needed: Counts): void {
   const wire = y.wire ?? rewire(y);
   const { work, burners } = wire;
   for (let c = 0; c < work.length; c++) flowAt(y, work[c] ?? 0, made, needed);
-  for (let b = 0; b < BURNING.length; b++) {
-    const k = BURNING[b] ?? NONE;
-    const burns = BURNS[k];
-    if (!burns) continue;
-    let n = 0;
-    for (let c = 0; c < burners.length; c++) if (y.kind[burners[c] ?? 0] === k) n++;
-    needed[burns.fuel] = (needed[burns.fuel] ?? 0) + n * (KIT.MINUTE / burns.ticks);
-  }
+  // Each kind's fuel once, as many as burn it now times what one burns, in the tables' order.
+  for (const k of BURNING)
+    for (const f of BURNS[k]?.fuels ?? []) {
+      let n = 0;
+      for (let c = 0; c < burners.length; c++) {
+        const i = burners[c] ?? 0;
+        if (y.kind[i] === k && fuelNow(KIT, y, i) === f) n++;
+      }
+      needed[f.fuel] = (needed[f.fuel] ?? 0) + n * (KIT.MINUTE / f.ticks);
+    }
 }
+
+/** Whether the burner on a tile (any of a big one's tiles) is burning, as its card and its picture say it: power reaches it, and it is alight (`alight`). */
+export const burningAt = (y: Yard, i: number): boolean => litAt(y, i) && alight(KIT, y, pieceOf(y, i));
+
+/** What the burner on a tile (any of a big one's tiles) burns now, as its card says it (`fuelNow`). */
+export const fuelAt = (y: Yard, i: number): Fuel | undefined => fuelNow(KIT, y, pieceOf(y, i));
 
 /** The kinds that burn for power, in the tables' order. */
 const BURNING: readonly Kind[] = ALL_KINDS.filter((k) => BURNS[k] !== null);

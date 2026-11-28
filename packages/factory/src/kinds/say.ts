@@ -68,13 +68,14 @@ export function slow(k: Kit, y: Yard, i: number): string {
 /**
  * Where the piece on its own tile `i` sends a thing held ready: each tile it leaves from and the tile it
  * goes to. One of one tile sends from its tile, ahead or by the ways it sends the thing `n` by; one of
- * more sends from each way out that sends its finished thing (or, with `also`, its by-product).
+ * more sends from each way out that sends its finished thing (or, with `also`, its by-product), and
+ * sends `n` (a way for one thing only sends that thing).
  */
 function sendings(k: Kit, y: Yard, i: number, n: Item, also: boolean): { from: number; to: number }[] {
   const outs = k.outsOf(y, i);
   if (outs.length > 0)
     return outs.flatMap((o, p) =>
-      o.also === also ? [{ from: i + o.dx + o.dy * y.land.w, to: k.portTo(y, i, p) }] : [],
+      o.also === also && k.sendsThing(o, n) ? [{ from: i + o.dx + o.dy * y.land.w, to: k.portTo(y, i, p) }] : [],
     );
   const ways = k.waysOf(y.kind[i] ?? k.NONE);
   if (ways === 0) return [{ from: i, to: k.nextOf(y, i) }];
@@ -167,11 +168,29 @@ export interface MachineRate {
   readonly most: number | null;
 }
 
-/** What the tile a piece hands to carries a minute, if something that carries stands there: else no limit. */
-function carriedAhead(k: Kit, y: Yard, i: number): number {
-  const to = i < 0 ? -1 : k.nextOf(y, i);
+/** What a tile carries a minute, if something that carries stands there: else no limit. */
+function carriedAt(k: Kit, y: Yard, to: number): number {
   const there = to < 0 ? k.NONE : (y.kind[to] ?? k.NONE);
   return k.carries(there) ? k.carried(y.grade[to] ?? 1) : Infinity;
+}
+
+/**
+ * The most a piece can turn out a minute for what it hands to carry it: what the tile it hands to
+ * carries; for one whose ways out each send one thing of its mix (a still's), the least of each way's
+ * belt over that thing's share of the mix, as the slowest way holds all of it back.
+ */
+function carriedAhead(k: Kit, y: Yard, i: number): number {
+  if (i < 0) return Infinity;
+  const outs = k.outsOf(y, i);
+  const kind = y.kind[i] ?? k.NONE;
+  if (!k.isKind(kind) || outs.length === 0 || outs[0]?.only === k.NONE) return carriedAt(k, y, k.nextOf(y, i));
+  let most = Infinity;
+  for (let p = 0; p < outs.length; p++) {
+    const only = outs[p]?.only ?? k.NONE;
+    const share = k.isItem(only) ? k.mixShare(kind, only) : 0;
+    if (share > 0) most = Math.min(most, carriedAt(k, y, k.portTo(y, i, p)) / share);
+  }
+  return most;
 }
 
 /**

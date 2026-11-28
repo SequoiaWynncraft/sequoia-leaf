@@ -83,7 +83,8 @@ describe("tier 5's tables", () => {
       if (!r) throw new Error(`no recipe for ${F.itemName(n)}`);
       const mine = F.MADE_BY[r.by] ?? [];
       const at = mine.indexOf(r);
-      const older = mine.filter((o) => !fresh.includes(o.out));
+      // An older recipe is one of a thing numbered before tier 5's first: things are appended in order.
+      const older = mine.filter((o) => o.out < Math.min(...fresh));
       expect([F.itemName(n), older.every((o) => mine.indexOf(o) < at)]).toEqual([F.itemName(n), true]);
       const within = mine.filter((o) => o !== r && r.from.every((part) => o.from.includes(part)));
       expect([F.itemName(n), within.map((o) => F.itemName(o.out))]).toEqual([F.itemName(n), []]);

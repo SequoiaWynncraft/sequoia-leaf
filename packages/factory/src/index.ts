@@ -88,6 +88,7 @@ export {
   waysOf,
 } from "./wire.ts";
 export { KIND_DEFS, type KindRules, RULES } from "./kinds/list.ts";
+export { wayNames } from "./kinds/ports.ts";
 export {
   cornerOf,
   FACING,
@@ -107,6 +108,6 @@ export type { Ports } from "./kinds/kind.ts";
 export type { Hooks, KindDef, Words } from "./kinds/kind.ts";
 export * from "./yard.ts";
 export { clearsAt, countSmog, setLevel, shareAt, smogPace, standingOn, stepOf } from "./smog.ts";
-export { clearsLine, madeOn, redwoodClears, smogLine, smogTrouble } from "./smogwords.ts";
+export { clearsLine, madeOn, redwoodClears, smogLine, smogRate, smogTrouble } from "./smogwords.ts";
 export { SMOG } from "./content/smog.ts";
 export { MIXES } from "./content/mixes.ts";

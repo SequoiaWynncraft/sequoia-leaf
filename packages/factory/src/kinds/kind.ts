@@ -16,6 +16,7 @@
  */
 import type { Lay } from "../build.ts";
 import type { KeptPiece } from "../cells.ts";
+import type { ItemName } from "../content/items.ts";
 import type { Kept, Piece } from "../pieces.ts";
 import type { Goal, Item, Open, Recipe } from "../tables.ts";
 import type { Counts, Wire, Yard } from "../yard.ts";
@@ -175,12 +176,17 @@ export interface KindDef<N extends string = string> {
   /** Whether it works for the research first in the line: its work is dropped when another comes first. */
   readonly studies?: true;
   /**
-   * Whether it burns for power, where power reaches it: a piece of `fuel` (a thing, by name) at a
-   * time, for `ticks` ticks, giving its power (`info.gives`) while it burns, and holding up to `holds`
-   * pieces. The tick burns it (`tick.ts`'s `power`) from this alone, with no step of the kind's:
-   * with a step a piece for every burner every tick cost the tick more than all the burning.
+   * Whether it burns for power, where power reaches it: a piece of one of its `fuels` (each a thing,
+   * by name) at a time, for that fuel's `ticks`, giving its power (`info.gives`) while it burns, and
+   * holding up to `holds` pieces of each. When nothing burns it takes the first of its fuels it holds,
+   * so the list is the order it burns them in; a piece taken adds the fuel's `smog` to its plot. The
+   * tick burns it (`tick.ts`'s `power`) from this alone, with no step of the kind's: with a step a
+   * piece for every burner every tick cost the tick more than all the burning.
    */
-  readonly burns?: { readonly fuel: string; readonly ticks: number; readonly holds: number };
+  readonly burns?: {
+    readonly fuels: readonly { readonly fuel: ItemName; readonly ticks: number; readonly smog?: number }[];
+    readonly holds: number;
+  };
   /** Half-ticks of work in each thing it finishes, for one whose work is not a recipe's (a gatherer, a Study). */
   readonly work?: number;
   /** The kinds it may be set down in the place of (a splitter on a belt), by name: not its own. */
@@ -231,9 +237,14 @@ export interface Ports {
   /**
    * Its outputs, each from a tile of its front to the tile ahead of it: the tile, across and down
    * from its box's corner, and what leaves there, the thing it finished (`"out"`) or what is made
-   * beside it (`"also"`, a recipe's by-product).
+   * beside it (`"also"`, a recipe's by-product); and for a way out that sends one thing only (a
+   * still's), that thing by name (`only`): it sends nothing else, and leaves another for another way.
    */
-  readonly out: readonly { readonly at: readonly [x: number, y: number]; readonly sends: "out" | "also" }[];
+  readonly out: readonly {
+    readonly at: readonly [x: number, y: number];
+    readonly sends: "out" | "also";
+    readonly only?: ItemName;
+  }[];
 }
 
 /** An unlock that is one thing or none (`Open`), that a port may wait for. */
