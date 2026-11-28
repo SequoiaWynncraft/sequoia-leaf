@@ -49,6 +49,30 @@ describe("a ring", () => {
     expect([F.ringsOf(y), F.held(y.holders, crate, PLANK), on]).toEqual([{ rings: 1, tiles: 4 }, 1, [F.NONE, F.NONE]]);
   });
 
+  test("full, two crates in it, the first handing into the second, empty: the second hands on nothing it was handed in the tick", () => {
+    const y = bare();
+    // A ring round 6 by 5 from (4, 4), full; at its first tile an empty crate facing east, below it a crate of stone facing north into it.
+    const tiles = ring(y, 4, 4, 6, 5);
+    for (const [x, z, dir] of [
+      [4, 4, 0],
+      [4, 5, 3],
+    ] as const) {
+      must(y, { do: "remove", x, y: z });
+      must(y, { do: "build", kind: "crate", x, y: z, dir });
+    }
+    const [second, first] = [F.at(y, 4, 4), F.at(y, 4, 5)];
+    for (let k = 0; k < 3; k++) F.put(y.holders, F.holderOf(y, first), F.item("stone"));
+    fill(
+      y,
+      tiles.filter((i) => i !== first && i !== second),
+    );
+    F.step(y);
+    // The stone went into the second crate, and no further: the belt after it has moved its plank on, and
+    // nothing has come out of the crate onto it.
+    const after = y.item[F.at(y, 5, 4)];
+    expect([F.held(y.holders, F.holderOf(y, second), F.item("stone")), after]).toEqual([1, F.NONE]);
+  });
+
   test("closed only by a sorter's side is none while the sorter is set to nothing, as everything goes straight on", () => {
     const y = bare();
     must(y, { do: "build", kind: "sorter", x: 5, y: 5, dir: 0 });

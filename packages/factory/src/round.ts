@@ -135,22 +135,27 @@ function firstHolder(wire: Wire, k: number): number {
 
 /**
  * Each holder on ring `k` tries to hand on what it holds, before anything on the ring has moved: so it
- * hands on only what it held when the tick began, and one that held nothing is done for the tick,
- * whatever comes into it. Says whether one did.
+ * hands on only what it held when the tick began. What each holds is noted first (`Rings.had`), before
+ * any tries, so one handed a thing by another in its turn still counts as holding what it held, and one
+ * that held nothing is done for the tick, whatever comes into it. Says whether one handed on.
  */
 function holdersFirst(y: Yard, wire: Wire, k: number, waiting: Uint8Array): boolean {
-  const { tiles, holders, holderStarts, done, looked } = wire.rings;
+  const { tiles, holders, holderStarts, had, done, looked } = wire.rings;
   const from = holderStarts[k] ?? 0;
   const to = holderStarts[k + 1] ?? 0;
   let moved = false;
   for (let h = from; h < to; h++) {
     const t = holders[h] ?? 0;
+    had[t] = heldIn(y, tiles[t] ?? 0) > 0 ? 1 : 0;
+  }
+  for (let h = from; h < to; h++) {
+    const t = holders[h] ?? 0;
     const i = tiles[t] ?? 0;
     // One that waits holds a thing it could not hand on: it may yet, once it is woken.
     if (waiting[i] === 1) continue;
-    const did = tryHolder(y, wire, i, y.kind[i] ?? NONE);
+    const did = tryHolder(y, wire, t);
     if ((did & MOVED) !== 0) moved = true;
-    if ((did & HELD) === 0) done[t] = y.tick;
+    if ((did & HELD) === 0) done[t] = y.tick | 0;
   }
   looked[0] = (looked[0] ?? 0) + (to - from);
   return moved;
@@ -162,30 +167,32 @@ function holdersFirst(y: Yard, wire: Wire, k: number, waiting: Uint8Array): bool
  * the second, as `openOf` and `lastOf` read them.
  */
 function sweep(y: Yard, wire: Wire, from: number, to: number, waiting: Uint8Array): number {
-  const { tick, prog } = y;
+  const { prog } = y;
+  const stamp = y.tick | 0;
   const { tiles, done, plain, looked } = wire.rings;
   let open = -1;
   let last = -1;
   for (let t = from; t < to; t++) {
-    if (done[t] === tick) continue;
+    if (done[t] === stamp) continue;
     const i = tiles[t] ?? 0;
     // What carries on its own tile alone holds at most one thing, which stays this turn till it has
     // crossed it: most of a ring's tiles most ticks, so asked here, without a call.
     let did = HELD;
     if (waiting[i] !== 1)
-      did = plain[t] !== 1 ? tryOn(y, wire, i, waiting) : (prog[i] ?? 0) < 8 ? 0 : tryPlain(y, wire, i);
+      did = plain[t] !== 1 ? tryOn(y, wire, t, waiting) : (prog[i] ?? 0) < 8 ? 0 : tryPlain(y, wire, i);
     if ((did & MOVED) !== 0) last = t;
-    if ((did & HELD) === 0) done[t] = tick;
+    if ((did & HELD) === 0) done[t] = stamp;
     else if (open < 0) open = t;
   }
   looked[0] = (looked[0] ?? 0) + (to - from);
   return (open + 1) * SPAN + (last + 1);
 }
 
-/** A ring tile's try at handing on but a plain carrier's (`tryPlain`): what it did (`MOVED`, `HELD`). */
-function tryOn(y: Yard, wire: Wire, i: number, waiting: Uint8Array): number {
-  const k = y.kind[i] ?? NONE;
-  return CARRIES[k] === 1 ? tryMouth(y, i, waiting) : tryHolder(y, wire, i, k);
+/** A ring tile's try at handing on but a plain carrier's (`tryPlain`), the tile `t` (a place in `Rings.tiles`): what it did (`MOVED`, `HELD`). */
+function tryOn(y: Yard, wire: Wire, t: number, waiting: Uint8Array): number {
+  const { tiles } = wire.rings;
+  const i = tiles[t] ?? 0;
+  return CARRIES[y.kind[i] ?? NONE] === 1 ? tryMouth(y, i, waiting) : tryHolder(y, wire, t);
 }
 
 /**
@@ -209,11 +216,16 @@ function tryMouth(y: Yard, i: number, waiting: Uint8Array): number {
   return (left < had ? MOVED : 0) | (left > 0 ? HELD : 0);
 }
 
-/** A holder's try (a crate, a grower): one that moved holds nothing it may hand on this turn, so says only that it moved. */
-function tryHolder(y: Yard, wire: Wire, i: number, k: number): number {
+/**
+ * A holder's try (a crate, a grower), on the ring tile `t` (a place in `Rings.tiles`): one that held
+ * nothing when its ring's turn began hands nothing on; one that moved holds nothing it may hand on this
+ * turn, so says only that it moved.
+ */
+function tryHolder(y: Yard, wire: Wire, t: number): number {
+  if (wire.rings.had[t] !== 1) return 0;
+  const i = wire.rings.tiles[t] ?? 0;
   const had = heldIn(y, i);
-  if (had === 0) return 0;
-  const hands = HANDS[k];
+  const hands = HANDS[y.kind[i] ?? NONE];
   if (hands === handOut) handOut(KIT, y, i, wire);
   else hands?.(KIT, y, i, wire);
   if (heldIn(y, i) < had) return MOVED;

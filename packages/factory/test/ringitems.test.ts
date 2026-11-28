@@ -10,7 +10,7 @@ import { expect, test } from "bun:test";
 import * as F from "../src/index.ts";
 import { randomRing } from "./randomring.ts";
 
-/** How many rings are built: among them some where a holder, tried after what hands to it, would hand on what it was just handed. */
+/** How many rings are built. A holder handed a thing by another in the same turn has a test of its own (`ringshapes.test.ts`). */
 const SEEDS = 300;
 
 /** Where a thing is: the tile it is on or in, or under the ground, -1 less its row (`Tunnels.under`). */

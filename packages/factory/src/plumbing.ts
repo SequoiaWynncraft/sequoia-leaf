@@ -23,11 +23,16 @@ export interface Rings {
   /** The ring tiles that hold things (crates, growers), as places in `tiles`, ring by ring: ring `k`'s from `holderStarts[k]`. */
   readonly holders: Int32Array;
   readonly holderStarts: Int32Array;
+  /** For each ring tile (as `tiles`) that holds things, 1 if it held any when its ring's turn began (`round.ts`). */
+  readonly had: Uint8Array;
   /** The ring tiles by tile, ascending, and each one's ring (`ringAt`). */
   readonly sorted: Int32Array;
   readonly ringOf: Int32Array;
-  /** For each ring tile (as `tiles`), the last tick it was done in its ring's turn (`round.ts`). */
-  readonly done: Float64Array;
+  /**
+   * For each ring tile (as `tiles`), the last tick it was done in its ring's turn (`round.ts`), as a
+   * whole number of 32 bits: a tick 2^32 ticks on (13 years of a yard's time) reads the same.
+   */
+  readonly done: Int32Array;
   /** For each ring, where its last turn began (a place in `tiles`: `round.ts`). */
   readonly begin: Int32Array;
   /** For each ring, the last tick its turn moved nothing (`ringFull`). */
