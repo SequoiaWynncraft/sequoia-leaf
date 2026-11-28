@@ -312,9 +312,13 @@ const listBlocks = (...lists: readonly (Listed | null)[]): Block[] => some(...li
 /** A machine's picture cut to a card's slot: a tall machine is known by its head. */
 const machinePic = (art: Art, k: Kind, grade = 1): HTMLCanvasElement => fitted(art.icon(k, grade), 22, 22);
 
-/** What a kind of piece is called on its card: "Belt", and once the yard may build it higher, "Belt I" or "Belt II". */
+/**
+ * What a kind of piece is called on its card: "Belt", and once the yard may build it higher, "Belt I"
+ * or "Belt II", its grade held to its name by a space that does not break, so the title stays whole
+ * and the price beside it goes onto a line of its own first.
+ */
 const gradedName = (p: MachinePrint): string =>
-  p.graded ? `${nameOf(p.kind)} ${numeral(Math.max(1, p.grade))}` : nameOf(p.kind);
+  p.graded ? `${nameOf(p.kind)}\u00a0${numeral(Math.max(1, p.grade))}` : nameOf(p.kind);
 
 /** Rows of another card named, with the words beside each. */
 const entries = (named: readonly Named[]): Entry[] =>
