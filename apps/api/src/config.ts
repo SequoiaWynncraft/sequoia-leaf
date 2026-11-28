@@ -67,7 +67,7 @@ export interface Settings {
    * (`live_full`) until some go. Read as Leaf starts: a new number takes a restart.
    */
   readonly liveMostPlayers: number;
-  /** The raid in a Discord call (`http/activity.ts`), when both its variables are set; otherwise there is none. */
+  /** Leaf in a Discord call (`http/activity.ts`), when both its variables are set; otherwise there is none. */
   readonly activity: Activity | undefined;
 }
 
@@ -90,6 +90,10 @@ export const DISCORD_API = "https://discord.com/api/v10";
 /** Whether an `Origin` is one of Leaf's own pages': at its public origin, or in a Discord call. */
 export const fromLeafPage = (settings: Settings, origin: string | undefined): boolean =>
   origin !== undefined && (origin === settings.publicOrigin || origin === settings.activity?.origin);
+
+/** Whether an `Origin` is a page of Leaf in a Discord call: Discord's proxy for Leaf. */
+export const fromCall = (settings: Settings, origin: string | undefined): boolean =>
+  origin !== undefined && origin === settings.activity?.origin;
 
 /**
  * How many players one Leaf carries in Live with room to spare, on the four cores production gives

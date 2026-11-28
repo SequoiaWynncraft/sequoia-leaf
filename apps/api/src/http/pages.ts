@@ -25,37 +25,42 @@ const REST = ["connect-src 'self'", "base-uri 'self'", "form-action 'self'", "ob
 export const PAGE_POLICY = [...OWN, "frame-ancestors 'self'", ...REST].join("; ");
 
 /**
- * The raid's page in a Discord call: as every page, but with no rule on who frames it. Discord's
+ * A page of Leaf in a Discord call: as every page, but with no rule on who frames it. Discord's
  * phone apps frame an Activity from a page with no origin of its own (its SDK takes messages from
  * the origin `null`), which no `frame-ancestors` list can name: with one, the phone shows a grey
  * frame and the page never runs. Nothing is lost by it: a site that frames this page gets it signed
  * out (Leaf's own cookie is not sent to another site's frame, and the frame's own cookie is kept
- * per site), and only Discord's client can answer the sign-in it asks for.
+ * per site), and only Discord's client can answer the sign-in it asks for. Inside Discord `'self'`
+ * is Discord's proxy for Leaf (`<client id>.discordsays.com`), which every request of the page goes
+ * through; the town frames a game there as it does at Leaf's own address.
  */
 export const CALL_PAGE_POLICY = [...OWN, ...REST].join("; ");
 
-/** The raid's page, which is all of Leaf a Discord call opens. */
-export const RAID_PAGE = "/play/battler/";
+/** Where the game's pages are: the town, and the games it shows in its frame. */
+const PAGES = "/play/";
 
 /**
- * Whether a request is Discord opening the raid in a call: its query names the frame and the
- * launch, as Discord's every launch does (and its SDK needs to start).
+ * Whether a request is a page opened as part of a Discord launch: its query names the frame and the
+ * launch, as Discord's every launch does (and its SDK needs to start), and as Leaf's own pages
+ * carry it from page to page inside the call (the kit's `withLaunch`).
  */
 const launchedByDiscord = (query: URLSearchParams): boolean =>
   (query.get("frame_id") ?? "") !== "" && (query.get("instance_id") ?? "") !== "";
 
 /**
- * The policy a page is served with, chosen by its address alone: the raid's page opened by Discord
- * gets `CALL_PAGE_POLICY`, every other page `PAGE_POLICY`. The most a request can do is have the
- * raid's page served framable, which is all a call needs and gives a framing site nothing.
+ * The policy a page is served with, chosen by its address alone: a page opened as part of a launch
+ * gets `CALL_PAGE_POLICY`, every other page `PAGE_POLICY`, framed by Leaf's own pages alone.
  */
 export function policyOf(url: string): string {
   const at = new URL(url, "http://leaf.invalid");
-  return at.pathname.startsWith(RAID_PAGE) && launchedByDiscord(at.searchParams) ? CALL_PAGE_POLICY : PAGE_POLICY;
+  return at.pathname.startsWith(PAGES) && launchedByDiscord(at.searchParams) ? CALL_PAGE_POLICY : PAGE_POLICY;
 }
 
-/** A file whose name carries a hash of what it holds, as `bun build` names a page's script and styles. */
-const HASHED = /\/index-[0-9a-z]+\.(?:js|css)$/;
+/**
+ * A file whose name carries a hash of what it holds, as `bun build` names a page's script and styles
+ * and each part of a page built in parts: `index-meamkakx.js`, `main-yxtpzszz.js`.
+ */
+const HASHED = /\/[\w.-]+-[0-9a-z]{8}\.(?:js|css)$/;
 
 /**
  * Hashed files never change under their name; anything else is asked about
@@ -76,21 +81,24 @@ const failed = HttpServerResponse.jsonUnsafe(
   { status: 500 },
 );
 
+/** The town's page, where Leaf opens on the website and in a Discord call alike. */
+const TOWN_PAGE = "/play/town/";
+
 /**
- * `GET /`: the town; or, opened by Discord in a call, the raid's page, with Discord's query as it came
- * (the page reads the frame and the launch from it). Discord maps its proxy's `/` to Leaf's.
+ * `GET /`: the town; opened by Discord in a call, with Discord's query as it came (the page reads the
+ * frame and the launch from it, and carries them on). Discord maps its proxy's `/` to Leaf's.
  */
 const entry = Effect.gen(function* () {
   const request = yield* HttpServerRequest.HttpServerRequest;
   const { search, searchParams } = new URL(request.url, "http://leaf.invalid");
-  if (!launchedByDiscord(searchParams)) return HttpServerResponse.redirect("/play/town/", { status: 302 });
-  return HttpServerResponse.redirect(`${RAID_PAGE}${search}`, {
+  if (!launchedByDiscord(searchParams)) return HttpServerResponse.redirect(TOWN_PAGE, { status: 302 });
+  return HttpServerResponse.redirect(`${TOWN_PAGE}${search}`, {
     status: 302,
     headers: { "content-security-policy": CALL_PAGE_POLICY, "cache-control": "no-store" },
   });
 });
 
-/** The game's pages under `/play`, from the directory `root`, with `GET /` sent to the town, or the raid in a call (`entry`). */
+/** The game's pages under `/play`, from the directory `root`, with `GET /` sent to the town (`entry`). */
 const pagesFrom = (root: string) =>
   Layer.effectDiscard(
     Effect.gen(function* () {

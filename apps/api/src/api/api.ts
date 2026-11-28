@@ -321,7 +321,7 @@ export class GamePlayApi extends HttpApiGroup.make("gamePlay")
       params: GameParams,
       payload: PlayBody,
       success: Played,
-      error: [Invalid, Missing, NotYou, StateUnreadable, SlowDown],
+      error: [BadOrigin, Invalid, Missing, NotYou, StateUnreadable, SlowDown],
     }).middleware(PlayBodyErrors),
     HttpApiEndpoint.get("standings", "/play/:game/standings", {
       params: GameParams,

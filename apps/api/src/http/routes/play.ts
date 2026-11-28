@@ -1,10 +1,12 @@
 import { parsePlayerId } from "@sequoia-leaf/core";
-import { Clock, Effect, Option } from "effect";
+import { Clock, Effect, Option, Schema } from "effect";
+import { HttpServerRequest } from "effect/http";
 import { HttpApiBuilder } from "effect/http-api";
 
 import { Visits } from "../../activity/visits.ts";
 import { CurrentIdentity, LeafApi } from "../../api/api.ts";
-import { Invalid, Missing, SlowDown } from "../../api/errors.ts";
+import { BadOrigin, Invalid, Missing, SlowDown } from "../../api/errors.ts";
+import { AppConfig, fromCall } from "../../config.ts";
 import { PlayerNames } from "../../game/names.ts";
 import type { Played } from "../../play/games.ts";
 import { type Opening, Play, type Shown } from "../../play/service.ts";
@@ -28,6 +30,22 @@ const answerOf = <R>(shown: Shown, played: Played, results: readonly R[]) => ({
  */
 const asRead = (shown: Opening, played: Played) =>
   shown.status === "unreadable" ? Effect.fail(unreadable) : Effect.succeed(answerOf(shown, played, []));
+
+/** A command of the pulls that is a draw, which Leaf makes only on its own website, never in a Discord call. */
+const isDraw = Schema.is(Schema.Struct({ do: Schema.Literal("pull") }));
+
+/**
+ * The game a batch of `commands` is for, as the route names it; refused, all of it undone, when it
+ * holds a draw and comes from Leaf in a Discord call (`fromCall`): the pulls are on the website.
+ */
+const playedFrom = (name: string, commands: readonly unknown[]) =>
+  Effect.gen(function* () {
+    const played = yield* playedGame(name);
+    if (played.id !== "pulls" || !commands.some(isDraw)) return played;
+    const request = yield* HttpServerRequest.HttpServerRequest;
+    if (!fromCall(yield* AppConfig, request.headers["origin"])) return played;
+    return yield* new BadOrigin({ code: "bad_origin", message: "Pulls are made on Leaf's website" });
+  });
 
 export const GamePlayHandlers = HttpApiBuilder.group(LeafApi, "gamePlay", (handlers) =>
   Effect.gen(function* () {
@@ -62,7 +80,7 @@ export const GamePlayHandlers = HttpApiBuilder.group(LeafApi, "gamePlay", (handl
         // it did then, so a page that sends a batch again after losing the answer changes nothing.
         .handle("command", ({ params, payload }) =>
           Effect.gen(function* () {
-            const played = yield* playedGame(params.game);
+            const played = yield* playedFrom(params.game, payload.commands);
             const identity = yield* CurrentIdentity;
             if (payload.player !== identity.playerId) {
               return yield* notYou;

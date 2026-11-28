@@ -21,8 +21,9 @@ export const leafCookies = (publicOrigin: string) => {
 };
 
 /**
- * The session's cookie in a Discord call, where the raid's page is in Discord's frame, a page of
- * another site (`discord.com`): `SameSite=None`, or the browser would not send it from there at all,
+ * The session's cookie in a Discord call, where Leaf's pages are in Discord's frame, in a page of
+ * another site (`discord.com`) or of none (Discord's phone app): `SameSite=None`, or the browser would
+ * not send it from there at all,
  * and `Partitioned`, which keeps it to Discord's frames alone. It is host-only (a `__Host-` cookie has
  * no `Domain`) on the host the page is at, Discord's proxy for Leaf, and always `Secure`, as Discord's
  * frame is. Nothing about the cookie at Leaf's own address changes.

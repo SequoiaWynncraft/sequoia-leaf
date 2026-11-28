@@ -1,12 +1,13 @@
 /**
- * The raid in a Discord call. Discord frames the raid's page at `https://<client id>.discordsays.com`
- * and proxies every request it makes to Leaf. The page asks Discord to sign the player in
+ * Leaf in a Discord call. Discord frames Leaf's town at `https://<client id>.discordsays.com` and
+ * proxies every request it makes to Leaf. The page asks Discord to sign the player in
  * (`authorize`) and sends the code it gets to `POST /v1/activity/sign-in`. Leaf trades the code with
  * Discord, with the application's secret, for the player's token, reads who they are (`/users/@me`),
  * and signs them in as Discord sign-in does (`discordPlayer`): a Discord account Leaf knows is its
  * player, one it does not is a new one. The Leaf session's cookie is set for Discord's frame alone
  * (`frameCookie`). The answer is the token, which the page hands back to Discord (`authenticate`).
- * `GET /v1/activity` tells the page the application's client id, which `authorize` needs.
+ * `GET /v1/activity` tells the page the application's client id, which `authorize` needs, and Leaf's
+ * own address outside Discord, which the page links to for what is only there.
  */
 import { Clock, Duration, Effect, Layer, Option, Redacted, Schema } from "effect";
 import type { SecureRandom } from "effect/crypto";
@@ -101,7 +102,7 @@ const trade = (code: string, app: Activity) =>
     return { status: "signed", token: accessToken, user: user.value } satisfies Traded;
   });
 
-/** `POST /v1/activity/sign-in`, from the raid's page in a Discord call. */
+/** `POST /v1/activity/sign-in`, from the page Discord frames in a call. */
 const signIn = Effect.gen(function* () {
   const settings = yield* AppConfig;
   const app = settings.activity;
@@ -138,10 +139,15 @@ const signIn = Effect.gen(function* () {
   );
 });
 
-/** `GET /v1/activity`: the Discord application's client id, for the page's `authorize`. */
+/**
+ * `GET /v1/activity`: the Discord application's client id, for the page's `authorize`, and Leaf's own
+ * address (`site`), where what is not in a call is.
+ */
 const hello = Effect.gen(function* () {
-  const { activity } = yield* AppConfig;
-  return activity === undefined ? notFound : HttpServerResponse.jsonUnsafe({ client_id: activity.clientId });
+  const { activity, publicOrigin } = yield* AppConfig;
+  return activity === undefined
+    ? notFound
+    : HttpServerResponse.jsonUnsafe({ client_id: activity.clientId, site: publicOrigin });
 });
 
 export const ActivityRoutes = Layer.effectDiscard(
