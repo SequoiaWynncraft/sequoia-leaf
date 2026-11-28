@@ -156,7 +156,7 @@ describe("decode refuses whole", () => {
       "",
       "not json",
       "[]",
-      JSON.stringify({ ...rec, v: F.VERSION + 1 }),
+      JSON.stringify({ ...rec, v: F.LAUNCHED + 1 }),
       JSON.stringify({ ...rec, v: 5 }),
       JSON.stringify({ ...rec, cells: undefined }),
       JSON.stringify({ ...rec, cells: "!!!!" }),

@@ -274,7 +274,7 @@ describe("the yard's 15 launch numbers", () => {
     expect([back && [...back.launches.ever], back && F.check(back), rec.v]).toEqual([
       [2, 0, 0, 0, 0],
       F.check(y),
-      F.VERSION,
+      F.LAUNCHED,
     ]);
     expect("launches" in record(F.encode(F.create({ seed: 1, tier: 9 })))).toBe(false);
   });
@@ -295,7 +295,7 @@ describe("the yard's 15 launch numbers", () => {
     expect([F.keptLater(JSON.stringify(rec)), F.decode(JSON.stringify(rec)) !== null]).toEqual([false, true]);
   });
 
-  test("a yard keeping any is past what the last Leaf of version 10 knew, as the cheap rule says too", () => {
+  test("a yard keeping any is kept as version 12, past what the Leaf of version 11 keeps, and past version 10 by both rules", () => {
     const y = beforeReach(staged("mid"));
     const rec = record(F.encode(y));
     const names = (r: Rec): boolean | null => {
@@ -307,7 +307,7 @@ describe("the yard's 15 launch numbers", () => {
     expect([names({ ...rec, launches: { ever: { any: 1 } } }), F.pastTen(y), record(F.encode(y)).v]).toEqual([
       false,
       true,
-      F.VERSION,
+      F.LAUNCHED,
     ]);
   });
 });

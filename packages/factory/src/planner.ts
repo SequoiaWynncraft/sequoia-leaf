@@ -5,7 +5,7 @@
  * held up; nothing that moves the yard reads it.
  */
 import { TICKS } from "./content/machines.ts";
-import { CHARGED, LAUNCHED } from "./launch.ts";
+import { CHARGED, ROCKET_OF } from "./launch.ts";
 import {
   ALL_ITEMS,
   GATHERING,
@@ -171,7 +171,7 @@ export function bill(b: Branch): { item: Item; kind: Kind; count: number }[] {
  * charged cells as the cells they are charged from: 1.78 line-hours a rocket.
  */
 export function lineHours(n: Item, count: number): number {
-  const rocket = LAUNCHED[n];
+  const rocket = ROCKET_OF[n];
   if (!rocket) {
     const { kind, recipe } = makerOf(n);
     return count / makes(kind, 3, recipe) / 60;

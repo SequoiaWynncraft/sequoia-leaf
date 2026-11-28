@@ -128,7 +128,7 @@ export const PLANNED: readonly (readonly Recipe[])[] = Array.from({ length: ITEM
   return [{ out: r.counts, also: NONE, from, need, by: LAUNCHPAD, ticks: 0, work: 0 }];
 });
 /** The first rocket that counts as each thing, which the planner plans it by; null for a thing none counts as. */
-export const LAUNCHED: readonly (Rocket | null)[] = Array.from(
+export const ROCKET_OF: readonly (Rocket | null)[] = Array.from(
   { length: ITEMS.length },
   (_, n) => ROCKETS_N.find((r) => r.counts === n) ?? null,
 );

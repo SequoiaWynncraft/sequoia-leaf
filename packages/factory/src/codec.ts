@@ -33,7 +33,7 @@ import { NODES } from "./content/nodes.ts";
 import { historyOf, stampOf } from "./history.ts";
 import { FIRST_LAND, holdsFirst, type KeptLand, keptLandOf, keptOn, piecesOn, tileOn } from "./keptland.ts";
 import { LAND, type Land, plotPrice } from "./land.ts";
-import { keptLaunches, launchesOnto } from "./launches.ts";
+import { anyLaunches, keptLaunches, launchesOnto } from "./launches.ts";
 import { type KeptNames, keptNames, knownAt10, knownHere, pastTen, WIDER } from "./named.ts";
 import { counting, fillBoard, giveGoal, ORDER_WAITS, queue, study } from "./orders.ts";
 import { keptOf, packPieces, type Piece, placed, unpackWays } from "./pieces.ts";
@@ -88,6 +88,12 @@ import {
  * one of this version as a newer Leaf's, rather than read it with what it does not know let go.
  */
 export const VERSION = 11;
+/**
+ * 12: a yard keeping launches or levels (tier 8, `launches.ts`), a field no Leaf of version 11 keeps,
+ * which that Leaf leaves as a newer Leaf's; every other yard is kept as before. The newest this Leaf
+ * writes and reads.
+ */
+export const LAUNCHED = 12;
 /** 10: a kind past 15 kept anywhere. It still reads; nothing keeps a yard as it now. */
 const WIDE = 10;
 /** 9: the land a yard was kept on, so that its tiles stay where they are as the land grows. */
@@ -159,13 +165,16 @@ export interface Keep {
 
 /**
  * A yard as text: its numbers and orders as JSON, its pieces and blueprints packed; kept as version 9
- * while it names nothing the last Leaf of version 10 did not know (`knownAt10`), and as this version
- * once it does.
+ * while it names nothing the last Leaf of version 10 did not know (`knownAt10`), as version 11 once it
+ * does, and as version 12 once it keeps launches (`LAUNCHED`).
  */
 export function encode(y: Yard, keep: Keep = {}): string {
   const pieces = keptPieces(y);
   const rec = record(y, keep, pieces);
-  return JSON.stringify({ v: keptPastTen(y, rec, pieces) ? VERSION : PLACED, ...rec });
+  return JSON.stringify({
+    v: anyLaunches(y.launches) ? LAUNCHED : keptPastTen(y, rec, pieces) ? VERSION : PLACED,
+    ...rec,
+  });
 }
 
 /**
@@ -434,7 +443,7 @@ function firstPiece(v: unknown): KeptPiece | null {
 }
 
 /** The versions this one reads as its own. */
-const READS: ReadonlySet<unknown> = new Set([VERSION, WIDE, PLACED, UNPLACED, UNFELLED, UNGRADED]);
+const READS: ReadonlySet<unknown> = new Set([LAUNCHED, VERSION, WIDE, PLACED, UNPLACED, UNFELLED, UNGRADED]);
 
 /** Text as JSON, or nothing for text that is none. */
 function parsed(text: string): unknown {
