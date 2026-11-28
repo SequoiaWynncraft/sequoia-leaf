@@ -48,42 +48,55 @@ export function clearRefusal(y: Yard, p: Plot): string | null {
   return y.clearing ? `You are clearing ${nameOf(y, y.clearing.plot)} already` : null;
 }
 
-/** Takes on a plot's clearing, with nothing delivered to it yet. Says whether it could. */
+/** Takes on a plot's clearing, with nothing delivered to it yet, numbered as the next the yard begins. Says whether it could. */
 export function takeClearing(y: Yard, p: Plot): boolean {
   if (clearRefusal(y, p) !== null) return false;
-  y.clearing = { plot: p, filled: counts() };
+  y.begun += 1;
+  y.clearing = { plot: p, begun: y.begun, filled: counts() };
   return true;
 }
 
-/** Stops the clearing being done, giving back nothing delivered to it. Says whether there was one. */
-export function stopClearing(y: Yard): boolean {
-  const was = y.clearing !== null;
-  y.clearing = null;
-  return was;
+/**
+ * Why a command for the clearing on plot `p`, the `begun`th the yard began, cannot be done to the
+ * clearing being done now, or nothing if it is that one: as the player saw it, not another begun since.
+ */
+export function sameRefusal(y: Yard, p: Plot, begun: number): string | null {
+  const c = y.clearing;
+  if (!c) return "You are clearing no plot";
+  return c.plot === p && c.begun === begun ? null : "That clearing has changed since";
 }
 
-/** Why the clearing being done cannot be handed over just now, or nothing if it can. */
-export function handRefusal(y: Yard): string | null {
+/** Stops the clearing being done, if it is the one named, giving back nothing delivered to it. Says whether it did. */
+export function stopClearing(y: Yard, p: Plot, begun: number): boolean {
+  if (sameRefusal(y, p, begun) !== null) return false;
+  y.clearing = null;
+  return true;
+}
+
+/** Why the clearing named cannot be handed over just now, or nothing if it can: it is the one being done, and has all it wants. */
+export function handRefusal(y: Yard, p: Plot, begun: number): string | null {
+  const same = sameRefusal(y, p, begun);
   const c = y.clearing;
   const want = c ? CLEARING[c.plot] : null;
-  if (!c || !want) return "You are clearing no plot";
+  if (same !== null || !c || !want) return same ?? "You are clearing no plot";
   if (isFilled(want, c.filled)) return null;
   const left = counts();
   for (const k of ALL_ITEMS) left[k] = Math.max(0, (want[k] ?? 0) - (c.filled[k] ?? 0));
   return `${nameOf(y, c.plot)} still wants ${goodsText(left)}`;
 }
 
-/** Hands the clearing being done over: its plot is cleared for good, and can be bought. Says whether it could. */
-export function handClearing(y: Yard): boolean {
+/** Hands the clearing named over, if it is the one being done: its plot is cleared for good, and can be bought. Says whether it could. */
+export function handClearing(y: Yard, p: Plot, begun: number): boolean {
   const c = y.clearing;
-  if (!c || handRefusal(y) !== null) return false;
+  if (!c || handRefusal(y, p, begun) !== null) return false;
   y.cleared.push(c.plot);
   y.clearing = null;
   return true;
 }
 
 /** Whether the clearing being done has all it wants, and waits to be handed over. */
-export const clearingReady = (y: Yard): boolean => y.clearing !== null && handRefusal(y) === null;
+export const clearingReady = (y: Yard): boolean =>
+  y.clearing !== null && handRefusal(y, y.clearing.plot, y.clearing.begun) === null;
 
 /** Whether a plot can be bought now: for sale, and cleared where it needs clearing. */
 export const readyToBuy = (y: Yard, p: Plot): boolean => {

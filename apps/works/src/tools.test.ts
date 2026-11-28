@@ -258,7 +258,7 @@ describe("what is worked out from the yard and kept", () => {
       if (want) {
         give({ do: "clearPlot", plot: plotName(p) });
         y.clearing?.filled.set(want);
-        give({ do: "handClearing" });
+        give({ do: "handClearing", plot: plotName(p), begun: y.begun });
       }
       give({ do: "buyPlot", plot: plotName(p), price: plotPrice(y, p) });
     };

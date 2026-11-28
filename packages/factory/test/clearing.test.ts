@@ -35,6 +35,15 @@ const want = (p: F.Plot): Float64Array => {
   return w;
 };
 const goods = (p: F.Plot): F.Item[] => F.ALL_ITEMS.filter((k) => (want(p)[k] ?? 0) > 0);
+/** The clearing a page shows: its plot and its number, as Stop and Hand over carry them. */
+function shown(y: F.Yard): { plot: string; begun: number } {
+  const c = y.clearing;
+  if (!c) throw new Error("no clearing");
+  return { plot: F.plotName(c.plot), begun: c.begun };
+}
+
+/** A kept clearing of The Old Workings, as a save holds it. */
+const workings = (filled: Record<string, number>, begun = 1) => ({ clearing: { plot: "workings", begun, filled } });
 
 /** A yard past tier 4's commission that owns today's nine plots, with the second ring for sale round them, and nothing in hand. */
 function meadow(): F.Yard {
@@ -99,13 +108,13 @@ describe("clearing a plot", () => {
     expect(F.clearRefusal(F.create({ seed: 3, tier: 5 }), F.plot("bank"))).toBe("The Clay Bank needs no clearing");
     expect(refused({ do: "clearPlot", plot: "crater" })).toBe("The Crater does not touch the yard's land yet");
     expect(refused({ do: "buyPlot", plot: "workings", price: 100_000 })).toBe("The Old Workings must be cleared first");
-    expect(refused({ do: "handClearing" })).toBe("You are clearing no plot");
-    expect(refused({ do: "stopClearing" })).toBe("You are clearing no plot");
+    expect(refused({ do: "handClearing", plot: "workings", begun: 1 })).toBe("You are clearing no plot");
+    expect(refused({ do: "stopClearing", plot: "workings", begun: 1 })).toBe("You are clearing no plot");
     expect(refused({ do: "clearPlot", plot: "workings" })).toBeNull();
     expect([F.clearingState(y, WORKINGS), y.clearing?.plot]).toEqual(["clearing", WORKINGS]);
     expect(refused({ do: "clearPlot", plot: "workings" })).toBe("You are clearing The Old Workings already");
     expect(refused({ do: "clearPlot", plot: "flats" })).toBe("You are clearing The Old Workings already");
-    expect(refused({ do: "handClearing" })).toBe("The Old Workings still wants 600 lanterns and 900 pipes");
+    expect(refused({ do: "handClearing", ...shown(y) })).toBe("The Old Workings still wants 600 lanterns and 900 pipes");
   });
 
   test("is given what the depot takes in after the node in hand and before the side orders, and no more than it wants", () => {
@@ -147,7 +156,7 @@ describe("clearing a plot", () => {
       { kind: "clearing", plot: "workings", title: "The Old Workings", pay: 0 },
     ]);
     const till = y.till;
-    const did = give(y, { do: "handClearing" });
+    const did = give(y, { do: "handClearing", ...shown(y) });
     // It pays nothing, and logs nothing: the goods were the price.
     expect("refused" in did ? did : [did.coins, did.log, y.till]).toEqual([[], [], till]);
     expect([F.clearingState(y, WORKINGS), y.clearing, y.cleared]).toEqual(["cleared", null, [WORKINGS]]);
@@ -164,13 +173,47 @@ describe("clearing a plot", () => {
     must(y, { do: "clearPlot", plot: "workings" });
     F.deliver(y, F.item("lantern"), 400);
     const [till, depot] = [y.till, Float64Array.from(y.depot)];
-    const did = give(y, { do: "stopClearing" });
+    const did = give(y, { do: "stopClearing", ...shown(y) });
     expect("refused" in did ? did : did.coins).toEqual([]);
     expect([y.clearing, y.till, Array.from(y.depot)]).toEqual([null, till, Array.from(depot)]);
     must(y, { do: "clearPlot", plot: "flats" });
-    must(y, { do: "stopClearing" });
+    must(y, { do: "stopClearing", ...shown(y) });
     must(y, { do: "clearPlot", plot: "workings" });
     expect(y.clearing?.filled[F.item("lantern")]).toBe(0);
+  });
+
+  test("a late Stop or Hand over, for a clearing stopped since, is refused and loses nothing: two pages of one yard", () => {
+    const y = meadow();
+    must(y, { do: "clearPlot", plot: "workings" });
+    // Both pages show The Old Workings being cleared; one stops it and clears The Flats.
+    const seen = shown(y);
+    must(y, { do: "stopClearing", ...seen });
+    must(y, { do: "clearPlot", plot: "flats" });
+    F.deliver(y, F.item("beacon"), 100);
+    const filled = Array.from(y.clearing?.filled ?? []);
+    // The other page's Stop, and its Hand over, are for the clearing it saw, not the one being done.
+    for (const late of ["stopClearing", "handClearing"]) {
+      expect(give(y, { do: late, ...seen })).toMatchObject({ why: "That clearing has changed since" });
+    }
+    expect([y.clearing?.plot, Array.from(y.clearing?.filled ?? [])]).toEqual([F.plot("flats"), filled]);
+    expect(filled[F.item("beacon")]).toBe(100);
+  });
+
+  test("stopped and taken on again on the same plot, it is another clearing: a command for the first is refused", () => {
+    const y = meadow();
+    must(y, { do: "clearPlot", plot: "workings" });
+    const first = shown(y);
+    must(y, { do: "stopClearing", ...first });
+    must(y, { do: "clearPlot", plot: "workings" });
+    F.deliver(y, F.item("pipe"), 300);
+    expect([shown(y), first]).toEqual([
+      { plot: "workings", begun: 2 },
+      { plot: "workings", begun: 1 },
+    ]);
+    expect(give(y, { do: "stopClearing", ...first })).toMatchObject({ why: "That clearing has changed since" });
+    expect(y.clearing?.filled[F.item("pipe")]).toBe(300);
+    must(y, { do: "stopClearing", ...shown(y) });
+    expect(y.clearing).toBeNull();
   });
 
   test("Undo never gives its goods back: a piece built before it is undone, and the clearing keeps all it was given", () => {
@@ -187,29 +230,32 @@ describe("clearing a plot", () => {
 });
 
 describe("a clearing kept", () => {
-  test("is kept by its plot's name and checked, only where there is one: taken on and stopped, the yard keeps and checks as before", () => {
+  test("is kept by its plot's name and number and checked, only where there is one: taken on and stopped, the yard keeps the count begun", () => {
     const y = meadow();
     const [text, check] = [F.encode(y), F.check(y)];
-    expect(JSON.parse(text)).not.toHaveProperty("clearing");
-    expect(JSON.parse(text)).not.toHaveProperty("cleared");
+    for (const field of ["clearing", "cleared", "begun"]) expect(JSON.parse(text)).not.toHaveProperty(field);
     must(y, { do: "clearPlot", plot: "workings" });
     expect(F.check(y)).not.toBe(check);
-    must(y, { do: "stopClearing" });
-    expect([F.encode(y), F.check(y)]).toEqual([text, check]);
+    must(y, { do: "stopClearing", ...shown(y) });
+    // Stopped, there is no clearing; but one was begun, and the next is numbered after it.
+    const stopped = JSON.parse(F.encode(y));
+    expect([stopped.clearing, stopped.begun, F.check(y) === check]).toEqual([undefined, 1, false]);
+    expect(F.decode(F.encode(y))?.begun).toBe(1);
     must(y, { do: "clearPlot", plot: "workings" });
     F.deliver(y, F.item("pipe"), 300);
-    expect(JSON.parse(F.encode(y)).clearing).toEqual({ plot: "workings", filled: { pipe: 300 } });
+    expect(JSON.parse(F.encode(y)).clearing).toEqual({ plot: "workings", begun: 2, filled: { pipe: 300 } });
     const back = F.decode(F.encode(y));
-    expect([back?.clearing?.plot, back?.clearing?.filled[F.item("pipe")], back && F.check(back)]).toEqual([
-      WORKINGS,
-      300,
-      F.check(y),
-    ]);
+    expect([back?.clearing, back?.begun, back && F.check(back)]).toEqual([y.clearing, 2, F.check(y)]);
+    // Its number is checked: two copies alike but for it do not agree.
+    const other = F.decode(F.encode(y));
+    if (!other?.clearing) throw new Error("no clearing read");
+    other.clearing = { ...other.clearing, begun: 1 };
+    expect(F.check(other)).not.toBe(F.check(y));
     // And with what was given to it, it changes the check as it changes.
     const given = F.check(y);
     F.deliver(y, F.item("pipe"), 1);
     expect(F.check(y)).not.toBe(given);
-    must(y, { do: "stopClearing" });
+    must(y, { do: "stopClearing", ...shown(y) });
     clearedFor(y, "workings");
     expect(JSON.parse(F.encode(y)).cleared).toEqual(["workings"]);
     expect(F.check(y)).not.toBe(check);
@@ -221,11 +267,12 @@ describe("a clearing kept", () => {
     must(y, { do: "clearPlot", plot: "workings" });
     const record = JSON.parse(F.encode(y));
     const read = (more: Record<string, unknown>): F.Yard | null => F.decode(JSON.stringify({ ...record, ...more }));
-    expect(read({ clearing: { plot: "workings", filled: { pipe: 99_999 } } })?.clearing?.filled[F.item("pipe")]).toBe(
-      900,
-    );
-    expect(read({ clearing: { plot: "crater", filled: {} } })?.clearing).toBeNull();
-    expect(read({ clearing: { plot: "bank", filled: {} } })?.clearing).toBeNull();
+    expect(read(workings({ pipe: 99_999 }))?.clearing?.filled[F.item("pipe")]).toBe(900);
+    expect(read({ clearing: { plot: "crater", begun: 1, filled: {} } })?.clearing).toBeNull();
+    expect(read({ clearing: { plot: "bank", begun: 1, filled: {} } })?.clearing).toBeNull();
+    // Its number is one the yard has begun: none, or past the count, and it is not read.
+    expect([read(workings({}, 0))?.clearing, read(workings({}, 2))?.clearing]).toEqual([null, null]);
+    expect(read({ ...workings({}, 2), begun: 2 })?.clearing?.begun).toBe(2);
     expect(read({ cleared: ["bank", "workings", "workings", "crater"] })?.cleared).toEqual([
       WORKINGS,
       F.plot("crater"),

@@ -114,7 +114,8 @@ test("Clear it takes the clearing on: its card shows what has been delivered; an
 test("in Orders, Stop asks first, saying the goods delivered are not given back; pressed again, it stops", async () => {
   const page = aPage();
   const y = nine();
-  y.clearing = { plot: WORKINGS, filled: new Float64Array(CLEARING[WORKINGS]?.length ?? 0) };
+  y.begun = 1;
+  y.clearing = { plot: WORKINGS, begun: 1, filled: new Float64Array(CLEARING[WORKINGS]?.length ?? 0) };
   const fake = await opened(y, 1_000_000);
   const life = scope();
   // Each card drawn on the page, as Orders draws it, for its button's question to be seen.
@@ -140,7 +141,8 @@ test("in Orders, once everything is delivered, Hand over clears the plot, and it
   const page = aPage();
   const y = nine();
   const want = CLEARING[WORKINGS] ?? new Float64Array();
-  y.clearing = { plot: WORKINGS, filled: Float64Array.from(want) };
+  y.begun = 1;
+  y.clearing = { plot: WORKINGS, begun: 1, filled: Float64Array.from(want) };
   const fake = await opened(y, 1_000_000);
   const [ready] = clearingCard(scope(), () => undefined, []);
   page.body.replaceChildren(ready);

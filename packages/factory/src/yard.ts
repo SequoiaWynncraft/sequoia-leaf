@@ -241,8 +241,13 @@ export interface Yard {
    * The plot being cleared, one at a time, and what has been delivered to it; the plots cleared, in
    * the order they were handed over, for good (`clearing.ts`).
    */
-  clearing: { readonly plot: Plot; readonly filled: Counts } | null;
+  clearing: { readonly plot: Plot; readonly begun: number; readonly filled: Counts } | null;
   cleared: Plot[];
+  /**
+   * How many clearings the yard has begun, ever: each is numbered by it as it begins (`begun` above),
+   * so a command for a clearing stopped since, even one begun again on the same plot, is refused.
+   */
+  begun: number;
   /**
    * 1 for each of the land's redwoods the yard has felled (`fell`), by its place in the land's
    * `trees`. Every rule asks whether one stands on a tile through `redwoodAt`, never the land alone.
@@ -348,6 +353,7 @@ export function emptyYard(land: Land, tier = 0): Yard {
     plots: [plot("yard")],
     clearing: null,
     cleared: [],
+    begun: 0,
     felled: new Uint8Array(land.trees.length),
     spare: Uint8Array.from(STARTING),
     blueprints: Array.from({ length: BLUEPRINTS_MOST }, () => null),

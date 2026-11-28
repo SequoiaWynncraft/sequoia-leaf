@@ -114,14 +114,17 @@ function mixKept(y: Yard, mix: (v: number) => void): void {
 
 /**
  * Mixes in the plots owned, in the order they were bought; those cleared, in the order they were
- * handed over, and the one being cleared with what it has been given, only where there are any; and
+ * handed over, how many were begun, and the one being cleared with its number and what it has been
+ * given, only where there are any; and
  * each redwood felled by its first tile; making nothing.
  */
 function mixLand(y: Yard, mix: (v: number) => void): void {
   for (let k = 0; k < y.plots.length; k++) mix((y.plots[k] ?? 0) + 32);
   for (let k = 0; k < y.cleared.length; k++) mix(0x20000 + (y.cleared[k] ?? 0));
+  if (y.begun > 0) mix(0x60000 + y.begun);
   if (y.clearing) {
     mix(0x30000 + y.clearing.plot);
+    mix(y.clearing.begun);
     mixTally(mix, y.clearing.filled);
   }
   for (let t = 0; t < y.felled.length; t++)

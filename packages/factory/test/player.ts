@@ -215,7 +215,11 @@ export class Player {
         const r = this.r();
         if (r < 0.7) return buying(y, plot);
         if (r < 0.85) return { do: "clearPlot", plot };
-        return { do: r < 0.98 ? "handClearing" : "stopClearing" };
+        // The clearing being done, as the player saw it; now and then one stopped since (the one before
+        // it), or one when there is none.
+        const c = y.clearing;
+        const begun = (c?.begun ?? 1) - (r >= 0.95 && r < 0.97 ? 1 : 0);
+        return { do: r < 0.98 ? "handClearing" : "stopClearing", plot: c ? F.plotName(c.plot) : plot, begun };
       }
       case 18:
         return { do: "take", node: this.pick([...F.NODES.map((n) => n.id), "nap"]) };

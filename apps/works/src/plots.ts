@@ -54,11 +54,10 @@ export function clearLand(id: Plot): boolean {
   return true;
 }
 
-/** Hands the plot being cleared over, once it has all it wants: it is cleared, and its card offers Buy. */
-export function handClearing(): boolean {
-  const w = S.world;
-  const name = w.land.plots.find((p) => p.plot === w.clearing?.plot)?.name ?? "";
-  const no = does({ do: "handClearing" });
+/** Hands the clearing the card showed over, once it has all it wants: its plot is cleared, and its card offers Buy. */
+export function handClearing(plot: Plot, begun: number): boolean {
+  const name = S.world.land.plots.find((p) => p.plot === plot)?.name ?? "";
+  const no = does({ do: "handClearing", plot, begun });
   if (no !== null) {
     yardSfx.no();
     toolHooks.said(`${no}.`);
@@ -69,9 +68,9 @@ export function handClearing(): boolean {
   return true;
 }
 
-/** Stops the clearing being done: what was delivered to it is not given back. */
-export function stopClearing(): boolean {
-  const no = does({ do: "stopClearing" });
+/** Stops the clearing the card showed: what was delivered to it is not given back. */
+export function stopClearing(plot: Plot, begun: number): boolean {
+  const no = does({ do: "stopClearing", plot, begun });
   if (no !== null) {
     yardSfx.no();
     toolHooks.said(`${no}.`);

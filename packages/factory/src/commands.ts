@@ -25,7 +25,7 @@ import {
   tipOut,
   turn,
 } from "./build.ts";
-import { clearRefusal, handClearing, handRefusal, stopClearing, takeClearing } from "./clearing.ts";
+import { clearRefusal, handClearing, handRefusal, sameRefusal, stopClearing, takeClearing } from "./clearing.ts";
 import { isCode, pasteBlueprint } from "./code.ts";
 import { STAND_MOST } from "./content/machines.ts";
 import { type Did, done, doneUnless, payIn, priced, refunded, spent, type Turned } from "./did.ts";
@@ -114,10 +114,14 @@ interface Carries {
   wayIn: At & { readonly way: number; readonly on: boolean };
   /** At the price the player was shown: refused if it is not the price now. */
   buyPlot: { readonly plot: Plot; readonly price: number };
-  /** Takes on clearing a plot; hands the clearing over once it has all it wants; or stops it (`clearing.ts`). */
+  /**
+   * Takes on clearing a plot; hands the clearing over once it has all it wants; or stops it
+   * (`clearing.ts`): each of the last two by the clearing's plot and the number it was begun as,
+   * refused if that is not the clearing being done.
+   */
   clearPlot: { readonly plot: Plot };
-  handClearing: object;
-  stopClearing: object;
+  handClearing: { readonly plot: Plot; readonly begun: number };
+  stopClearing: { readonly plot: Plot; readonly begun: number };
   /** Any tile of the redwood. */
   fell: At;
   take: { readonly node: Goal };
@@ -174,6 +178,18 @@ const itemAt =
 const writeItem = (a: At & { readonly item: Item | null }): Record<string, unknown> => ({
   item: a.item === null ? null : itemName(a.item),
   ...spot(a),
+});
+
+/** Reads a command for one clearing: its plot, and the number it was begun as. */
+const oneClearing =
+  <D extends "handClearing" | "stopClearing">(name: D) =>
+  (v: Record<string, unknown>): ActOf<D> | null => {
+    const plot = plotNamed(v.plot);
+    return plot !== null && whole(v.begun, 1e9) ? { do: name, plot, begun: v.begun } : null;
+  };
+const writeClearing = (a: { readonly plot: Plot; readonly begun: number }): Record<string, unknown> => ({
+  plot: plotName(a.plot),
+  begun: a.begun,
 });
 
 /** Every command, by its name. */
@@ -423,15 +439,15 @@ export const COMMANDS: { readonly [D in Name]: Spec<D> } = {
   },
   handClearing: {
     refused: "not_cleared",
-    read: () => ({ do: "handClearing" }),
-    write: () => ({}),
-    act: (y, _a, _coins, no) => doneUnless(handRefusal(y), no, () => handClearing(y)),
+    read: oneClearing("handClearing"),
+    write: writeClearing,
+    act: (y, a, _coins, no) => doneUnless(handRefusal(y, a.plot, a.begun), no, () => handClearing(y, a.plot, a.begun)),
   },
   stopClearing: {
     refused: "not_clearing",
-    read: () => ({ do: "stopClearing" }),
-    write: () => ({}),
-    act: (y, _a, _coins, no) => (stopClearing(y) ? done() : no("You are clearing no plot")),
+    read: oneClearing("stopClearing"),
+    write: writeClearing,
+    act: (y, a, _coins, no) => doneUnless(sameRefusal(y, a.plot, a.begun), no, () => stopClearing(y, a.plot, a.begun)),
   },
   fell: {
     refused: "cannot_fell",
