@@ -1,8 +1,9 @@
 /**
  * The clone check (`bun run clones`, in `bun run verify` and CI): code copied from one app or
  * package into another, where a fix to one copy misses the other. The TypeScript is read as tokens,
- * comments and spacing dropped, and every run of `RUN` tokens is hashed; a run found in two files of
- * different workspaces is copied between them. (Nothing generated is TypeScript: the frames the kit
+ * comments, spacing and import declarations dropped (two files that import the same modules by the
+ * same names, as the rules' list of kinds and the page's do, copy no logic), and every run of `RUN`
+ * tokens is hashed; a run found in two files of different workspaces is copied between them. (Nothing generated is TypeScript: the frames the kit
  * draws are CSS.)
  *
  * The copies there are now are held to `baseline/clones.json` (`ratchet.ts`): for each pair of
@@ -26,6 +27,26 @@ export function tokens(text: string): string[] {
   return [...text.matchAll(TOKEN)].flatMap((m) => (m[2] === undefined ? [] : [m[2]]));
 }
 
+/**
+ * A source's tokens as the check reads them (`tokens`), without its import declarations: from an
+ * `import` that begins a statement (not `import(` or `import.meta`) to its semicolon.
+ */
+export function code(text: string): string[] {
+  const all = tokens(text);
+  const out: string[] = [];
+  for (let i = 0; i < all.length; i++) {
+    const before = all[i - 1];
+    const next = all[i + 1];
+    const starts = before === undefined || before === ";" || before === "}";
+    if (all[i] === "import" && starts && next !== "(" && next !== ".") {
+      while (i < all.length && all[i] !== ";") i++;
+      continue;
+    }
+    out.push(all[i] ?? "");
+  }
+  return out;
+}
+
 /** Every tracked file still on disk, from the root: one deleted or renamed but not yet staged is gone. */
 function tracked(): string[] {
   const out = Bun.spawnSync(["git", "ls-files", "-z"], { cwd: root, stdout: "pipe" });
@@ -43,7 +64,7 @@ export function shared(sources: ReadonlyMap<string, string>): Counts {
   const ids = new Map<string, number>();
   const runs = new Map<string, Set<bigint>>();
   for (const [file, text] of sources) {
-    const t = Uint32Array.from(tokens(text), (tok) => ids.get(tok) ?? ids.set(tok, ids.size).size - 1);
+    const t = Uint32Array.from(code(text), (tok) => ids.get(tok) ?? ids.set(tok, ids.size).size - 1);
     const mine = new Set<bigint>();
     for (let i = 0; i + RUN <= t.length; i++) mine.add(Bun.hash.wyhash(t.subarray(i, i + RUN)));
     runs.set(file, mine);

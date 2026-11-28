@@ -8,7 +8,7 @@ import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync,
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
-import { RUN, shared, tokens } from "./clones.ts";
+import { code, RUN, shared, tokens } from "./clones.ts";
 import { built, entries, type Graph, root } from "./graph.ts";
 import { findings, loops } from "./imports.ts";
 import { isDiagnostics } from "./lint.ts";
@@ -313,6 +313,20 @@ describe("the clone check", () => {
         ";",
       ]),
     );
+  });
+  test("leaves import declarations out, but not a dynamic import or import.meta", () => {
+    const names = Array.from({ length: RUN }, (_, i) => `import { k${i} } from "./k${i}.ts";`).join("\n");
+    expect(code(`${names}\nconst a = 1;`)).toEqual(["const", "a", "=", "1", ";"]);
+    const dynamic = 'const m = import("./m.ts"); const d = import.meta.dir;';
+    expect(code(dynamic)).toEqual(tokens(dynamic));
+    expect(
+      shared(
+        new Map([
+          ["apps/town/src/a.ts", names],
+          ["apps/works/src/b.ts", names],
+        ]),
+      ),
+    ).toEqual({});
   });
   test("counts the runs two workspaces share, and none within one", () => {
     const copied = Array.from({ length: RUN + 4 }, (_, i) => `x${i}`).join(" + ");
