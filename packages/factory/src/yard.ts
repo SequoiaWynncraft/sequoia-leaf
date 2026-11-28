@@ -46,6 +46,12 @@ export interface Holders {
   out: Uint8Array;
   /** What was made beside it (a recipe's by-product), waiting to leave by its own way out, or `NONE` (`KindDef.ports`). */
   also: Uint8Array;
+  /**
+   * How many more of the finished thing (`out`) it holds beyond the one there, waiting to leave after
+   * it: a machine that stands in for several (`TIMES_MOST`, the assembler's 9 benches) holds one for
+   * each, so its belt's timing never holds its work up. 0 for every other.
+   */
+  more: Uint8Array;
   making: Uint8Array;
   /**
    * What a machine last began to make, or `NONE` before it has begun anything (`lastRecipe`). It is
@@ -274,6 +280,7 @@ const holders = (cap: number): Holders => ({
   tile: new Int32Array(cap),
   out: new Uint8Array(cap),
   also: new Uint8Array(cap),
+  more: new Uint8Array(cap),
   making: new Uint8Array(cap),
   last: new Uint8Array(cap),
   work: new Uint16Array(cap),
@@ -437,6 +444,7 @@ export function holderRow(y: Yard, tile: number): number {
       "tile",
       "out",
       "also",
+      "more",
       "making",
       "last",
       "work",
@@ -455,6 +463,7 @@ export function holderRow(y: Yard, tile: number): number {
   h.tile[r] = tile;
   h.out[r] = NONE;
   h.also[r] = NONE;
+  h.more[r] = 0;
   h.making[r] = NONE;
   h.last[r] = NONE;
   h.work[r] = 0;
@@ -497,6 +506,7 @@ export function dropRow(y: Yard, tile: number): void {
         "tile",
         "out",
         "also",
+        "more",
         "making",
         "last",
         "work",

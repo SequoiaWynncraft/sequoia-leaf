@@ -214,6 +214,75 @@ describe("the assembler", () => {
     }
   });
 
+  test("short of power onto a belt that carries more, delivers what its card says: it holds a finished item for each bench it stands in for", () => {
+    const y = yard();
+    const pole = F.item("pole");
+    expect(F.build(y, ASSEMBLER, 20, 10, 0, Infinity, { grade: 3 }).ok).toBe(true);
+    // Two more halls and a bench beside it draw the yard short of power: 184 drawn, 100 made, so it makes
+    // 196 of the 200 a minute its grade II belt carries, close enough that its belt's timing would show.
+    expect(F.build(y, ASSEMBLER, 20, 5, 0, Infinity, { grade: 3 }).ok).toBe(true);
+    expect(F.build(y, ASSEMBLER, 20, 15, 0, Infinity, { grade: 1 }).ok).toBe(true);
+    expect(F.build(y, F.BENCH, 24, 14, 0, Infinity).ok).toBe(true);
+    expect(F.setRecipe(y, 20, 10, pole)).toBeNull();
+    for (let x = 22; x <= 24; x++) expect(F.build(y, F.BELT, x, 10, 0, Infinity, { grade: 2 }).ok).toBe(true);
+    const own = tile(y, 20, 10);
+    const r = F.holderOf(y, own);
+    const fed = (): void => {
+      for (const n of [F.item("frame"), F.item("gear")]) while (F.held(y.holders, r, n) < 4) F.put(y.holders, r, n);
+    };
+    for (let t = 0; t < 600; t++) {
+      fed();
+      F.step(y);
+    }
+    const said = F.machineRate(y, own, F.RECIPE[pole] ?? null);
+    expect(said.share).toBeLessThan(1);
+    expect(said.most).toBeNull();
+    expect(said.effective).toBeGreaterThan(190);
+    const before = y.depot[pole] ?? 0;
+    for (let t = 0; t < 15 * 600; t++) {
+      fed();
+      F.step(y);
+    }
+    const perMinute = ((y.depot[pole] ?? 0) - before) / 15;
+    expect(Math.abs(perMinute - said.effective) / said.effective).toBeLessThan(0.01);
+    // It never holds more than 9 finished at once.
+    expect((y.holders.more[r] ?? 0) + 1).toBeLessThanOrEqual(9);
+  });
+
+  test("its finished items wait behind the first, are kept and read back, and a bench still holds 1", () => {
+    const y = alone(ASSEMBLER, 1);
+    const r = F.holderOf(y, tile(y, 20, 10));
+    made(y, 20, 10, F.item("tool"), 0);
+    for (let t = 0; t < 200; t++) {
+      for (const n of [F.item("plank"), F.item("ingot")]) while (F.held(y.holders, r, n) < 2) F.put(y.holders, r, n);
+      F.step(y);
+    }
+    // Nothing ahead of its way out: 9 tools held, and it says it is blocked.
+    expect([y.holders.out[r], (y.holders.more[r] ?? 0) + 1]).toEqual([F.item("tool"), 9]);
+    expect(F.status(y, tile(y, 20, 10))?.state).toBe("blocked");
+    const read = F.decode(F.encode(y), land);
+    expect(
+      read && [
+        read.holders.out[F.holderOf(read, tile(read, 20, 10))],
+        read.holders.more[F.holderOf(read, tile(read, 20, 10))],
+      ],
+    ).toEqual([F.item("tool"), 8]);
+    expect(read && F.check(read)).toBe(F.check(y));
+    // A belt ahead takes them one by one.
+    F.build(y, F.BELT, 22, 10, 0, Infinity);
+    for (let t = 0; t < 20; t++) F.step(y);
+    expect(y.item[tile(y, 22, 10)]).toBe(F.item("tool"));
+    // A bench with nowhere to send its tool holds the one.
+    const b = alone(F.BENCH, 1);
+    const br = F.holderOf(b, tile(b, 20, 10));
+    made(b, 20, 10, F.item("tool"), 0);
+    for (let t = 0; t < 400; t++) {
+      for (const n of [F.item("plank"), F.item("ingot")]) while (F.held(b.holders, br, n) < 2) F.put(b.holders, br, n);
+      F.step(b);
+    }
+    expect([b.holders.out[br], b.holders.more[br]]).toEqual([F.item("tool"), 0]);
+  });
+
   test("keeps 9 times what a bench keeps of each part, and tips out what it no longer keeps when told otherwise", () => {
     const plank = F.item("plank");
     const hamper = F.item("hamper");
