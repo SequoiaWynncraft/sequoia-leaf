@@ -120,46 +120,42 @@ function halves(g: Ctx, x: number, y: number): void {
   }
 }
 
-/** A wet print, drying: a darker smear on the wood with a glint of water. */
+/** A wet print, drying: a smear of water on the wood (a stain: one tone, no edge). */
 function print(g: Ctx, x: number, y: number, k: number): void {
   g.globalAlpha = 0.6 * (1 - k);
-  R(g, x - 5, y - 1, 10, 3, INK);
-  R(g, x - 3, y - 2, 6, 1, INK);
-  R(g, x - 1, y, 2, 1, WATER[3]);
+  R(g, x - 5, y - 1, 10, 3, WATER[2]);
+  R(g, x - 3, y - 2, 6, 1, WATER[2]);
   g.globalAlpha = 1;
 }
 
-/** A wet ring on a hex round a figure's base, drying: dark wood, a glint of water on it. */
+/** A wet ring on a hex round a figure's base, drying: a one-pixel line of water (a stain: one tone, no edge). */
 function wetRing(g: Ctx, x: number, y: number, k: number): void {
-  g.globalAlpha = 0.55 * (1 - k);
-  R(g, x - 8, y - 4, 16, 1, INK);
-  R(g, x - 8, y + 3, 16, 1, INK);
-  R(g, x - 11, y - 3, 3, 1, INK);
-  R(g, x + 8, y - 3, 3, 1, INK);
-  R(g, x - 11, y + 2, 3, 1, INK);
-  R(g, x + 8, y + 2, 3, 1, INK);
-  R(g, x - 12, y - 2, 1, 4, INK);
-  R(g, x + 11, y - 2, 1, 4, INK);
-  g.globalAlpha = 1 - k;
-  R(g, x - 12, y, 1, 1, WATER[3]);
-  R(g, x + 9, y - 3, 1, 1, WATER[3]);
+  g.globalAlpha = 0.8 * (1 - k);
+  R(g, x - 8, y - 4, 16, 1, WATER[2]);
+  R(g, x - 8, y + 3, 16, 1, WATER[2]);
+  R(g, x - 11, y - 3, 3, 1, WATER[2]);
+  R(g, x + 8, y - 3, 3, 1, WATER[2]);
+  R(g, x - 11, y + 2, 3, 1, WATER[2]);
+  R(g, x + 8, y + 2, 3, 1, WATER[2]);
+  R(g, x - 12, y - 2, 1, 4, WATER[2]);
+  R(g, x + 11, y - 2, 1, 4, WATER[2]);
   g.globalAlpha = 1;
 }
 
 /** The lumps of a bank of snow, left to right: where each starts, how wide and how tall it is. */
 const LUMPS: readonly (readonly [x: number, w: number, h: number])[] = [
   [-12, 6, 3],
-  [-8, 6, 5],
-  [-3, 6, 4],
-  [2, 6, 5],
+  [-8, 6, 4],
+  [-3, 6, 3],
+  [2, 6, 4],
   [7, 5, 3],
 ];
-/** A low bank of snow behind a figure's base, its lumps showing either side; a pixel lower as it melts (`k` of the way). */
+/** A low bank of snow behind a figure's base, its lumps showing either side, never taller than 4 so it hides no feet; a pixel lower as it melts (`k` of the way). */
 function bank(g: Ctx, x: number, y: number, k = 0): void {
   const low = k > 0.5 ? 1 : 0;
   for (const [dx, w, h] of LUMPS) R(g, x + dx - 1, y - h - 1 + low, w + 2, h + 2 - low, INK);
   for (const [dx, w, h] of LUMPS) {
-    R(g, x + dx, y - h + low, w, h - low, CREAM);
+    R(g, x + dx, y - h + low, w, h - low, PAPER[2]);
     R(g, x + dx, y - 1, w, 1, WATER[3]);
   }
 }

@@ -30,6 +30,7 @@ import { clamp, type Ctx } from "@sequoia-leaf/kit/util.ts";
 import { type Fight, type FightEvent, GEAR, type Gear } from "@sequoia-leaf/raid";
 
 import { handAt } from "./acting.ts";
+import { BOARD } from "./art/board.ts";
 import { clockNow, feetAt, fightNow, FOOT, FV } from "./board.ts";
 import { hexCorners } from "./call.ts";
 import { burst } from "./fx.ts";
@@ -218,7 +219,7 @@ export function drawAimsUnder(g: Ctx): void {
     if (aim.how === "drum" && c >= aim.at - beats.catch && c < aim.at) {
       const p = pools[0];
       const wide = clamp((c - (aim.at - beats.dread)) / beats.dread, 0, 1);
-      if (p) woodRing(g, p.x, p.y + FOOT, 9 + Math.round(wide * 2), INK);
+      if (p) woodRing(g, p.x, p.y + FOOT, 9 + Math.round(wide * 2), BOARD.ring);
     }
   }
 }

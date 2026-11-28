@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 
 import { COLS, distance, seatCell } from "../hex.ts";
 import { CAT } from "../testkit.ts";
-import { drawName, drawTip, GOOD_WITH, placeOf, roleLine, ROLES } from "./advice.ts";
+import { drawName, drawTip, GOOD_WITH, placeOf, roleLine, ROLES, zoneOf } from "./advice.ts";
 import { boonShort, boonText } from "./boons.ts";
-import { type Catalog, catalogAt } from "./catalog.ts";
+import { type Catalog, catalogAt, catalogsOf } from "./catalog.ts";
 import {
   abilityShort,
   abilityText,
@@ -17,6 +17,8 @@ import {
 } from "./figures.ts";
 import { FINISHED_IDS, isFinishedId, itemShort, itemText } from "./items.ts";
 import { eraOf, LAST_ERA, RELEASES } from "./releases.ts";
+import { BASE } from "./releases/base.ts";
+import { GROOT } from "./releases/groot.ts";
 import { traitIn, traitShort, traitText } from "./traits.ts";
 
 /** The longest a fragment may be and still fit one line of a card. */
@@ -119,6 +121,25 @@ describe("advice for the cards", () => {
         ).toBeLessThanOrEqual(figureIn(EVERY, id).range);
       }
     }
+  });
+  test("the rows a figure belongs in are the ones its card names: front two for front or second row, back two for back row, none for a leap", () => {
+    for (const id of EVERY.order) {
+      const place = placeOf(EVERY, id);
+      const rows = place === "front row" || place === "second row" ? [0, 1] : place === "back row" ? [2, 3] : [];
+      expect([id, zoneOf(EVERY, id)]).toEqual([id, rows]);
+    }
+    // Reach 2 is the second row: Toast, Crab #23 and Dose belong at the front, as their cards say.
+    for (const id of ["cindernewt", "crab23", "apothecary"] as const) expect(zoneOf(CAT, id)).toEqual([0, 1]);
+    expect(zoneOf(CAT, "worm")).toEqual([]);
+  });
+  test("the rows are read in the catalogue a figure is in: a release that gives it more reach moves them from that era", () => {
+    // Twig made up as reaching 1 hex from Penguin Month: its rows are the front two from then, and the back two before.
+    const eras = catalogsOf([BASE, GROOT, { release: "penguin-month", figures: { change: { finch: { range: 1 } } } }]);
+    const at = (era: number): Catalog => eras[era - 1] ?? CAT;
+    expect(zoneOf(at(eraOf("groot-night")), "finch")).toEqual([2, 3]);
+    expect(zoneOf(at(eraOf("penguin-month")), "finch")).toEqual([0, 1]);
+    // A figure the catalogue does not have belongs in no rows: Seqwawa before the expansion.
+    expect(zoneOf(at(eraOf("base")), "seqwawa")).toEqual([]);
   });
   test("a draw has a name and a tip", () => {
     expect(drawName(0)).toBeNull();

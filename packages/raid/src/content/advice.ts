@@ -8,7 +8,7 @@
  * ability wants something else has its own three. `bun review/balance.ts 200 0 suits` plays sample
  * fights again with each figure given each item, and none of these is among a figure's three worst.
  */
-import { standRow } from "../hex.ts";
+import { HOME_ROWS, standRow } from "../hex.ts";
 import type { Catalog } from "./catalog.ts";
 import { type FigureId, figureIn } from "./figures.ts";
 import type { FinishedId } from "./items.ts";
@@ -34,6 +34,18 @@ const ROW_NAMES = ["front row", "second row", "third row", "back row"] as const;
 export function placeOf(cat: Catalog, id: FigureId): string {
   const { calling, range } = figureIn(cat, id);
   return calling === "sneak" ? "leaps to the enemy back row" : (ROW_NAMES[standRow(range)] ?? "");
+}
+
+/**
+ * The rows of a party's own half (0 its front line) a figure belongs in, which the board lights while
+ * the figure is in the hand: the front two for a figure whose card says front or second row, the
+ * back two for one whose card says back row, none for a Sneak (it leaps from wherever it starts) or
+ * a figure the catalogue does not have. The same reading as `placeOf`, so the two cannot disagree.
+ */
+export function zoneOf(cat: Catalog, id: FigureId): readonly number[] {
+  const f = cat.figures[id];
+  if (!f || f.calling === "sneak") return [];
+  return standRow(f.range) < HOME_ROWS / 2 ? [0, 1] : [2, 3];
 }
 
 /** What a figure's draw is called on its card: "Draws fire", "Draws fire ×2", "Avoids fire"; nothing for 0. */

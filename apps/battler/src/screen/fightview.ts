@@ -29,7 +29,7 @@ import { seatCell } from "@sequoia-leaf/raid/hex.ts";
 
 import { stanceOf } from "./acting.ts";
 import { drawAims, drumNow, swingNow, toolNow } from "./aimed.ts";
-import { hexMark } from "./art/table.ts";
+import { drawShadow, hexSign } from "./art/board.ts";
 import { clockNow, feetAt, FV, shownCell } from "./board.ts";
 import { drawBubbled, waitsForBubble } from "./bubble.ts";
 import { drawCalls } from "./call.ts";
@@ -51,15 +51,8 @@ import { drawSpells } from "./spells.ts";
 import { type Standing, V } from "./stage.ts";
 import { drawWalls } from "./walls.ts";
 
-const marksByColour = new Map<string, HTMLCanvasElement>();
-function markOf(col: string): HTMLCanvasElement {
-  let m = marksByColour.get(col);
-  if (!m) {
-    m = hexMark(col, CREAM);
-    marksByColour.set(col, m);
-  }
-  return m;
-}
+/** An ability's flash on a hex: its owner's colour, a cream rim. */
+const markOf = (col: string): HTMLCanvasElement => hexSign(col, CREAM);
 
 export const fightOn = (): boolean => FV.pb !== null;
 /** Where the fight has got to, for looking from outside. */
@@ -383,11 +376,11 @@ function standing(g: Ctx, cat: Catalog, a: Actor, c: number, tick: number): Stan
       if (hidden && drawBubbled(g, a, x, ground)) return;
       if (hidden) return drawHidden(g, cat, a, { x, y, ground, left });
       if (sunk) return drawMound(g, x, ground);
-      // Off the ground, its shadow stays on it.
+      // Off the ground, its shadow stays on it; standing, it throws one; fallen, none.
       if (p.lift > 2) {
         g.fillStyle = "rgba(26,15,30,0.3)";
         g.fillRect(x - 6, ground - 1, 12, 2);
-      }
+      } else if (!down) drawShadow(g, x, ground, isBossId(u.kind));
       g.globalAlpha = p.alpha * (shine.dim ? DIM : 1);
       // The member's figures stand on the bases they chose; the forest's, and what is summoned, on plain ones.
       drawStanding(g, cat, u.kind, x, y, u.side === FV.ours ? FV.bases : "plain", {

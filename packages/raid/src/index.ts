@@ -90,7 +90,17 @@ export {
   traitShort,
   traitText,
 } from "./content/traits.ts";
-export { drawName, drawReach, drawTip, GOOD_WITH, placeOf, roleLine, ROLES, type Three } from "./content/advice.ts";
+export {
+  drawName,
+  drawReach,
+  drawTip,
+  GOOD_WITH,
+  placeOf,
+  roleLine,
+  ROLES,
+  type Three,
+  zoneOf,
+} from "./content/advice.ts";
 export {
   carriedTraits,
   carries,

@@ -8,7 +8,7 @@ import { drawStanding } from "@sequoia-leaf/figures/sprites.ts";
  *
  * It is the stump the town shows from outside, seen close: the same wood, moss and lanterns.
  */
-import { BARK, CREAM, GOLD, GREEN, INK, PAPER, SKY, STONE } from "@sequoia-leaf/kit/palette.ts";
+import { BARK, CREAM, GOLD, GREEN, INK, SKY, STONE } from "@sequoia-leaf/kit/palette.ts";
 import { bitmap, ell, outlined, paint, R } from "@sequoia-leaf/kit/pix.ts";
 import { clamp, type Ctx, hash, makeCanvas, vnoise } from "@sequoia-leaf/kit/util.ts";
 import { catalogAt, type ClothId, type LanternId, LAST_ERA, type Looks } from "@sequoia-leaf/raid";
@@ -26,11 +26,10 @@ import {
   cellXY,
   GAP,
   HEX_H,
-  HEX_W,
   ROW,
-  SLOPE,
   SLOT_W,
 } from "../geometry.ts";
+import { BENCH, BOARD, CHECK, CLOTHS, cutHex, halvesOf, type HexTones, RIM } from "./board.ts";
 
 export const at = (ramp: readonly string[], i: number): string =>
   ramp[clamp(Math.round(i), 0, ramp.length - 1)] ?? "#000000";
@@ -76,68 +75,21 @@ export const lampsOf = (p: Place): { x: number; y: number }[] =>
 
 // ---------- the two halves of the board ----------
 
-/** Half the width of a hex at one of its rows, counted from its top point. */
-function halfWidth(row: number): number {
-  if (row < 0 || row >= HEX_H) return 0;
-  const steep = HEX_W / 2 / SLOPE;
-  if (row < SLOPE) return (row + 1) * steep;
-  if (row >= HEX_H - SLOPE) return (HEX_H - row) * steep;
-  return HEX_W / 2;
-}
-/** The same, one pixel in from the edge all round. */
-function insetWidth(row: number): number {
-  return Math.min(halfWidth(row - 1), halfWidth(row), halfWidth(row + 1)) - 1;
-}
-
-/** One hex, cut into the wood: a dark groove round it and a pale face catching the lantern. */
-function drawHex(g: Ctx, cx: number, cy: number, tones: readonly [string, string, string], groove: string): void {
-  const top = cy - HEX_H / 2;
-  for (let r = 0; r < HEX_H; r++) R(g, cx - halfWidth(r), top + r, halfWidth(r) * 2, 1, groove);
-  for (let r = 1; r < HEX_H - 1; r++) {
-    const hw = insetWidth(r);
-    if (hw <= 0) continue;
-    const upper = r < HEX_H / 2;
-    R(g, cx - hw, top + r, hw * 2, 1, r <= 2 ? tones[0] : r >= HEX_H - 3 ? tones[2] : tones[1]);
-    if (upper && r > 2) R(g, cx - hw, top + r, 1, 1, tones[0]);
-    if (!upper && r < HEX_H - 3) R(g, cx + hw - 1, top + r, 1, 1, tones[2]);
-  }
-}
-
 export const HALF_H = (HOME_ROWS - 1) * ROW + HEX_H;
-const NEAR_TONES = [CREAM, PAPER[1], PAPER[0]] as const;
-const FAR_TONES = [PAPER[1], PAPER[0], "#a98a5a"] as const;
 
 /**
- * One half of the board as a picture `BOARD_W` wide. The far half is the darker wood; the near
- * half's top row is the member's front line.
+ * One half of the board as a picture `BOARD_W` wide, each hex cut into it in `tones`, with the
+ * half's outer edge round it. The near half's top row is the member's front line.
  */
-export function paintHalf(far: boolean): HTMLCanvasElement {
+export function paintHalf(far: boolean, tones: HexTones): HTMLCanvasElement {
   const { c, g } = makeCanvas(BOARD_W, HALF_H);
   const first = far ? 0 : HOME_ROWS * COLS;
   const lift = far ? 0 : HOME_ROWS * ROW;
   for (let i = 0; i < HOME_ROWS * COLS; i++) {
     const { x, y } = cellXY(first + i);
-    drawHex(g, x, y - lift, far ? FAR_TONES : NEAR_TONES, BARK[1]);
+    cutHex(g, x, y - lift, tones);
   }
-  return outlined(c, BARK[0]);
-}
-
-/** A hex-shaped mark laid over one hex of the board, for lighting it. */
-export function hexMark(colour: string, rim: string): HTMLCanvasElement {
-  const { c, g } = makeCanvas(HEX_W, HEX_H);
-  for (let r = 1; r < HEX_H - 1; r++) {
-    const hw = insetWidth(r);
-    if (hw <= 0) continue;
-    R(g, HEX_W / 2 - hw, r, hw * 2, 1, colour);
-    R(g, HEX_W / 2 - hw, r, 1, 1, rim);
-    R(g, HEX_W / 2 + hw - 1, r, 1, 1, rim);
-    if (r <= 2 || r >= HEX_H - 3 || r < SLOPE || r >= HEX_H - SLOPE) {
-      const edge = r <= 1 || r >= HEX_H - 2 ? hw * 2 : 2;
-      R(g, HEX_W / 2 - hw, r, edge, 1, rim);
-      R(g, HEX_W / 2 + hw - edge, r, edge, 1, rim);
-    }
-  }
-  return c;
+  return outlined(c, tones.edge);
 }
 
 // ---------- small things at the table's edge ----------
@@ -282,10 +234,12 @@ function radial(stops: readonly (readonly [number, string])[]): HTMLCanvasElemen
 }
 let hole: HTMLCanvasElement | null = null;
 let warm: HTMLCanvasElement | null = null;
+/** The heart of the warm glow: what the lanterns' light adds where it is strongest. */
+export const WARM = [255, 196, 120] as const;
 /** A soft warm glow, for adding light to the picture. */
 export function warmGlow(): HTMLCanvasElement {
   warm ??= radial([
-    [0, "rgba(255,196,120,1)"],
+    [0, `rgba(${WARM.join(",")},1)`],
     [0.4, "rgba(255,160,90,0.5)"],
     [1, "rgba(255,140,80,0)"],
   ]);
@@ -304,17 +258,13 @@ export function lightHole(): HTMLCanvasElement {
 
 // ---------- the whole table ----------
 
-const CLOTH: Readonly<Record<ClothId, readonly [string, string, string] | null>> = {
-  bare: null,
-  baize: [GREEN[2], GREEN[1], GREEN[0]],
-  plum: [SKY[2], SKY[1], SKY[0]],
-  gingham: [CREAM, SKY[5], "#b0483a"],
-};
-
-/** The cloth under the board, if there is one: its colour at a pixel, or null where it does not reach. */
+/**
+ * The cloth under the board, if there is one: its colour at a pixel, or null where it does not reach.
+ * Its edge, a trim two pixels in, and its ground: a little nap and a fold where it has been kept, or
+ * the gingham's checks of four.
+ */
 export function clothAt(cloth: ClothId, x: number, y: number, p: Place): string | null {
-  const tones = CLOTH[cloth];
-  if (!tones) return null;
+  if (cloth === "bare") return null;
   const x0 = p.bx - 9;
   const x1 = p.bx + BOARD_W + 9;
   const y0 = p.by - GAP - 8;
@@ -324,18 +274,17 @@ export function clothAt(cloth: ClothId, x: number, y: number, p: Place): string 
   const dy = Math.min(y - y0, y1 - 1 - y);
   if (dx + dy < 3) return null;
   const edge = Math.min(dx, dy);
+  const t = CLOTHS[cloth];
+  if (edge < 1) return t.near.edge;
+  if (edge === 2) return t.trim;
   if (cloth === "gingham") {
-    if (edge < 1) return tones[2];
     const a = Math.floor((x - x0) / 4) % 2;
     const b = Math.floor((y - y0) / 4) % 2;
-    return a + b === 2 ? tones[2] : a + b === 1 ? tones[1] : tones[0];
+    return a + b === 2 ? CHECK : a + b === 1 ? t.nap : t.ground;
   }
-  if (edge < 1) return tones[2];
-  if (edge === 2) return cloth === "plum" ? GOLD[1] : tones[0];
-  // A little nap in the cloth, and a fold where it has been kept.
-  if (hash(x >> 1, y >> 1, 611) > 0.9) return tones[0];
-  if ((x - x0) % 56 === 55) return tones[2];
-  return tones[1];
+  if (hash(x >> 1, y >> 1, 611) > 0.92) return t.nap;
+  if ((x - x0) % 56 === 55) return t.near.edge;
+  return t.ground;
 }
 
 /** The bench: a plank along the near edge with nine hollows cut in it. */
@@ -346,21 +295,21 @@ export function drawBench(g: Ctx, p: Place): void {
   const ph = BENCH_H + 3;
   R(g, px, py - 1, pw, ph + 2, INK);
   R(g, px - 1, py, pw + 2, ph, INK);
-  R(g, px, py, pw, ph, BARK[3]);
-  R(g, px, py, pw, 1, BARK[4]);
-  R(g, px, py + ph - 2, pw, 2, BARK[1]);
-  for (let i = 0; i < 9; i++) R(g, px + 6 + i * 21, py + 1, 9, 1, BARK[2]);
+  R(g, px, py, pw, ph, BENCH.plank);
+  R(g, px, py, pw, 1, BENCH.top);
+  R(g, px, py + ph - 2, pw, 2, BENCH.foot);
+  for (let i = 0; i < 9; i++) R(g, px + 6 + i * 21, py + 1, 9, 1, BENCH.slat);
   for (const nx of [px + 1, px + pw - 3]) {
-    R(g, nx, py + 3, 2, 2, GOLD[1]);
-    R(g, nx, py + ph - 6, 2, 2, GOLD[1]);
+    R(g, nx, py + 3, 2, 2, BENCH.nail);
+    R(g, nx, py + ph - 6, 2, 2, BENCH.nail);
   }
   for (let i = 0; i < BENCH_SLOTS; i++) {
     const sx = p.bx + BENCH_X + i * SLOT_W + 1;
     const sy = py + 3;
     R(g, sx, sy, SLOT_W - 2, BENCH_H - 5, INK);
     R(g, sx + 1, sy + 1, SLOT_W - 3, BENCH_H - 6, "#211228");
-    R(g, sx + 1, sy + BENCH_H - 6, SLOT_W - 3, 1, SKY[1]);
-    R(g, sx + SLOT_W - 3, sy + 1, 1, BENCH_H - 6, SKY[1]);
+    R(g, sx + 1, sy + BENCH_H - 6, SLOT_W - 3, 1, SKY[0]);
+    R(g, sx + SLOT_W - 3, sy + 1, 1, BENCH_H - 6, SKY[0]);
   }
 }
 
@@ -379,7 +328,7 @@ export function paintTable(p: Place, cloth: ClothId, lantern: LanternId): HTMLCa
     const d = inTop(x, y);
     if (d < 1) {
       if (d > 0.985) return BARK[0];
-      if (d > 0.95) return hash(x >> 1, y >> 1, 502) > 0.7 ? BARK[2] : BARK[3];
+      if (d > 0.95) return hash(x >> 1, y >> 1, 502) > 0.7 ? RIM.dark : RIM.pale;
       const laid = clothAt(cloth, x, y, p);
       if (laid) return laid;
       // The rings, counted from a heart a little off the middle.
@@ -387,11 +336,11 @@ export function paintTable(p: Place, cloth: ClothId, lantern: LanternId): HTMLCa
       const hy = (y - (cy - 6)) / ry;
       const ring = Math.hypot(hx, hy) * 13 + vnoise(x / 22, y / 22, 503) * 1.1;
       const f = ring - Math.floor(ring);
-      if (f < 0.16) return BARK[4];
-      if (f > 0.9 && hash(x, y, 504) > 0.5) return GOLD[1];
+      if (f < 0.16) return BOARD.ring;
+      if (f > 0.9 && hash(x, y, 504) > 0.72) return BOARD.fleck;
       // A crack or two running out from the heart.
-      if (Math.abs(hy * 3 - hx) < 0.012 && hx > 0.05 && hx < 0.5) return BARK[3];
-      return GOLD[0];
+      if (Math.abs(hy * 3 - hx) < 0.012 && hx > 0.05 && hx < 0.5) return BOARD.ring;
+      return BOARD.wood;
     }
     // The side of the stump below its top: furrowed bark down to the roots.
     const wall = inTop(x, y - 14);
@@ -491,7 +440,7 @@ export function paintTable(p: Place, cloth: ClothId, lantern: LanternId): HTMLCa
 
   drawBench(g, p);
 
-  // Dusk over everything, with the lanterns' light and the pool it throws on the board cut out.
+  // Dusk over everything, with the lanterns' light cut out, and the light over the board's middle.
   const dusk = makeCanvas(p.w, p.h);
   const d = dusk.g;
   const fall = d.createLinearGradient(0, 0, 0, p.h);
@@ -500,16 +449,14 @@ export function paintTable(p: Place, cloth: ClothId, lantern: LanternId): HTMLCa
   d.fillStyle = fall;
   d.fillRect(0, 0, p.w, p.h);
   d.globalCompositeOperation = "destination-out";
-  const pool = Math.max(rx, ry) * 1.25;
-  d.drawImage(lightHole(), cx - pool, cy - pool * 0.86, pool * 2, pool * 1.72);
+  const [hw, hh] = BOARD.hole;
+  d.drawImage(lightHole(), cx - hw / 2, p.by + BOARD_H / 2 - hh / 2, hw, hh);
   const lamps = lampsOf(p);
   for (const l of lamps) d.drawImage(lightHole(), l.x - 44, l.y - 40, 88, 88);
   g.drawImage(dusk.c, 0, 0);
   g.globalCompositeOperation = "lighter";
   g.globalAlpha = 0.16;
   for (const l of lamps) g.drawImage(warmGlow(), l.x - 40, l.y - 38, 80, 80);
-  g.globalAlpha = 0.07;
-  g.drawImage(warmGlow(), cx - pool, cy - pool * 0.8, pool * 2, pool * 1.6);
   g.globalAlpha = 1;
   g.globalCompositeOperation = "source-over";
   if (lantern === "jar") {
@@ -533,7 +480,7 @@ export function paintTable(p: Place, cloth: ClothId, lantern: LanternId): HTMLCa
 type Dressing = Pick<Looks, "cloth" | "lantern" | "bases">;
 function swatchRings(x: number, y: number): string {
   const ring = Math.hypot(x - 80, (y - 8) * 1.3) / 9 + vnoise(x / 22, y / 22, 503) * 1.1;
-  return ring - Math.floor(ring) < 0.16 ? BARK[4] : GOLD[0];
+  return ring - Math.floor(ring) < 0.16 ? BOARD.ring : BOARD.wood;
 }
 
 /**
@@ -559,8 +506,9 @@ export function paintSwatch(looks: Dressing, wood = swatchRings, post?: PostTone
     [66, 27],
   ];
   const hexes = makeCanvas(w, h);
-  for (const [x, y] of spots) drawHex(hexes.g, x, y, NEAR_TONES, BARK[1]);
-  g.drawImage(outlined(hexes.c, BARK[0]), -1, -1);
+  const near = halvesOf(looks.cloth).near;
+  for (const [x, y] of spots) cutHex(hexes.g, x, y, near);
+  g.drawImage(outlined(hexes.c, near.edge), -1, -1);
   const stand: (readonly [UnitKind, number, number])[] = [
     ["mossmote", 36, 45],
     ["crab7", 56, 45],

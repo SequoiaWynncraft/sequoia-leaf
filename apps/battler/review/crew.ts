@@ -40,6 +40,8 @@ const BODY = [
 const FLANK = ["CCCC", "CCCC", "CCCC", "CCCC", "CCCC", "CCCC", "CCCC", "CCCC", "TTTT", "CCCC", "cCCc", "cCCc"];
 const ARM = ["CCCC", "CCCC", "CCCC", "CCCC", "CCCC", "CCCC", "CCCC", "cCCc", "TTTT", "SSSS", "SSSS", "SSSS"];
 const LEG = ["PPPP", "PPPP", "PPPP", "PPPP", "PPPP", "PPPP", "PPPP", "PPPP", "BBBB", "BBBB", "BBBB", "BBBB"];
+/** What of a person shows from the front, as rows of their letters: the face, the body, both arms and both legs. */
+export const CREW_FRONT: readonly (readonly string[])[] = [FACE, BODY, ARM, ARM, LEG, LEG];
 
 /** A whole skin sheet in a person's colours, laid out as a real one is: the head's faces, the body's, an arm and a leg. */
 export function crewSheet(inks: Crew): HTMLCanvasElement {

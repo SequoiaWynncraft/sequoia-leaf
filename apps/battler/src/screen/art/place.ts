@@ -16,6 +16,8 @@ import { bitmap, outlined, paint, R } from "@sequoia-leaf/kit/pix.ts";
 import { type Ctx, hash, makeCanvas, vnoise } from "@sequoia-leaf/kit/util.ts";
 import type { ClothId, LanternId, Looks, PlaceId } from "@sequoia-leaf/raid";
 
+import { BOARD_H } from "../geometry.ts";
+import { dusk } from "./board.ts";
 import {
   clothAt,
   drawBench,
@@ -64,14 +66,17 @@ type Hall = ReturnType<typeof hallOf>;
 
 // ---------- what it is made of ----------
 
+/** The oak of the table's top at dusk, darkest first: as dark as the board round it. */
+const OAK = EARTH.map((t) => dusk(t, 0.36));
 /** The oak of the table at a point of its top: boards laid lengthwise, their seams and ends, and the grain along them. */
 function oak(x: number, y: number): string {
+  const [seam = INK, mid = INK, pale = INK] = OAK;
   const board = Math.floor(y / 19);
   const v = y - board * 19;
-  if (v === 0 || (x + Math.floor(hash(board, 1, 701) * 170)) % 173 === 0) return EARTH[0];
+  if (v === 0 || (x + Math.floor(hash(board, 1, 701) * 170)) % 173 === 0) return seam;
   const grain = vnoise(x / 34, board * 7.3 + v / 1.6, 703);
-  if (grain > 0.76) return EARTH[2];
-  return grain < 0.17 ? EARTH[0] : EARTH[1];
+  if (grain > 0.76) return pale;
+  return grain < 0.17 ? seam : mid;
 }
 
 /** The table's near side, `below` pixels under its top and `dx` in from an end, and a leg at each end; null under them. */
@@ -93,8 +98,11 @@ function tableAt(h: Hall, x: number, y: number, cloth: ClothId, p: Place): strin
   return clothAt(cloth, x, y, p) ?? oak(x - h.x0, y - h.y0);
 }
 
+/** The floor's flags at dusk, darkest first: no brighter than the board. */
+const FLAGS = STONE.map((t) => dusk(t, 0.25));
 /** A stone flag of the floor at a point: courses of flags of uneven widths, a few of them darker. */
 function flagAt(x: number, y: number): string {
+  const [dark = INK, mid = INK, top = INK] = FLAGS;
   const row = Math.floor(y / 14);
   const sx = x + 4096 + Math.floor(hash(row, 1, 711) * 24);
   const col = Math.floor(sx / 24);
@@ -102,8 +110,8 @@ function flagAt(x: number, y: number): string {
   const flag = sx >= edge(col) ? col : col - 1;
   if (y % 14 === 0 || sx === edge(flag)) return GROUT;
   const tone = hash(flag, row, 713);
-  if (y % 14 === 1 && tone > 0.5) return STONE[2];
-  return tone > 0.28 ? STONE[1] : STONE[0];
+  if (y % 14 === 1 && tone > 0.5) return top;
+  return tone > 0.28 ? mid : dark;
 }
 
 /** The runner at a point measured from its corner: a pale band inside its edge, and woven diamonds. */
@@ -125,9 +133,7 @@ function moonlit(h: Hall, x: number, y: number): boolean {
 /** What the floor's tones are in the moon. */
 const MOONLIT: ReadonlyMap<string, string> = new Map([
   [GROUT, STONE[0]],
-  [STONE[0], STONE[2]],
-  [STONE[1], STONE[3]],
-  [STONE[2], STONE[3]],
+  ...FLAGS.slice(0, 3).map((t, i) => [t, STONE[Math.min(3, i + 2)] ?? CREAM] as const),
   [WATER[0], WATER[1]],
   [WATER[1], WATER[2]],
   [PAPER[0], PAPER[1]],
@@ -289,7 +295,8 @@ function light(g: Ctx, h: Hall, p: Place): void {
   d.fillStyle = "rgba(12,14,40,0.58)";
   d.fillRect(0, 0, p.w, p.h);
   d.globalCompositeOperation = "destination-out";
-  d.drawImage(lightHole(), h.cx - 152, h.cy - 131, 304, 262);
+  // Light over the board's middle, reaching the table's ends.
+  d.drawImage(lightHole(), h.cx - 168, p.by + BOARD_H / 2 - 134, 336, 268);
   const lamps = lampsOf(p);
   for (const l of lamps) d.drawImage(lightHole(), l.x - 44, l.y - 40, 88, 88);
   d.drawImage(lightHole(), h.candle.x - 22, h.candle.y - 22, 44, 44);

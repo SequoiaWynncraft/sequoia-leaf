@@ -25,6 +25,7 @@ import {
   isRackItem,
   kindsOn,
   LAST_ERA,
+  type Looks,
   MEASURES,
   onTrail,
   picksOf,
@@ -179,6 +180,8 @@ export interface Handle {
   foldReport(): string[];
   /** Draws the table again from the copy as it stands. */
   redraw(): void;
+  /** For looking at a look: dresses the page's own copy of the table in it (not Leaf's), until Leaf next says what the looks are. */
+  dress(looks: Partial<Looks>): void;
   /** Leaf's table as the page last heard it, and whether anything sent is still waiting for an answer. */
   leaf(): TableView | null;
   waiting(): boolean;
@@ -555,6 +558,10 @@ export function openHandle(): void {
     redraw() {
       syncPawns(S.run, true);
       changed();
+    },
+    dress(looks) {
+      S.looks = { ...S.looks, ...looks };
+      stage.render();
     },
     tableBoxes,
     foldReport,
