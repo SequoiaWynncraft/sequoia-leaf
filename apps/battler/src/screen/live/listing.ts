@@ -54,6 +54,8 @@ export const T: {
   shown: () => boolean;
   /** Reads the list, one at a time, whenever one is owed. */
   follow: Follower | null;
+  /** In a Discord call: the call's table, as Leaf last seated the member at it; null until it has. */
+  callTable: string | null;
 } = {
   scope: null,
   me: null,
@@ -70,6 +72,7 @@ export const T: {
   restored: false,
   shown: () => false,
   follow: null,
+  callTable: null,
 };
 
 const RECORD_EVERY = 60_000;
@@ -171,23 +174,48 @@ async function asking(what: () => Promise<string | null>): Promise<void> {
   }
 }
 
-/** Opens a table, with the member sat at it. */
-export function openTable(): Promise<void> {
+/**
+ * Asks Leaf for a table to sit at (a `POST` of `body` to `path`) and takes it up; or says why not. A
+ * table the page follows already (the first read gave it back) is the one asked for: nothing more.
+ * With `final`, Leaf's answer is taken up even if the page took up another meanwhile: it is the table
+ * Leaf has just seated the member at.
+ */
+function seatFrom(path: string, body: object, final = false): Promise<void> {
   return asking(async () => {
-    const asked = T.gen;
-    const answer = await ask("/v1/game/sittings", {
+    const before = T.gen;
+    const answer = await ask(path, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ player: T.me?.id }),
+      body: JSON.stringify(body),
     });
     if (answer.status === 200 && isRecord(answer.body) && typeof answer.body.id === "string") {
-      return lineFrom(answer.body.id, answer.body, asked) ? null : "That table could not be read.";
+      if (final) T.callTable = answer.body.id;
+      if (liveLine()?.id === answer.body.id) return null;
+      return lineFrom(answer.body.id, answer.body, final ? T.gen : before) ? null : "That table could not be read.";
     }
     return isRecord(answer.body) && typeof answer.body.message === "string"
       ? `${answer.body.message}.`
       : "Leaf did not answer. Try again.";
   });
 }
+
+/** Opens a table, with the member sat at it. */
+export const openTable = (): Promise<void> => seatFrom("/v1/game/sittings", { player: T.me?.id });
+
+/**
+ * Sits down at the table of the member's Discord call (`instance`, its launch), opening it if nobody
+ * has: Leaf knows which. Its answer wins over the first read's, which may give back another table.
+ * Refused, the member keeps whatever table the page follows: the one they were at, or a finished one
+ * to see how it ended. The call's next table is asked for the same way.
+ */
+export const joinCall = (instance: string): Promise<void> =>
+  seatFrom("/v1/game/sittings/call", { player: T.me?.id, instance }, true);
+
+/** Whether the table the page follows is the member's call's (in a call; elsewhere, never). */
+export const atCallTable = (): boolean => T.callTable !== null && liveLine()?.id === T.callTable;
+
+/** Why the last thing asked of Leaf for the tables was not done, or null. */
+export const tablesWhy = (): string | null => T.why;
 
 /** Sits down at an open table. */
 export function sitAt(id: string): Promise<void> {

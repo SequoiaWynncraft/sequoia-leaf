@@ -10,9 +10,9 @@ import {
 } from "effect/http";
 import { SqlClient } from "effect/sql";
 
-import { leafCookies, SIGN_IN_MS, SignIns } from "../auth/sign-ins.ts";
+import { frameCookie, leafCookies, SIGN_IN_MS, SignIns } from "../auth/sign-ins.ts";
 import { askBackend, logFailure } from "../backend/failure.ts";
-import { AppConfig } from "../config.ts";
+import { AppConfig, fromLeafPage } from "../config.ts";
 import { discordPlayer } from "../players/link.ts";
 import type { Logins } from "../players/logins.ts";
 import { DiscordId } from "../wire.ts";
@@ -151,9 +151,10 @@ const cameBack = Effect.gen(function* () {
 
 /** `POST /v1/game/sign-out`, from Leaf's own pages: ends the Leaf session. */
 const signOut = Effect.gen(function* () {
-  const { publicOrigin } = yield* AppConfig;
+  const settings = yield* AppConfig;
+  const { publicOrigin } = settings;
   const request = yield* HttpServerRequest.HttpServerRequest;
-  if (request.headers["origin"] !== publicOrigin) {
+  if (!fromLeafPage(settings, request.headers["origin"])) {
     return HttpServerResponse.jsonUnsafe(
       { code: "bad_origin", message: "Leaf takes this only from its own pages" },
       { status: 403 },
@@ -162,10 +163,13 @@ const signOut = Effect.gen(function* () {
   const { secure, session } = leafCookies(publicOrigin);
   const token = cookieOf(request.headers["cookie"], session);
   if (token !== "") yield* (yield* SignIns).end(token);
-  return HttpServerResponse.expireCookieUnsafe(HttpServerResponse.empty({ status: 204 }), session, {
-    path: "/",
-    secure,
-  });
+  // From Discord's frame, its own cookie is taken away, as it was set (`frameCookie`).
+  const inFrame = settings.activity !== undefined && request.headers["origin"] === settings.activity.origin;
+  return HttpServerResponse.expireCookieUnsafe(
+    HttpServerResponse.empty({ status: 204 }),
+    session,
+    inFrame ? frameCookie(publicOrigin).gone : { path: "/", secure },
+  );
 });
 
 export const SignInRoutes = Layer.effectDiscard(
