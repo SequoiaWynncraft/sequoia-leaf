@@ -22,7 +22,7 @@ const BOX = TILE * 3;
 const CX = 24;
 const CY = 27;
 /** Its glass: the dark of the dome, its body, the light along its top, and the highlight. */
-const GLASS = ["#24222e", "#302e3c", "#3d3a4b", "#8a86a0"] as const;
+const GLASS = ["#272535", "#363344", "#46425a", "#9a96b0"] as const;
 /** A thin pale seam. */
 const SEAM = "#7b7688";
 
@@ -62,11 +62,16 @@ function bed(g: Ctx, x: number, y: number, grade: number): void {
   }
 }
 
-/** The dome over the bed: dull glass, darker at its foot, a light along its top and one highlight. */
+/** The dome over the bed: dull glass, darker at its foot, a light along its top, and two thin seams up it. */
 function dome(g: Ctx, x: number, y: number): void {
   ell(g, x + CX, y + CY - 3, 15, 13, GLASS[0]);
   ell(g, x + CX, y + CY - 4, 14, 12, GLASS[1]);
   ell(g, x + CX, y + CY - 8, 10, 6, GLASS[2]);
+  for (const side of [-0.55, 0.55])
+    for (let k = 0; k <= 12; k++) {
+      const a = (k / 12) * (Math.PI / 2);
+      R(g, x + CX + Math.round(side * 14 * Math.cos(a)), y + CY + 4 - Math.round(19 * Math.sin(a)), 1, 1, IRON[2]);
+    }
   // Its foot, where it sits on the bed: a ring of dark iron, and a seam on it.
   ell(g, x + CX, y + CY + 5, 15, 4, IRON[1]);
   R(g, x + CX - 13, y + CY + 5, 26, 1, SEAM);
@@ -86,10 +91,12 @@ function crystals(g: Ctx, x: number, y: number, points: number): void {
   }
 }
 
-/** The highlight on the dome's glass, over what is inside it. */
+/** The highlight on the dome's glass, over what is inside it: a short curve on its upper left. */
 function shine(g: Ctx, x: number, y: number): void {
-  for (let k = 0; k < 7; k++)
-    R(g, x + CX - 10 + k, y + CY - 12 - Math.round(Math.sin((k / 6) * Math.PI) * 2), 1, 1, GLASS[3]);
+  for (let k = 0; k <= 8; k++) {
+    const a = Math.PI * (0.62 + k * 0.03);
+    R(g, x + CX + Math.round(11 * Math.cos(a)), y + CY - 4 - Math.round(10 * Math.sin(a)), 1, 1, GLASS[3]);
+  }
 }
 
 /** Its one light, on the front of its bed: lilac while it grows, dark while it does not. */
