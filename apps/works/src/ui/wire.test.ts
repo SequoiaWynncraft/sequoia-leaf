@@ -7,11 +7,13 @@ import { expect, test } from "bun:test";
 
 import {
   at,
+  BELT,
   BREAKER,
   build,
   buyPlot,
   create,
   holderOf,
+  item,
   MIX_OF,
   outsOf,
   plot,
@@ -22,6 +24,7 @@ import {
   STUDY,
   type Yard,
 } from "@sequoia-leaf/factory";
+import type { Row } from "@sequoia-leaf/kit/card.ts";
 
 import { opened, useFakeLeaf } from "../../test/fake-leaf.ts";
 import { breaker, outOf } from "../kinds/breaker.ts";
@@ -29,9 +32,10 @@ import { S } from "../state.ts";
 import { setTool } from "../tools.ts";
 import { smoggy } from "../trouble.ts";
 import type { PlotPrint } from "./land.ts";
+import { madeRows } from "./made.ts";
 import { numbersOf } from "./numbers.ts";
 import { printOf } from "./prints.ts";
-import { machineRef, plotRef, tileRef } from "./refs.ts";
+import { itemRef, machineRef, plotRef, tileRef } from "./refs.ts";
 import { wrongCount } from "./views.ts";
 
 useFakeLeaf();
@@ -121,8 +125,7 @@ test("a plot at step 1 or more is in the Trouble view, by name, and counted on i
 test("a Study slowed by smog says smog slows it, not that power is short; with power short too, both", async () => {
   const y = workings(6);
   // Pylons down to The Old Workings from the depot, and a Study on its clear bottom row.
-  for (const z of [46, 50, 54, 58, 62, 66]) build(y, PYLON, 58, z, 0, Infinity);
-  for (const x of [54, 50]) build(y, PYLON, x, 68, 0, Infinity);
+  pylons(y);
   const corner = y.land.plots.find((p) => p.plot === WORKINGS);
   const [x, z] = [(corner?.x ?? 0) + 1, (corner?.y ?? 0) + 10];
   expect(build(y, STUDY, x, z, 0, Infinity).ok).toBe(true);
@@ -150,4 +153,52 @@ test("a breaker's chute is drawn at its way out whichever way it faces, placed o
     return outOf(d).slice(0, 2).join(",");
   });
   expect(new Set(outs).size).toBe(4);
+});
+
+/** Each thing of a row as its picture's ref and its note: "item:31 40 /min". */
+const noted = (row: Row | undefined): string[] =>
+  (row?.things ?? []).map((t) => `${t.ref} ${typeof t.note === "string" ? t.note : ""}`);
+/** Pylons down to The Old Workings from the depot. */
+function pylons(y: Yard): void {
+  for (const z of [46, 50, 54, 58, 62, 66]) build(y, PYLON, 58, z, 0, Infinity);
+  for (const x of [54, 50]) build(y, PYLON, x, 68, 0, Infinity);
+}
+
+test("the breaker's card gives each thing a minute at its grade; a standing one what it gives now, no more than its belt carries", async () => {
+  const y = workings(6);
+  pylons(y);
+  const corner = y.land.plots.find((p) => p.plot === WORKINGS);
+  const [x, z] = [(corner?.x ?? 0) + 2, (corner?.y ?? 0) + 9];
+  expect(build(y, BREAKER, x, z, 0, Infinity).ok).toBe(true);
+  // A grade III breaker onto a grade I belt: 150 a minute of its 200.
+  y.grade[at(y, x, z)] = 3;
+  expect(build(y, BELT, x + 2, z, 0, Infinity).ok).toBe(true);
+  await opened(y, 1_000);
+  const things = (["copper", "ingot", "glass", "slag", "gear"] as const).map((n) => itemRef(item(n)));
+  const each = (values: readonly string[]): string[] => things.map((t, n) => `${t} ${values[n] ?? ""} /min`);
+  const machine = printOf(machineRef(BREAKER));
+  const [, flat] = machine?.card === "machine" ? (breaker.rows?.(machine) ?? []) : [];
+  expect([flat?.label, noted(flat)]).toEqual(["A minute", each(["40", "25", "15", "15", "5"])]);
+  // 8, 5, 3, 3 and 1 of every 20 of the 150 its belt carries, as every rate is said.
+  const standing = printOf(tileRef(at(S.world, x, z)));
+  const [, now] = standing?.card === "standing" ? (breaker.standing?.rows?.(standing) ?? []) : [];
+  expect([standing?.card === "standing" && standing.rate, noted(now)]).toEqual([
+    150,
+    each(["60", "38", "23", "23", "7.5"]),
+  ]);
+});
+
+test("copper's and slag's cards say what they are broken from and in what, as a recipe's say what makes them", async () => {
+  await opened(workings(6), 1_000);
+  for (const [name, each] of [
+    ["copper", "40 /min"],
+    ["slag", "15 /min"],
+  ] as const) {
+    const print = printOf(itemRef(item(name)));
+    const rows = print?.card === "item" ? madeRows(print) : [];
+    expect(rows.map((r) => [r.label, noted(r)])).toEqual([
+      ["Broken from", [`${itemRef(item("salvage"))} `]],
+      ["In", [`${machineRef(BREAKER)} ${each}`]],
+    ]);
+  }
 });

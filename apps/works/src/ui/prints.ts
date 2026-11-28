@@ -37,6 +37,7 @@ import {
   LEFT,
   LINE,
   locked,
+  type MachineRate,
   machineRate,
   makeable,
   MIX_OF,
@@ -179,6 +180,10 @@ const sets = (k: Kind, what: "sort" | "way"): boolean => RULES[k]?.set[what] !==
 /** How many its card says a kind may hold, where it says (`KindPage.holdsUp`). */
 const holdsUp = (k: Kind): number | null => pageOf(k)?.holdsUp?.(S.world) ?? null;
 
+/** What a piece makes a minute now, in words and as a number, said even when that is none (0 /min where power does not reach); nothing for one that makes nothing of its own. */
+const madeNow = (r: MachineRate): Pick<StandingPrint, "perMinute" | "rate"> =>
+  r.nominal > 0 ? { perMinute: perMinute(r.effective), rate: r.effective } : { perMinute: null, rate: null };
+
 function standingPrint(i: number, k: Kind): StandingPrint {
   const w = S.world;
   const x = i % w.land.w;
@@ -210,8 +215,7 @@ function standingPrint(i: number, k: Kind): StandingPrint {
     making: making ? making.out : null,
     flow: flowOf(w, i, saysNumbers(w)),
     gathering: k === GATHERING ? asItem(w.land.deposit[i] ?? NONE) : null,
-    // What it makes now, said even when that is none: where power does not reach, 0 /min.
-    perMinute: rate.nominal > 0 ? perMinute(rate.effective) : null,
+    ...madeNow(rate),
     numbers: saysNumbers(w) ? numbersOf(w, i) : [],
     set,
     sorts: can ? ALL_ITEMS.filter((t) => can.has(t) || (w.depot[t] ?? 0) > 0 || set === t) : [],

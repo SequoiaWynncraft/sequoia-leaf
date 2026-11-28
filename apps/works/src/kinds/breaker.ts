@@ -6,7 +6,7 @@
  * one sign of the smog it makes: at grade III a steady thread. Its card says how much salvage it
  * breaks a minute and shows its mix of 20, the next picked out.
  */
-import { BREAKER, isItem, MIX_OF, mixPerMinute, outsAs } from "@sequoia-leaf/factory";
+import { BREAKER, isItem, MIX_OF, mixPerMinute, mixShare, outsAs } from "@sequoia-leaf/factory";
 import type { Row, Stat } from "@sequoia-leaf/kit/card.ts";
 import { lessMotion } from "@sequoia-leaf/kit/dom.ts";
 import { perMinute } from "@sequoia-leaf/kit/say.ts";
@@ -110,14 +110,25 @@ function mouth(x: number, top: number, ox: number, oy: number, way: number): rea
   return [tx + (way === 0 ? 10 : way === 2 ? -10 : 0), ty + (way === 1 ? 10 : way === 3 ? -10 : 0)];
 }
 
-/** The 20 things of its mix in order, as a card's row of pictures; on a standing one, the next picked out. */
-const mixRow = (label: string, next: number | null): Row[] => [
-  {
-    label,
-    look: "icons",
-    things: (MIX_OF[BREAKER]?.gives ?? []).map((k, n) => ({ ref: itemRef(k), lit: n === next })),
-  },
-];
+/**
+ * The 20 things of its mix in order, as a card's row of pictures, on a standing one the next picked
+ * out; and each thing it gives, a minute, of `total` a minute in all: at the card's grade flat out, or
+ * on a standing one what it gives now (no more than its way out carries).
+ */
+function mixRows(next: number | null, total: number): Row[] {
+  const gives = MIX_OF[BREAKER]?.gives ?? [];
+  return [
+    {
+      label: "Gives, in this order",
+      look: "icons",
+      things: gives.map((k, n) => ({ ref: itemRef(k), lit: n === next })),
+    },
+    {
+      label: "A minute",
+      things: [...new Set(gives)].map((k) => ({ ref: itemRef(k), note: perMinute(total * mixShare(BREAKER, k)) })),
+    },
+  ];
+}
 
 export const breaker: KindPage = {
   picture: (_p, n) => pictureOf(n, 1, 0, 0, 0),
@@ -140,8 +151,8 @@ export const breaker: KindPage = {
   },
   pointer: "bare",
   pace: (k, n): Stat => ({ label: "Breaks", value: perMinute(mixPerMinute(k, n)) }),
-  rows: () => mixRow("Gives, in this order", null),
-  standing: { rows: (p) => mixRow("Gives, in this order", p.mix) },
+  rows: (p) => mixRows(null, mixPerMinute(BREAKER, p.grade)),
+  standing: { rows: (p) => mixRows(p.mix, p.rate ?? 0) },
   holdsUp: () => MIX_OF[BREAKER]?.holds ?? 8,
   map: [CLAY[1], CLAY[0]],
   dot: CLAY[1],

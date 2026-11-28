@@ -357,7 +357,8 @@ export const makesThing = (k: number, n: number): n is Item => {
 };
 /** The kinds of machine that make a thing by the recipe it names: its own first, then those that make it as that one (`KindDef.as`). */
 export const kindsMaking = (n: Item): Kind[] => {
-  const r = RECIPE[n];
+  // A thing only a mix gives is made by its share of the mix (`makersOf`): by the kind that breaks it.
+  const r = RECIPE[n] ?? MIXED[n];
   return r ? [r.by, ...ALL_KINDS.filter((k) => k !== r.by && timesOf(k, r) > 0)] : [];
 };
 /** For each kind, the most of any machine it is one of (`TIMES`): what its pace on a recipe is at most times its grade's. */

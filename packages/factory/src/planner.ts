@@ -27,6 +27,12 @@ export function makes(k: Kind, grade: number, r: Recipe | null): number {
 /** How many pieces of deadfall a minute a boiler burns while it makes power, at any grade. */
 export const burned = (): number => MINUTE / TICKS.burn;
 
+/** The share of what a kind that breaks a mix gives that is a thing: 8 in 20 of a breaker's are copper; 0 for a thing it never gives. */
+export function mixShare(k: Kind, n: Item): number {
+  const gives = MIX_OF[k]?.gives ?? [];
+  return gives.length === 0 ? 0 : gives.filter((g) => g === n).length / gives.length;
+}
+
 /** How many things a kind that breaks a mix gives a minute at a grade, flat out: one for each of what it breaks (`MIXES`). */
 export function mixPerMinute(k: Kind, grade: number): number {
   const first = MIX_OF[k]?.gives[0];

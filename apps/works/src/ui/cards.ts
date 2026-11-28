@@ -168,6 +168,8 @@ export interface StandingPrint extends SorterPrint {
   readonly flow: Flow | null;
   readonly gathering: Item | null;
   readonly perMinute: string | null;
+  /** How many it makes a minute now, as a number (`perMinute` says it): null where it makes nothing of its own. */
+  readonly rate: number | null;
   /** What it makes, needs, gathers, studies or carries a minute, in sentences (`numbers.ts`): none until the yard counts. */
   readonly numbers: readonly string[];
   /** The one thing it is told to make, or a sorter to send to its side, or nothing. */
