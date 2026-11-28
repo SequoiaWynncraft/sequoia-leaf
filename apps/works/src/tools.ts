@@ -61,7 +61,7 @@ import { GOLD, SKY } from "@sequoia-leaf/kit/palette.ts";
 import { buildAct, gradeOn, groupAct, layAct, raisedOn } from "./acts.ts";
 import { PAINTS, TILE } from "./art/belts.ts";
 import { pieceOn } from "./big.ts";
-import { OUT_OF_REACH, reachOf, withReach } from "./figure/reach.ts";
+import { OUT_OF_REACH, reachOf } from "./figure/reach.ts";
 import { float, flutter, puff, sparkle } from "./fx.ts";
 import { aimOf, groupOf, markOf, runOf, type Tile } from "./hand.ts";
 import { flips } from "./kinds/index.ts";
@@ -814,7 +814,8 @@ function aimGroup(x: number, y: number): void {
   const box = boxOf(placed(from, g.turns, 0, 0));
   const placedAt = placed(from, g.turns, x - ((box.w - 1) >> 1), y - ((box.h - 1) >> 1));
   const moving = g.as === "move";
-  const whys = withReach(groupAct(g, placedAt), refusals(w, placedAt, moving ? tilesOf(w, from) : null));
+  // Pieces in hand go anywhere on the land: reach is for building by hand (`figure/reach.ts`).
+  const whys = refusals(w, placedAt, moving ? tilesOf(w, from) : null);
   const why = moving ? (whys.find((r) => r !== null) ?? null) : standRefusal(w, placedAt, coins(), whys);
   go({
     do: "group",

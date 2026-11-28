@@ -1,18 +1,20 @@
 /**
- * Reach: you put pieces down and take them up only near where you stand, on the plot you stand on
- * and the plots round it, as many plots out as the yard's range (`Open.range`: 1, the eight round it,
- * until research makes it more). On the guild's land today 1 is the whole yard from its middle plot,
- * and 2 from any plot; on a bigger map you walk out to build far away.
+ * Reach: you build by hand only near where you stand, on the plot you stand on and the plots round
+ * it, as many plots out as the yard's range (`Open.range`: 1, the eight round it, until research
+ * makes it more: 2 with `longreach`, 3 with `longerreach`). On the 7 by 7 land, 3 is the whole land
+ * from its middle plot; with less you walk out to build by hand far away.
  *
- * One rule, asked of a command: every tile it puts a piece on or takes one off must be in reach
- * (`footprint`), whatever stood there before: both mouths of a tunnel, a move's every piece where it
- * leaves and where it lands, a blueprint's every piece, every tile of a run of belt, a piece built
- * over one of its kind. A preview asks it of the very command its press would send (`acts.ts`), and
- * `doNow` asks it before the rules, so a gold preview is never refused and a coral one never goes
- * through. Only commands that put nothing down and take nothing up are done from anywhere: turning a
- * piece, raising grades with the grade command (Upgrade on a marked area or the whole yard, and a
- * card's Upgrade), a card's settings, painting a line, undoing, and putting back a plan of the whole yard. Without a figure of
- * yours (a visit, a review page's own yard) nothing is out of reach.
+ * Reach is for building by hand and for nothing else (`footprint`): one piece built, raised or
+ * turned in place by building over it, a run of belt, a tunnel, and one piece removed by hand. Every
+ * tile such a command puts a piece on or takes one off must be in reach, whatever stood there
+ * before. Nothing the select tool or a blueprint does is limited by reach: moving, copying or
+ * removing an area, saving it, and setting down a blueprint (a pasted code's too) work anywhere on
+ * the yard's land. They are the way to build far from where you stand. Nor is anything that puts no
+ * piece down and takes none up: turning a piece, Upgrade, a card's settings, painting, Undo.
+ *
+ * A preview asks it of the very command its press would send (`acts.ts`), and `doNow` asks it before
+ * the rules, so a gold preview is never refused and a coral one never goes through. Without a figure
+ * of yours (a visit, a review page's own yard) nothing is out of reach.
  *
  * It is the page's rule alone for now: Leaf does not know where you stand until visitors walk, and
  * building far away gains nothing over anyone else.
@@ -20,11 +22,9 @@
 import {
   type Act,
   at,
-  blueprintAt,
   legPiece,
   type Piece,
   piecesAt,
-  placed,
   SPANS,
   tilesAt,
   tilesOf,
@@ -93,37 +93,23 @@ function built(y: Yard, act: Extract<Act, { do: "build" }>): number[] {
 }
 
 /**
- * What a command puts down and takes up, piece by piece: for each piece it builds, lays, sets down or
- * takes away, the tiles that changes (in the order the pieces are set down, for pieces in hand).
- * Every other command, and a plan of the whole yard put back, changes none.
+ * The tiles reach asks of a command: every tile it puts a piece on or takes one off, if it is
+ * building by hand, and none else. Building by hand is a build (raising or turning a piece in place
+ * too), a run of belt, a tunnel (built or laid), a remove, and standing one piece, which the rules
+ * count a build of no tool. Everything else, the select tool's and a blueprint's commands among
+ * them, is done anywhere on the land.
  */
-export function footprint(y: Yard, act: Act): number[][] {
-  const each = (pieces: readonly Piece[] | null): number[][] => (pieces ?? []).map((p) => setsDown(y, p));
-  if (act.do === "build") return [built(y, act)];
-  if (act.do === "lay") return each(act.legs.map(legPiece));
-  if (act.do === "stand") return each(act.pieces);
-  if (act.do === "remove") return [taken(y, [at(y, act.x, act.y)])];
-  if (act.do === "clear") return piecesAt(y, act.tiles).map((p) => tilesOf(y, [p]));
-  if (act.do === "copy") return each(placed(piecesAt(y, act.tiles), act.turns, act.x, act.y));
-  if (act.do === "move") {
-    const from = piecesAt(y, act.tiles);
-    const to = placed(from, act.turns, act.x, act.y);
-    return from.map((p, n) => tilesOf(y, [p]).concat(to[n] ? setsDown(y, to[n]) : []));
-  }
-  if (act.do === "placeBlueprint" && !y.blueprints[act.slot]?.whole)
-    return each(blueprintAt(y, act.slot, act.turns, act.x, act.y));
+export function footprint(y: Yard, act: Act): number[] {
+  if (act.do === "build") return built(y, act);
+  if (act.do === "lay") return act.legs.flatMap((l) => setsDown(y, legPiece(l)));
+  if (act.do === "remove") return taken(y, [at(y, act.x, act.y)]);
+  if (act.do === "stand" && act.pieces.length === 1) return act.pieces.flatMap((p) => setsDown(y, p));
   return [];
 }
 
 /** Why a command cannot be done for reach, or null: what a single preview, a run and `doNow` ask. */
 export function reachOf(act: Act, y: Yard = S.world): string | null {
-  return footprint(y, act).every((tiles) => tiles.every((i) => tileReaches(y, i))) ? null : OUT_OF_REACH;
-}
-
-/** For pieces in hand set down by a command, each piece's reason it cannot stand (`whys`), reach first. */
-export function withReach(act: Act, whys: readonly (string | null)[], y: Yard = S.world): (string | null)[] {
-  const out = footprint(y, act).map((tiles) => (tiles.every((i) => tileReaches(y, i)) ? null : OUT_OF_REACH));
-  return whys.map((why, n) => out[n] ?? why);
+  return footprint(y, act).every((i) => tileReaches(y, i)) ? null : OUT_OF_REACH;
 }
 
 /** The refusal of a command out of reach, or null: what `doNow` asks before the rules. */

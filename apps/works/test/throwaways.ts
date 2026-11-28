@@ -451,7 +451,7 @@ const turnedOn = turnAt(9, 14) && y.dir[F.at(y, 10, 15)] === 2;
 // as well as those it covers now.
 const CHUTE = F.kindNamed("chute");
 F.build(y, CHUTE, 14, 14, 0, Infinity);
-const relaid = footprint(y, { do: "build", kind: CHUTE, x: 14, y: 14, dir: 1 }).flat();
+const relaid = footprint(y, { do: "build", kind: CHUTE, x: 14, y: 14, dir: 1 });
 const reachTurned = [[13, 14], [13, 15], [14, 13], [15, 15]].every(([x, z]) => relaid.includes(F.at(y, x, z)));
 // A sifter on (4, 4) facing east hands sand out of (5, 4) and clay out of (5, 5), each east: a belt by
 // each, turned across it (north, south), is drawn fed from the west, as each takes from it.
@@ -487,8 +487,8 @@ console.log(
     card: tiles.every((t) => refAt(t % 34, Math.floor(t / 34)) === tileRef(own)),
     drawnOnce: tiles.filter((t) => drawnFrom(y, t)).length === 1 && drawnFrom(y, own),
     box: JSON.stringify(pieceBox(y, F.at(y, 21, 11))) === JSON.stringify({ x: 19, y: 9, w: 3, h: 3 }),
-    reachBuild: nine(footprint(y, { do: "build", kind: FORGE, x: 20, y: 10, dir: 0 }).flat()),
-    reachRemove: nine(footprint(y, { do: "remove", x: 21, y: 11 }).flat()),
+    reachBuild: nine(footprint(y, { do: "build", kind: FORGE, x: 20, y: 10, dir: 0 })),
+    reachRemove: nine(footprint(y, { do: "remove", x: 21, y: 11 })),
     colour: blockColour(FORGE) === PAGES.forge.map?.[0],
     lamp: lamps.length === 1 && lamps[0]?.x === 20 * 16 + 8 && lamps[0]?.y === 12 * 16 - 4,
   }),
