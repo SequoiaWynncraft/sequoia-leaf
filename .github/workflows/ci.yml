@@ -17,7 +17,9 @@ concurrency:
 jobs:
   ci:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    # A full run takes 3.5 to 5 minutes now, so 5 cancelled runs that were passing. The cap only
+    # stops a run that hangs; one that finishes is billed what it used.
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
