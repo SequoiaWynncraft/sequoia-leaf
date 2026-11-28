@@ -5,7 +5,7 @@
  */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
-import { create } from "@sequoia-leaf/factory";
+import { create, step } from "@sequoia-leaf/factory";
 import { bareLand } from "@sequoia-leaf/factory/test/land.ts";
 import { lay, must } from "@sequoia-leaf/factory/test/yards.ts";
 import { GOLD } from "@sequoia-leaf/kit/palette.ts";
@@ -108,6 +108,10 @@ describe("a plan's picture", () => {
     const plan = makePlan(4);
     paintPlan(plan, y, layout(y));
     expect(plan.painted).toBe(1);
+    paintPlan(plan, y, layout(y));
+    expect(plan.painted).toBe(1);
+    // A second of the yard's clock in which nothing on the plan changes: it is looked at again, and nothing is painted.
+    for (let k = 0; k < 10; k++) step(y);
     paintPlan(plan, y, layout(y));
     expect(plan.painted).toBe(1);
     must(y, { do: "build", kind: "pylon", x: 6, y: 6, dir: 0 });
