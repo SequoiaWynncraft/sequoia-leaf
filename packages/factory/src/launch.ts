@@ -10,7 +10,7 @@
  */
 import { CHARGE } from "./content/charge.ts";
 import { type ItemName, ITEMS, type Wants } from "./content/items.ts";
-import { LAUNCH_KINDS, ROCKETS } from "./content/rockets.ts";
+import { CLOGGED, LAUNCH_KINDS, ROCKETS } from "./content/rockets.ts";
 import { KIND_DEFS, type KindName } from "./kinds/list.ts";
 import type { Item, Kind, Recipe } from "./tables.ts";
 
@@ -97,13 +97,34 @@ export const ROCKETS_N: readonly Rocket[] = ROCKETS.map((r) => ({
   withPad: r.withPad,
 }));
 
-/** The rockets a pad may be set to now, each by the thing it counts as, which is what a pad keeps (`Yard.set`): those that come with the pad. */
+/** The rockets a pad may be set to now: those that come with the pad. */
+const ON_PAD = ROCKETS_N.filter((r) => r.withPad);
+/** Each rocket a pad may be set to, by the thing it counts as, which is what a pad keeps (`Yard.set`). */
 const SET: readonly (Rocket | null)[] = Array.from(
   { length: ITEMS.length },
-  (_, n) => ROCKETS_N.find((r) => r.withPad && r.counts === n) ?? null,
+  (_, n) => ON_PAD.find((r) => r.counts === n) ?? null,
 );
 /** The rocket a launch pad set to the thing `n` launches, or null for a thing no rocket a pad may be set to counts as. */
 export const rocketSet = (n: number): Rocket | null => SET[n] ?? null;
+/**
+ * The most of each thing a launch pad can come to hold, whatever rocket it is set to or has been, which
+ * is what a kept one reads back up to (`Hooks.most`), so that every yard the tick makes reads back as it
+ * was. A pad keeps all it holds when its rocket changes, and takes a part only below its rocket's number
+ * of it: so of each part, the most any rocket a pad may be set to takes. It takes charged cells only
+ * below its rocket's cells: so of charged cells, of each bars, the most cells any such rocket takes. And
+ * it takes them only while it holds fewer than `CLOGGED` plain cells, but the beat may then turn every
+ * charged cell it holds plain at once: so of plain cells, one fewer than `CLOGGED` and the most charged
+ * cells besides.
+ */
+export const PAD_HOLDS: Uint32Array = (() => {
+  const most = new Uint32Array(ITEMS.length);
+  const cells = Math.max(0, ...ON_PAD.map((r) => r.cells));
+  for (const r of ON_PAD) for (const p of r.parts) most[p.item] = Math.max(most[p.item] ?? 0, p.need);
+  for (const b of CHARGED.bars) most[b] = cells;
+  most[CHARGED.plain] = CLOGGED - 1 + cells;
+  return most;
+})();
+
 /** The rocket a new launch pad is set to: the first. */
 export const FIRST_ROCKET: Rocket | null = ROCKETS_N[0] ?? null;
 

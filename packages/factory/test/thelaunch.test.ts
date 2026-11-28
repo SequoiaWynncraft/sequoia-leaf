@@ -368,7 +368,7 @@ describe("the launch pad", () => {
     }
     console.log(`1,200 a minute, 5 seconds old: launched at tick ${y.tick}, holding ${most} charged cells at most`);
     expect([y.launches.ever[0], y.depot[ROCKET], y.tick <= 800, most >= 999]).toEqual([1, 1, true, true]);
-    // Every part and charged cell it held went with the rocket.
+    // It held its rocket's parts and cells exactly, and they went with the rocket.
     expect([holding(y, pad, [HULL, FUEL]), chargedIn(y, pad)]).toEqual([[0, 0], 0]);
   }, 30_000);
 
@@ -409,7 +409,7 @@ describe("the launch pad", () => {
     }
   });
 
-  test("a rocket is chosen on its card, naming the rocket it showed; what the new one does not take, or beyond its number, is tipped out", () => {
+  test("a rocket is chosen on its card, naming the rocket it showed; changing it takes nothing out, and a launch uses only its rocket's needs", () => {
     const y = bareYard(32, 30, [27, 25]);
     const pad = padAt(y, [14, 14]);
     const at = { x: 14, y: 14 };
@@ -430,13 +430,28 @@ describe("the launch pad", () => {
     fill(y, pad, THREE, 400);
     fill(y, pad, ONE, 200);
     fill(y, pad, CELL, 30);
+    const kept = [HULL, FUEL, CELL, ONE, TWO, THREE];
     must(y, { do: "recipe", ...at, item: "testrocket", was: "rocket" });
-    // The fullest charged cells kept first, to the test rocket's 100; its plain cells stay, to leave by its front.
-    expect([holding(y, pad, [HULL, FUEL, CELL, ONE, THREE]), y.set[pad]]).toEqual([[60, 240, 30, 0, 100], TESTROCKET]);
-    // Kept and read back, it is set to what it was.
-    must(y, { do: "recipe", ...at, item: "rocket", was: "testrocket" });
+    // Set to the test rocket, it holds all it held for the rocket; kept and read back, the same.
+    expect([holding(y, pad, kept), y.set[pad]]).toEqual([[900, 3600, 30, 200, 0, 400], TESTROCKET]);
     const back = F.decode(F.encode(y), y.land);
-    expect([back?.set[pad], back && F.check(back)]).toEqual([ROCKET, F.check(y)]);
+    expect([back?.set[pad], back && F.check(back)]).toEqual([TESTROCKET, F.check(y)]);
+    // With power it launches a test rocket from that: 60 hull sections, 240 rocket fuel, and the 100 charged cells with the fewest bars.
+    pylons(y);
+    F.step(y);
+    expect([y.depot[TESTROCKET], holding(y, pad, kept)]).toEqual([1, [840, 3360, 30, 100, 0, 400]]);
+    // Set back to the rocket, it keeps the rest; given what it is short of, it launches the rocket with all of it.
+    must(y, { do: "recipe", ...at, item: "rocket", was: "testrocket" });
+    expect([holding(y, pad, kept), F.padAt(y, pad)?.ready]).toEqual([[840, 3360, 30, 100, 0, 400], false]);
+    fill(y, pad, HULL, 60);
+    fill(y, pad, FUEL, 240);
+    fill(y, pad, TWO, 500);
+    F.step(y);
+    expect([y.depot[ROCKET], [...y.launches.ever], holding(y, pad, kept)]).toEqual([
+      1,
+      [1, 0, 0, 0, 0],
+      [0, 0, 30, 0, 0, 0],
+    ]);
   });
 
   test("its words: waiting for its parts, ready with its charged cells and those about to go flat, clogged, and with no power", () => {

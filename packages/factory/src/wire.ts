@@ -19,7 +19,7 @@ import { anything, empty, lay } from "./kinds/line.ts";
 import { RULES, TAKES_TURNS } from "./kinds/list.ts";
 import { room as makerRoom, wants as makerWants } from "./kinds/maker.ts";
 import { besideWater, toward } from "./land.ts";
-import { CHARGED, FIRST_ROCKET, rocketSet } from "./launch.ts";
+import { CHARGED, FIRST_ROCKET, PAD_HOLDS, rocketSet } from "./launch.ts";
 import { deliver, giveGoal } from "./orders.ts";
 import {
   carried,
@@ -578,6 +578,7 @@ export const KIT: Kit = {
   CHARGED,
   rocketSet,
   FIRST_ROCKET,
+  PAD_HOLDS,
   toBeat,
   whole,
   // The yard's reads and writes.

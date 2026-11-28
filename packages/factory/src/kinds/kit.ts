@@ -73,6 +73,7 @@ export interface Kit {
   readonly CHARGED: typeof Launch.CHARGED;
   readonly rocketSet: typeof Launch.rocketSet;
   readonly FIRST_ROCKET: typeof Launch.FIRST_ROCKET;
+  readonly PAD_HOLDS: typeof Launch.PAD_HOLDS;
   /** Ticks to the yard's next beat, from its tick alone (`beat.ts`). */
   readonly toBeat: typeof Beat.toBeat;
   readonly whole: (v: unknown, most: number) => number | null;

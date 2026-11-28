@@ -116,6 +116,6 @@ export { SMOG } from "./content/smog.ts";
 export { MIXES } from "./content/mixes.ts";
 export { CHARGE } from "./content/charge.ts";
 export { CLOGGED, LAUNCH_KINDS, type LaunchKind, LETS_OUT_EVERY, ROCKETS, TRACK_IDS } from "./content/rockets.ts";
-export { CHARGED, FIRST_ROCKET, ROCKET_OF, type Rocket, ROCKETS_N, rocketSet } from "./launch.ts";
+export { CHARGED, FIRST_ROCKET, PAD_HOLDS, ROCKET_OF, type Rocket, ROCKETS_N, rocketSet } from "./launch.ts";
 export { anyLaunches, type Launches, noLaunches } from "./launches.ts";
 export { beat, beats, toBeat } from "./beat.ts";

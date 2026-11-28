@@ -6,10 +6,13 @@
  * holds fewer than its rocket's cells and fewer than `CLOGGED` plain cells. It never takes a plain cell.
  *
  * Its step, where power reaches it: ready and holding at least its rocket's charged cells, it launches.
- * Every part and every charged cell it holds is used; the launch counts as 1 of the rocket's thing
- * reaching the depot, and adds 1 to each of the yard's launches of its kinds (`Yard.launches`). The
- * beat reaches into it as into any holder: its cells with 1 bar become plain cells, which it goes on
- * holding and lets out by the middle tile of its front, one at a time, once in `LETS_OUT_EVERY` ticks.
+ * The launch uses its rocket's number of each part and its rocket's cells, those with the fewest bars
+ * first, and the rest stays; it counts as 1 of the rocket's thing reaching the depot, and adds 1 to each
+ * of the yard's launches of its kinds (`Yard.launches`). Setting it to another rocket takes nothing out:
+ * what it holds stays for a rocket that uses it. The beat reaches into it as into any holder: its cells
+ * with 1 bar become plain cells, which it goes on holding and lets out by the middle tile of its front,
+ * one at a time, once in `LETS_OUT_EVERY` ticks. A kept one reads back up to what it can come to hold
+ * (`PAD_HOLDS`).
  *
  * What a screen says of it (its words, its picture, its card) reads one thing: `padReading`.
  */
@@ -82,19 +85,26 @@ function room(k: Kit, y: Yard, i: number, n: number): boolean {
 
 /**
  * Its step in the tick's work, where power reaches it: ready and holding its rocket's charged cells,
- * it launches. Every part and charged cell it holds is used, the rocket's thing has reached the depot,
- * and the yard's launches of each of its kinds go up by 1. Says whether it launched.
+ * it launches. It uses its rocket's number of each part and its rocket's cells, those with the fewest
+ * bars first; the rocket's thing has reached the depot, and the yard's launches of each of its kinds go
+ * up by 1. Says whether it launched.
  */
 function work(k: Kit, y: Yard, i: number, r: number, _speed: number, wire: Wire): boolean {
   const rocket = rocketOf(k, y, i);
   const h = y.holders;
   if (!rocket || !isReady(k, h, r, rocket) || chargedIn(k, h, r) < rocket.cells) return false;
   for (let p = 0; p < rocket.parts.length; p++) {
-    const n = rocket.parts[p]?.item ?? k.NONE;
-    k.take(h, r, n, k.held(h, r, n));
+    const part = rocket.parts[p];
+    if (part) k.take(h, r, part.item, part.need);
   }
   const { bars } = k.CHARGED;
-  for (let b = 0; b < bars.length; b++) k.take(h, r, bars[b] ?? k.NONE, k.held(h, r, bars[b] ?? k.NONE));
+  let left = rocket.cells;
+  for (let b = 0; b < bars.length && left > 0; b++) {
+    const n = bars[b] ?? k.NONE;
+    const used = Math.min(k.held(h, r, n), left);
+    k.take(h, r, n, used);
+    left -= used;
+  }
   const { ever } = y.launches;
   for (let n = 0; n < rocket.kinds.length; n++) ever[rocket.kinds[n] ?? 0] = (ever[rocket.kinds[n] ?? 0] ?? 0) + 1;
   k.deliver(y, rocket.counts, 1);
@@ -185,13 +195,8 @@ function words(k: Kit, y: Yard, i: number, state: string): Words {
   return { line: `Ready. Holds ${whole(p.charged)} of ${whole(p.rocket.cells)} charged cells.${fading}` };
 }
 
-/** How many of a thing it may hold: each part to its rocket's number, charged cells to its cells, plain cells to the clog. */
-function most(k: Kit, y: Yard, i: number, n: number): number {
-  const rocket = rocketOf(k, y, i);
-  if (!rocket) return 0;
-  if (isBar(k, n)) return rocket.cells;
-  return n === k.CHARGED.plain ? CLOGGED : partNeed(rocket, n);
-}
+/** How many of a thing a kept one may hold: as many as a pad can come to hold, whatever it has been set to (`PAD_HOLDS`). */
+const most = (k: Kit, _y: Yard, _i: number, n: number): number => k.PAD_HOLDS[n] ?? 0;
 
 /** Puts back what a kept one was set to and held: its rocket, if a pad may be set to it, then each thing up to what it may hold. */
 function onto(k: Kit, y: Yard, i: number, r: number, o: KeptPiece): void {
@@ -212,9 +217,8 @@ function keeps(k: Kit, _kind: number, v: Unchecked): Kept {
 }
 
 /**
- * Sets its rocket, by the thing it counts as, if the pad is still set to `was`, what its card showed:
- * what it holds that the new rocket does not take, or beyond its number, is tipped out (its plain cells
- * stay, to leave by its front). Says why not, or nothing.
+ * Sets its rocket, by the thing it counts as, if the pad is still set to `was`, what its card showed.
+ * It takes nothing out: what it holds stays, for this rocket or another. Says why not, or nothing.
  */
 function choose(k: Kit, y: Yard, i: number, out: Item | null, was?: Item): string | null {
   const next = out === null ? null : k.rocketSet(out);
@@ -223,17 +227,6 @@ function choose(k: Kit, y: Yard, i: number, out: Item | null, was?: Item): strin
   if (now && was !== now.counts) return `It has changed since: it is set to the ${now.name.toLowerCase()} now.`;
   if (now === next) return null;
   y.set[i] = next.counts;
-  const h = y.holders;
-  const r = k.holderOf(y, i);
-  for (const n of k.ALL_ITEMS)
-    if (n !== k.CHARGED.plain && !isBar(k, n)) k.take(h, r, n, k.held(h, r, n) - partNeed(next, n));
-  // Charged cells, of any bars, beyond the new rocket's cells: the fullest kept first.
-  let left = next.cells;
-  for (const b of k.CHARGED.bars.toReversed()) {
-    const kept = Math.min(k.held(h, r, b), left);
-    left -= kept;
-    k.take(h, r, b, k.held(h, r, b) - kept);
-  }
   k.changed(y);
   return null;
 }

@@ -475,10 +475,14 @@ carries, under every tunnel, and in every holder's row, its counts kept right. I
 the yard as kept, so a yard read back beats as the yard it was kept from, and a yard that does not
 know the research is never passed over. A launch pad set to a rocket (`ROCKETS`, kept as what it
 counts as in `set`) takes its parts, then charged cells, and launches at a tick when it holds them
-all; a launch reaches the depot as its rocket's thing and adds to the yard's launches of its kinds
-(`launches.ts`: fifteen numbers, launches ever and spent by kind and a level of each track, kept by
-name only above 0, so a yard with none keeps and checks as before). A yard keeping any is kept as
-version 12, which a Leaf of version 11 leaves as a newer Leaf's.
+all, using its rocket's number of each and the cells with the fewest bars first; the rest stays, and
+setting it to another rocket takes nothing out. A launch reaches the depot as its rocket's thing and
+adds to the yard's launches of its kinds (`launches.ts`: fifteen numbers, launches ever and spent by
+kind and a level of each track, kept by name only above 0, so a yard with none keeps and checks as
+before). A yard keeping any is kept as version 12, which a Leaf of version 11 leaves as a newer
+Leaf's. A kept pad reads back up to the most it can come to hold, whatever it has been set to
+(`PAD_HOLDS`): the beat may turn all its charged cells plain at once, past the 1,000 plain cells at
+which it stops taking more (`test/heldback.test.ts` holds every holder to what its own room lets in).
 
 ## Keeping a yard
 

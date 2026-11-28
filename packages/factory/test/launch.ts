@@ -45,6 +45,15 @@ export function run(y: F.Yard, from: At, dir: number, count: number, grade = 3):
   for (let k = 0; k < count; k++) put(y, "belt", [from[0] + dx * k, from[1] + dy * k], dir, grade);
 }
 
+/** A pad facing east on its own tile [14, 14], set to the rocket and holding its hull sections and fuel: its tile. */
+export function rocketPad(y: F.Yard): number {
+  const pad = put(y, "launchpad", [14, 14], 0);
+  must(y, { do: "recipe", x: 14, y: 14, item: "rocket", was: "testrocket" });
+  fill(y, pad, HULL, 900);
+  fill(y, pad, FUEL, 3600);
+  return pad;
+}
+
 /** Puts `count` of a thing into the holder of the piece on a tile, as a line would have handed them in. */
 export function fill(y: F.Yard, i: number, n: F.Item, count: number): void {
   const r = F.holderOf(y, i);
