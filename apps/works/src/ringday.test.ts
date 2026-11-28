@@ -2,7 +2,8 @@
  * Tier 7 on the page across a day: a ring of belts with growers on it, on the guild's land, tended by
  * Leaf now and then across 24 hours while the page runs its copy on by its own loop (`runYard`), which
  * goes a tick at a time where there are growers, to count what each took in and gave out
- * (`grown.ts`). Leaf's yard and the page's copy stand at one tick with one check all the way.
+ * (`grown.ts`). Leaf's yard and the page's copy stand at one tick with one check all the way, and the
+ * page never takes Leaf's yard again to be put right.
  */
 import { expect, test } from "bun:test";
 
@@ -100,7 +101,8 @@ test("a ring with growers on it, Leaf tending its yard now and then across a day
     seen.push(`${minute}: ${same}`);
     grown = Math.max(grown, leaf.depot[CRYSTAL] ?? 0);
   }
-  expect(seen).toEqual([...marks].map((m) => `${m}: true`));
+  // And the page was never put right: it read Leaf's yard once, as it opened.
+  expect([seen, fake.leaf.reads.length]).toEqual([[...marks].map((m) => `${m}: true`), 1]);
   // It grew, sent its net to the depot until its feed ran out, and the page counted its growers as it went.
   const counted = growers.map((i) => countedAt(S.world, i)?.seconds);
   expect([grown > 1000, counted, held(S.world.holders, holderOf(S.world, 48 + 37 * S.world.land.w), FEED)]).toEqual([
