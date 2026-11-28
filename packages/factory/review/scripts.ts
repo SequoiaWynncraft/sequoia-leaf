@@ -13,8 +13,11 @@ import { boardFilled } from "../test/player.ts";
 import { buying, delivering, must, staged } from "../test/yards.ts";
 
 type Rec = Readonly<Record<string, unknown>>;
-/** A command off the wire, or one worked out from the yard as it stands; or the yard run on for a number of ticks. */
-export type Step = { readonly send: Rec | ((y: F.Yard) => Rec) } | { readonly wait: number };
+/** A command off the wire, one of the staff's, or the yard run on for a number of ticks. */
+export type Step =
+  | { readonly send: Rec | ((y: F.Yard) => Rec) }
+  | { readonly staff: Rec | ((y: F.Yard) => Rec) }
+  | { readonly wait: number };
 export interface Script {
   readonly name: string;
   readonly yard: () => F.Yard;
@@ -24,6 +27,7 @@ export interface Script {
 }
 
 const send = (c: Rec | ((y: F.Yard) => Rec)): Step => ({ send: c });
+const staff = (c: Rec | ((y: F.Yard) => Rec)): Step => ({ staff: c });
 const wait = (ticks: number): Step => ({ wait: ticks });
 /** Upgrade on some tiles at the price the yard asks for them when it is sent, as the page sends it. */
 const upgrade =
@@ -213,6 +217,31 @@ export const SCRIPTS: readonly Script[] = [
       send({ do: "undo", entry: "c2" }),
       send({ do: "build", kind: "belt", ...near(-1, -5), dir: 0 }),
       send({ do: "remove", ...near(-1, -5) }),
+    ],
+  },
+  {
+    name: "staff",
+    // Staff commands through readStaffCommand: learn, plots, pieces, refusal, and restore.
+    yard: () => F.create({ seed: 11, tier: 4 }),
+    steps: [
+      staff({ do: "learn", goals: ["tooling3"] }),
+      staff({ do: "learn", goals: ["no_such_goal"] }),
+      staff({ do: "plots", plots: ["meadow", "workings"] }),
+      staff(() => ({
+        do: "pieces",
+        code: F.packedCode(
+          F.packPrint(
+            F.packPieces([
+              { kind: F.BELT, x: 0, y: 0, dir: 0, span: 0 },
+              { kind: F.BELT, x: 1, y: 0, dir: 0, span: 0 },
+            ]),
+          ),
+        ),
+        ...near(-2, 15),
+        turn: 1,
+        replace: true,
+      })),
+      staff(() => ({ do: "restore", yard: F.FACTORY.encode(F.create({ seed: 11, tier: 4 })) })),
     ],
   },
 ];

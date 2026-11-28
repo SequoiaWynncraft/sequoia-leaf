@@ -1,13 +1,11 @@
 import {
   type Balances,
-  COMMAND_ID,
   type Ctx,
   isLeaf,
   type Leaf,
   LOGGED,
   type Logged,
   mayBuy,
-  MOST_FLUSHED,
   type PlayerId,
 } from "@sequoia-leaf/core";
 import {
@@ -35,10 +33,22 @@ import { Watchers } from "../live/watchers.ts";
 import { type CommandOutcome, type JobPhase, playCommands, playJobSeconds } from "../metrics.ts";
 import { type CoinEntry, Coins, payable } from "./coins.ts";
 import { Copies } from "./copies.ts";
-import { type Attempt, ctxOf, type Given, type Held, NOTHING_GIVEN, type Played, toRoom, unread } from "./games.ts";
+import {
+  type Attempt,
+  ctxOf,
+  type Given,
+  type Held,
+  NOTHING_GIVEN,
+  type Played,
+  type Sent,
+  sentOf,
+  toRoom,
+  unread,
+} from "./games.ts";
 import { type Keeping, keptPieces } from "./kept.ts";
 import { PlayPace } from "./pace.ts";
 import { nextSlice } from "./slices.ts";
+import { collectStaffEdit, type PendingStaffEdit, recordStaffEdits } from "./staff-edits.ts";
 import { PlayStore } from "./store.ts";
 
 /** How many players' differences logged are kept before those filled up again are let go. */
@@ -218,13 +228,6 @@ export type Batch =
   /** The player sent batches, or commands, faster than they may. Nothing was done. */
   | { readonly status: "slow" };
 
-/** A command as it came, with its id. */
-interface Sent {
-  readonly id: string;
-  readonly command: unknown;
-}
-
-const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 /** Which state of which player's a lane is of. */
 const keyOf = (player: PlayerId, played: Played) => `${played.id}:${player}`;
 
@@ -295,21 +298,18 @@ const failed = (player: PlayerId, game: string, defect: unknown) =>
 const outcome = (game: string, what: CommandOutcome, n: number) =>
   n === 0 ? Effect.void : Metric.update(playCommands({ game, outcome: what }), n);
 
-/** The commands of a batch with their ids, or why the batch is not one. */
-function sentOf(played: Played, commands: readonly unknown[]): readonly Sent[] | string {
-  if (commands.length > MOST_FLUSHED) return `A batch holds at most ${MOST_FLUSHED} commands`;
-  const sent: Sent[] = [];
-  for (const command of commands) {
-    if (!isRecord(command) || typeof command.id !== "string" || !COMMAND_ID.test(command.id)) {
-      return "Every command needs an id of its own: up to 64 letters, digits and _ . : -";
+/** Posts a batch's weighed Leaf spends to the ledger inside its transaction; a rejection is a defect. */
+const postSpends = (ledger: Ledger["Service"], player: PlayerId, taken: readonly Taken[], at: number) =>
+  Effect.gen(function* () {
+    for (const { amount, reason, key } of taken) {
+      const posted = yield* ledger.post(
+        { kind: "spend", playerId: player, amount, sink: "shop", idempotencyKey: key, memo: reason },
+        at,
+      );
+      if (posted.status === "rejected")
+        return yield* Effect.die(new Error(`The ledger refused ${key}: ${posted.reason}`));
     }
-    const { id } = command;
-    if (sent.some((other) => other.id === id)) return "Two commands in the batch have the same id";
-    if (!played.reads(command)) return `Command ${id} is not one of the game's`;
-    sent.push({ id, command });
-  }
-  return sent;
-}
+  });
 
 /**
  * Leaf's play service: it owns each player's state in each game. A player's page opens a game
@@ -562,8 +562,9 @@ export class Play extends Context.Service<
           const entries: CoinEntry[] = [];
           const taken: Taken[] = [];
           const logs: Logged[] = [];
-          // The pieces the commands done leave for others to meet.
+          // The pieces the commands done leave for others to meet, and any staff edits to record.
           const leaving: Keeping[] = [];
+          const edits: PendingStaffEdit[] = [];
           // Everybody where the state is seen hears what the batch did, if anybody is there.
           const told = toRoom(played, player, game, ctx(0, room), watchers);
           /**
@@ -619,6 +620,7 @@ export class Play extends Context.Service<
             );
             // A command refused, by the rules or for Leaf or Coins, is not done at all.
             const result = "refused" in attempt ? { id, refused: attempt.refused } : yield* weigh(id, attempt);
+            collectStaffEdit(edits, command, id, attempt, result);
             results.push(result);
             answers.push({ id, result });
           }
@@ -662,18 +664,11 @@ export class Play extends Context.Service<
                   if (!(yield* store.answer(player, played.id, id, next, keptOf(result)))) return yield* new Lost();
                 }
                 if (answers.length > 0) yield* store.keepNewest(player, played.id);
-                for (const { amount, reason, key } of taken) {
-                  const posted = yield* ledger.post(
-                    { kind: "spend", playerId: player, amount, sink: "shop", idempotencyKey: key, memo: reason },
-                    at,
-                  );
-                  // Weighed against the balance this transaction checked: a refusal is a defect.
-                  if (posted.status === "rejected")
-                    return yield* Effect.die(new Error(`The ledger refused ${key}: ${posted.reason}`));
-                }
+                yield* postSpends(ledger, player, taken, at);
                 for (const entry of entries) yield* coins.post(player, entry, at);
                 yield* store.log(player, played.id, logs, at);
                 yield* kept.keep(player, played.id, leaving, at);
+                yield* recordStaffEdits(sql, player, played.id, copy.rev, next, edits, at);
                 yield* store.count(player, answers.length - refused, refused, at);
                 // The balances as the batch leaves them, for the page: no other answer is needed.
                 return { rev: next, purse: yield* coins.balances(player) };
