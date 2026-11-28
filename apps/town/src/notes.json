@@ -136,7 +136,7 @@
   },
   {
     "id": "works-tier-5-wire",
-    "at": "2026-11-28T01:14Z",
+    "at": "2026-11-28T03:39Z",
     "title": "The Works: tier 5, The wire",
     "lines": [
       "Tier 5 is open. Copper comes from salvage, on the new land. A breaker turns salvage into copper, ingots, glass, slag and gears, mixed on one belt. The depot does not take slag.",
@@ -150,12 +150,16 @@
           "Coils, bulbs, telegraphs, strings of lights and the Spark folio.",
           "A redwood's card says what it clears. Felling one loses that for good."
         ]
+      },
+      {
+        "head": "Also",
+        "points": ["Shelves for the plan chest keep blueprints of up to 40 by 25 tiles, so all 1,000 pieces fit."]
       }
     ]
   },
   {
     "id": "works-outer-land",
-    "at": "2026-11-28T01:13Z",
+    "at": "2026-11-28T03:38Z",
     "title": "The Works: 40 more plots",
     "lines": [
       "40 new plots of land are for sale, in two rings round the yard, to every yard that has finished tier 4. Each is cleared with goods, then bought with Coins.",
