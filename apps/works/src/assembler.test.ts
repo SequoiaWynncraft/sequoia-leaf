@@ -14,13 +14,18 @@ import {
   carried,
   create,
   feeders,
+  holderOf,
   item,
   kind,
   makes,
   MILL,
+  NONE,
+  power,
   price,
+  put,
   RECIPE,
   setRecipe,
+  step,
   type Yard,
 } from "@sequoia-leaf/factory";
 import { xy } from "@sequoia-leaf/factory/test/near.ts";
@@ -32,6 +37,7 @@ import { markedTiles, pinBoxes } from "./pinned.ts";
 import { blockColour } from "./plan.ts";
 import { DRAWN, draws, S } from "./state.ts";
 import { itemRef, tileRef } from "./ui/card.ts";
+import { adviceOf, saidOf } from "./ui/cards.ts";
 import { madeSays } from "./ui/flow.ts";
 import { printOf } from "./ui/prints.ts";
 
@@ -131,5 +137,59 @@ describe("the assembler on the page", () => {
     } finally {
       deck.open = null;
     }
+  });
+
+  test("between batches says what it said during them: counted for what it last made", () => {
+    const y = hall(1, 1);
+    expect(setRecipe(y, ...xy(-6, -4), null)).toBeNull();
+    const own = at(y, ...xy(-6, -4));
+    const r = holderOf(y, own);
+    put(y.holders, r, item("plank"));
+    put(y.holders, r, item("ingot"));
+    for (let t = 0; t < 60; t++) step(y);
+    // Its tool is on the belt and it holds nothing: still up to 150 a minute, not its kind's range.
+    expect([y.holders.count[r], y.holders.out[r]]).toEqual([0, NONE]);
+    const p = printOf(tileRef(own));
+    expect(p?.card === "standing" && p.flow ? [p.flow.out, madeSays(p.flow)] : null).toEqual([
+      item("tool"),
+      "up to 150 /min",
+    ]);
+  });
+
+  test("short of power, counts the machines before it at the same share of power", () => {
+    const y = hall(1, 1);
+    // Two more halls and three benches near the depot: 120 drawn for the depot's 100.
+    for (const [dx, dz] of [
+      [-6, 1],
+      [4, -5],
+    ] as const)
+      expect(build(y, ASSEMBLER, ...xy(dx, dz), 0, Infinity).ok).toBe(true);
+    for (const dx of [2, 3, 4]) expect(build(y, BENCH, ...xy(dx, 3), 0, Infinity).ok).toBe(true);
+    const share = power(y).pace;
+    expect(share).toBeLessThan(1);
+    const tool = RECIPE[item("tool")];
+    if (!tool) throw new Error("no recipe");
+    const p = printOf(tileRef(at(y, ...xy(-6, -4))));
+    const flow = p?.card === "standing" ? p.flow : null;
+    // It makes 270 a minute at full power: 270 times the share, then no more than the belt's 150.
+    const now = Math.min(270 * share, 150);
+    expect(flow?.perMinute).toBeCloseTo(now, 9);
+    // Each mill makes its flat-out pace times the share: as many as make `now` planks at that.
+    const mill = makes(MILL, 1, RECIPE[item("plank")] ?? null);
+    expect(flow?.parts[0]?.by?.count).toBeCloseTo(now / (mill * share), 9);
+  });
+
+  test("full of one part, says the rules' own diagnosis, and its advice names the assembler", () => {
+    const y = hall(1, null);
+    const own = at(y, ...xy(-6, -4));
+    expect(setRecipe(y, ...xy(-6, -4), null)).toBeNull();
+    const r = holderOf(y, own);
+    for (let n = 0; n < 36; n++) put(y.holders, r, item("glass"));
+    const p = printOf(tileRef(own));
+    if (p?.card !== "standing") throw new Error("no card");
+    expect([p.state, p.trouble]).toEqual(["starved", true]);
+    expect(saidOf(p)).toBe(p.line ?? "");
+    expect(saidOf(p).startsWith("Full of glass")).toBe(true);
+    expect(adviceOf(p)?.startsWith("An assembler takes things in at its back and both sides.")).toBe(true);
   });
 });

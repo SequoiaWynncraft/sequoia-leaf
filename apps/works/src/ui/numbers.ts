@@ -20,6 +20,7 @@ import {
   type Item,
   ITEM_INFO,
   type Kind,
+  lastRecipe,
   locked,
   machineRate,
   needs,
@@ -100,7 +101,9 @@ export interface Flow {
 
 /** The recipe of the machine standing on a tile, or null for a piece with none in mind. */
 export function flowOf(w: Yard, i: number, counts: boolean): Flow | null {
-  const recipe = aim(w, i);
+  // Between batches it holds nothing to aim at: it is counted for what it last began, as the yard's
+  // Items are (`flow`), so its card says the same between batches as during them.
+  const recipe = aim(w, i) ?? lastRecipe(w, i);
   if (!recipe) return null;
   const grade = w.grade[i] ?? 0;
   const here = w.kind[i] ?? recipe.by;
@@ -109,9 +112,10 @@ export function flowOf(w: Yard, i: number, counts: boolean): Flow | null {
   const h = w.holders;
   const r = holderOf(w, i);
   const state = status(w, i)?.state;
-  // Flat out as power goes, but no more than the belt it hands to carries: what its parts and the
-  // machines before it are counted for. Its parts a minute are of what it does now.
-  const made = most === null ? nominal : Math.min(nominal, most);
+  // What it makes now, the power's share first and then the belt it hands to (`machineRate`): its parts
+  // a minute are of that, and the machines before them are counted for it at the same share of power,
+  // as what they make flat out over the share (where no power reaches it, flat out, to its belt).
+  const made = share > 0 ? effective / share : Math.min(nominal, most ?? Infinity);
   const first = feeders(grade, recipe, 1, maker, made);
   const rates = needs(grade, recipe, maker, effective);
   return {

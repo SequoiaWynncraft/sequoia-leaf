@@ -297,6 +297,8 @@ const GROUND: Readonly<Record<string, readonly [string, string]>> = {
 const STEPS = ["From the ground", "Worked once", "Put together", "The guild's goods", "Takes the whole yard"];
 
 const nameOf = (k: number): string => KIND_INFO[k]?.name ?? "";
+/** A kind as a sentence starts with one: "A bench", "An assembler". */
+const aKind = (k: number): string => `${/^[AEIOU]/.test(nameOf(k)) ? "An" : "A"} ${nameOf(k).toLowerCase()}`;
 const many = (k: number): string => ITEM_INFO[k]?.many ?? "";
 
 /** Sentences as one block of a card, each on a line of its own. */
@@ -401,6 +403,25 @@ function takeUp(p: StandingPrint, hands: Hands): Action[] {
   ];
 }
 
+/** What a machine full of one part says to do about it, naming its kind; nothing for any other. */
+export const adviceOf = (p: StandingPrint): string | null =>
+  p.state === "starved" && p.spare !== null
+    ? `${aKind(p.machine.kind)} takes things in at its back and both sides. Bring ${many(p.spare)} in one way and ${p.missing.map(many).join(" and ")} another, and it cannot fill up with the wrong one.`
+    : null;
+
+/**
+ * The line under a standing piece's name. What is wrong with it is the rules' to say, as the Trouble
+ * list says it; a machine waiting for its parts, which it is short of is in its rows, not in a
+ * sentence; else a kind may say what it does in its own words (a cart stop, a sorter: the rules' line
+ * for either is of every sink or belt).
+ */
+export function saidOf(p: StandingPrint): string {
+  if (p.trouble && p.line !== null) return p.line;
+  if (p.flow?.waiting === true) return `Waiting to make ${many(p.flow.out)}.`;
+  const k = p.machine.kind;
+  return pageOf(k)?.standing?.said?.(p) ?? p.line ?? KIND_INFO[k]?.what ?? "";
+}
+
 /** A machine standing in the yard: its kind's card, with what this one is doing and holds, and what can be done with it. */
 function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
   const { machine: m, x, y } = p;
@@ -415,7 +436,6 @@ function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
       label: p.most !== null ? `Holds, of ${p.most}` : "Holds",
       things: holding.map(([t, c]) => ({ ref: itemRef(t), count: `×${c}` })),
     });
-  const waits = p.flow?.waiting === true;
   // Once the card says what it gathers a minute in a sentence, the row names the thing and no more.
   const per = p.numbers.length === 0 ? p.perMinute : null;
   if (p.gathering !== null) rows.push({ label: "Gathering", things: [{ ref: itemRef(p.gathering), note: per ?? "" }] });
@@ -466,23 +486,12 @@ function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
       on: () => hands.remove(x, y),
     });
   }
-  const advice =
-    p.state === "starved" && p.spare !== null
-      ? `A bench takes things in at its back and both sides. Bring ${many(p.spare)} in one way and ${p.missing.map(many).join(" and ")} another, and it cannot fill up with the wrong one.`
-      : null;
-  // A kind may say what it does in its own words (a cart stop, a sorter: the rules' line for either is
-  // of every sink or belt). What is wrong with one is the rules' to say.
-  // What a machine waiting for its parts is short of is in its rows, not in a sentence.
-  const said =
-    waits && p.flow
-      ? `Waiting to make ${many(p.flow.out)}.`
-      : p.trouble && p.line !== null
-        ? p.line
-        : (own?.said?.(p) ?? p.line ?? KIND_INFO[k]?.what ?? "");
+  const advice = adviceOf(p);
+  const said = saidOf(p);
   return {
     ...base,
     stats: ownPace(base.stats, p.flow),
-    tag: el("span", p.trouble && !waits ? "k-coral" : "", { text: said }),
+    tag: el("span", p.trouble ? "k-coral" : "", { text: said }),
     // What is wrong and what to do about it comes first; the numbers are under it.
     blocks: [
       ...spareBlocks(m),
