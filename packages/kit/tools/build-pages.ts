@@ -1,10 +1,13 @@
 /**
  * Builds the game's pages into a folder (`bun packages/kit/tools/build-pages.ts <out>`), as the
- * image does: each app with an `index.html` by `bun build index.html --minify` into `<out>/<app>/`
- * (`--splitting` too for those in `SPLIT`),
- * and the pages' guard (`src/guard-page.ts`) into `<out>/guard.js`, under the same name in every
- * build. Each page gets the guard's tag first in its head, before its styles and script, with the
- * page and the version of its rules on it.
+ * image does: each app with an `index.html` by `bun build index.html --minify --splitting` into
+ * `<out>/<app>/`, and the pages' guard (`src/guard-page.ts`) into `<out>/guard.js`, under the same
+ * name in every build. Each page gets the guard's tag first in its head, before its styles and
+ * script, with the page and the version of its rules on it.
+ *
+ * Every page is built in parts: what only some players load is a file of its own, fetched when they
+ * need it. Discord's SDK is loaded only by the page Discord frames in a call (`call.ts`), and the
+ * town's own `import()` of itself is a part too, fetched once Leaf has answered for the member.
  */
 import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -13,13 +16,6 @@ import { GAME_OF, type Page, PAGES } from "@sequoia-leaf/core";
 import { rulesVersions } from "@sequoia-leaf/core/build/rules.ts";
 
 const root = resolve(import.meta.dir, "..", "..", "..");
-
-/**
- * The pages built in parts: what only some players load is a file of its own, fetched when they
- * need it. The raid's Discord sign-in is loaded only in a Discord call. (The town's own `import()`
- * is not split: it waits on nothing it would fetch.)
- */
-const SPLIT: ReadonlySet<Page> = new Set(["battler"]);
 
 /** The guard's tag for `page`, built with rules of `version`. */
 export function guardTag(page: Page, version: string): string {
@@ -56,9 +52,8 @@ if (import.meta.main) {
   for (const app of apps) {
     const page = PAGES.find((p) => p === app);
     if (page === undefined) throw new Error(`apps/${app} has a page Leaf does not know: add it to PAGES`);
-    const split = SPLIT.has(page) ? ["--splitting"] : [];
     run(
-      [process.execPath, "build", "index.html", "--outdir", join(out, app), "--minify", ...split],
+      [process.execPath, "build", "index.html", "--outdir", join(out, app), "--minify", "--splitting"],
       join(root, "apps", app),
     );
     const html = join(out, app, "index.html");

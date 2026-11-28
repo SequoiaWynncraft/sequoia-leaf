@@ -2,11 +2,13 @@
  * The Grove's words and buttons over its picture, built from the kit: the way back, the pools, the
  * Leaf, the pulls towards a top prize, the pull buttons, Skip, Next where a ceremony waits, the
  * names in the end picture, and one panel with the prizes and their chances (the rules behind its
- * "?"), the Seeds and what they buy, and the last pulls.
+ * "?"), the Seeds and what they buy, and the last pulls. In a Discord call the pulls are on Leaf's
+ * website: one line says so in place of the pull buttons, with a link that opens it outside Discord.
  * Everything shown is Leaf's view (`pulls.ts` says how it is worded); a press goes to
  * `grovescene.ts`, which asks Leaf.
  */
 
+import { leafSite, openOutside } from "@sequoia-leaf/kit/call.ts";
 import { type Choice, type Choices, choices } from "@sequoia-leaf/kit/choices.ts";
 import {
   amount,
@@ -20,6 +22,7 @@ import {
   type Spend,
   when,
 } from "@sequoia-leaf/kit/dom.ts";
+import { inCall } from "@sequoia-leaf/kit/launch.ts";
 import { longPress } from "@sequoia-leaf/kit/press.ts";
 import { balance, leafOpen, leafShut } from "@sequoia-leaf/kit/purse.ts";
 import { closeLeaf } from "@sequoia-leaf/kit/pursebar.ts";
@@ -170,6 +173,36 @@ function pullButton(host: GroveHost, n: 1 | 10, confirm: (spend: Spend) => boole
   return b;
 }
 
+/** In a Discord call: the pulls are on Leaf's website (`site`), in one line, linked to it outside Discord. */
+export function pullsAway(site = leafSite()): HTMLElement {
+  if (site === null) return el("div", "k-read k-over grove-elsewhere", { text: "Pulls are on Leaf's website." });
+  const go = (e: Event): void => {
+    e.preventDefault();
+    void openOutside(site);
+  };
+  const link = el("a", "grove-away", { href: site, onclick: go, text: new URL(site).host });
+  return el("div", "k-read k-over grove-elsewhere", {}, "Pulls are on ", link, ".");
+}
+
+/**
+ * Under the banner: when the next free pull comes, the pull buttons (not at a ceremony's end, which
+ * offers its own), and why not even one pull can be made; in a Discord call (`call`), where they are instead.
+ */
+export function pullsRow(
+  next: string | null,
+  shut: string | null,
+  atEnd: boolean,
+  pull: (n: 1 | 10) => HTMLElement,
+  call = inCall(),
+): HTMLElement[] {
+  if (call) return [pullsAway()];
+  return [
+    ...(next ? [el("div", "k-read k-over", { text: next })] : []),
+    ...(atEnd ? [] : [el("div", "k-row grove-pulls", {}, pull(1), pull(10))]),
+    ...(shut ? [el("div", "k-read k-over", { text: shut })] : []),
+  ];
+}
+
 export function makeGroveUi(host: GroveHost) {
   /** What the Grove's words and buttons hold for as long as the page stands. */
   const lasting = scope();
@@ -268,9 +301,7 @@ export function makeGroveUi(host: GroveHost) {
             return launcher;
           }),
         ),
-        ...(next ? [el("div", "k-read k-over", { text: next })] : []),
-        ...(atEnd() ? [] : [el("div", "k-row grove-pulls", {}, pull(1), pull(10))]),
-        ...(shut ? [el("div", "k-read k-over", { text: shut })] : []),
+        ...pullsRow(next, shut, atEnd(), pull),
       ),
     );
     renderEnd();

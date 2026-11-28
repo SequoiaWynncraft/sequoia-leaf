@@ -658,8 +658,15 @@
       #grove .grove-pity .k-bar {
         height: calc(var(--u) * 6);
       }
-      .grove-pulls {
+      .grove-pulls,
+      .grove-elsewhere {
         margin-top: auto;
+      }
+      /* In a Discord call, the way to the pulls on Leaf's website. */
+      .grove-away {
+        color: var(--k-gold);
+        text-decoration: underline;
+        text-underline-offset: var(--u);
       }
       /* A banner with featured figures: its headliner's traits and ability, and the featured row. */
       #grove .grove-headliner {
@@ -1011,7 +1018,7 @@
     <aside id="panel" class="k-panel" aria-labelledby="panel-title" tabindex="-1" hidden></aside>
     <div id="card" class="k-plaque" hidden></div>
     <div id="arrival" hidden></div>
-    <div id="door" hidden></div>
+    <div id="door" class="k-call-keep" hidden></div>
     <div id="grove" hidden></div>
     <script type="module" src="./src/open.ts"></script>
   </body>

@@ -15,8 +15,9 @@
 
 import { PURSE_HEADER, readBalances } from "@sequoia-leaf/core";
 
+import { inCall, withLaunch } from "./launch.ts";
 import { fromLeaf } from "./purse.ts";
-import { fromTown } from "./shell.ts";
+import { fromTown, inTown } from "./shell.ts";
 
 /** The part of a WebSocket the game uses. */
 export interface LiveSocket {
@@ -45,9 +46,9 @@ export interface Outside {
   tab(): Store | null;
   /** The page's own address. */
   href(): string;
-  /** Whether the page is the whole window, rather than in a frame. */
+  /** Whether the page is the whole window, rather than in a frame (in a Discord call, rather than in the town's frame). */
   top(): boolean;
-  /** Leaves the page for another address. */
+  /** Leaves the page for another of Leaf's addresses, in a Discord call with the launch (`withLaunch`). */
   go(url: string): void;
   /** Leaves for another address with the whole window: out of the town's frame too, when the page is in it. */
   away(url: string): void;
@@ -119,9 +120,10 @@ function browserStore(kind: "localStorage" | "sessionStorage"): Store | null {
   }
 }
 
+/** Whether the page is the whole window: in a Discord call, the page Discord frames, which is not in the town's. */
 function isTop(): boolean {
   try {
-    return typeof window !== "undefined" && window.top === window;
+    return typeof window !== "undefined" && (window.top === window || (inCall() && !inTown()));
   } catch {
     return false;
   }
@@ -134,7 +136,7 @@ export const outside: Outside = {
   href: () => (typeof location === "undefined" ? "" : location.href),
   top: isTop,
   go: (url) => {
-    location.assign(url);
+    location.assign(withLaunch(url, location.href));
   },
   away: (url) => {
     try {

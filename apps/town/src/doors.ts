@@ -10,6 +10,7 @@
 
 import { close as closeCard } from "@sequoia-leaf/kit/card.ts";
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
+import { withLaunch } from "@sequoia-leaf/kit/launch.ts";
 import { passPurse } from "@sequoia-leaf/kit/live.ts";
 import { fromLeaf } from "@sequoia-leaf/kit/purse.ts";
 import { fromGame, toGame } from "@sequoia-leaf/kit/shell.ts";
@@ -64,7 +65,8 @@ export function goIn(game: Game, asks: Asks): Visit {
   // A card pinned in town would sit over the game, out of reach of its keys and taps.
   closeCard();
   const root = must(document.getElementById("door"), "door");
-  const frame = el("iframe", "door-frame", { title: game.name, src: game.url });
+  // In a Discord call the game's page carries the launch (`withLaunch`), as every page of Leaf in the call does.
+  const frame = el("iframe", "door-frame", { title: game.name, src: withLaunch(game.url, location.href) });
   const sign = el("div", "door-sign k-over", { text: "Knocking..." });
   root.replaceChildren(frame, sign);
   root.hidden = false;

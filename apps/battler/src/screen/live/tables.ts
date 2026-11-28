@@ -8,12 +8,12 @@
  * (`call/`): no list of tables, Join the table in place of Open a table, and Next table once it is over.
  */
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
+import { LAUNCH } from "@sequoia-leaf/kit/launch.ts";
 import type { Scope } from "@sequoia-leaf/kit/scope.ts";
 import { CHAIRS } from "@sequoia-leaf/raid/sitting/sitting.ts";
 import type { SittingView } from "@sequoia-leaf/raid/sitting/view.ts";
 
 import { glyph } from "../art/icons.ts";
-import { LAUNCH } from "../call/launch.ts";
 import { snd } from "../sounds.ts";
 import { pic } from "../ui/cards.ts";
 import { atCallTable, command, followTables, joinCall, leave, openTable, recordIfOld, sitAt, T } from "./listing.ts";

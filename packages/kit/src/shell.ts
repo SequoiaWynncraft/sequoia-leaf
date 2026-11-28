@@ -6,6 +6,8 @@
 
 import { type Balances, readBalances } from "@sequoia-leaf/core";
 
+import { withLaunch } from "./launch.ts";
+
 export type ToTown =
   /** Back to the town; with `camp`, on to that player's camp. */
   | { readonly town: "leave"; readonly camp?: string }
@@ -22,10 +24,14 @@ export type FromTown =
   /** Leaf's newest word on the member's balances, as the town heard it (`purse.ts`). */
   | { readonly town: "purse"; readonly purse: Balances };
 
-/** True when this page is running inside the town. */
+/**
+ * True when this page is running inside the town: in its door's frame (`#door`), which only a page
+ * of Leaf's own origin can see. A page of Leaf's framed by anything else (Discord's apps, or a page
+ * standing in for them on Leaf's origin) is not.
+ */
 export const inTown = (): boolean => {
   try {
-    return window.parent !== window && window.parent.location.origin === window.location.origin;
+    return typeof window !== "undefined" && (window.frameElement?.closest("#door") ?? null) !== null;
   } catch {
     return false;
   }
@@ -35,10 +41,16 @@ export function tell(msg: ToTown): void {
   if (inTown()) window.parent.postMessage(msg, window.location.origin);
 }
 
-/** Go back to the town (with `camp`, on to that player's camp); opened alone, go to where the town lives beside this game. */
+/**
+ * Go back to the town (with `camp`, on to that player's camp); opened alone, go to where the town
+ * lives beside this game, in a Discord call with the launch (`withLaunch`).
+ */
 export function leave(camp?: string): void {
   if (inTown()) tell(camp === undefined ? { town: "leave" } : { town: "leave", camp });
-  else window.location.href = camp === undefined ? "../town/" : `../town/?camp=${encodeURIComponent(camp)}`;
+  else {
+    const town = camp === undefined ? "../town/" : `../town/?camp=${encodeURIComponent(camp)}`;
+    window.location.assign(withLaunch(town, window.location.href));
+  }
 }
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;

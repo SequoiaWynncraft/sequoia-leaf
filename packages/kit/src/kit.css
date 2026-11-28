@@ -1981,3 +1981,34 @@ button.k-cap.waiting {
     grid-template-columns: calc(var(--u) * 70) minmax(0, 1fr) auto;
   }
 }
+
+/* ---------- in a Discord call (`call.ts`): Discord's small picture of it ---------- */
+
+/*
+ * Where the player is, in one line, shown only when Discord makes the call small: everything else on
+ * the page goes, but what is marked to stay (the town's frame for a game, which has its own line), and
+ * nothing can be pressed.
+ */
+.k-call-line {
+  display: none;
+}
+@media (max-width: 480px) and (max-height: 280px) {
+  body[data-call] > :not(.k-call-line, .k-call-keep) {
+    display: none !important;
+  }
+  body[data-call] .k-call-line {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    min-height: 100dvh;
+    margin: 0;
+    padding: 0 calc(var(--u) * 8);
+    font: var(--f-ui);
+    color: var(--k-cream);
+    text-align: center;
+    background: var(--k-deep);
+    pointer-events: none;
+    user-select: none;
+  }
+}

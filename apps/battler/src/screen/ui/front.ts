@@ -3,12 +3,13 @@
  * out; down the left the categories, and under the chosen one its modes; in the middle the chosen
  * mode's card, with its options and its Set out; on the right its board; along the bottom the
  * almanac, how to play, table looks and leaving. A phone has the same, one under another. Whatever
- * is chosen, the card, the board and the button keep their size and place. In a Discord call it is
- * the call's table alone (`call/`): the live tables' card, the almanac and how to play. The endless ways' own
+ * is chosen, the card, the board and the button keep their size and place. In a Discord call it
+ * opens on the live tables' card, where the call's table is (`call/`). The endless ways' own
  * parts (their boards, rooms held, a room taken) are `woods.ts`'s.
  */
 import { choices, stepped } from "@sequoia-leaf/kit/choices.ts";
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
+import { inCall } from "@sequoia-leaf/kit/launch.ts";
 import { ask as fetchLeaf } from "@sequoia-leaf/kit/net.ts";
 import { type Board as Standings, readBoard } from "@sequoia-leaf/kit/person.ts";
 import {
@@ -25,7 +26,6 @@ import {
 
 import { type Glyph, glyph, roomIcon } from "../art/icons.ts";
 import { paintLook } from "../art/place.ts";
-import { inCall } from "../call/launch.ts";
 import { liveStrip, tablesBody, tablesFoot, tablesRecord } from "../live/tables.ts";
 import { snd } from "../sounds.ts";
 import { ask, S, type Slot } from "../state.ts";
@@ -73,10 +73,15 @@ const BOARD_MOST = 10;
 const TRAIL_ICONS = ["trouble", "spar", "boss"] as const;
 
 /**
- * What the page keeps for the session: the mode chosen, a trail not open yet that the member is
- * looking at (of those open, Leaf keeps the one picked), and which run's ending is being asked.
+ * What the page keeps for the session: the mode chosen (in a Discord call the live tables, where the
+ * call's table is, to begin with), a trail not open yet that the member is looking at (of those open,
+ * Leaf keeps the one picked), and which run's ending is being asked.
  */
-const kept: { mode: ModeId; trail: number | null; home: Slot | null } = { mode: "trails", trail: null, home: null };
+const kept: { mode: ModeId; trail: number | null; home: Slot | null } = {
+  mode: inCall() ? LIVE_TABLES.id : "trails",
+  trail: null,
+  home: null,
+};
 /**
  * A page has been opened over it, or it has been put away: ending a run is asked from the start
  * again, a trail not open yet is no longer looked at, and a room taken has been said.
@@ -467,24 +472,20 @@ function bottom(go: FrontAsks): HTMLElement {
       pic(glyph(sign)),
       words,
     );
-  // In a call: nothing bought with Leaf, and no town to go back to.
-  const call = inCall();
   return el(
     "div",
     "k-row menu-foot",
     {},
     to("almanac", "Almanac", "book"),
     to("howto", "How to play", "help"),
-    call ? null : to("looks", "Table looks", "brush"),
-    call
-      ? null
-      : el(
-          "button",
-          "k-btn wood sm",
-          { type: "button", id: "leave", onclick: () => go.leave() },
-          icon("back"),
-          "Leave the table",
-        ),
+    to("looks", "Table looks", "brush"),
+    el(
+      "button",
+      "k-btn wood sm",
+      { type: "button", id: "leave", onclick: () => go.leave() },
+      icon("back"),
+      "Leave the table",
+    ),
   );
 }
 
@@ -506,10 +507,10 @@ export function frontBody(asked: FrontAsks): HTMLElement {
   const go = backFirst(asked);
   readNow("guild", () => readGuild(go.redraw));
   const at = atNow();
-  const shown = shownModes(inCall() ? [LIVE_TABLES] : MODES);
-  const mode = shown.find((m) => m.id === kept.mode) ?? shown[0] ?? THE_TRAILS;
+  const shown = shownModes(MODES);
+  const mode = shown.find((m) => m.id === kept.mode) ?? THE_TRAILS;
   readWoods(mode, at, go.redraw);
-  const runs = inCall() ? [] : laidOut(at);
+  const runs = laidOut(at);
   const live = liveStrip();
   // The strips, the categories, the card and the board scroll between the title bar and the foot.
   return el(
