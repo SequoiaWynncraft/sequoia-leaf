@@ -45,6 +45,7 @@ import { mapPress } from "./mappress.ts";
 import { price, type Sale, salesOf } from "./mapprice.ts";
 import { closePanel, openPanel, refreshPanel } from "./panels.ts";
 import { $, fitted, iconButton, yardIcon } from "./parts.ts";
+import { SMALL } from "./screens.ts";
 import { type Line, table } from "./table.ts";
 
 export type View = "map" | "trouble" | "needs";
@@ -81,8 +82,7 @@ export const viewHooks: { look: (x: number, y: number) => void } = { look: () =>
  * sheet, as on a phone (the page's own breakpoint), or a short screen, where the panel beside the
  * yard reaches down over the tools. A walk, or a pick on its map, puts it away.
  */
-const narrow = (): boolean =>
-  window.matchMedia("(max-width: 760px), (max-height: 500px), (orientation: portrait)").matches;
+const narrow = (): boolean => window.matchMedia(SMALL).matches;
 
 // ---------- going to a place ----------
 

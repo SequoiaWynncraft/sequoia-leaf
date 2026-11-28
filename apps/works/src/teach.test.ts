@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   ALL_GOALS,
+  ALL_KINDS,
   at,
   BELT,
   BENCH,
@@ -11,19 +12,22 @@ import {
   deliver,
   FOLIOS,
   GATHERER,
-  GOALS,
   highest,
+  isGraded,
   isNode,
   item,
   type ItemName,
   legPiece,
   litOf,
+  locked,
   MILL,
   NONE,
   PYLON,
   ready,
+  RECIPES_N,
   recipeSays,
   refusal,
+  remove,
   route,
   SPLITTER,
   stand,
@@ -34,7 +38,7 @@ import {
 } from "@sequoia-leaf/factory";
 import { near, xy } from "@sequoia-leaf/factory/test/near.ts";
 
-import { NO_LESSONS, nudge, SAID_FOR, stepLessons } from "./teach.ts";
+import { type Looking, NO_LESSONS, nudge, OPENS, RECENT, SAID_FOR, stepLessons } from "./teach.ts";
 
 const none = new Set<string>();
 const run = (w: Yard, ticks: number): void => {
@@ -61,6 +65,30 @@ const belts = (w: Yard, n: number): void => {
     return w.kind[i] === NONE && refusal(w, BELT, x, y, 999) === null ? [{ x, y }] : [];
   });
   for (const t of free.slice(0, n)) build(w, BELT, t.x, t.y, 0, 999);
+};
+
+/** The first tier whose start has open what a later lesson is about. */
+const opens = (id: string): number => {
+  for (let tier = 0; tier <= 8; tier++) {
+    const o = create({ seed: 4, tier }).open;
+    const graded = ALL_KINDS.some((k) => isGraded(k) && highest(o, k) > 1);
+    const counted = RECIPES_N.some((r) => r.need.some((n) => n > 1) && locked(o, { make: r.out }) === null);
+    const is: Record<string, boolean> = {
+      // Power and the bench, a machine of two parts, are both met in tier 0's own lessons.
+      short: true,
+      starved: true,
+      board: o.board,
+      tier: o.tier >= 1,
+      numbers: counted,
+      grades: graded,
+      study: locked(o, { build: STUDY }) === null,
+      research: locked(o, { build: STUDY }) === null,
+      select: locked(o, { use: "select" }) === null,
+      first: locked(o, { first: true }) === null,
+    };
+    if (is[id]) return tier;
+  }
+  return -1;
 };
 
 describe("teaching", () => {
@@ -167,14 +195,6 @@ describe("teaching each new idea, once, where it is met", () => {
     // A card open on a machine and a kind in hand say nothing more while every recipe is one of each and there is one grade.
     build(w, BENCH, ...xy(-3, -4), 0, 999);
     expect(nudge(w, new Set([...quiet, "tier"]), false, { picked: at(w, ...xy(-3, -4)), hand: BELT })).toBeNull();
-  });
-
-  test("a tier with research alone, no project and no commission yet, has no nudge to its screen", () => {
-    const w = create({ seed: 4, tier: 5 });
-    expect(GOALS.some((g) => g.tier === 5 && g.kind === "research")).toBe(true);
-    // Tier 5 has research alone so far; once it has a project or its commission, the nudge is back.
-    const onScreen = GOALS.some((g) => g.tier === 5 && (g.kind === "project" || g.kind === "commission"));
-    expect(nudge(w, new Set([...quiet, "study", "research", "first"]), false)?.id === "tier").toBe(onScreen);
   });
 
   test("a machine's numbers, the first time a card is open on one once the yard counts: over that machine", () => {
@@ -294,5 +314,96 @@ describe("lessons, step by step", () => {
     expect([now.show?.id, now.fresh, now.taken]).toEqual(["board", false, []]);
     now = stepLessons(now.lessons, w, told, when(SAID_FOR + 0.5));
     expect([now.show, now.taken]).toEqual([null, ["board"]]);
+  });
+});
+
+describe("lessons after the first tier, for a yard that met their idea recently", () => {
+  const looking: Looking = { picked: -1, hand: null };
+  const when = (t: number, look = looking) => ({ t, hidden: false, finger: false, looking: look });
+
+  test("each lesson's tier is where its idea first opens in the rules", () => {
+    for (const [id, tier] of Object.entries(OPENS)) expect([id, opens(id)]).toEqual([id, tier]);
+  });
+
+  test("a tier 6 yard with an empty taught list hears none of the later lessons, whatever is before it", () => {
+    const w = create({ seed: 4, tier: 6 });
+    // Everything the later lessons are about: many pieces, power short, a machine waiting, cards open, a graded kind in hand.
+    for (let k = 0; k < 6; k++) build(w, BENCH, ...xy(-3, -4 + k), 0, 999);
+    build(w, GATHERER, ...xy(-5, -3), 0, 999);
+    build(w, MILL, ...xy(-4, -3), 0, 999);
+    build(w, SPLITTER, ...xy(2, -4), 0, 999);
+    belts(w, 61);
+    run(w, 600);
+    const looks = [looking, { picked: at(w, ...xy(-3, -3)), hand: null }, { picked: at(w, ...xy(2, -4)), hand: null }];
+    const graded = ALL_KINDS.find((k) => isGraded(k) && highest(w.open, k) > 1) ?? BELT;
+    let lessons = NO_LESSONS;
+    const heard: string[] = [];
+    for (const [k, look] of [...looks, { picked: -1, hand: graded }].entries()) {
+      const now = stepLessons(lessons, w, none, when(k, look));
+      lessons = now.lessons;
+      if (now.show) heard.push(now.show.id);
+    }
+    expect(heard).toEqual([]);
+    // The same yard, as if it had only just opened tier 1's ideas, would hear them.
+    const early = create({ seed: 4, tier: 1 });
+    expect(early.done.length).toBeLessThan(RECENT);
+    expect(stepLessons(NO_LESSONS, early, none, when(0)).show?.id).toBe("board");
+  });
+
+  test("a nudge about a machine stays on it while it waits, as other machines start waiting, and moves when it stops", () => {
+    const w = create({ seed: 4, tier: 1 });
+    const told = new Set(["board", "tier", "short"]);
+    // Planks and nothing else into a bench: it fills with planks and waits.
+    build(w, GATHERER, ...xy(-5, -2), 0, 999);
+    build(w, MILL, ...xy(-4, -2), 0, 999);
+    build(w, BENCH, ...xy(-3, -2), 0, 999);
+    run(w, 600);
+    let now = stepLessons(NO_LESSONS, w, told, when(0));
+    expect([now.show?.id, now.show?.x, now.show?.y]).toEqual(["starved", ...xy(-3, -2)]);
+    // A second bench, first in tile order, starts waiting too; tick by tick, the nudge stays where it is.
+    build(w, GATHERER, ...xy(-5, -4), 0, 999);
+    build(w, MILL, ...xy(-4, -4), 0, 999);
+    build(w, BENCH, ...xy(-3, -4), 0, 999);
+    const where = new Set<string>();
+    for (let k = 1; k <= 600; k++) {
+      run(w, 1);
+      now = stepLessons(now.lessons, w, told, when(k * 0.01));
+      where.add(`${now.show?.id} ${now.show?.x},${now.show?.y}`);
+    }
+    // Asked afresh, the yard would say the other bench.
+    expect(nudge(w, told, false)).toMatchObject({ id: "starved", ...near(-3, -4) });
+    expect(where).toEqual(new Set([`starved ${xy(-3, -2).join(",")}`]));
+    // The bench it was over goes; then it moves to the one still waiting.
+    remove(w, ...xy(-3, -2));
+    now = stepLessons(now.lessons, w, told, when(7));
+    expect(now.show).toMatchObject({ id: "starved", ...near(-3, -4) });
+  });
+
+  test("two lessons said in turn are each taken once their own time said passes SAID_FOR", () => {
+    const told = new Set(["board", "tier", "short", "select", "study", "research"]);
+    const w = create({ seed: 4, tier: 2 });
+    build(w, BENCH, ...xy(-3, 1), 0, 999);
+    build(w, GATHERER, ...xy(-5, -3), 0, 999);
+    build(w, MILL, ...xy(-4, -3), 0, 999);
+    build(w, BENCH, ...xy(-3, -3), 0, 999);
+    run(w, 600);
+    const card = { picked: at(w, ...xy(-3, 1)), hand: null };
+    // A card opened brings up the numbers; closed, the waiting machine: two seconds of each, in turn.
+    let lessons = NO_LESSONS;
+    const taken: [string, number][] = [];
+    for (let t = 0; t <= 40; t += 0.5) {
+      const now = stepLessons(
+        lessons,
+        w,
+        new Set([...told, ...taken.map(([id]) => id)]),
+        when(t, Math.floor(t / 2) % 2 ? looking : card),
+      );
+      lessons = now.lessons;
+      for (const id of now.taken) taken.push([id, t]);
+    }
+    expect(taken.map(([id]) => id).toSorted()).toEqual(["numbers", "starved"]);
+    // Each was said about half the time, so each is taken a little after twice SAID_FOR.
+    for (const [, t] of taken) expect(t).toBeGreaterThan(2 * SAID_FOR - 2);
+    for (const [, t] of taken) expect(t).toBeLessThan(2 * SAID_FOR + 4);
   });
 });

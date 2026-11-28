@@ -38,7 +38,7 @@ import {
   saidOf,
   thingOf,
 } from "./face.ts";
-import { fitHead, length } from "./measure.ts";
+import { fitHead, length, sheetScreen } from "./measure.ts";
 import { beside, type Box, clear, sheet, type Side } from "./place.ts";
 import { longPress } from "./press.ts";
 import { type Release, scope } from "./scope.ts";
@@ -491,7 +491,7 @@ function peekAt(target: HTMLElement, ref: Ref): void {
 /** How an open card is drawn. */
 const faceOf = (o: Open): Face => ({
   pinned: o.pinned,
-  sheet: o.pinned && o.via === "touch",
+  sheet: o.pinned && o.via === "touch" && sheetScreen(),
   glance: o.glance ?? false,
   back: o.stack.length > 1,
   card: o.stack.at(-1) ?? "",
@@ -806,8 +806,10 @@ export function settle(): void {
     if (!o.pinned) deck.close();
     return;
   }
-  // A card followed to stays where it is; a sheet goes to whichever edge keeps it off its thing now.
-  if (!node.classList.contains("sheet") && o.pinned && o.stack.length > 1) return;
+  // The card takes the screen's form first: a screen that changed size (a folding phone opened or
+  // closed) may want a finger's card as a sheet where it stood beside its thing, or the other way.
+  // Then a card followed to stays where it is; a sheet goes to whichever edge keeps it off its thing now.
+  if (!node.classList.toggle("sheet", faceOf(o).sheet) && o.pinned && o.stack.length > 1) return;
   placeCard(node, o, "follow");
 }
 
