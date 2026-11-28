@@ -19,6 +19,7 @@ export const LORE: Readonly<Partial<Record<FigureId | TraitId, string>>> = {
   graid: "Carved from what the raiders said. A true form is what the raiders saw.",
   canopy: "From up the sequoia. They watch every raid and have opinions.",
   grooter: "From the nest raid, the one they run every night. Carved from what the grooters said was in there.",
+  lhz: "The Commodore gave them numbers. He says he is not one of them.",
   huddle: "From the winter the pond froze. The guild came home in onesies; some had penguins in them.",
   // ---------- classes ----------
   bulwark: "The ones who are told to stand in front.",

@@ -4,7 +4,9 @@
  * the set's own healer, who puts friends in a bubble. Pomp, a gnome with a trumpet, Chorus's fifth.
  * Gnome stays at 2 and 4, with three Gnomes in the set (`RAID-SETS.md`). Sage gains a third step at
  * 6 and Chorus a fourth at 5. A sixth component, the Carving Knife, which turns up only after a boss
- * and makes a class emblem with any other component, or An Extra Chair with a second Knife.
+ * and makes a class emblem with any other component, or An Extra Chair with a second Knife. LHZ,
+ * the guild's strike team, arrives with Yule as its third trait, and the Honorary Badge as its
+ * emblem: one LHZ figure turns it on, and two feed each other's casts.
  */
 import { charm, EMBLEM } from "../charms.ts";
 import { type ComponentId, emblem, type ItemSpec, NO_STATS } from "../items.ts";
@@ -154,14 +156,16 @@ export const PENGUIN_MONTH: Patch = {
         tier: 5,
         kin: "huddle",
         calling: "mender",
-        extra: [],
+        extra: ["lhz"],
         hp: 720,
         attack: 30,
         speed: 0.7,
         range: 4,
         armour: 30,
         ward: 35,
-        mana: [50, 80],
+        // A shorter bar since LHZ, which never fills it at the start: in the five-acorn band, between
+        // Vesta and Greg (`review/swap.ts`).
+        mana: [35, 65],
         ability: {
           name: "Bubble Bath",
           shape: "ally",
@@ -177,6 +181,19 @@ export const PENGUIN_MONTH: Patch = {
   },
   traits: {
     add: {
+      // Mana at the start, and at the second step each LHZ's cast feeds the others' (`fight/effects.ts`).
+      lhz: {
+        name: "LHZ",
+        sort: "kin",
+        steps: [1, 2],
+        gist: "The strike team.",
+        text: [
+          "LHZ figures start the fight with {mana} more mana.",
+          "LHZ figures start the fight with {mana} more mana. When an LHZ figure uses its ability, every other LHZ figure gets {gift} mana.",
+        ],
+        short: ["+{mana} mana at the start.", "+{mana} mana at the start; casts give others +{gift}."],
+        n: { mana: [15, 25], gift: [0, 15] },
+      },
       huddle: {
         name: "Huddle",
         sort: "kin",
@@ -241,6 +258,7 @@ export const PENGUIN_MONTH: Patch = {
         turnsUp: "boss",
       },
       huddlecharm: emblem("huddle", "Guild Onesie", "The old uniform. One size.", EMBLEM),
+      lhzcharm: emblem("lhz", "Honorary Badge", "No number. Still counts.", EMBLEM),
       woodentooth: wooden("fang", "Wooden Tooth", ["knife", "thorn"], "Sharper than the real one."),
       woodensling: wooden("slinger", "Wooden Sling", ["knife", "plume"], "Comes with one pebble."),
       woodenspectacles: wooden("sage", "Wooden Spectacles", ["knife", "glowcap"], "For reading the rules."),
@@ -251,6 +269,7 @@ export const PENGUIN_MONTH: Patch = {
   boons: {
     add: {
       huddlecharm: charm("huddlecharm", "Guild Onesie", "Huddle", "The old uniform. One size."),
+      lhzcharm: charm("lhzcharm", "Honorary Badge", "LHZ", "No number. Still counts."),
     },
     // Two Knives make it: the boon as it was, and a recipe of its own.
     change: { extrachair: { made: ["knife", "knife"] } },

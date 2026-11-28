@@ -463,6 +463,8 @@ const KIN_PUFF: Readonly<Record<KinId, Puff>> = {
   huddle: { cols: [CREAM, WATER[3]], drift: "down" },
   // Russet fur and leaves, coming down out of the tree.
   canopy: { cols: [CORAL, BARK[2], GREEN[3]], drift: "down" },
+  // A carrier always has an origin of its own, whose puff it leaves; this is never the first.
+  lhz: { cols: ["#6fb0e8", GOLD[1]], drift: "out" },
 };
 const SHELL: Puff = KIN_PUFF.crab;
 const LEAVES: Puff = { cols: [BARK[3], GREEN[3]], drift: "down" };

@@ -27,6 +27,7 @@ export const KINS = [
   "grooter",
   "huddle",
   "canopy",
+  "lhz",
 ] as const;
 export type KinId = (typeof KINS)[number];
 export const CALLINGS = ["bulwark", "fang", "slinger", "sage", "mender", "sneak", "chorus"] as const;
@@ -36,6 +37,12 @@ export const OWN_TRAITS = ["greg", "rooted", "stowaway", "crafter"] as const;
 export type OwnTraitId = (typeof OWN_TRAITS)[number];
 export type TraitId = KinId | CallingId | OwnTraitId;
 export const TRAIT_IDS: readonly TraitId[] = [...KINS, ...CALLINGS, ...OWN_TRAITS];
+
+/**
+ * A name with "a" or "an" before it, as it is said: "a Crab", "an Ember", and an initialism by its
+ * first letter's sound, "an LHZ".
+ */
+export const withA = (name: string): string => `${/^([AEIOU]|[FHLMNRSX][A-Z]+\b)/.test(name) ? "an" : "a"} ${name}`;
 
 export interface TraitSpec {
   readonly name: string;
