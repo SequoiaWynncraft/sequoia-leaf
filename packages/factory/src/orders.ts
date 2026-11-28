@@ -21,6 +21,7 @@ import {
   ARRIVAL,
   type Goal,
   GOALS,
+  isGrown,
   isNode,
   type Item,
   item,
@@ -277,7 +278,11 @@ function rehang(y: Yard, slot: number): void {
   if (next) y.board.push(next);
 }
 
-/** Everything a yard could make on some land with what is open and the plots it owns: what lies in them, and whatever its machines make of that. */
+/**
+ * Everything a yard could make on some land with what is open and the plots it owns: what lies in them,
+ * and whatever its machines make of that. A thing grown from itself (star crystal) is made only where
+ * the yard owns a tile of it: a grower needs some to begin, so its growing (`isGrown`) adds nothing here.
+ */
 export function makeableOn(land: Land, open: Open, plots: readonly Plot[]): Item[] {
   const can = new Uint8Array(ITEM_COUNT);
   const owned = land.plots.map((p) => plots.includes(p.plot));
@@ -287,7 +292,8 @@ export function makeableOn(land: Land, open: Open, plots: readonly Plot[]): Item
     if (raw !== NONE && owned[plot[i] ?? NONE] === true) can[raw] = 1;
   }
   // Then each thing a recipe it may make makes from what it can, its own thing or beside it, till none is new.
-  const may = (r: Recipe): boolean => locked(open, { make: r.out }) === null && r.from.every((k) => can[k] === 1);
+  const may = (r: Recipe): boolean =>
+    !isGrown(r) && locked(open, { make: r.out }) === null && r.from.every((k) => can[k] === 1);
   for (let grew = true; grew;) {
     grew = false;
     for (const n of ALL_ITEMS) {
@@ -359,7 +365,7 @@ export function fresh(y: Yard, seed: number): Standing {
   let worth = 0;
   const items = second === null ? [first] : [first, second];
   for (const k of items) {
-    const share = step(k) === 4 ? ORDER_WORK.deepest : step(k) === 0 ? ORDER_WORK.ground : 1;
+    const share = step(k) >= 4 ? ORDER_WORK.deepest : step(k) === 0 ? ORDER_WORK.ground : 1;
     const n = round((budget * share * (0.8 + roll() * 0.4)) / workOf(k));
     want[k] = n;
     worth += n * (WORTH[k] ?? 0);

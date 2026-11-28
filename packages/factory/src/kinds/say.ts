@@ -6,6 +6,7 @@
  */
 import type { Item, Recipe } from "../tables.ts";
 import type { Yard } from "../yard.ts";
+import type { Words } from "./kind.ts";
 import type { Kit } from "./kit.ts";
 
 /** How a thing stands: doing its job, with nothing to do just now, or in trouble that will not mend itself. */
@@ -85,14 +86,14 @@ function sendings(k: Kit, y: Yard, i: number, n: Item, also: boolean): { from: n
 
 /**
  * Whether what stands where a piece sends a thing could ever take it, from the tile it leaves by: yes,
- * nothing stands there, or never. A full belt or machine still counts.
+ * nothing stands there, or never. A full belt or machine still counts; a crate full and shut never takes.
  */
 function takenAhead(k: Kit, y: Yard, i: number, n: Item, also = false): "yes" | "nothing" | "never" {
   let found: "nothing" | "never" = "nothing";
   for (const { from, to } of sendings(k, y, i, n, also)) {
     if (to < 0 || (y.kind[to] ?? k.NONE) === k.NONE) continue;
     found = "never";
-    if (k.takes(y, to, from) && k.wants(y, to, n)) return "yes";
+    if (k.takes(y, to, from) && k.wants(y, to, n) && !fullAndShut(k, y, to)) return "yes";
   }
   return found;
 }
@@ -120,6 +121,39 @@ export function jammedAhead(k: Kit, y: Yard, i: number, n: Item, also = false): 
   return false;
 }
 
+/** Whether the piece on a tile holds things, is shut and can take no more: a crate, which alone shuts. */
+function fullAndShut(k: Kit, y: Yard, i: number): boolean {
+  const r = i < 0 ? -1 : k.holderOf(y, i);
+  const h = y.holders;
+  return r >= 0 && h.open[r] === 0 && (h.count[r] ?? 0) + (h.out[r] === k.NONE ? 0 : 1) >= y.open.crate;
+}
+
+/** The name of the way out of a piece of more than one tile that sends a thing it holds ready (`Out.name`): "left", "middle", "right". */
+export function wayFor(k: Kit, y: Yard, i: number, n: Item, also = false): string {
+  return k.outsOf(y, i).find((o) => o.also === also && k.sendsThing(o, n))?.name ?? "";
+}
+
+/**
+ * How a piece of more than one tile stands while it holds a finished thing `out` (a still, a grower):
+ * waiting while what stands ahead of its way out takes it and the line there still moves; else
+ * stopped, in trouble, with nowhere ahead to take it or the line ahead stopped.
+ */
+export function heldAs(k: Kit, y: Yard, i: number, out: Item): number {
+  const stuck = stuckAs(k, y, i, out);
+  return stuck === as("waiting") && !jammedAhead(k, y, i, out) ? stuck : as("blocked", true);
+}
+
+/**
+ * Its words for that (`heldAs`): stopped, which thing cannot leave by which way out, and `until`, what
+ * it does not do until it has; or waiting for room ahead, by that way out.
+ */
+export function heldWords(k: Kit, y: Yard, i: number, state: string, out: Item, until: string): Words {
+  const way = wayFor(k, y, i, out);
+  return state === "blocked"
+    ? { line: `Stopped: its ${many(k, out)} cannot leave by its ${way} way out. ${until}`, stuck: out }
+    : { line: `Waiting: no room ahead for its ${many(k, out)}, by its ${way} way out.` };
+}
+
 /** The sink a thing held ready would go into and that never takes it, as named: "the depot", "the cart stop"; or nothing. */
 function refusingSink(k: Kit, y: Yard, i: number, n: Item, also: boolean): string | null {
   if (k.ITEM_INFO[n]?.unsold !== true) return null;
@@ -134,6 +168,8 @@ function refusingSink(k: Kit, y: Yard, i: number, n: Item, also: boolean): strin
 export function nowhere(k: Kit, y: Yard, i: number, n: Item, also = false): string {
   const sink = refusingSink(k, y, i, n, also);
   if (sink !== null) return `${k.ITEM_INFO[n]?.name ?? ""} has nowhere to go: ${sink} does not take it.`;
+  if (sendings(k, y, i, n, also).some(({ to }) => fullAndShut(k, y, to)))
+    return "The crate it points at is full and shut.";
   if (takenAhead(k, y, i, n, also) === "never") return `The piece it points at does not take ${many(k, n)}.`;
   // Only a splitter has ways to shut, or to take things in by.
   const shut = y.shut[i] ?? 0;
@@ -183,6 +219,9 @@ function carriedAhead(k: Kit, y: Yard, i: number): number {
   if (i < 0) return Infinity;
   const outs = k.outsOf(y, i);
   const kind = y.kind[i] ?? k.NONE;
+  // One that grows gives more than one a run, on the whole (`grownPerRun`): 3 for every 2 of a grower's.
+  const grown = k.isKind(kind) ? k.grownPerRun(kind) : 0;
+  if (grown > 0) return carriedAt(k, y, k.nextOf(y, i)) / grown;
   if (!k.isKind(kind) || outs.length === 0 || outs[0]?.only === k.NONE) return carriedAt(k, y, k.nextOf(y, i));
   let most = Infinity;
   for (let p = 0; p < outs.length; p++) {
@@ -194,14 +233,17 @@ function carriedAhead(k: Kit, y: Yard, i: number): number {
 }
 
 /**
- * What a kind of piece at a grade turns out a minute flat out, for `recipe` (a machine's): its own
- * pace's worth (a gatherer, a Study), a thing a run for one that breaks a mix (`mixPerMinute`), or
- * its recipe's; else nothing.
+ * What the piece of a kind at a grade on the tile `i` turns out a minute flat out, for `recipe` (a
+ * machine's): a gatherer what lies under it, at that thing's own pace (`gathers`); a Study its own
+ * pace's worth; a thing a run for one that breaks a mix (`mixPerMinute`); runs, for one that grows a
+ * thing (`growPerMinute`); or its recipe's; else nothing.
  */
-function flatOut(k: Kit, kind: number, grade: number, recipe: Recipe | null): number {
+function flatOut(k: Kit, y: Yard, i: number, kind: number, grade: number, recipe: Recipe | null): number {
   if (!k.isKind(kind)) return 0;
+  if (kind === k.GATHERING) return k.gathers(y.land.deposit[i] ?? k.NONE, grade);
   if ((k.WORK_OF[kind] ?? 0) > 0) return k.makes(kind, grade, null);
   if (k.MIX_OF[kind]) return k.mixPerMinute(kind, grade);
+  if (k.GROW_OF[kind]) return k.growPerMinute(kind, grade);
   return k.isMaker(kind) && recipe ? k.makes(kind, grade, recipe) : 0;
 }
 
@@ -210,7 +252,7 @@ export function rateOf(k: Kit, y: Yard, i: number, recipe: Recipe | null): Machi
   const grade = y.grade[i] ?? 0;
   const lit = kind !== k.NONE && k.litAt(y, i);
   const share = lit ? k.pace(y) * k.smogPace(y, i) : 0;
-  const nominal = flatOut(k, kind, grade, recipe);
+  const nominal = flatOut(k, y, i, kind, grade, recipe);
   const ahead = nominal > 0 ? carriedAhead(k, y, i) : Infinity;
   const effective = Math.min(nominal * share, ahead);
   return {

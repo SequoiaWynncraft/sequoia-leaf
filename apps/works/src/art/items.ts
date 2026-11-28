@@ -102,6 +102,16 @@ export const ROWS: Readonly<Record<ItemName, readonly string[]>> = {
   sleeper: ["EEEEEE.", "FFFFFFb", "FFFFFFx", "ffffffb"],
   // A small pot with a brush handle standing in it, amber.
   varnish: ["....n..", "...n...", "..xn...", ".oooooo", ".MoMMMB", ".MMMMMB", "..BBBB."],
+  // Three pale lilac shards in dark rock, one with a cream glint.
+  crystal: ["...w...", "..PO..P", "P.PO.PO", "PO.HOPO", "OHiHiOH", "iIIIIIi"],
+  // A sack with a pale green-grey spill at its mouth.
+  feed: [".tgt...", "..n....", ".CccC..", "CcccCC.", "CcccCCt", ".CCCC.t"],
+  // A square plate crossed by fine teal lines, on dark.
+  lattice: ["WWWWWWW", "WKKWKKW", "WKKWKKW", "WWWWWWW", "WKKWKKW", "WWWWWWW"],
+  // The Star folio, bound in dark lilac, one cream star on its cover.
+  star: ["XHHHHH.", "XHHwHHc", "XHwwwHc", "XHHwHHc", "XHwHwHc", "bCCCCOc", ".....O."],
+  // A shallow pale dish on a short mast, tilted up to the left.
+  dish: ["t......", "ct.....", "cct....", ".cctt..", "..ccSt.", "....i..", "...iIi."],
 };
 
 /** Each thing's picture with its dark edge, for a belt or a card. */

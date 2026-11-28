@@ -171,7 +171,7 @@ describe("tier 6's tables", () => {
 
   test("a tunnel passes under 20 tiles and carries what goes in all the way; under 21 it is refused", () => {
     const y = yard();
-    expect([F.SPAN_MOST, y.open.span]).toEqual([20, 20]);
+    expect(y.open.span).toBe(20);
     const plank = F.item("plank");
     must(y, { do: "build", kind: "crate", x: 1, y: 4, dir: 0 });
     const out = bin(y, 25, 4);
@@ -181,10 +181,11 @@ describe("tier 6's tables", () => {
     fill(y, F.at(y, 1, 4), plank, 6);
     for (let k = 0; k < 600; k++) F.step(y);
     expect(F.held(y.holders, out, plank)).toBe(6);
-    // A span past the most does not read as a command at all, and changes nothing.
+    // A span past what the yard has researched is refused, and changes nothing (past the most any yard
+    // may have, it does not read as a command at all: tier 7's test).
     const was = F.encode(y);
     const deeper = F.writeAct({ do: "lay", legs: [{ tunnel: true, x: 2, y: 6, dir: 0, span: 21, grade: 1 }] });
-    expect(() => give(y, deeper)).toThrow("does not read");
+    expect("refused" in give(y, deeper)).toBe(true);
     expect(F.encode(y)).toBe(was);
   });
 });
@@ -301,7 +302,7 @@ describe("the still", () => {
     expect(F.status(y, i)?.trouble).toBe(false);
   });
 
-  test("waiting at a full crate ahead, it says which thing has no room and by which way out, and is not in trouble", () => {
+  test("at a full crate ahead, it says which thing has no room and by which way out: stopped while the crate is shut, waiting once it is open", () => {
     const y = yard();
     const i = piece(y, "still", 4, 4);
     bin(y, 6, 3);
@@ -310,9 +311,11 @@ describe("the still", () => {
     for (let k = 0; k < y.open.crate; k++) F.put(y.holders, full, CREOSOTE);
     fill(y, i, TAR, 8);
     for (let k = 0; k < 60 && F.status(y, i)?.state === "working"; k++) F.step(y);
-    expect([F.status(y, i)?.line, F.status(y, i)?.trouble]).toEqual([
-      "Waiting: no room ahead for its creosote, by its middle way out.",
-      false,
+    const shut = [F.status(y, i)?.line, F.status(y, i)?.trouble];
+    must(y, { do: "crate", x: 6, y: 4, open: true });
+    expect([shut, [F.status(y, i)?.line, F.status(y, i)?.trouble]]).toEqual([
+      ["Stopped: its creosote cannot leave by its middle way out. It makes nothing else until it does.", true],
+      ["Waiting: no room ahead for its creosote, by its middle way out.", false],
     ]);
   });
 

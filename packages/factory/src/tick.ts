@@ -1,3 +1,4 @@
+import { BURNS, type Burns } from "./burns.ts";
 import { SMOG } from "./content/smog.ts";
 /**
  * Moving the yard on by one tick. Ten ticks are a second.
@@ -43,7 +44,7 @@ import { RULES } from "./kinds/list.ts";
 import { work as make } from "./kinds/maker.ts";
 import { passUnder } from "./kinds/under.ts";
 import { countSmog, FULL, smogged } from "./smog.ts";
-import { BURNS, type Burns, CARRIES, ITEM_COUNT, NONE, PACE, SPAN_MOST, TIMES_MOST } from "./tables.ts";
+import { CARRIES, ITEM_COUNT, NONE, PACE, SPAN_MOST, TIMES_MOST } from "./tables.ts";
 import { KIT, rewire, roomAt } from "./wire.ts";
 import { holderOf, take, tunnelOf, type Wire, type Yard } from "./yard.ts";
 

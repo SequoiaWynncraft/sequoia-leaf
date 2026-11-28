@@ -18,6 +18,14 @@ export const CLAY = ["#7a2f2a", "#b0483a", SKY[5], "#f4a08c"] as const;
  * many steps as the wood's ramp, `BARK`) or stone. A muted, dusk-lit grey with the sky's purple in it.
  */
 export const IRON = ["#221d27", "#2e2a35", "#403b47", "#55505c", "#6c6672"] as const;
+/**
+ * Star's lilac (tiers 7 and 8), darkest first: star crystal, and the one small light a Star piece may
+ * wear. Dusk-muted, as SPEC-2's star crystal is (`#b9a6d9`): the town's sky ramp turns pink at its
+ * pale end, and nothing of the Star era is pink, magenta or bright.
+ */
+export const LILAC = ["#2c2836", "#3e3650", "#5e5276", "#8f82ad", "#b9a6d9"] as const;
+/** The muted teal a lattice is crossed with, the Star era's other small light (never both on one piece). */
+export const TEAL = "#8fb5ad";
 /** The dark inside of a doorway or a tunnel. */
 export const DARK = "#24121a";
 /** Deep forest floor, where the yard has not been cleared. */
@@ -75,6 +83,12 @@ export const PAL: Readonly<Record<string, string>> = {
   F: "#6b5040",
   L: "#c9b98a",
   M: "#b8873f",
+  // Star crystal's lilac, darkest first, and a lattice's teal, for tier 7.
+  X: LILAC[1],
+  H: LILAC[2],
+  O: LILAC[3],
+  P: LILAC[4],
+  W: TEAL,
 };
 
 /** A picture with the dark edge every sprite has; `ax`, `ay` are counted before the edge is added. */

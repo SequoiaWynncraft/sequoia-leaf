@@ -63,4 +63,10 @@ export const RECIPES: readonly RecipeInfo[] = [
   { out: "tarmac", from: { gravel: 1, pitch: 1 }, by: "bench", ticks: 20 },
   { out: "sleeper", from: { plank: 2, creosote: 1 }, by: "bench", ticks: 20 },
   { out: "varnish", from: { spirit: 1, oil: 1 }, by: "bench", ticks: 20 },
+  // Tier 7, the signal: what a grower is fed, and what star crystal is for. Star crystal itself has no
+  // recipe: it lies in the ground, and a grower grows it (`grow.ts`).
+  { out: "feed", from: { spirit: 1, glass: 1 }, by: "bench", ticks: 20 },
+  { out: "lattice", from: { crystal: 2, wire: 1 }, by: "bench", ticks: 20 },
+  { out: "star", from: { lattice: 1, coil: 1, varnish: 1 }, by: "workshop", ticks: 40 },
+  { out: "dish", from: { lattice: 2, telegraph: 1, sleeper: 1 }, by: "workshop", ticks: 80 },
 ];

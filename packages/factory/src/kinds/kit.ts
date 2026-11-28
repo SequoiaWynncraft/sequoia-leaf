@@ -4,6 +4,7 @@
  * with the plumbing, as `KIT` in `wire.ts`; this says what is in it. A kind that needs more of the
  * rules adds it here and there, where the rest of the rules can see it.
  */
+import type * as Burning from "../burns.ts";
 import type * as Land from "../land.ts";
 import type * as Orders from "../orders.ts";
 import type * as Planner from "../planner.ts";
@@ -38,6 +39,9 @@ export interface Kit {
   readonly SINKS: typeof Tables.SINKS;
   readonly KIND_INFO: typeof Tables.KIND_INFO;
   readonly MIX_OF: typeof Tables.MIX_OF;
+  readonly GROW_OF: typeof Tables.GROW_OF;
+  readonly GATHERING: typeof Tables.GATHERING;
+  readonly GATHER_WORK: typeof Planner.GATHER_WORK;
   readonly SMOG_OF: typeof Tables.SMOG_OF;
   readonly TINTED: typeof Tables.TINTED;
   readonly GRADED: typeof Tables.GRADED;
@@ -57,9 +61,12 @@ export interface Kit {
   readonly makes: typeof Planner.makes;
   readonly mixPerMinute: typeof Planner.mixPerMinute;
   readonly mixShare: typeof Planner.mixShare;
+  readonly gathers: typeof Planner.gathers;
+  readonly growPerMinute: typeof Planner.growPerMinute;
+  readonly grownPerRun: typeof Planner.grownPerRun;
   readonly MINUTE: typeof Planner.MINUTE;
   readonly carried: typeof Planner.carried;
-  readonly BURNS: typeof Tables.BURNS;
+  readonly BURNS: typeof Burning.BURNS;
   readonly whole: (v: unknown, most: number) => number | null;
 
   // The yard's reads and writes.

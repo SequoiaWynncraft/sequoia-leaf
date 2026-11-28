@@ -72,6 +72,7 @@ import {
 import { perMinute, whole } from "@sequoia-leaf/kit/say.ts";
 
 import { isSpark } from "../era.ts";
+import { countedAt } from "../grown.ts";
 import { WORKS_KEYS } from "../keymap.ts";
 import { pageOf } from "../kinds/index.ts";
 import { layout, sendsRight } from "../layout.ts";
@@ -237,6 +238,7 @@ function standingPrint(i: number, k: Kind): StandingPrint {
     // A piece whose ways out its card presses, a step at a time (a splitter's).
     ways: sets(k, "way") ? waysPrint(i) : null,
     mix: mixAt(k, r),
+    counted: countedAt(w, i),
     visiting: S.visiting !== null,
   };
 }

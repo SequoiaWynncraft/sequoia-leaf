@@ -7,8 +7,10 @@
  * makes; wire and gravel from those, coils and bulbs, the Spark folio, telegraphs and strings of
  * lights. Slag is the first thing the town does not buy (`unsold`). Tier 6 adds tar, and the three
  * things a still parts it into, pitch, creosote and spirit, none of which the town buys either; and
- * tarmac, sleepers and varnish, each made of one of them. Nothing here fells a living tree: wood is
- * deadfall, picked up off the forest floor.
+ * tarmac, sleepers and varnish, each made of one of them. Tier 7 adds star crystal, which lies in the
+ * ground of the outer ring and comes out of it slowly (`gather`), and is grown (`content/grow.ts`);
+ * crystal feed, what growing it costs; and lattices, the Star folio and dishes, what it is for.
+ * Nothing here fells a living tree: wood is deadfall, picked up off the forest floor.
  *
  * A new thing goes at the end of the list: a thing riding a belt is kept by its place in it.
  */
@@ -59,6 +61,11 @@ export const ITEMS = [
   "tarmac",
   "sleeper",
   "varnish",
+  "crystal",
+  "feed",
+  "lattice",
+  "star",
+  "dish",
 ] as const;
 export type ItemName = (typeof ITEMS)[number];
 
@@ -77,8 +84,10 @@ export interface ItemInfo {
   readonly folio?: true;
   /** The town does not buy it: the depot and cart stops do not take it, the board never asks for it, and it is worth nothing. */
   readonly unsold?: true;
-  /** The work in one, in ticks, where the tables cannot work it out: a thing a mix gives (`mixes.ts`). */
+  /** The work in one, in ticks, where the tables cannot work it out: a thing a mix gives (`mixes.ts`), star crystal. */
   readonly work?: number;
+  /** Ticks a gatherer at grade 1 takes over one, for a thing from the ground: `TICKS.gather` if not said. */
+  readonly gather?: number;
 }
 
 export const ITEM: Record<ItemName, ItemInfo> = {
@@ -129,4 +138,9 @@ export const ITEM: Record<ItemName, ItemInfo> = {
   tarmac: { name: "Tarmac", many: "tarmac", step: 3, worth: 1.8 },
   sleeper: { name: "Sleeper", many: "sleepers", step: 2, worth: 2.4 },
   varnish: { name: "Varnish", many: "varnish", step: 2, worth: 1.7 },
+  crystal: { name: "Star crystal", many: "star crystals", step: 0, worth: 2, work: 150, gather: 1500 },
+  feed: { name: "Crystal feed", many: "crystal feed", step: 2, worth: 1 },
+  lattice: { name: "Lattice", many: "lattices", step: 3, worth: 5 },
+  star: { name: "Star folio", many: "Star folios", step: 4, worth: 12, folio: true },
+  dish: { name: "Dish", many: "dishes", step: 5, worth: 54 },
 };

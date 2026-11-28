@@ -1,3 +1,4 @@
+import type { Burns, Fuel } from "../burns.ts";
 /**
  * What every kind that burns for power shares (a boiler; a powerhouse), from what its module says it
  * burns (`KindDef.burns`): it takes in each of its fuels from any side, up to what it holds of each,
@@ -6,7 +7,6 @@
  * minute the yard's flow's (`status.ts`, `fuelNow`), from the same data.
  */
 import type { KeptPiece } from "../cells.ts";
-import type { Burns, Fuel } from "../tables.ts";
 import type { Yard } from "../yard.ts";
 import { keep, stockOnto } from "./holder.ts";
 import type { Hooks, Words } from "./kind.ts";
