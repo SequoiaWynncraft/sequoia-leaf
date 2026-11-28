@@ -21,7 +21,7 @@
  */
 
 import { isNode, type Item, type Kind, MILLI, NODE_COUNT, NONE, power, type Yard } from "@sequoia-leaf/factory";
-import { pick, shown as cardShown, thing } from "@sequoia-leaf/kit/card.ts";
+import { pick, show, shown as cardShown, thing } from "@sequoia-leaf/kit/card.ts";
 import { el, icon, unit } from "@sequoia-leaf/kit/dom.ts";
 import { keepText, keptText } from "@sequoia-leaf/kit/keep.ts";
 import { CREAM, INK } from "@sequoia-leaf/kit/palette.ts";
@@ -38,7 +38,7 @@ import { cellOf, flowRows, said, SHORT, yardFlows } from "../flows.ts";
 import { layout } from "../layout.ts";
 import { alarm, layPlan, makePlan, paintPlan, type Plan } from "../plan.ts";
 import { S, seenFrom } from "../state.ts";
-import { troubled, troubleGroups } from "../trouble.ts";
+import { smoggy, troubled, troubleGroups } from "../trouble.ts";
 import { NOT_WALKING, type Walk, walkAt, type WalkEvent, walkStep } from "../walk.ts";
 import { closeCard, itemRef, openCard, plotRef, tileRef } from "./card.ts";
 import { mapPress } from "./mappress.ts";
@@ -66,8 +66,8 @@ const lastView = (): View => {
 
 /** Whether the yard has the map, the list of trouble and the count: from its second plot. Before that the sheet is the depot's panel alone. */
 export const hasViews = (): boolean => S.world.plots.length > 1;
-/** How many pieces are in trouble, for the count on the button; nothing is looked at in a yard of one plot. */
-export const wrongCount = (): number => (hasViews() ? troubled(S.world).count : 0);
+/** How many pieces are in trouble and plots slowed by smog, for the count on the button; nothing is looked at in a yard of one plot. */
+export const wrongCount = (): number => (hasViews() ? troubled(S.world).count + smoggy(S.world).length : 0);
 
 /** The sheet's name and picture: the yard's, or in a yard of one plot the depot's. */
 export const sheetTitle = (): string => (hasViews() ? "The yard" : "The depot");
@@ -377,19 +377,27 @@ function troubleView(art: Art, host: HTMLElement): () => void {
         : [],
     );
     const groups = troubleGroups(y);
-    list.el.hidden = groups.length === 0;
-    none.hidden = groups.length > 0;
+    const smog = smoggy(y);
+    list.el.hidden = groups.length + smog.length === 0;
+    none.hidden = groups.length + smog.length > 0;
     // Short of power is trouble too, in the row above: then it is only the pieces that are fine.
     none.textContent = cells ? "No piece is in trouble." : "Nothing is wrong.";
-    list.set(
-      groups.map((g): Line => ({
+    list.set([
+      // A plot slowed by its smog, first: a tap goes to the plot's card.
+      ...smog.map((s): Line => ({
+        key: `smog:${s.n}:${s.line}`,
+        head: () => el("span", "wrong", {}, el("span", "k-grow", { text: s.line })),
+        cells: [""],
+        on: () => show(plotRef(s.plot)),
+      })),
+      ...groups.map((g): Line => ({
         // Its pictures are built once for a row: a group that gains a kind of piece is a new row.
         key: `${g.title}|${g.kinds.join()}`,
         head: () => head(g.title, g.kinds, g.stuck),
         cells: [String(g.tiles.length)],
         on: () => startWalk(g.title),
       })),
-    );
+    ]);
   };
 }
 

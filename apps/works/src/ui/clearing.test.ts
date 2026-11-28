@@ -84,6 +84,7 @@ test("a plot to clear: its card says what it wants and its price, and offers Cle
   expect(p.clearing).toMatchObject({ state: "to clear", words: "600 lanterns and 900 pipes", other: null });
   expect(bodies(p)).toEqual([
     "Clear it: 600 lanterns and 900 pipes, delivered to the depot. Then it can be bought.",
+    "Clears 420 smog /min: the ground 300, 1 redwood 120.",
     "It costs 100,000 Coins.",
     expect.stringContaining("15%"),
   ]);

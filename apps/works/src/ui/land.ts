@@ -25,6 +25,8 @@ export type GroundPrint =
       readonly fell: { readonly x: number; readonly y: number; readonly price: number; readonly short: number } | null;
       /** On its own plot, why it may not be felled yet: felling not studied. */
       readonly locked: string | null;
+      /** From tier 5: the smog it clears from its plot while it stands. */
+      readonly clears: string | null;
     };
 
 export interface PlotPrint {
@@ -47,6 +49,8 @@ export interface PlotPrint {
   readonly visiting: boolean;
   /** Its clearing, for a plot past the first ring that is for sale and not the yard's: null for any other. */
   readonly clearing: ClearingPrint | null;
+  /** From tier 5: the smog on a plot the yard owns, or what a plot not yet its would clear (`smog.ts`); null before. */
+  readonly smog: string | null;
 }
 
 /** A plot's clearing as its card prints it (`clearing.ts`). */
@@ -85,6 +89,7 @@ export function groundCard(p: GroundPrint, hands: Pick<LandHands, "fell" | "refu
     name: "Redwood",
     tag: "Nothing can be built on it. Belts go round it, or under it by tunnel.",
     blocks: [
+      ...(p.clears === null ? [] : [{ body: p.clears }]),
       ...(p.locked === null ? [] : [{ body: `${p.locked}.` }]),
       ...(fell && fell.short > 0 ? [{ body: `You need ${coinsText(fell.short)} more.` }] : []),
     ],
@@ -170,6 +175,7 @@ function plotBlocks(p: PlotPrint, buys: boolean): Block[] {
     ...(p.bank ? [{ body: "The stream runs through it. A waterwheel must be beside the stream." }] : []),
     ...(p.state === "not yet" ? [{ body: `${p.not ?? "Not for sale yet"}.` }] : []),
     ...clearingBlocks(p.clearing),
+    ...(p.smog === null ? [] : [{ body: p.smog }]),
     ...(p.state !== "owned" && !buys ? [{ body: `It costs ${coinsText(p.price)}.` }] : []),
     ...(p.rises ? [{ body: RISE_LINE }] : []),
     ...(p.state === "for sale" && p.short > 0 ? [{ body: `You need ${coinsText(p.short)} more.` }] : []),

@@ -192,6 +192,8 @@ export interface StandingPrint extends SorterPrint {
   readonly refund: number;
   readonly free: boolean;
   readonly ways: WaysPrint | null;
+  /** For a piece that breaks a mix (the breaker): the place in its mix of the next thing it gives. */
+  readonly mix: number | null;
   readonly visiting: boolean;
 }
 
@@ -386,15 +388,14 @@ const pressWay = (p: StandingPrint, hands: Hands): ((way: number) => void) | nul
 /** What takes a standing piece up: as the tool in hand, facing the same way (Another), or itself, to set down elsewhere (Move). */
 function takeUp(p: StandingPrint, hands: Hands): Action[] {
   const { x, y } = p;
-  const another = p.hints.another;
   const name = nameOf(p.machine.kind).toLowerCase();
   return [
-    ...(another === null
+    ...(p.hints.another === null
       ? []
       : [
           {
             label: "Another",
-            hint: another,
+            hint: p.hints.another,
             about: `Picks the ${name} as your tool, facing the same way.`,
             on: () => hands.another(x, y),
           },

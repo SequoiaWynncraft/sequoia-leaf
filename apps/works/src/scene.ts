@@ -53,10 +53,12 @@ import { type Box, glint, type Ground } from "./art/ground.ts";
 import type { Art } from "./art/index.ts";
 import { DEPOT as DEPOT_ART, lookOf } from "./art/machines.ts";
 import type { Sprite } from "./art/pal.ts";
+import { depotOf } from "./art/spark.ts";
 import { aimBox, boxIn, drawnFrom, heldIn, markCovers, pointersOn } from "./big.ts";
 import { drawPlan, drawPlanMarks } from "./far.ts";
 import { Floor, handsNow } from "./floor.ts";
 import { bits, floaters, rings } from "./fx.ts";
+import { onGround } from "./haze.ts";
 import { heldBox, heldMarks } from "./held.ts";
 import { straight } from "./kinds/carrier.ts";
 import { pageOf } from "./kinds/index.ts";
@@ -68,7 +70,7 @@ import { eachPerson } from "./people.ts";
 import { pinMark } from "./pinned.ts";
 import { builds, draws, type Group, handGrade, type Mark, S, seenFrom, standsOn, tileNudge } from "./state.ts";
 import { cameFrom, dirAt, hooded } from "./tiles.ts";
-import { drawShades, eachTrunk } from "./trees.ts";
+import { eachTrunk } from "./trees.ts";
 import { Wires } from "./wires.ts";
 
 /** What the frame needs to know about the moment: how far into the next tick it is, and how the yard is going. */
@@ -900,7 +902,8 @@ function floorLayer(f: Frame): void {
     g.restore();
   }
 
-  drawShades(g, f.art, cx, cy, W, H);
+  // The trees' shade, and the smog: on the ground, under every belt, piece and redwood.
+  onGround(g, f.art, f.w, cx, cy, W, H, S.t);
   for (let ty = ty0; ty <= ty1; ty++)
     for (let tx = tx0; tx <= tx1; tx++)
       if (land.water[ty * land.w + tx] === 1) glint(g, land, tx, ty, tx * TILE - cx, ty * TILE - cy, S.t);
@@ -1004,7 +1007,7 @@ function standingLayer(f: Frame): void {
   // The depot, with whatever it wears.
   const { dx, dfoot } = depotAt(f);
   const dz = dfoot + cy - 1;
-  const ds = art.m.depot;
+  const { depot: ds, fly: flies } = depotOf(art.m, w);
   const dl = dx - ds.ax;
   const dt = dfoot - ds.ay;
   if (dl < W && dl + ds.c.width > 0 && dt < H && dfoot > -8) {
@@ -1021,10 +1024,8 @@ function standingLayer(f: Frame): void {
         );
     }
     // A depot that gives more than at first wears its flywheel.
-    if (w.open.depot > DEPOT_FIRST) {
-      const fly = art.m.fly[Math.floor(S.t * 8) % 4];
-      if (fly) put(fly, dl + DEPOT_ART.fly.x - 6, dt + DEPOT_ART.fly.y - 6, dz + 0.1);
-    }
+    const fly = w.open.depot > DEPOT_FIRST ? flies[Math.floor(S.t * 8) % 4] : undefined;
+    if (fly) put(fly, dl + DEPOT_ART.fly.x - 6, dt + DEPOT_ART.fly.y - 6, dz + 0.1);
   }
   eachTrunk(art, cx, cy, W, H, stand);
   for (let n = 0; n + 2 < L.fences.length; n += 3) {

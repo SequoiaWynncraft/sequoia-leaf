@@ -39,6 +39,7 @@ import { type Ctx, makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
 import { armAt, PAINTS } from "./art/belts.ts";
 import { CLAY, DARK, DEEP } from "./art/pal.ts";
+import { hazeOnPlan } from "./haze.ts";
 import { pageOf } from "./kinds/index.ts";
 import { armsAt, type Layout } from "./layout.ts";
 
@@ -88,6 +89,16 @@ const HUE: Readonly<Record<ItemName, string>> = {
   spyglass: WATER[1],
   clock: SKY[3],
   orrery: GREEN[2],
+  salvage: "#7a6a5c",
+  copper: "#b86a4a",
+  slag: "#4a444e",
+  gravel: "#8b8791",
+  wire: "#d08a5a",
+  coil: "#a85f48",
+  bulb: "#efe6c8",
+  spark: "#d9c27a",
+  telegraph: "#9c8a6a",
+  lights: "#e6d9a8",
 };
 const HUES = ALL_ITEMS.map((n) => HUE[itemName(n)]);
 
@@ -463,6 +474,7 @@ export function paintPlan(p: Plan, y: Yard, L: Layout): HTMLCanvasElement {
  */
 export function layPlan(g: Ctx, p: Plan, y: Yard, dx: number, dy: number): void {
   g.drawImage(p.c, dx, dy);
+  hazeOnPlan(g, y, dx, dy, p.px);
   const W = y.land.w;
   // The depot: a pale line round its nine tiles.
   const [cx, cy] = y.land.depot;

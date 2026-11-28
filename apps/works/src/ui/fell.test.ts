@@ -57,7 +57,13 @@ test("on the yard's own plot, the first Fell costs 1,000 Coins and asks to be pr
   const { ref, print, card } = cardAt(...xy(-1, 16));
   expect([card.name, print]).toEqual([
     "Redwood",
-    { card: "ground", ground: "redwood", fell: { ...near(-1, 16), price: 1000, short: 0 }, locked: null },
+    {
+      card: "ground",
+      ground: "redwood",
+      fell: { ...near(-1, 16), price: 1000, short: 0 },
+      locked: null,
+      clears: "Clears 120 smog /min from this plot.",
+    },
   ]);
   const [fell] = card.actions ?? [];
   if (!fell) throw new Error("no Fell");
@@ -88,7 +94,7 @@ test("drawn short of Coins, Fell says how many more and fells nothing", async ()
   const page = aPage();
   const refused: string[] = [];
   const { card } = cardAt(...xy(-2, 15), refused);
-  expect(card.blocks).toEqual([{ body: "You need 600 Coins more." }]);
+  expect(card.blocks).toEqual([{ body: "Clears 120 smog /min from this plot." }, { body: "You need 600 Coins more." }]);
   const [fell] = card.actions ?? [];
   if (!fell) throw new Error("no Fell");
   expect(fell.ask).toBeUndefined();
@@ -118,8 +124,17 @@ test("with a redwood felled before, the card's Fell is at the next one's price, 
 test("before felling is studied, the card says so and has no Fell", async () => {
   await opened(meadow(false), 5_000);
   const { print, card } = cardAt(...xy(-2, 15));
-  expect(print).toEqual({ card: "ground", ground: "redwood", fell: null, locked: "Felling is not unlocked yet" });
-  expect([card.blocks, card.actions]).toEqual([[{ body: "Felling is not unlocked yet." }], []]);
+  expect(print).toEqual({
+    card: "ground",
+    ground: "redwood",
+    fell: null,
+    locked: "Felling is not unlocked yet",
+    clears: "Clears 120 smog /min from this plot.",
+  });
+  expect([card.blocks, card.actions]).toEqual([
+    [{ body: "Clears 120 smog /min from this plot." }, { body: "Felling is not unlocked yet." }],
+    [],
+  ]);
 });
 
 test("a redwood on a plot the yard does not own asks about the plot", async () => {

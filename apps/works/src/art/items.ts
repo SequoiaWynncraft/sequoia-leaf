@@ -68,6 +68,26 @@ export const ROWS: Readonly<Record<ItemName, readonly string[]>> = {
     "....o....",
     "..ooooo..",
   ],
+  // Tier 5. Salvage: a bent iron rail, a loop of copper and a shard of glass, out of the old workings.
+  salvage: ["J.....j", "jJ...jJ", ".jJ.jJ.", "..jJJ..", ".iJr.w.", "iJ...J.", "J.....i"],
+  // A twist of copper scrap, green at one end.
+  copper: ["gg.....", "gRr....", ".rRq...", "..RrRq.", "...rRRq", "....QRQ"],
+  // Dull dark clinker with two dim embers in it.
+  slag: ["..ijj..", ".iIjiI.", "jIQIijj", "iIjIQIi", ".IIiII.", "..III.."],
+  // A low heap of grey chips.
+  gravel: ["...t...", "..tSs..", ".tSsSh.", "tSsShsh", "SshSshh"],
+  // A coil of copper wire seen from the side, one end loose.
+  wire: [".rrrr..", "rR..Rr.", "R.rr.R.", "rR..Rr.", ".RQQR..", "....QQq"],
+  // Copper windings on an iron core: a spool.
+  coil: ["j.....j", "JrRrRrJ", "jRrRrRj", "JrRrRrJ", "jRrRrRj", "i.....i"],
+  // A glass bulb with a cream filament and a brass cap.
+  bulb: ["..CCC..", ".CcwcC.", "CcwYwcC", ".CcwcC.", "..CcC..", "..yoy..", "..ooo.."],
+  // The Spark folio, bound in copper, a cream zigzag on its cover.
+  spark: ["QRRRRR.", "QRwRRRc", "QRRwRRc", "QRwRRRc", "QRRwRRc", "bCCCCrc", ".....r."],
+  // A telegraph key on its board: a brass arm, a dark knob, two copper posts.
+  telegraph: ["....x..", "..yyyx.", ".r.o..r", ".r....r", "NNNNNNN", "nnnnnnb"],
+  // Three small bulbs on a sagging dark line.
+  lights: ["I.....I", ".I...I.", ".cIIIc.", ".w.c.w.", "...w..."],
 };
 
 /** Each thing's picture with its dark edge, for a belt or a card. */

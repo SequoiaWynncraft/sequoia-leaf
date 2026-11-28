@@ -45,15 +45,15 @@ export const RULES_FORGE = rules("forge", 3, "Makes resin of deadfall and stone.
 export const RULES_CHUTE = `/** A throwaway kind for the test that a kind may cover many tiles, not square. */
 import { kind } from "./kind.ts";
 import { around } from "./ports.ts";
-import { always, anything, sell } from "./sink.ts";
+import { always, sell, sold } from "./sink.ts";
 
 export const chute = kind({
   name: "chute",
-  info: { name: "Chute", cost: 30, draw: 0, gives: 0, what: "Takes every item, as the depot does." },
+  info: { name: "Chute", cost: 30, draw: 0, gives: 0, what: "Takes every item the town buys, as the depot does." },
   starters: 1,
   size: [2, 3],
   ports: { in: around(2, 3), out: [] },
-  rules: { wants: anything, room: always, give: sell },
+  rules: { wants: sold, room: always, give: sell },
 });
 `;
 

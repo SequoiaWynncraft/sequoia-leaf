@@ -62,6 +62,12 @@ export const PAL: Readonly<Record<string, string>> = {
   u: WATER[2],
   U: WATER[3],
   D: DARK,
+  // Blackened iron, for tier 5's scrap, slag and windings.
+  K: IRON[0],
+  I: IRON[1],
+  i: IRON[2],
+  j: IRON[3],
+  J: IRON[4],
 };
 
 /** A picture with the dark edge every sprite has; `ax`, `ay` are counted before the edge is added. */

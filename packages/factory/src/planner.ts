@@ -5,7 +5,7 @@
  * held up; nothing that moves the yard reads it.
  */
 import { TICKS } from "./content/machines.ts";
-import { GATHERING, type Item, type Kind, PACE, type Recipe, recipeFor, timesOf, WORK_OF } from "./tables.ts";
+import { GATHERING, type Item, type Kind, MIX_OF, PACE, type Recipe, recipeFor, timesOf, WORK_OF } from "./tables.ts";
 
 /** Ticks in a minute. */
 export const MINUTE = 600;
@@ -26,6 +26,13 @@ export function makes(k: Kind, grade: number, r: Recipe | null): number {
 
 /** How many pieces of deadfall a minute a boiler burns while it makes power, at any grade. */
 export const burned = (): number => MINUTE / TICKS.burn;
+
+/** How many things a kind that breaks a mix gives a minute at a grade, flat out: one for each of what it breaks (`MIXES`). */
+export function mixPerMinute(k: Kind, grade: number): number {
+  const first = MIX_OF[k]?.gives[0];
+  const r = first === undefined ? null : recipeFor(first);
+  return r ? makes(k, grade, r) * (r.need[0] ?? 0) : 0;
+}
 
 /**
  * How many things a minute a line of belt of a grade carries, fed flat out, and a tunnel, splitter,

@@ -9,6 +9,7 @@ import {
   ALL_ITEMS,
   clearingState,
   clearingWant,
+  clearsLine,
   costOf,
   fellPrice,
   fellRefusal,
@@ -38,6 +39,7 @@ import {
   locked,
   machineRate,
   makeable,
+  MIX_OF,
   MOST,
   NODES,
   NONE,
@@ -50,9 +52,11 @@ import {
   RECIPE,
   recipesFor,
   redwoodAt,
+  redwoodClears,
   RIGHT,
   rises,
   RULES,
+  smogLine,
   status,
   stops,
   STUDIES,
@@ -65,6 +69,7 @@ import {
 } from "@sequoia-leaf/factory";
 import { perMinute, whole } from "@sequoia-leaf/kit/say.ts";
 
+import { isSpark } from "../era.ts";
 import { WORKS_KEYS } from "../keymap.ts";
 import { pageOf } from "../kinds/index.ts";
 import { layout, sendsRight } from "../layout.ts";
@@ -222,6 +227,7 @@ function standingPrint(i: number, k: Kind): StandingPrint {
     free: w.free[i] === 1,
     // A piece whose ways out its card presses, a step at a time (a splitter's).
     ways: sets(k, "way") ? waysPrint(i) : null,
+    mix: mixAt(k, r),
     visiting: S.visiting !== null,
   };
 }
@@ -248,9 +254,19 @@ function tilePrint(i: number): StandingPrint | GroundPrint | null {
     const lock = own ? locked(w.open, { fell: true }) : null;
     const cost = fellPrice(w);
     const fell = own && lock === null ? { x, y, price: cost, short: Math.max(0, cost - coins()) } : null;
-    return { card: "ground", ground: "redwood", fell, locked: lock };
+    return { card: "ground", ground: "redwood", fell, locked: lock, clears: isSpark(S.world) ? redwoodClears() : null };
   }
   return null;
+}
+
+/** For a piece that breaks a mix, on its holder's row `r`: the place in its mix of the next thing it gives. */
+const mixAt = (k: Kind, r: number): number | null => (MIX_OF[k] && r >= 0 ? (S.world.holders.mix[r] ?? 0) : null);
+
+/** A plot's smog, from tier 5, when the first piece that makes it can be built: on one the yard owns, else what it would clear. */
+function smogAt(n: number, owned: boolean): string | null {
+  const w = S.world;
+  if (!isSpark(w)) return null;
+  return owned ? smogLine(w, n) : clearsLine(w, n);
 }
 
 function plotPrint(id: Plot): PlotPrint | null {
@@ -278,6 +294,7 @@ function plotPrint(id: Plot): PlotPrint | null {
     short: Math.max(0, cost - coins()),
     visiting: S.visiting !== null,
     clearing: state === "owned" || w.open.plots[id] !== 1 ? null : clearingPrint(id),
+    smog: smogAt(index, state === "owned"),
   };
 }
 
