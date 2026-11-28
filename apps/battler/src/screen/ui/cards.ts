@@ -351,7 +351,14 @@ function member(cat: Catalog, id: FigureId, run: RunView | null): Entry {
  * figure that carries it. Its steps as every view shows them (`traitShown`): every one in a raid
  * with the member's own figures, or in the member's collection (`own`).
  */
-export function traitDesc(cat: Catalog, id: TraitId, run: RunView | null, lore = false, own = false): Description {
+export function traitDesc(
+  cat: Catalog,
+  id: TraitId,
+  run: RunView | null,
+  lore = false,
+  // A raid with the member's own figures is the member's own view unless a caller says otherwise.
+  own = run?.way.figures.pool === "own",
+): Description {
   const spec = traitIn(cat, id);
   const state = run ? ownTraitCount(run, id) : null;
   const { count, step, steps } = state ?? traitShown(cat, id, 0, own);
