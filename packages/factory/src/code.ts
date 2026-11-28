@@ -19,10 +19,9 @@
  */
 import { isDir } from "./build.ts";
 import { fromBase64, toBase64 } from "./bytes.ts";
-import { BLUEPRINT } from "./content/machines.ts";
 import { boxOf, cellsOf, keptOf, packPieces, type Piece, unpackWays } from "./pieces.ts";
 import { type KeptPrint, packPrint, unpackPrint } from "./prints.ts";
-import { FIXED, isKind, locked, type Open, SPAN_MOST, SPANS } from "./tables.ts";
+import { BOX_MOST, FIXED, isKind, locked, type Open, SPAN_MOST, SPANS } from "./tables.ts";
 import type { Print, Yard } from "./yard.ts";
 
 /** What every code begins with: which version of the code it is. */
@@ -33,8 +32,8 @@ const PIECE_MOST = 9;
 /** The bytes before a code's pieces: their check (3), then how many bytes of them follow (2). */
 const HEAD = 5;
 
-/** The longest a code can be: every tile of the largest box a blueprint holds a piece of the most bytes. */
-export const CODE_MOST = CODE_PREFIX.length + Math.ceil((HEAD + BLUEPRINT.w * BLUEPRINT.h * PIECE_MOST) / 3) * 4;
+/** The longest a code can be: every tile of the largest box any blueprint holds a piece of the most bytes. */
+export const CODE_MOST = CODE_PREFIX.length + Math.ceil((HEAD + BOX_MOST.w * BOX_MOST.h * PIECE_MOST) / 3) * 4;
 
 /** Whether a command's code is text no longer than any code can be: the rules read it as they do it. */
 export const isCode = (v: unknown): v is string => typeof v === "string" && v.length <= CODE_MOST;

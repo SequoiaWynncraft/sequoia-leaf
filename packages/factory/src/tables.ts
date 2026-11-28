@@ -448,6 +448,17 @@ export const SPAN_MOST = most((u) => u.span);
 // A span is kept in a signed byte (`spanByte`), a far mouth's below 0.
 if (SPAN_MOST > 127) throw new Error("a tunnel runs under at most 127 tiles");
 export const BLUEPRINTS_MOST = most((u) => u.blueprints?.count);
+/** The largest box any blueprint holds, across and down. */
+export const BOX_MOST = {
+  w: Math.max(
+    BLUEPRINT.w,
+    most((u) => u.blueprints?.w),
+  ),
+  h: Math.max(
+    BLUEPRINT.h,
+    most((u) => u.blueprints?.h),
+  ),
+} as const;
 /**
  * How many places for blueprints any yard had before tier 5's plan room: a yard's check and its save
  * name a place past these only where it holds something, so a yard that uses none is as it was.
@@ -474,6 +485,8 @@ export interface Open {
   readonly tools: number;
   readonly blueprints: number;
   readonly pieces: number;
+  /** The most tiles across and down a blueprint's box holds. */
+  readonly box: { readonly w: number; readonly h: number };
   readonly stops: number;
   readonly crate: number;
   /** How far a pylon reaches, in hundredths of its plain reach. */
@@ -535,6 +548,16 @@ export function openOf(goals: readonly Goal[]): Open {
     tools,
     blueprints: top((u) => u.blueprints?.count),
     pieces: top((u) => u.blueprints?.pieces),
+    box: {
+      w: Math.max(
+        BLUEPRINT.w,
+        top((u) => u.blueprints?.w),
+      ),
+      h: Math.max(
+        BLUEPRINT.h,
+        top((u) => u.blueprints?.h),
+      ),
+    },
     stops: top((u) => u.stops),
     crate: top((u) => u.crate),
     reach: top((u) => u.reach),
@@ -623,8 +646,8 @@ export function locked(open: Open, ask: Lock): string | null {
   if (open.blueprints === 0) return "Blueprints are not unlocked yet";
   if (slot < 0 || slot >= open.blueprints) return "There is no such blueprint";
   if (pieces > open.pieces) return `A blueprint holds at most ${open.pieces} pieces. This is ${pieces}`;
-  if (w > BLUEPRINT.w || h > BLUEPRINT.h)
-    return `A blueprint is at most ${BLUEPRINT.w} tiles by ${BLUEPRINT.h}. This is ${w} by ${h}`;
+  if (w > open.box.w || h > open.box.h)
+    return `A blueprint is at most ${open.box.w} tiles by ${open.box.h}. This is ${w} by ${h}`;
   return null;
 }
 

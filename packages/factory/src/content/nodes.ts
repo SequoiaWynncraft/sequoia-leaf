@@ -27,8 +27,11 @@ export interface Unlocks {
   /** Plots put up for sale. */
   readonly plots?: readonly PlotName[];
   readonly tools?: readonly Tool[];
-  /** How many blueprints the yard keeps, and the most pieces one holds. */
-  readonly blueprints?: { readonly count: number; readonly pieces: number };
+  /**
+   * How many blueprints the yard keeps, the most pieces one holds, and where it says so, the most
+   * tiles across and down its box holds (else `BLUEPRINT`'s).
+   */
+  readonly blueprints?: { readonly count: number; readonly pieces: number; readonly w?: number; readonly h?: number };
   /** How many cart stops may stand. */
   readonly stops?: number;
   /** How many things a crate holds. */

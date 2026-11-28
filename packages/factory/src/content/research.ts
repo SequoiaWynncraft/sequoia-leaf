@@ -337,9 +337,10 @@ export const RESEARCH: readonly ResearchInfo[] = [
     id: "planroom",
     tier: 5,
     name: "A plan room",
-    what: "Keep 6 blueprints of up to 2,000 pieces each.",
+    what: "Keep 6 blueprints of up to 1,200 pieces each, in a box of up to 40 tiles by 30.",
     cost: { spark: 12000, timber: 12000 },
     needs: ["shelves", "sparkfolio"],
-    unlocks: { blueprints: { count: 6, pieces: 2000 } },
+    // As large as a blueprint's code may be and still be pasted in one command (`CODE_MOST`).
+    unlocks: { blueprints: { count: 6, pieces: 1200, w: 40, h: 30 } },
   },
 ];
