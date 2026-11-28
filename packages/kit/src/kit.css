@@ -388,9 +388,10 @@ button.k-plaque:active {
 /*
  * A thing with a tier, `k-tier-1` to `k-tier-5`: stone, jade, sapphire, amethyst, gold. Every tier's
  * frame is built alike (`tools/frames.ts`): an ink outline, a band of the tier's metal, one lighter
- * line inside it. It is the thing's border exactly, five units (`k-thin`: three), drawn over what it
- * holds so nothing inside cuts into it, and nothing of it lies inside; `--k-fill` is what is behind
- * it, and `--k-tier` the tier's colour for whatever inside wants it.
+ * line inside it. It is the thing's border exactly, five units thick, drawn over what it holds so
+ * nothing inside cuts into it, and nothing of it lies inside. A small thing sets `--k-fw: 3` and
+ * `--k-f: var(--k-f-thin)` for the three-unit frame. `--k-fill` is what is behind it, and `--k-tier`
+ * the tier's colour for whatever inside wants it.
  */
 .k-tier-1 {
   --k-f-thick: var(--k-f-tier-1);
@@ -437,10 +438,6 @@ button.k-plaque:active {
         var(--k-plum)
     )
     padding-box;
-}
-[class*="k-tier-"].k-thin {
-  --k-fw: 3;
-  --k-f: var(--k-f-thin);
 }
 [class*="k-tier-"]::after {
   content: "";

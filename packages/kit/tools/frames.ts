@@ -207,7 +207,7 @@ const brass = (): Grid => frame({ band: BRASS, thick: 4, cut: 2, corner: 5, gem:
 /**
  * A tier's frame, every tier built alike and only its colours its own: an ink outline, a flat band of
  * the tier's metal, one lighter line inside it, and the outline's corner cut by a pixel. Five pixels
- * thick, or three (`thin`) for a small thing; it is drawn over what it holds and nothing lies on it.
+ * thick, or three (`thin`) for a small thing (`kit.css`); drawn over what it holds, nothing lies on it.
  */
 const tier = ([, mid, hi]: Ramp, thin: boolean): Grid => {
   const band: Ring = [mid, mid];

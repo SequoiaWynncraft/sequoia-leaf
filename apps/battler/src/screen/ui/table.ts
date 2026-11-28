@@ -78,6 +78,33 @@ const byId = (id: string): HTMLElement | null => document.getElementById(id);
 /** An amount of acorns in words, for a control's name. */
 const acornsSaid = (n: number): string => `${n} acorn${n === 1 ? "" : "s"}`;
 
+/** The bar in the stall's place during a fight: the tally, its tabs, the speeds and Skip. */
+function fightBar(a: Asks): HTMLElement {
+  const speeds = el("div", "k-tabs", { id: "speeds", role: "tablist" });
+  for (const s of [1, 2, 4] as const) {
+    add(
+      speeds,
+      el("button", "k-btn sm", { type: "button", role: "tab", "data-speed": s, onclick: () => a.speed(s) }, `${s}x`),
+    );
+  }
+  const skip = el(
+    "button",
+    "k-btn wood",
+    { id: "skip", type: "button", "aria-label": "Skip", onclick: a.skipFight },
+    pic(glyph("skip")),
+    el("span", "wide-only", { text: "Skip" }),
+  );
+  tip(skip, "Skip to the end", "The fight comes out the same.");
+  panelTally = tallyView(unitRef, "panel");
+  return el(
+    "div",
+    "",
+    { id: "fightbar" },
+    el("div", "", { id: "tally" }, panelTally.el),
+    el("div", "controls", {}, panelTally.switcher, panelTally.tabs, el("div", "k-row speedrow", {}, speeds, skip)),
+  );
+}
+
 /** Builds everything round the table, once. */
 export function buildTable(a: Asks): void {
   asks = a;
@@ -150,39 +177,20 @@ export function buildTable(a: Asks): void {
     "div",
     "",
     { id: "plan" },
+    // In the order they are read, left to right, for Tab: the left column, the acorns over the cards, the right column.
+    level,
     rustle,
-    hold,
+    levelUp,
+    acornsBtn,
     // Five empty slots until there is a run: the panel has its height from the start, which the table is fitted above.
     el("div", "", { id: "stall" }, ...Array.from({ length: 5 }, emptySlot)),
-    acornsBtn,
-    level,
-    levelUp,
+    hold,
     setOut,
+    // What letting a carried figure go does, over the cards only: the level and the acorns stay in view.
+    el("div", "k-over", { id: "sellhint" }),
   );
 
-  const speeds = el("div", "k-tabs", { id: "speeds", role: "tablist" });
-  for (const s of [1, 2, 4] as const) {
-    add(
-      speeds,
-      el("button", "k-btn sm", { type: "button", role: "tab", "data-speed": s, onclick: () => a.speed(s) }, `${s}x`),
-    );
-  }
-  const skip = el(
-    "button",
-    "k-btn wood",
-    { id: "skip", type: "button", "aria-label": "Skip", onclick: a.skipFight },
-    pic(glyph("skip")),
-    el("span", "wide-only", { text: "Skip" }),
-  );
-  tip(skip, "Skip to the end", "The fight comes out the same.");
-  panelTally = tallyView(unitRef, "panel");
-  const fightbar = el(
-    "div",
-    "",
-    { id: "fightbar" },
-    el("div", "", { id: "tally" }, panelTally.el),
-    el("div", "controls", {}, panelTally.switcher, panelTally.tabs, el("div", "k-row speedrow", {}, speeds, skip)),
-  );
+  const fightbar = fightBar(a);
 
   add(
     document.body,
@@ -197,7 +205,7 @@ export function buildTable(a: Asks): void {
       el("div", "", { id: "traits" }),
       // At the top right on a wide window; on a phone, beside the traits over the stall (`raid.css`).
       el("div", "", { id: "rack" }),
-      el("div", "k-panel", { id: "shop" }, plan, fightbar, el("div", "k-over", { id: "sellhint" })),
+      el("div", "k-panel", { id: "shop" }, plan, fightbar),
     ),
   );
   watch(() => renderPurse());
