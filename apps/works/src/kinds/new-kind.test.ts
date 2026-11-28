@@ -122,7 +122,7 @@ export const sieve: KindPage = {
   lamps: (_y, _i, x, foot, _at, out) => out.push({ x, y: foot - 4, r: 9, power: 0.4, reach: false }),
   map: [GOLD[1], CREAM],
   dot: GOLD[2],
-  dock: 15,
+  dock: 30,
   pace: () => ({ label: "Sifts", value: "60 /min" }),
   faces: true,
 };
@@ -265,7 +265,7 @@ const PAGE_FURNACE = `/** A throwaway kind for the test that a second kind that 
 import { bm } from "../art/pal.ts";
 import type { KindPage } from "./kind.ts";
 
-export const furnace: KindPage = { picture: () => bm(["nn", "nn"], 2, 2).c, dock: 16 };
+export const furnace: KindPage = { picture: () => bm(["nn", "nn"], 2, 2).c, dock: 31 };
 `;
 
 /** A furnace burning beside a boiler gone cold, in the copy: the rules' power book, and the page's rows of it. */

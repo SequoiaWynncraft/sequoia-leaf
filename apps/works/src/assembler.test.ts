@@ -14,6 +14,7 @@ import {
   carried,
   create,
   feeders,
+  GOALS,
   holderOf,
   item,
   kind,
@@ -24,6 +25,7 @@ import {
   price,
   put,
   RECIPE,
+  reopen,
   setRecipe,
   step,
   type Yard,
@@ -46,6 +48,9 @@ const ASSEMBLER = kind("assembler");
 /** A yard with tier 5's research done, an assembler of a grade at (-6, -4) told to make tools, and a belt of `belt`'s grade ahead of its way out, or none. */
 function hall(grade: number, belt: number | null): Yard {
   const y = create({ seed: 5, tier: 6 });
+  // But for tier 5's long work that raises the depot's power to 150: the numbers here are the depot's 100.
+  y.done = y.done.filter((g) => GOALS[g]?.id !== "wholewood");
+  reopen(y);
   expect(build(y, ASSEMBLER, ...xy(-6, -4), 0, Infinity, { grade })).toEqual({
     ok: true,
     cost: price(ASSEMBLER, grade),

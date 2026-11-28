@@ -98,9 +98,9 @@ export const ${name}: KindPage = {
   faces: true,
 };
 `;
-export const PAGE_SIFTER = page("sifter", 16);
-export const PAGE_FORGE = page("forge", 17);
-export const PAGE_CHUTE = page("chute", 18);
+export const PAGE_SIFTER = page("sifter", 32);
+export const PAGE_FORGE = page("forge", 33);
+export const PAGE_CHUTE = page("chute", 34);
 
 /**
  * Plays both throwaways by the rules, in the copy, and prints what it found as one line of JSON, each

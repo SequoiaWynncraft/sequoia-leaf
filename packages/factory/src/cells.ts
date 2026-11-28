@@ -98,19 +98,24 @@ const LATE = [
 
 // ---------- off the yard ----------
 
+/** What a holder's row holds ready beside its finished thing, as kept: a by-product, more of the thing, and its place in a mix, where it has any. */
+function heldOut(h: Holders, r: number): Partial<Building> {
+  const [also, more, mix] = [h.also[r] ?? NONE, h.more[r] ?? 0, h.mix[r] ?? 0];
+  return {
+    ...(also === NONE ? {} : { also }),
+    ...(more === 0 ? {} : { more }),
+    ...(mix === 0 ? {} : { mix }),
+  };
+}
+
 /** What a holder's row holds and is doing, as kept: only what there is. */
 function heldBy(h: Holders, r: number): Partial<Building> {
   const kinds = ALL_ITEMS.filter((n) => held(h, r, n) > 0);
   const [out, work, making, fuel] = [h.out[r] ?? NONE, h.work[r] ?? 0, h.making[r] ?? NONE, h.fuel[r] ?? 0];
-  const also = h.also[r] ?? NONE;
-  const more = h.more[r] ?? 0;
-  const mix = h.mix[r] ?? 0;
   return {
     ...(kinds.length > 0 ? { held: kinds.map((n): [number, number] => [n, held(h, r, n)]) } : {}),
     ...(out === NONE ? {} : { out }),
-    ...(also === NONE ? {} : { also }),
-    ...(more === 0 ? {} : { more }),
-    ...(mix === 0 ? {} : { mix }),
+    ...heldOut(h, r),
     ...(work === 0 ? {} : { work }),
     ...(making === NONE ? {} : { making }),
     ...(fuel === 0 ? {} : { fuel }),

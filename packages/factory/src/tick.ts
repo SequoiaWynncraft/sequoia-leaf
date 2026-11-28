@@ -131,23 +131,24 @@ function carryUnder(y: Yard, wire: Wire): void {
  * the list.
  */
 function working(y: Yard, wire: Wire): void {
-  const { kind, grade } = y;
-  const h = y.holders;
   const { work: workers, workFrom, workPlot } = wire;
   const level = y.smog.level;
   for (let part = 0; part < workPlot.length; part++) {
     if (!worksOn(stepOf(level[workPlot[part] ?? 0] ?? 0), y.tick)) continue;
-    for (let c = workFrom[part] ?? 0; c < (workFrom[part + 1] ?? 0); c++) {
-      const i = workers[c] ?? 0;
-      const r = holderOf(y, i);
-      const k = kind[i] ?? NONE;
-      if (h.out[r] !== NONE && (h.more[r] ?? 0) + 1 >= (TIMES_MOST[k] ?? 1)) continue;
-      const work = WORK[k];
-      const speed = PACE[grade[i] ?? 0] ?? 0;
-      if (work === make) make(KIT, y, i, r, speed, wire);
-      else if (work) work(KIT, y, i, r, speed, wire);
-    }
+    for (let c = workFrom[part] ?? 0; c < (workFrom[part + 1] ?? 0); c++) workOne(y, wire, workers[c] ?? 0);
   }
+}
+
+/** The piece on the tile `i` does its work, unless it holds as many finished things as it may. */
+function workOne(y: Yard, wire: Wire, i: number): void {
+  const h = y.holders;
+  const r = holderOf(y, i);
+  const k = y.kind[i] ?? NONE;
+  if (h.out[r] !== NONE && (h.more[r] ?? 0) + 1 >= (TIMES_MOST[k] ?? 1)) return;
+  const work = WORK[k];
+  const speed = PACE[y.grade[i] ?? 0] ?? 0;
+  if (work === make) make(KIT, y, i, r, speed, wire);
+  else if (work) work(KIT, y, i, r, speed, wire);
 }
 
 /**
