@@ -7,6 +7,9 @@
 import {
   aim,
   ALL_ITEMS,
+  clearingState,
+  clearingWant,
+  clearsLine,
   costOf,
   fellPrice,
   fellRefusal,
@@ -15,6 +18,7 @@ import {
   GIVES,
   type Goal,
   GOALS,
+  goodsText,
   held,
   highest,
   holderOf,
@@ -33,21 +37,27 @@ import {
   LEFT,
   LINE,
   locked,
+  type MachineRate,
   machineRate,
   makeable,
+  MIX_OF,
   MOST,
   NODES,
   NONE,
   orderAt,
   type Plot,
+  plotPrice,
   plotState,
   priceAt,
   ready,
   RECIPE,
   recipesFor,
   redwoodAt,
+  redwoodClears,
   RIGHT,
+  rises,
   RULES,
+  smogLine,
   status,
   stops,
   STUDIES,
@@ -60,6 +70,7 @@ import {
 } from "@sequoia-leaf/factory";
 import { perMinute, whole } from "@sequoia-leaf/kit/say.ts";
 
+import { isSpark } from "../era.ts";
 import { WORKS_KEYS } from "../keymap.ts";
 import { pageOf } from "../kinds/index.ts";
 import { layout, sendsRight } from "../layout.ts";
@@ -79,7 +90,7 @@ import type {
 } from "./cards.ts";
 import { openTools } from "./dock.ts";
 import { givenIn } from "./goal.ts";
-import type { GroundPrint, PlotPrint } from "./land.ts";
+import type { ClearingPrint, GroundPrint, PlotPrint } from "./land.ts";
 import { flowOf, numbersOf, saysNumbers } from "./numbers.ts";
 import { orderRef } from "./refs.ts";
 import type { WaysPrint } from "./splitter.ts";
@@ -169,6 +180,10 @@ const sets = (k: Kind, what: "sort" | "way"): boolean => RULES[k]?.set[what] !==
 /** How many its card says a kind may hold, where it says (`KindPage.holdsUp`). */
 const holdsUp = (k: Kind): number | null => pageOf(k)?.holdsUp?.(S.world) ?? null;
 
+/** What a piece makes a minute now, in words and as a number, said even when that is none (0 /min where power does not reach); nothing for one that makes nothing of its own. */
+const madeNow = (r: MachineRate): Pick<StandingPrint, "perMinute" | "rate"> =>
+  r.nominal > 0 ? { perMinute: perMinute(r.effective), rate: r.effective } : { perMinute: null, rate: null };
+
 function standingPrint(i: number, k: Kind): StandingPrint {
   const w = S.world;
   const x = i % w.land.w;
@@ -200,8 +215,7 @@ function standingPrint(i: number, k: Kind): StandingPrint {
     making: making ? making.out : null,
     flow: flowOf(w, i, saysNumbers(w)),
     gathering: k === GATHERING ? asItem(w.land.deposit[i] ?? NONE) : null,
-    // What it makes now, said even when that is none: where power does not reach, 0 /min.
-    perMinute: rate.nominal > 0 ? perMinute(rate.effective) : null,
+    ...madeNow(rate),
     numbers: saysNumbers(w) ? numbersOf(w, i) : [],
     set,
     sorts: can ? ALL_ITEMS.filter((t) => can.has(t) || (w.depot[t] ?? 0) > 0 || set === t) : [],
@@ -217,6 +231,7 @@ function standingPrint(i: number, k: Kind): StandingPrint {
     free: w.free[i] === 1,
     // A piece whose ways out its card presses, a step at a time (a splitter's).
     ways: sets(k, "way") ? waysPrint(i) : null,
+    mix: mixAt(k, r),
     visiting: S.visiting !== null,
   };
 }
@@ -233,7 +248,7 @@ function tilePrint(i: number): StandingPrint | GroundPrint | null {
   if (i < 0 || i >= w.kind.length) return null;
   const k = w.kind[i] ?? NONE;
   if (isKind(k)) return standingPrint(i, k);
-  if (w.land.water[i] === 1) return { card: "ground", ground: "stream" };
+  if (w.land.water[i] === 1) return { card: "ground", ground: "stream", ford: w.land.ford[i] === 1 };
   if (redwoodAt(w, i)) {
     const x = i % w.land.w;
     const y = Math.floor(i / w.land.w);
@@ -243,9 +258,19 @@ function tilePrint(i: number): StandingPrint | GroundPrint | null {
     const lock = own ? locked(w.open, { fell: true }) : null;
     const cost = fellPrice(w);
     const fell = own && lock === null ? { x, y, price: cost, short: Math.max(0, cost - coins()) } : null;
-    return { card: "ground", ground: "redwood", fell, locked: lock };
+    return { card: "ground", ground: "redwood", fell, locked: lock, clears: isSpark(S.world) ? redwoodClears() : null };
   }
   return null;
+}
+
+/** For a piece that breaks a mix, on its holder's row `r`: the place in its mix of the next thing it gives. */
+const mixAt = (k: Kind, r: number): number | null => (MIX_OF[k] && r >= 0 ? (S.world.holders.mix[r] ?? 0) : null);
+
+/** A plot's smog, from tier 5, when the first piece that makes it can be built: on one the yard owns, else what it would clear. */
+function smogAt(n: number, owned: boolean): string | null {
+  const w = S.world;
+  if (!isSpark(w)) return null;
+  return owned ? smogLine(w, n) : clearsLine(w, n);
 }
 
 function plotPrint(id: Plot): PlotPrint | null {
@@ -254,6 +279,7 @@ function plotPrint(id: Plot): PlotPrint | null {
   const plot = w.land.plots[index];
   if (!plot) return null;
   const { state, why } = plotState(w, id);
+  const cost = plotPrice(w, id);
   const ground = new Map<Item, number>();
   w.land.deposit.forEach((d, i) => {
     if (isItem(d) && w.land.plot[i] === index) ground.set(d, (ground.get(d) ?? 0) + 1);
@@ -263,13 +289,33 @@ function plotPrint(id: Plot): PlotPrint | null {
     plot: id,
     name: plot.name,
     why: plot.why,
-    price: plot.price,
+    price: cost,
+    rises: rises(plot) && state !== "owned" && w.open.plots[id] === 1,
     state,
     not: why,
     bank: w.land.water.some((v, i) => v === 1 && w.land.plot[i] === index),
     ground: [...ground],
-    short: Math.max(0, plot.price - coins()),
+    short: Math.max(0, cost - coins()),
     visiting: S.visiting !== null,
+    clearing: state === "owned" || w.open.plots[id] !== 1 ? null : clearingPrint(id),
+    smog: smogAt(index, state === "owned"),
+  };
+}
+
+/** A plot's clearing, for its card: null for a plot Coins alone buy. */
+function clearingPrint(id: Plot): ClearingPrint | null {
+  const w = S.world;
+  const want = clearingWant(w, id);
+  const state = clearingState(w, id);
+  if (!want || state === "none") return null;
+  const filled = state === "clearing" ? w.clearing?.filled : undefined;
+  const other =
+    w.clearing && w.clearing.plot !== id ? w.land.plots.find((q) => q.plot === w.clearing?.plot) : undefined;
+  return {
+    state,
+    words: goodsText(want),
+    given: ALL_ITEMS.flatMap((k) => ((want[k] ?? 0) > 0 ? [[k, filled?.[k] ?? 0, want[k] ?? 0] as const] : [])),
+    other: other?.name ?? null,
   };
 }
 

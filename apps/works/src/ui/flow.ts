@@ -3,7 +3,8 @@
  * holds, an arrow, and the thing coming out. A dot over a part's slot for each one a single make
  * takes: filled while it holds that many, hollow and coral while the machine waits for it. Once the
  * yard counts, under each part how many a minute and the machines that make that many, and under
- * the thing made how many a minute (coral, with the bolt, while power is short or does not reach it),
+ * the thing made how many a minute (coral while it makes less than flat out, with the bolt where power is
+ * short or does not reach it, and saying why),
  * or "up to" what its belt carries where it makes more.
  */
 
@@ -80,8 +81,8 @@ export function flowNode(art: Art, f: Flow): HTMLElement {
       el(
         "span",
         `fl-made${f.slow ? " k-coral" : ""}`,
-        f.slow ? { "aria-label": f.dark ? "no power here" : "power is short" } : {},
-        f.slow ? yardIcon("bolt") : null,
+        f.slow ? { "aria-label": f.why } : {},
+        f.bolt ? yardIcon("bolt") : null,
         // Making more than its belt carries, it says what the belt lets it send.
         f.most === null ? null : el("span", "fl-upto", { text: "up to" }),
         rate(f.most ?? f.perMinute),

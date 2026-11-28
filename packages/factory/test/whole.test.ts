@@ -9,7 +9,7 @@ import { describe, expect, test } from "bun:test";
 
 import * as F from "../src/index.ts";
 import { near, xy } from "./near.ts";
-import { give, lay, must } from "./yards.ts";
+import { bought, give, lay, must } from "./yards.ts";
 
 type Rec = Record<string, unknown>;
 
@@ -31,13 +31,14 @@ const place = (slot: number, id?: string): Rec => ({
   ...(id ? { id } : {}),
 });
 
-/** Every goal done, tier 4's long works and research among them, with every plot bought; nothing to undo. */
-function everything(seed = 1): F.Yard {
+/** Every goal done, tier 4's long works and research among them, with every plot bought out to a ring; nothing to undo. */
+function everything(seed = 1, rings = Infinity): F.Yard {
   const y = F.create({ seed, tier: 5 });
+  const within = (id: F.PlotName): boolean => (y.land.plots.find((p) => p.plot === F.plot(id))?.ring ?? 0) <= rings;
   for (let more = true; more;) {
-    const p = F.PLOT_IDS.find((id) => F.plotState(y, F.plot(id)).state === "for sale");
+    const p = F.PLOT_IDS.find((id) => within(id) && F.plotState(y, F.plot(id)).state === "for sale");
     more = p !== undefined;
-    if (p) must(y, { do: "buyPlot", plot: p });
+    if (p) bought(y, p);
   }
   return y;
 }
@@ -168,7 +169,8 @@ describe("saving the whole yard", () => {
       why: "There is nothing here to save",
     });
     must(y, { do: "build", kind: "mill", ...near(-3, -3), dir: 0 });
-    expect(give(y, { do: "saveYard", slot: F.BLUEPRINTS_MOST - 1 })).not.toHaveProperty("refused");
+    expect(give(y, { do: "saveYard", slot: y.open.blueprints - 1 })).not.toHaveProperty("refused");
+    expect(give(y, { do: "saveYard", slot: y.open.blueprints })).toHaveProperty("refused");
     expect(F.readCommand({ tick: 0, do: "saveYard", slot: F.BLUEPRINTS_MOST })).toBeNull();
   });
 });
@@ -334,12 +336,13 @@ describe("Undo of a plan of the whole yard put back", () => {
 });
 
 /**
- * The largest yard a player can have: every goal done, every plot bought, a piece on every tile one
- * may stand on, each of the kind whose settings take the most bytes (a sorter III, coloured, set to a
- * thing and sent right). A plan of a yard of nothing but belts put back over it changes every tile.
+ * The largest yard a player can have on the plots out to a ring: every goal done, every plot of them
+ * bought, a piece on every tile one may stand on, each of the kind whose settings take the most bytes
+ * (a sorter III, coloured, set to a thing and sent right). A plan of a yard of nothing but belts put
+ * back over it changes every tile.
  */
-function fullOf(kind: "sorter" | "belt"): F.Yard {
-  const y = everything();
+function fullOf(kind: "sorter" | "belt", rings = Infinity): F.Yard {
+  const y = everything(1, rings);
   for (const i of all(y)) {
     const [x, z] = [i % y.land.w, Math.floor(i / y.land.w)];
     if (kind === "belt") F.build(y, F.BELT, x, z, 0, Infinity);
@@ -353,9 +356,9 @@ function fullOf(kind: "sorter" | "belt"): F.Yard {
 }
 
 describe("the history, for the largest yard", () => {
-  test("holds a plan of the whole yard put back over the largest yard a player can have, every tile changed, two of them and more, the oldest let go by bytes", () => {
-    const sorters = fullOf("sorter");
-    const belts = fullOf("belt");
+  test("holds a plan of the whole yard put back over the largest yard of the first ring's plots, every tile changed, two of them and more, the oldest let go by bytes", () => {
+    const sorters = fullOf("sorter", 1);
+    const belts = fullOf("belt", 1);
     must(sorters, { do: "saveYard", slot: 0 });
     must(belts, { do: "saveYard", slot: 1 });
     const pieces = F.piecesAt(sorters, all(sorters)).length;
@@ -382,10 +385,26 @@ describe("the history, for the largest yard", () => {
     expect(F.piecesAt(sorters, all(sorters)).every((p) => p.kind === F.BELT)).toBe(true);
     console.log(
       [
-        `the largest yard: ${pieces} pieces on ${sorters.land.w} by ${sorters.land.h} tiles, every plot`,
+        `the largest yard of the first ring: ${pieces} pieces on ${sorters.land.w} by ${sorters.land.h} tiles, its 9 plots`,
         `a plan of belts put back over it: an entry of ${largest} bytes (of ${F.UNDO_ENTRY}); the plan of it put back over the belts: ${back}`,
         `the yard as text: ${bytesKept(bare)} bytes with no plan and no history; with both plans and three entries, ${kept}`,
       ].join("\n"),
     );
+  }, 60_000);
+
+  test("on every plot of the land, a plan put back over it is done and kept as one entry that cannot be undone: it changed too much at once", () => {
+    const sorters = fullOf("sorter");
+    const belts = fullOf("belt");
+    must(belts, { do: "saveYard", slot: 1 });
+    sorters.blueprints[1] = belts.blueprints[1] ?? null;
+    const pieces = F.piecesAt(sorters, all(sorters)).length;
+    must(sorters, { do: "placeBlueprint", slot: 1, turns: 0, x: 0, y: 0, id: "a" });
+    expect(F.piecesAt(sorters, all(sorters)).every((p) => p.kind === F.BELT)).toBe(true);
+    expect(sorters.history.map((e) => e.id)).toEqual(["a"]);
+    expect(give(sorters, { do: "undo", entry: "a" })).toEqual({
+      refused: "cannot_undo",
+      why: "Cannot undo: that changed too much at once",
+    });
+    console.log(`the largest yard: ${pieces} pieces on ${sorters.land.w} by ${sorters.land.h} tiles, every plot`);
   }, 60_000);
 });

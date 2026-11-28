@@ -65,19 +65,20 @@ function room(k: Kit, y: Yard, i: number): boolean {
   return (y.holders.count[r] ?? 0) === 0 && y.holders.out[r] === k.NONE;
 }
 
-/** It works on what it holds for a second, and then holds it out to hand on. */
-function work(k: Kit, y: Yard, _i: number, r: number, speed: number): void {
+/** It works on what it holds for a second, and then holds it out to hand on. Says whether it held anything to work on. */
+function work(k: Kit, y: Yard, _i: number, r: number, speed: number): boolean {
   const h = y.holders;
-  if ((h.count[r] ?? 0) === 0) return;
+  if ((h.count[r] ?? 0) === 0) return false;
   h.work[r] = (h.work[r] ?? 0) + speed;
-  if ((h.work[r] ?? 0) < 20) return;
+  if ((h.work[r] ?? 0) < 20) return true;
   h.work[r] = 0;
   for (let n = 0; n < k.ITEM_COUNT; n++)
     if (k.held(h, r, n) > 0) {
       k.take(h, r, n);
       h.out[r] = n;
-      return;
+      return true;
     }
+  return true;
 }
 
 export const sieve = kind({
@@ -122,7 +123,7 @@ export const sieve: KindPage = {
   lamps: (_y, _i, x, foot, _at, out) => out.push({ x, y: foot - 4, r: 9, power: 0.4, reach: false }),
   map: [GOLD[1], CREAM],
   dot: GOLD[2],
-  dock: 15,
+  dock: 30,
   pace: () => ({ label: "Sifts", value: "60 /min" }),
   faces: true,
 };
@@ -265,7 +266,7 @@ const PAGE_FURNACE = `/** A throwaway kind for the test that a second kind that 
 import { bm } from "../art/pal.ts";
 import type { KindPage } from "./kind.ts";
 
-export const furnace: KindPage = { picture: () => bm(["nn", "nn"], 2, 2).c, dock: 16 };
+export const furnace: KindPage = { picture: () => bm(["nn", "nn"], 2, 2).c, dock: 31 };
 `;
 
 /** A furnace burning beside a boiler gone cold, in the copy: the rules' power book, and the page's rows of it. */

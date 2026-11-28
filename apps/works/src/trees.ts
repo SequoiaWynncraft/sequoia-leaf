@@ -17,10 +17,10 @@ import { doNow } from "./yard.ts";
 /** How long a redwood felled takes to go, in seconds, and how many pixels it rises as it does. */
 export const FELLING = { seconds: 0.4, rise: 6 } as const;
 
-/** Fells the redwood on a tile. Says the rules' reason when it is not done, with its sound. Gives back whether it was. */
-export function fellAt(x: number, y: number): boolean {
+/** Fells the redwood on a tile at the price its card showed. Says the rules' reason when it is not done, with its sound. Gives back whether it was. */
+export function fellAt(x: number, y: number, price: number): boolean {
   const tree = standingTree(S.world, at(S.world, x, y));
-  const did = doNow({ do: "fell", x, y });
+  const did = doNow({ do: "fell", x, y, price });
   if ("refused" in did) {
     yardSfx.no();
     toolHooks.said(`${did.why}.`);

@@ -9,8 +9,9 @@ import { coinsText, num, perMinute } from "@sequoia-leaf/core";
 
 import { REACH } from "./content/machines.ts";
 import { ANYWHERE, START, type Tool, type Unlocks } from "./content/nodes.ts";
-import { FELLING, PLOTS } from "./content/plots.ts";
+import { FELLING, type PlotName, PLOTS, RISE } from "./content/plots.ts";
 import { TIERS } from "./content/tiers.ts";
+import { LAND, rises } from "./land.ts";
 import { carried, makes } from "./planner.ts";
 import {
   ALL_KINDS,
@@ -60,6 +61,13 @@ export type Unlock = Said &
     | { readonly is: "grade"; readonly kind: Kind; readonly grade: number }
     | { readonly is: "recipe"; readonly item: Item }
     | { readonly is: "plot"; readonly plot: Plot; readonly price: number }
+    | {
+        /** Plots that rise in price (`RISE`), put up for sale together: `first` is the cheapest, `price` its base. */
+        readonly is: "land";
+        readonly plots: readonly Plot[];
+        readonly first: Plot;
+        readonly price: number;
+      }
     | { readonly is: "tool"; readonly tool: Tool }
     | {
         readonly is: "blueprints";
@@ -81,6 +89,9 @@ export type Unlock = Said &
     | { readonly is: "felling" }
     | { readonly is: "mouths" }
   );
+
+/** What a plot that rises in price says of it, on its card and where it is put up for sale. */
+export const RISE_LINE = `Each plot you buy raises the price of the rest by ${RISE.percent}%.`;
 
 /** What each unlock that is one thing or none lets the yard do, as they are listed: a splitter's flags and ways in, felling, wide mouths. */
 const FLAGS = [
@@ -223,6 +234,21 @@ function number(of: Numbered, to: number): Unlock {
 const ofKind = (of: Numbered): Kind | undefined => ALL_KINDS.find((k) => OWNS[k]?.includes(of));
 const NUMBERED: readonly Numbered[] = ["stops", "crate", "reach", "depot", "span", "away", "hooks", "range"];
 
+/** The line of blueprints an unlock gives: how many, of how many pieces each, in a box of so many tiles where it says. */
+function blueprintsLine(b: NonNullable<Unlocks["blueprints"]>): Unlock {
+  const { count, pieces, w, h } = b;
+  const box = w === undefined || h === undefined ? "" : `, in a box of up to ${num(w)} tiles by ${num(h)}`;
+  return {
+    is: "blueprints",
+    count,
+    pieces,
+    was: { count: before(count, (o) => o.blueprints?.count), pieces: before(pieces, (o) => o.blueprints?.pieces) },
+    name: "Blueprints",
+    amount: `${num(count)} of ${num(pieces)} pieces`,
+    says: `Keep ${num(count)} blueprint${s(count)} of up to ${num(pieces)} pieces${count === 1 ? "" : " each"}${box}.`,
+  };
+}
+
 /**
  * What an `Unlocks` unlocks, each thing once, in the order a screen lists them: kinds of piece,
  * grades, recipes, tools, blueprints, numbers, the board, a way put first, and plots put up for sale. A number that
@@ -266,22 +292,7 @@ export function unlocked(u: Unlocks): Unlock[] {
     out.push({ is: "recipe", item: made, name: ITEM_INFO[made]?.name ?? "", says: recipeSays(made) });
   }
   for (const tool of u.tools ?? []) out.push({ is: "tool", tool, ...TOOL_INFO[tool] });
-  if (u.blueprints) {
-    const { count, pieces } = u.blueprints;
-    const was = {
-      count: before(count, (o) => o.blueprints?.count),
-      pieces: before(pieces, (o) => o.blueprints?.pieces),
-    };
-    out.push({
-      is: "blueprints",
-      count,
-      pieces,
-      was,
-      name: "Blueprints",
-      amount: `${num(count)} of ${num(pieces)} pieces`,
-      says: `Keep ${num(count)} blueprint${s(count)} of up to ${num(pieces)} pieces${count === 1 ? "" : " each"}.`,
-    });
-  }
+  if (u.blueprints) out.push(blueprintsLine(u.blueprints));
   for (const of of NUMBERED) {
     const to = u[of];
     if (to === undefined) continue;
@@ -300,19 +311,53 @@ export function unlocked(u: Unlocks): Unlock[] {
     });
   }
   out.push(...FLAGS.filter((flag) => u[flag.is] === true));
-  for (const name of u.plots ?? []) {
+  out.push(...plotsFor(u.plots ?? []));
+  return out;
+}
+
+/** Whether a plot, by its name, rises in price. */
+const risesNamed = (name: PlotName): boolean => {
+  const p = LAND.plots.find((q) => q.plot === plot(name));
+  return p !== undefined && rises(p);
+};
+/** A plot's base price. */
+const baseOf = (p: Plot): number => LAND.plots.find((q) => q.plot === p)?.price ?? 0;
+
+/** Plots put up for sale, one by one; but plots that rise in price, two or more put up together, are one thing (`land`). */
+function plotsFor(named: readonly PlotName[]): Unlock[] {
+  const rising = named.filter(risesNamed);
+  const alone = rising.length > 1 ? named.filter((n) => !risesNamed(n)) : named;
+  const out = alone.map((name): Unlock => {
     const info = PLOTS.find((p) => p.id === name);
     const cost = info?.price ?? 0;
-    out.push({
+    const rest = risesNamed(name) ? ` ${RISE_LINE}` : "";
+    return {
       is: "plot",
       plot: plot(name),
       price: cost,
       name: info?.name ?? plotName(plot(name)),
       says:
-        cost > 0 ? `${info?.name ?? ""} is for sale, for ${coinsText(cost)}.` : `${info?.name ?? ""} is the yard's.`,
-    });
-  }
-  return out;
+        cost > 0
+          ? `${info?.name ?? ""} is for sale, for ${coinsText(cost)}.${rest}`
+          : `${info?.name ?? ""} is the yard's.`,
+    };
+  });
+  return rising.length > 1 ? [...out, land(rising)] : out;
+}
+
+/** Plots that rise in price, put up for sale together: how many, and the cheapest of them. */
+function land(names: readonly PlotName[]): Unlock {
+  const plots = names.map(plot);
+  const first = plots.reduce((a, b) => (baseOf(b) < baseOf(a) ? b : a));
+  const n = num(plots.length);
+  return {
+    is: "land",
+    plots,
+    first,
+    price: baseOf(first),
+    name: `${n} plots`,
+    says: `${n} plots are for sale, from ${coinsText(baseOf(first))}. ${RISE_LINE}`,
+  };
 }
 
 /** What each goal unlocks, worked out once: the tables do not change. */

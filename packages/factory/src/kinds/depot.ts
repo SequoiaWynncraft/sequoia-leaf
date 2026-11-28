@@ -7,7 +7,7 @@
 import { kind } from "./kind.ts";
 import { around } from "./ports.ts";
 import { as } from "./say.ts";
-import { always, anything, sell } from "./sink.ts";
+import { always, sell, sold } from "./sink.ts";
 
 export const depot = kind({
   name: "depot",
@@ -16,14 +16,15 @@ export const depot = kind({
     cost: 0,
     draw: 0,
     gives: 20,
-    what: "Takes every item that reaches it. Each item counts towards an order that asks for it, and also pays 1% of its worth.",
+    what: "Takes every item that reaches it but slag. Each item counts towards an order that asks for it, and also pays 1% of its worth.",
   },
   fixed: true,
   fast: true,
   size: [3, 3],
   ports: { in: around(3, 3), out: [] },
+  sinks: true,
   rules: {
-    wants: anything,
+    wants: sold,
     room: always,
     give: sell,
     condition: () => as("giving"),

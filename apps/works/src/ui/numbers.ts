@@ -1,7 +1,8 @@
 /**
  * What a piece's card says in numbers, from the rules' planner: for a machine, its recipe with what it
  * makes and needs of each part a minute and how many of the piece before it that is (`flowOf`); and
- * in sentences, what a gatherer gathers and a Study studies while power is short (the rest is a piece's pace).
+ * in sentences, what a gatherer gathers and a Study studies while power is short or smog slows it (the
+ * rest is a piece's pace), each saying which.
  *
  * A card says these only from the moment the yard may make a recipe that takes more than 1 of a
  * part (`saysNumbers`): until then every recipe is one of each, and no card changes. They are part
@@ -26,6 +27,7 @@ import {
   needs,
   NONE,
   RECIPES_N,
+  smogPace,
   status,
   type Yard,
 } from "@sequoia-leaf/factory";
@@ -46,11 +48,20 @@ export function saysNumbers(w: Yard): boolean {
 const called = (v: number, k: number): string =>
   num(v) === "1" ? (ITEM_INFO[k]?.name ?? "").toLowerCase() : (ITEM_INFO[k]?.many ?? "");
 
+/** Whether a piece working at `share` of its pace, with power, is held back by power short: below its plot's smog's share. */
+const powerShort = (w: Yard, i: number, share: number): boolean => share < smogPace(w, i);
+
+/** Why a piece with power works at `share` of its pace, in words: power short, smog on its plot, or both. */
+export function slowedBy(w: Yard, i: number, share: number): string {
+  if (smogPace(w, i) >= 1) return "power is short";
+  return powerShort(w, i, share) ? "power is short and smog slows it" : "smog slows it";
+}
+
 /**
  * What the piece standing on a tile does a minute, in a sentence, where its card's pace (`paceOf` in
  * `cards.ts`, flat out) does not say it already: what a gatherer gathers or a Study studies while
- * power reaches it and is short (where it does not reach, the piece's line says so). A machine's
- * recipe is drawn instead (`flowOf`).
+ * power reaches it and is short, or smog slows it, saying which (where power does not reach, the
+ * piece's line says so). A machine's recipe is drawn instead (`flowOf`).
  */
 export function numbersOf(w: Yard, i: number): string[] {
   const k = w.kind[i] ?? NONE;
@@ -59,9 +70,10 @@ export function numbersOf(w: Yard, i: number): string[] {
   // What it does a minute, as its kind says it (`KindDef.does`): what a gatherer gathers is its deposit's thing.
   const does = DOES[k];
   if (!does) return [];
-  if (k !== GATHERING) return [`${does[0]} ${perMinute(effective, does[1])}: power is short.`];
+  const why = slowedBy(w, i, share);
+  if (k !== GATHERING) return [`${does[0]} ${perMinute(effective, does[1])}: ${why}.`];
   const raw = w.land.deposit[i] ?? NONE;
-  return isItem(raw) ? [`${does[0]} ${perMinute(effective, called(effective, raw))}: power is short.`] : [];
+  return isItem(raw) ? [`${does[0]} ${perMinute(effective, called(effective, raw))}: ${why}.`] : [];
 }
 
 /** The machines that make so many of a part a minute: of the first grade, and of the highest the yard may build. */
@@ -95,6 +107,10 @@ export interface Flow {
   readonly most: number | null;
   readonly slow: boolean;
   readonly dark: boolean;
+  /** Why it makes less than flat out, in words, where it does (`slow`): no power, power short, smog, or both. */
+  readonly why: string;
+  /** Whether power is why: none reaches it, or it is short. */
+  readonly bolt: boolean;
   readonly waiting: boolean;
   readonly parts: readonly FlowPart[];
 }
@@ -124,6 +140,8 @@ export function flowOf(w: Yard, i: number, counts: boolean): Flow | null {
     most,
     slow: share < 1,
     dark: state === "unpowered",
+    why: state === "unpowered" ? "no power here" : share < 1 ? slowedBy(w, i, share) : "",
+    bolt: state === "unpowered" || (share < 1 && powerShort(w, i, share)),
     waiting: state === "waiting" || state === "starved",
     parts: recipe.from.map((item, part) => {
       const by = first[part];

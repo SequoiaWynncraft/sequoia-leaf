@@ -11,6 +11,13 @@
 export const spanByte = (span: number): number => (span + 8) & 255;
 export const spanOfByte = (b: number): number => ((b - 8) << 24) >> 24;
 
+/**
+ * What a reader of bytes says of a flag bit it does not know, in a piece or an Undo entry: a newer
+ * Leaf's (`keptLater`), never broken bytes. What follows it is past reading.
+ */
+export const NEWER = "newer";
+export type Newer = typeof NEWER;
+
 /** Bytes written one after another into a buffer that grows. */
 export class Writer {
   private buf = new Uint8Array(1 << 12);

@@ -54,10 +54,15 @@ export function holding(k: Kit, y: Yard, r: number): string {
   return parts.length ? `${parts.join(", ")} and ${last}` : last || "nothing";
 }
 
-/** ", at 75% of its pace: the yard is short of power", or nothing while it has power enough. */
-export function slow(k: Kit, y: Yard): string {
+/**
+ * ", at 75% of its pace: the yard is short of power" for the piece on its own tile `i`, then ", at 50%
+ * of its pace: smog on this plot" (`smog.ts`); nothing while it has power enough and clean air.
+ */
+export function slow(k: Kit, y: Yard, i: number): string {
   const share = k.pace(y);
-  return share < 1 ? `, at ${Math.floor(share * 100)}% of its pace: the yard is short of power` : "";
+  const smog = k.smogPace(y, i);
+  const power = share < 1 ? `, at ${Math.floor(share * 100)}% of its pace: the yard is short of power` : "";
+  return smog < 1 ? `${power}, at ${Math.floor(smog * 100)}% of its pace: smog on this plot` : power;
 }
 
 /**
@@ -95,8 +100,39 @@ function takenAhead(k: Kit, y: Yard, i: number, n: Item, also = false): "yes" | 
 export const stuckAs = (k: Kit, y: Yard, i: number, n: Item, also = false): number =>
   takenAhead(k, y, i, n, also) === "yes" ? as("waiting") : as("blocked", true);
 
+/**
+ * Whether the line a piece sends a thing into (with `also`, its by-product) has stopped: every tile of
+ * it ahead holds a thing at the end of its tile, waiting, up to one that is blocked (in trouble). A
+ * line with room on any tile, or that runs into a piece that is not a line, still moves. Each line is
+ * followed no further than the land has tiles.
+ */
+export function jammedAhead(k: Kit, y: Yard, i: number, n: Item, also = false): boolean {
+  for (const { to } of sendings(k, y, i, n, also)) {
+    let t = to;
+    for (let step = 0; step < y.kind.length && t >= 0 && k.carries(y.kind[t] ?? k.NONE); step++) {
+      const held = y.item[t] ?? k.NONE;
+      if (!k.isItem(held) || (y.prog[t] ?? 0) < 8 || k.tunnelOf(y, t) >= 0) break;
+      if (stuckAs(k, y, t, held) !== as("waiting")) return true;
+      t = k.nextOf(y, t);
+    }
+  }
+  return false;
+}
+
+/** The sink a thing held ready would go into and that never takes it, as named: "the depot", "the cart stop"; or nothing. */
+function refusingSink(k: Kit, y: Yard, i: number, n: Item, also: boolean): string | null {
+  if (k.ITEM_INFO[n]?.unsold !== true) return null;
+  for (const { to } of sendings(k, y, i, n, also)) {
+    const kind = to < 0 ? k.NONE : (y.kind[to] ?? k.NONE);
+    if (k.SINKS[kind] === 1) return `the ${(k.KIND_INFO[kind]?.name ?? "").toLowerCase()}`;
+  }
+  return null;
+}
+
 /** Why a thing held ready (with `also`, a by-product) has nowhere to go, in words: what stands ahead never takes it, or nothing does. */
 export function nowhere(k: Kit, y: Yard, i: number, n: Item, also = false): string {
+  const sink = refusingSink(k, y, i, n, also);
+  if (sink !== null) return `${k.ITEM_INFO[n]?.name ?? ""} has nowhere to go: ${sink} does not take it.`;
   if (takenAhead(k, y, i, n, also) === "never") return `The piece it points at does not take ${many(k, n)}.`;
   // Only a splitter has ways to shut, or to take things in by.
   const shut = y.shut[i] ?? 0;
@@ -111,14 +147,16 @@ export function nowhere(k: Kit, y: Yard, i: number, n: Item, also = false): stri
 }
 
 /**
- * What a gatherer, a machine or a Study does a minute (the planner's `makes`), as every screen says
- * it: what it turns out (or a Study takes in) at full power, for `recipe` (a machine's); the share of
- * ticks it works, none where power does not reach and else the yard's pace; what it does now at
- * that share; and the power it draws now, its grade's where power reaches it and none where it does
- * not. Anything else does nothing a minute.
+ * What a gatherer, a machine, a Study or a piece that breaks a mix does a minute (the planner's
+ * `makes`), as every screen says it: what it turns out (or a Study takes in) at full power, for
+ * `recipe` (a machine's; `flatOut`); the share of its pace it works at, none where power does not
+ * reach and else the yard's pace and its plot's smog's; what it does now at that share; and the power
+ * it draws now, its grade's where power reaches it and none where it does not. Anything else does
+ * nothing a minute.
  *
  * What it does now is no more than the belt it hands to carries (`most`, null where that is not
- * less): a piece that makes faster than that (an assembler) waits for room on it the rest of the time.
+ * less): a piece that makes faster than that (an assembler, a breaker) waits for room on it the rest
+ * of the time.
  */
 export interface MachineRate {
   readonly nominal: number;
@@ -136,17 +174,24 @@ function carriedAhead(k: Kit, y: Yard, i: number): number {
   return k.carries(there) ? k.carried(y.grade[to] ?? 1) : Infinity;
 }
 
+/**
+ * What a kind of piece at a grade turns out a minute flat out, for `recipe` (a machine's): its own
+ * pace's worth (a gatherer, a Study), a thing a run for one that breaks a mix (`mixPerMinute`), or
+ * its recipe's; else nothing.
+ */
+function flatOut(k: Kit, kind: number, grade: number, recipe: Recipe | null): number {
+  if (!k.isKind(kind)) return 0;
+  if ((k.WORK_OF[kind] ?? 0) > 0) return k.makes(kind, grade, null);
+  if (k.MIX_OF[kind]) return k.mixPerMinute(kind, grade);
+  return k.isMaker(kind) && recipe ? k.makes(kind, grade, recipe) : 0;
+}
+
 export function rateOf(k: Kit, y: Yard, i: number, recipe: Recipe | null): MachineRate {
   const kind = i < 0 ? k.NONE : (y.kind[i] ?? k.NONE);
   const grade = y.grade[i] ?? 0;
   const lit = kind !== k.NONE && k.litAt(y, i);
-  const share = lit ? k.pace(y) : 0;
-  const own = k.isKind(kind) && (k.WORK_OF[kind] ?? 0) > 0;
-  const nominal = own
-    ? k.makes(kind, grade, null)
-    : k.isKind(kind) && k.isMaker(kind) && recipe
-      ? k.makes(kind, grade, recipe)
-      : 0;
+  const share = lit ? k.pace(y) * k.smogPace(y, i) : 0;
+  const nominal = flatOut(k, kind, grade, recipe);
   const ahead = nominal > 0 ? carriedAhead(k, y, i) : Infinity;
   const effective = Math.min(nominal * share, ahead);
   return {

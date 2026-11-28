@@ -508,3 +508,11 @@ export function unit(): number {
   const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--u"));
   return v > 0 ? v : 2;
 }
+
+/** The system's setting for less motion, asked once; none off the page. */
+const stiller =
+  typeof window !== "undefined" && typeof window.matchMedia === "function"
+    ? window.matchMedia("(prefers-reduced-motion: reduce)")
+    : null;
+/** Whether the player asked for less motion: what only drifts or puffs is left out. */
+export const lessMotion = (): boolean => stiller?.matches === true;

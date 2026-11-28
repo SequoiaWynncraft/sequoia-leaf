@@ -3,8 +3,7 @@
  * from the yard than any the plots table has (sixteen round today's nine), each a plot of the plots
  * table's size with deadfall, a pool and a redwood standing where a yard might build. They are added
  * to the plots table (`RINGED_IDS`) and the land is put together from all of them (`RINGED`), as the
- * land is. A second ring round that one (`RING_2`) makes the land of tier 5, seven plots by seven
- * (`SEVEN`).
+ * land is. The land of tier 5, seven plots by seven, is the guild's own (`SEVEN`).
  */
 import * as F from "../src/index.ts";
 import { must } from "./yards.ts";
@@ -54,8 +53,6 @@ const ringOf = (out: number, from: number): readonly F.PlotInfo<string>[] =>
 
 /** The ring's plots, as the plots table has its own. */
 export const RING: readonly F.PlotInfo<string>[] = ringOf(OUT, 0);
-/** A second ring round the first: with both, the land is seven plots by seven, as tier 5's will be. */
-export const RING_2: readonly F.PlotInfo<string>[] = ringOf(OUT + 1, RING.length);
 
 /** The plots table with the ring added at its end. */
 export const RINGED_IDS: readonly string[] = [...F.PLOT_IDS, ...RING.map((p) => p.id)];
@@ -63,8 +60,8 @@ export const RINGED_IDS: readonly string[] = [...F.PLOT_IDS, ...RING.map((p) => 
 /** The guild's land with the ring round it. */
 export const RINGED: F.Land = F.landFrom([...F.PLOTS, ...RING], RINGED_IDS);
 
-/** The guild's land with both rings round it: forty-nine plots, seven by seven. */
-export const SEVEN: F.Land = F.landFrom([...F.PLOTS, ...RING, ...RING_2], [...RINGED_IDS, ...RING_2.map((p) => p.id)]);
+/** The land of tier 5: the guild's own, forty-nine plots, seven by seven. */
+export const SEVEN: F.Land = F.LAND;
 
 /** A yard on the larger land that owns a plot of the ring, with a crate on it, its redwood felled and a plan of the whole yard kept. */
 export function outward(): F.Yard {
@@ -75,7 +72,7 @@ export function outward(): F.Yard {
   y.till = 1_000_000 * F.MILLI;
   const tree = RINGED.trees.findIndex((tiles) => RINGED.plot[tiles[0] ?? 0] === RINGED.plots.indexOf(ring));
   const first = RINGED.trees[tree]?.[0] ?? 0;
-  must(y, { do: "fell", x: first % RINGED.w, y: Math.floor(first / RINGED.w) });
+  must(y, { do: "fell", x: first % RINGED.w, y: Math.floor(first / RINGED.w), price: F.fellPrice(y) });
   must(y, { do: "build", kind: "crate", x: first % RINGED.w, y: Math.floor(first / RINGED.w), dir: 0 });
   must(y, { do: "saveYard", slot: 0 });
   return y;

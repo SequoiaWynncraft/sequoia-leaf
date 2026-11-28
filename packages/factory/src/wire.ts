@@ -17,9 +17,10 @@ import { room as makerRoom, wants as makerWants } from "./kinds/maker.ts";
  */
 import { besideWater, toward } from "./land.ts";
 import { deliver, giveGoal } from "./orders.ts";
-import { carried, makes, MINUTE } from "./planner.ts";
+import { carried, makes, MINUTE, mixPerMinute } from "./planner.ts";
 import { litAt, litOf } from "./power.ts";
 import { lit as litBig, outsOf, OWN, pieceOf, roomRound, takesAt } from "./sizes.ts";
+import { smogged, smogPace } from "./smog.ts";
 import {
   ALL_ITEMS,
   ALL_KINDS,
@@ -41,12 +42,16 @@ import {
   ITEM_COUNT,
   ITEM_INFO,
   type Kind,
+  KIND_INFO,
   locked,
   makesThing,
+  MIX_OF,
   NONE,
   PACE,
   RECIPE,
   recipesFor,
+  SINKS,
+  SMOG_OF,
   SPAN_MOST,
   SPANS,
   TIMES_MOST,
@@ -502,6 +507,10 @@ export const KIT: Kit = {
   SPAN_MOST,
   WORK_OF,
   FIXED,
+  SINKS,
+  KIND_INFO,
+  MIX_OF,
+  SMOG_OF,
   TINTED,
   GRADED,
   isItem,
@@ -518,6 +527,7 @@ export const KIT: Kit = {
   locked,
   recipesFor,
   makes,
+  mixPerMinute,
   MINUTE,
   carried,
   BURNS,
@@ -535,6 +545,8 @@ export const KIT: Kit = {
   tunnelRow,
   insTo,
   unpackWays,
+  smogged,
+  smogPace,
   mostHeld,
   // The tiles about a piece.
   DX,

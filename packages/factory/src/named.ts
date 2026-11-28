@@ -1,11 +1,11 @@
 /**
  * What a kept yard names, wherever it names it: the goals it has done, holds, has in line or has
  * given anything; the things it counts, by name, and holds, carries, makes or is told to make, by
- * number; the kinds of its pieces; its plots; and the most tiles any of its tunnels passes under. Its
+ * number; the kinds of its pieces; its plots, those it cleared and the one it is clearing; and the most tiles any of its tunnels passes under. Its
  * pieces, its blueprints and plans of the whole yard, and what Undo would put back all count.
  *
- * One rule reads it: a yard naming anything this Leaf does not know, or a tunnel longer than this
- * Leaf's longest, is a newer Leaf's (`knownHere`, which `decode` and `keptLater` ask), never read with
+ * One rule reads it: a yard naming anything this Leaf does not know, a tunnel longer than this
+ * Leaf's longest, or a bit in a piece or an Undo entry that no reader here knows, is a newer Leaf's (`knownHere`, which `decode` and `keptLater` ask), never read with
  * that thing let go or its Coins paid back. And one writes it: a yard naming nothing past what the
  * last Leaf of version 10 knew (`knownAt10`) is kept so that Leaf reads it. Writing asks it before
  * every save, so it asks it cheaply (`pastTen`): of the yard itself, only what these tables have past
@@ -18,6 +18,7 @@
  * (on a piece or in a blueprint), a colour past the 7 tints, a blueprint slot past its 4, or a felled
  * redwood on a tile that Leaf's map has no redwood on.
  */
+import { NEWER, type Newer } from "./bytes.ts";
 import type { KeptPiece } from "./cells.ts";
 import { PLOT_IDS } from "./content/plots.ts";
 import { historyNamed } from "./history.ts";
@@ -49,6 +50,10 @@ export interface KeptNames {
   readonly plots: ReadonlySet<string>;
   /** The most tiles a tunnel in it passes under, from either mouth. */
   readonly span: number;
+  /** Whether a piece or an Undo entry in it has a bit no reader here knows (`NEWER`). */
+  readonly newer: boolean;
+  /** Whether it keeps smog on any plot (`smog.ts`), or a piece's work past a whole half-tick that smog left (`Holders.quarter`), which no Leaf of version 10 knew. */
+  readonly smog: boolean;
 }
 
 type Rec = Record<string, unknown>;
@@ -66,15 +71,20 @@ function recordNames(raw: Rec, goals: Set<string>, things: Set<string>, plots: S
   const seen = isRec(raw.seen) ? raw.seen : {};
   const away = isRec(raw.away) ? raw.away : {};
   const orders = list(raw.board).filter(isRec);
+  const clearing = isRec(raw.clearing) ? raw.clearing : {};
   const counted = [
     raw.depot,
     seen.depot,
     away.made,
     ...Object.values(got),
     ...orders.flatMap((o) => [o.want, o.filled]),
+    clearing.want,
+    clearing.filled,
   ];
   for (const c of counted) for (const name of countNames(c)) things.add(name);
-  for (const id of list(raw.plots)) if (typeof id === "string") plots.add(id);
+  for (const id of [...list(raw.plots), ...list(raw.cleared), clearing.plot]) if (typeof id === "string") plots.add(id);
+  // Smog is kept by the plot's name.
+  for (const id of Object.keys(isRec(raw.smog) ? raw.smog : {})) plots.add(id);
 }
 
 /** The things a kept piece holds, carries, makes or is told to make, by number. */
@@ -87,7 +97,7 @@ const pieceItems = (p: KeptPiece): number[] => [
 /** What a kept yard names (its record, its pieces, its blueprints, and its history on a land of so many tiles). */
 export function keptNames(
   raw: Rec,
-  pieces: readonly KeptPiece[],
+  pieces: readonly KeptPiece[] | Newer,
   prints: readonly KeptBlueprint[],
   tiles: number,
 ): KeptNames {
@@ -100,17 +110,23 @@ export function keptNames(
     span = Math.max(span, Math.abs(s ?? 0));
     for (const n of made) if (n !== undefined) items.add(n);
   };
-  for (const p of pieces) piece(p.kind, p.span, pieceItems(p));
+  let newer = pieces === NEWER;
+  for (const p of pieces === NEWER ? [] : pieces) piece(p.kind, p.span, pieceItems(p));
   for (const b of prints) for (const p of b.pieces ?? []) piece(p.kind, p.span, [p.recipe]);
-  for (const p of historyNamed(raw.history, tiles)) piece(p.kind, p.span, [p.recipe]);
+  for (const p of historyNamed(raw.history, tiles))
+    if (p === NEWER) newer = true;
+    else piece(p.kind, p.span, [p.recipe]);
   items.delete(NONE);
-  return { goals, things, items, kinds, plots, span };
+  const slowed = pieces !== NEWER && pieces.some((p) => p.quarter !== undefined);
+  const smog = slowed || (isRec(raw.smog) && Object.keys(raw.smog).length > 0);
+  return { goals, things, items, kinds, plots, span, newer, smog };
 }
 
 const every = <T>(set: ReadonlySet<T>, ok: (v: T) => boolean): boolean => [...set].every(ok);
 
 /** Whether this Leaf knows everything a kept yard names, and runs tunnels as long as its longest. */
 export const knownHere = (n: KeptNames): boolean =>
+  !n.newer &&
   every(n.goals, (id) => goalNamed(id) !== null) &&
   every(n.things, (name) => itemNamed(name) !== null) &&
   every(n.items, isItem) &&
@@ -134,7 +150,8 @@ export const knownAt10 = (n: KeptNames): boolean =>
   every(n.items, (k) => isItem(k) && KNOWN_AT_10.items[k] === itemName(k)) &&
   every(n.kinds, (k) => isKind(k) && KNOWN_AT_10.kinds[k] === kindName(k)) &&
   every(n.plots, (id) => AT_10.plots.has(id)) &&
-  n.span <= KNOWN_AT_10.span;
+  n.span <= KNOWN_AT_10.span &&
+  !n.smog;
 
 /** How many kinds the last Leaf of version 10 had: a kind numbered past them is a later one's. */
 const KINDS_AT_10 = KNOWN_AT_10.kinds.length;
@@ -176,6 +193,8 @@ function kindPast(y: Yard): boolean {
  * says what the whole scan says (`knownAt10`).
  */
 export function pastTen(y: Yard): boolean {
+  if (y.smog.level.some((v) => v > 0) || y.smog.made.some((v) => v > 0)) return true;
+  if (y.holders.quarter.subarray(0, y.holders.size).some((v) => v > 0)) return true;
   const goals = [...y.done, ...y.line, ...y.queue, y.hand];
   if (goals.some((g) => LATER_GOAL[g] === 1) || y.got.some((got, g) => got && LATER_GOAL[g] === 1)) return true;
   const most = KNOWN_AT_10.span;

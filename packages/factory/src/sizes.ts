@@ -151,9 +151,13 @@ export function takesAt(y: Pick<Yard, "part" | "land" | "kind" | "dir" | "open">
   return 0;
 }
 
+/** No outputs: one list, made once, for every piece that has none (the tick asks this of pieces that hand on by their ways out). */
+const NO_OUTS: readonly Out[] = Object.freeze([]);
+/** The outputs of a kind of more than one tile facing a way, from its own tile: as one stands, or is about to be placed. */
+export const outsAs = (k: number, dir: number): readonly Out[] => FACING[k]?.[dir & 3]?.outs ?? NO_OUTS;
 /** The outputs of the piece of more than one tile standing on its own tile `i`, as it faces. */
 export const outsOf = (y: Pick<Yard, "kind" | "dir">, i: number): readonly Out[] =>
-  FACING[y.kind[i] ?? 0]?.[(y.dir[i] ?? 0) & 3]?.outs ?? [];
+  outsAs(y.kind[i] ?? 0, y.dir[i] ?? 0);
 
 /** The tiles of the piece of more than one tile standing on its own tile `i`, as it faces, by `f`. */
 const facingAt = (y: Pick<Yard, "kind" | "dir">, i: number): Facing | undefined =>

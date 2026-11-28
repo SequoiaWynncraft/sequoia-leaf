@@ -21,13 +21,14 @@ import {
   ALL_KINDS,
   carries,
   FIXED,
+  isRaw,
+  type Item,
   type ItemName,
   itemName,
   type Land,
   nextOf,
   NONE,
   plotState,
-  RAW,
   redwoodAt,
   tunnelOf,
   wayOut,
@@ -39,6 +40,7 @@ import { type Ctx, makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
 import { armAt, PAINTS } from "./art/belts.ts";
 import { CLAY, DARK, DEEP } from "./art/pal.ts";
+import { hazeOnPlan } from "./haze.ts";
 import { pageOf } from "./kinds/index.ts";
 import { armsAt, type Layout } from "./layout.ts";
 
@@ -88,6 +90,16 @@ const HUE: Readonly<Record<ItemName, string>> = {
   spyglass: WATER[1],
   clock: SKY[3],
   orrery: GREEN[2],
+  salvage: "#7a6a5c",
+  copper: "#b86a4a",
+  slag: "#4a444e",
+  gravel: "#8b8791",
+  wire: "#d08a5a",
+  coil: "#a85f48",
+  bulb: "#efe6c8",
+  spark: "#d9c27a",
+  telegraph: "#9c8a6a",
+  lights: "#e6d9a8",
 };
 const HUES = ALL_ITEMS.map((n) => HUE[itemName(n)]);
 
@@ -102,10 +114,25 @@ const TRUNKS = [BARK[1], BARK[0], mix(BARK[0], DEEP[0], 0.5)] as const;
 const EDGES = GROUNDS.map((g) => mix(g, INK, 0.45));
 /** How much of a thing's colour shows where it lies in the ground: quiet on the yard's own land, quieter beyond. */
 const QUIET = [0.5, 0.34, 0.22] as const;
-const LIES = GROUNDS.map((g, of) => RAW.map((name) => mix(g, HUE[name], QUIET[of] ?? 0.3)));
+/** The things that lie in the ground, a raw each (a thing of step 0), in the tables' order. */
+export const LYING: readonly Item[] = ALL_ITEMS.filter(isRaw);
+/** What lies on a tile as the map keeps it in 3 bits: a thing's place among those that lie in the ground, from 1; 0 for nothing. */
+const LIES_AT = Uint8Array.from(ALL_ITEMS, (n) => LYING.indexOf(n) + 1);
+export const liesOf = (n: number): number => LIES_AT[n] ?? 0;
+const LIES = GROUNDS.map((g, of) => LYING.map((n) => mix(g, HUE[itemName(n)], QUIET[of] ?? 0.3)));
 /** A belt's dark bed, and the wood of a line that carries nothing. */
 const BED = mix(BARK[0], INK, 0.45);
 const WOOD = BARK[2];
+/**
+ * A line's paint or, unpainted, what it carries, as the map keeps it in 8 bits (never both drawn): 0
+ * for neither, a paint as itself (1 to 7), a thing as 8 more than its number.
+ */
+export const lineField = (tint: number, load: number): number => (tint > 0 ? tint : load === NONE ? 0 : 8 + load);
+/** The colour a line is drawn in, from its field: its paint's, else its thing's own, else wood. */
+export const lineColour = (field: number): string =>
+  field === 0 ? WOOD : field < 8 ? (PAINTS[field - 1]?.lit ?? WOOD) : (HUES[field - 8] ?? WOOD);
+/** A thing's own colour on a plan. */
+export const hueOf = (n: Item): string => HUE[itemName(n)];
 /** The depot: its roof, lit and in shade, its planks, and the brass wheel on it. */
 const ROOF = [SKY[3], SKY[2]] as const;
 /** A mark on a piece in trouble. */
@@ -301,8 +328,9 @@ export function makePlan(px: number): Plan {
 
 /**
  * A tile as one number: everything its picture is painted from. From the low bits: whose ground (2),
- * a plot's edges (2), water, a redwood, what lies in it (3), what stands on it (5), a belt's arms or
- * which part of the depot (8), a line's paint (3), what it carries (5), a tunnel under it (2).
+ * a plot's edges (2), water, a redwood, what lies in it (3, `liesOf`), what stands on it (5), a belt's
+ * arms or which part of the depot (8), a line's paint or what it carries (8, `lineField`), a tunnel
+ * under it (2).
  */
 function numberOf(s: Seen, y: Yard, L: Layout, i: number, depot: number): number {
   const { land } = y;
@@ -313,7 +341,7 @@ function numberOf(s: Seen, y: Yard, L: Layout, i: number, depot: number): number
     ((s.edge[i] ?? 0) << 2) |
     ((land.water[i] ?? 0) << 4) |
     ((redwoodAt(y, i) ? 1 : 0) << 5) |
-    ((lies < RAW.length ? lies + 1 : 0) << 6) |
+    (liesOf(lies) << 6) |
     ((s.under[i] ?? 0) << 30);
   if (k === NONE) return n >>> 0;
   n |= (k + 1) << 9;
@@ -321,7 +349,7 @@ function numberOf(s: Seen, y: Yard, L: Layout, i: number, depot: number): number
     const tint = y.tint[i] ?? 0;
     const load = s.carried[i] ?? NONE;
     // A kind the picture near does not draw yet has no arms in the layout: they are worked out here.
-    n |= ((L.arms[i] || armsAt(y, i)) << 14) | (tint << 22) | ((tint > 0 || load === NONE ? 0 : load + 1) << 25);
+    n |= ((L.arms[i] || armsAt(y, i)) << 14) | (lineField(tint, load) << 22);
   } else if (FIXED[k] === 1) {
     const W = land.w;
     n |= ((i % W) - (depot % W) + 1 + (Math.floor(i / W) - Math.floor(depot / W) + 1) * 3) << 14;
@@ -359,15 +387,13 @@ function tile(g: Ctx, P: number, x: number, y: number, n: number): void {
     return;
   }
   if (carries(kind)) {
-    const tint = (n >> 22) & 7;
-    const load = ((n >> 25) & 31) - 1;
+    const line = lineColour((n >> 22) & 255);
     // The bed, a pixel wider than the line each side, and then the line: the middle, and an arm to each side it joins.
     for (let pass = 0; pass < 2; pass++) {
       const grow = pass === 0 ? 1 : 0;
       const a = m - grow;
       const wide = t + grow * 2;
-      g.fillStyle =
-        pass === 0 ? BED : tint > 0 ? (PAINTS[tint - 1]?.lit ?? WOOD) : load >= 0 ? (HUES[load] ?? WOOD) : WOOD;
+      g.fillStyle = pass === 0 ? BED : line;
       g.fillRect(x + a, y + a, wide, wide);
       const east = armAt(detail, 0);
       const south = armAt(detail, 1);
@@ -463,6 +489,7 @@ export function paintPlan(p: Plan, y: Yard, L: Layout): HTMLCanvasElement {
  */
 export function layPlan(g: Ctx, p: Plan, y: Yard, dx: number, dy: number): void {
   g.drawImage(p.c, dx, dy);
+  hazeOnPlan(g, y, dx, dy, p.px);
   const W = y.land.w;
   // The depot: a pale line round its nine tiles.
   const [cx, cy] = y.land.depot;

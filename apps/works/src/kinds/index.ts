@@ -9,6 +9,7 @@ import { assembler } from "./assembler.ts";
 import { belt } from "./belt.ts";
 import { bench } from "./bench.ts";
 import { boiler } from "./boiler.ts";
+import { breaker } from "./breaker.ts";
 import { crate } from "./crate.ts";
 import { depot } from "./depot.ts";
 import { gatherer } from "./gatherer.ts";
@@ -42,6 +43,7 @@ export const PAGES: Readonly<Record<KindName, KindPage>> = {
   stop,
   sorter,
   assembler,
+  breaker,
 };
 
 /** Each kind's page module, by the kind's number. */

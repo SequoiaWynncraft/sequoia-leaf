@@ -11,7 +11,7 @@ import { keptOrder, orderOf } from "./codec.ts";
 import { type Wired, writeAct } from "./commands.ts";
 import type { Command, Short, View } from "./game.ts";
 import { counting } from "./orders.ts";
-import { goalNamed, HOOKS_MOST } from "./tables.ts";
+import { goalNamed, HOOKS_MOST, plotNamed } from "./tables.ts";
 import type { News, Standing, Yard } from "./yard.ts";
 
 /** A command as it goes on the wire, with the tick the page's copy stood at. */
@@ -69,6 +69,10 @@ function newsOf(n: unknown): News | null {
   const { title, pay } = n;
   if (n.kind === "done")
     return typeof n.goal === "string" && goalNamed(n.goal) !== null ? { kind: "done", goal: n.goal, title, pay } : null;
+  if (n.kind === "clearing")
+    return typeof n.plot === "string" && plotNamed(n.plot) !== null
+      ? { kind: "clearing", plot: n.plot, title, pay }
+      : null;
   return (n.kind === "filled" || n.kind === "standing") && whole(n.id, 1e9)
     ? { kind: n.kind, id: n.id, title, pay }
     : null;

@@ -38,7 +38,7 @@ function oneplot(
     water,
     trunk,
     plot: new Uint8Array(w * h),
-    plots: [{ plot: F.plot("yard"), name: "The Yard", why: "", price: 0, x: 0, y: 0, w, h }],
+    plots: [{ plot: F.plot("yard"), name: "The Yard", why: "", price: 0, ring: 0, x: 0, y: 0, w, h }],
     depot,
   });
 }
@@ -135,11 +135,11 @@ export function makeLand(cols: number, rows: number, seed = 7): F.Land {
   return oneplot(w, h, deposit, water, trunk, [cx, cy]);
 }
 
-/** A small bare land, one plot owned, with a few deposits where asked and the depot's middle at `depot`. */
+/** A small bare land, one plot owned, with a few deposits (of anything gathered) where asked and the depot's middle at `depot`. */
 export function bareLand(
   w: number,
   h: number,
-  deposits: readonly (readonly [number, number, F.RawName])[],
+  deposits: readonly (readonly [number, number, F.ItemName])[],
   depot: readonly [number, number],
 ): F.Land {
   const deposit = new Uint8Array(w * h).fill(F.NONE);

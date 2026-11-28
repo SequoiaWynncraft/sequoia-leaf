@@ -27,24 +27,29 @@
 import { build, isDir, plotState, refusal } from "./build.ts";
 import { fromBase64, toBase64 } from "./bytes.ts";
 import { keptOnto, type KeptPiece, keptPieces, packKept, unpackCells } from "./cells.ts";
+import { clearRefusal, isStart } from "./clearing.ts";
 import { here } from "./clock.ts";
 import { NODES } from "./content/nodes.ts";
 import { historyOf, stampOf } from "./history.ts";
 import { FIRST_LAND, holdsFirst, type KeptLand, keptLandOf, keptOn, piecesOn, tileOn } from "./keptland.ts";
-import { LAND, type Land } from "./land.ts";
+import { LAND, type Land, plotPrice } from "./land.ts";
 import { type KeptNames, keptNames, knownAt10, knownHere, pastTen, WIDER } from "./named.ts";
 import { counting, fillBoard, giveGoal, ORDER_WAITS, queue, study } from "./orders.ts";
 import { keptOf, packPieces, type Piece, placed, unpackWays } from "./pieces.ts";
 import { type KeptBlueprint, keptBlueprint, printText } from "./prints.ts";
+import { keptSmog, smogOnto } from "./smog.ts";
 import {
   ALL_GOALS,
   ALL_ITEMS,
+  BLUEPRINTS_BEFORE,
   BLUEPRINTS_MOST,
+  CLEARING,
   FIXED,
   type Goal,
   goalNamed,
   GOALS,
   highest,
+  HOLDS,
   isGoal,
   isKind,
   isNode,
@@ -70,6 +75,7 @@ import {
   hold,
   type Print,
   reopen,
+  reserve,
   type Standing,
   type Yard,
 } from "./yard.ts";
@@ -167,6 +173,8 @@ export function encode(y: Yard, keep: Keep = {}): string {
  * plot past it, by the whole scan (`WIDER`).
  */
 function keptPastTen(y: Yard, rec: Rec, pieces: readonly KeptPiece[]): boolean {
+  // A yard that has begun a clearing keeps the count of them, which that Leaf would let go.
+  if (y.begun > 0) return true;
   if (!WIDER) return pastTen(y);
   const prints: unknown[] = Array.isArray(rec.blueprints) ? rec.blueprints : [];
   return !knownAt10(keptNames(rec, pieces, prints.map(keptBlueprint), y.land.w * y.land.h));
@@ -188,6 +196,8 @@ function record(y: Yard, keep: Keep, pieces: readonly KeptPiece[]): Rec {
     seen: { tick: y.seen.tick, till: y.seen.till, depot: tally(y.seen.depot) },
     plots: y.plots.map(plotName),
     ...(y.felled.includes(1) ? { felled: felledTiles(y) } : {}),
+    ...keptClearing(y),
+    ...keptSmog(y),
     done: y.done.map(goalId),
     hand: y.hand === -1 ? null : goalId(y.hand),
     ...(y.queue.length > 0 ? { queue: y.queue.map(goalId) } : {}),
@@ -202,7 +212,12 @@ function record(y: Yard, keep: Keep, pieces: readonly KeptPiece[]): Rec {
     paid: y.paid,
     cells: toBase64(packKept(pieces)),
     ...(y.blueprints.some((b) => b !== null)
-      ? { blueprints: y.blueprints.map((b) => b && (b.whole ? { whole: printText(b) } : printText(b))) }
+      ? {
+          // As many places as every yard had, and any past them up to the last that holds something.
+          blueprints: y.blueprints
+            .slice(0, Math.max(BLUEPRINTS_BEFORE, y.blueprints.findLastIndex((b) => b !== null) + 1))
+            .map((b) => b && (b.whole ? { whole: printText(b) } : printText(b))),
+        }
       : {}),
     ...(y.history.length > 0 ? { history: y.history.map((e) => toBase64(e.bytes)), stamp: stampOf(y.land) } : {}),
   };
@@ -225,6 +240,22 @@ export function namesOf(raw: unknown, land: Land = LAND): KeptNames | null {
 export function keptUnknown(raw: unknown, land: Land = LAND): boolean {
   const names = namesOf(raw, land);
   return names !== null && !knownHere(names);
+}
+
+/** The plot being cleared, its name, what it asks for and what it has been given; the plots cleared, by name; and how many clearings were begun: nothing for a yard that has begun none. */
+function keptClearing(y: Yard): {
+  clearing?: { plot: string; start: string; want: Record<string, number>; filled: Record<string, number> };
+  cleared?: string[];
+  begun?: number;
+} {
+  const c = y.clearing;
+  return {
+    ...(c
+      ? { clearing: { plot: plotName(c.plot), start: c.start, want: tally(c.want), filled: tally(c.filled) } }
+      : {}),
+    ...(y.cleared.length > 0 ? { cleared: y.cleared.map(plotName) } : {}),
+    ...(y.begun > 0 ? { begun: y.begun } : {}),
+  };
 }
 
 /** The first tile of each redwood the yard has felled, in the land's order. */
@@ -340,7 +371,7 @@ function fromFirst(raw: Rec, land: Land): Yard | null {
     if (p === null || y.plots.includes(p)) continue;
     if (plotState(y, p).state === "for sale") y.plots.push(p);
     // A plot the tier does not sell yet is paid back, in the till, at what it would cost again.
-    else y.till += (land.plots.find((q) => q.plot === p)?.price ?? 0) * MILLI;
+    else y.till += plotPrice(y, p) * MILLI;
   }
   const cells: unknown[] = Array.isArray(raw.cells) ? raw.cells : [];
   // Its tiles were the guild's first land's.
@@ -420,8 +451,9 @@ export function decode(text: string | null | undefined, land: Land = LAND): Yard
   // A yard kept on more land is not read on less (`keptOn`).
   const on = keptOn(raw, land);
   const bytes = fromBase64(raw.cells);
-  const pieces = on && bytes && unpackCells(bytes, on.w * on.h);
-  if (!on || !pieces) return null;
+  // Pieces with a part this Leaf does not know are a newer Leaf's (`NEWER`): not read, as bytes that are not pieces.
+  const pieces = on && bytes ? unpackCells(bytes, on.w * on.h) : null;
+  if (!on || !Array.isArray(pieces)) return null;
   const prints: unknown[] = Array.isArray(raw.blueprints) ? raw.blueprints : [];
   const kept = prints.map(keptBlueprint);
   // Anything this Leaf does not know, anywhere: a newer Leaf's yard (`keptLater`), not read with it let go.
@@ -510,6 +542,40 @@ function keptAway(v: unknown): Away | null {
   return seconds === null || coins === null ? null : { seconds, coins, made: untally(v.made, 1e12) };
 }
 
+/** Puts back what a yard did to its land, once its plots are back: the redwoods it felled, its clearing, and its smog. */
+function landOnto(y: Yard, raw: Rec, on: KeptLand): void {
+  felledOnto(y, raw.felled, on);
+  clearedOnto(y, raw.cleared);
+  y.begun = whole(raw.begun, 1e9) ?? 0;
+  y.clearing = isRec(raw.clearing) ? clearingOf(y, raw.clearing) : null;
+  smogOnto(y, raw.smog);
+}
+
+/** Puts back the plots cleared, each the land has with a clearing, once; anything else kept is let go. */
+function clearedOnto(y: Yard, cleared: unknown): void {
+  for (const name of Array.isArray(cleared) ? cleared.slice(0, y.land.plots.length) : []) {
+    const p = plotNamed(name);
+    const onLand = p !== null && y.land.plots.some((q) => q.plot === p);
+    if (onLand && CLEARING[p] && !y.cleared.includes(p)) y.cleared.push(p);
+  }
+}
+
+/**
+ * The plot being cleared, put back once the count of clearings begun is back, if it could be taken
+ * on now: by its name (`isStart`), asking for what it asked for when it began (something), and with
+ * what it was given, no more than it wants; else nothing.
+ */
+function clearingOf(y: Yard, kept: Record<string, unknown>): Yard["clearing"] {
+  const p = plotNamed(kept.plot);
+  const start = isStart(kept.start) ? kept.start : null;
+  const want = untally(kept.want, 1e6);
+  if (p === null || start === null || clearRefusal(y, p) !== null || !want.some((k) => k > 0)) return null;
+  const given = untally(kept.filled, 1e6);
+  const filled = counts();
+  for (const k of ALL_ITEMS) filled[k] = Math.min(given[k] ?? 0, want[k] ?? 0);
+  return { plot: p, start, want, filled };
+}
+
 /**
  * Fells each redwood kept as felled, by a tile of it on the land the yard was kept on (`on`), on a
  * plot the yard owns; anything else kept is let go. No more are read than the land has redwoods, as many as a yard ever keeps.
@@ -522,6 +588,13 @@ function felledOnto(y: Yard, kept: unknown, on: KeptLand): void {
     const plot = land.plots[land.plot[i] ?? NONE];
     if (t >= 0 && plot && y.plots.includes(plot.plot)) y.felled[t] = 1;
   }
+}
+
+/** An empty yard with as many holders' rows as the kept pieces hold things, and tunnel rows as they go in under the ground. */
+function roomFor(land: Land, pieces: readonly KeptPiece[]): Yard {
+  const y = emptyYard(land);
+  reserve(y, pieces.filter((o) => HOLDS[o.kind] === 1).length, pieces.filter((o) => (o.span ?? 0) > 0).length);
+  return y;
 }
 
 /**
@@ -569,10 +642,9 @@ export function vouch(
   )
     return null;
 
-  const y = emptyYard(land);
+  const y = roomFor(land, pieces);
   Object.assign(y, { seed, tick, charge, at, till, bank, away: keptAway(raw.away) });
-  Object.assign(y, { serial, handed, swapAt, sold, paid, board: [] });
-  y.depot = untally(raw.depot, 1e12);
+  Object.assign(y, { serial, handed, swapAt, sold, paid, board: [], depot: untally(raw.depot, 1e12) });
 
   // Goals in the order they were done, each that today's tables have.
   for (const id of raw.done) {
@@ -621,8 +693,8 @@ export function vouch(
     if (p !== null && !y.plots.includes(p) && land.plots.some((q) => q.plot === p)) y.plots.push(p);
   }
 
-  // The redwoods it felled, before its pieces stand where they stood.
-  felledOnto(y, raw.felled, on);
+  // The redwoods it felled and its clearing, before its pieces stand where they stood.
+  landOnto(y, raw, on);
   y.till += stand(y, pieces, studied, ungraded);
 
   fillBoard(y);

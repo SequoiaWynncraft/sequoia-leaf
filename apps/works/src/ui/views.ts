@@ -4,7 +4,8 @@
  * third view, and the other two, the row and the count on its button come with the second plot.
  *
  * - **Map**: the whole land as a plan (`plan.ts`), a mark on every piece in trouble, the part of the
- *   yard on screen as a frame, a price on each plot for sale. A tap goes there (to the piece in
+ *   yard on screen as a frame, a price on each plot for sale (gold where it can be bought now, stone
+ *   where it must be cleared first). A tap goes there (to the piece in
  *   trouble under the finger, with its card); on land that is not the yard's it opens the plot's card.
  * - **Trouble**: the pieces in trouble (`trouble.ts`) in groups by what is wrong, the largest first.
  *   A tap on a group goes to its first piece and opens its card (on a phone, where the card would
@@ -19,18 +20,8 @@
  * for the view that is up.
  */
 
-import {
-  isNode,
-  type Item,
-  type Kind,
-  MILLI,
-  NODE_COUNT,
-  NONE,
-  plotState,
-  power,
-  type Yard,
-} from "@sequoia-leaf/factory";
-import { pick, shown as cardShown, thing } from "@sequoia-leaf/kit/card.ts";
+import { isNode, type Item, type Kind, MILLI, NODE_COUNT, NONE, power, type Yard } from "@sequoia-leaf/factory";
+import { pick, show, shown as cardShown, thing } from "@sequoia-leaf/kit/card.ts";
 import { el, icon, unit } from "@sequoia-leaf/kit/dom.ts";
 import { keepText, keptText } from "@sequoia-leaf/kit/keep.ts";
 import { CREAM, INK } from "@sequoia-leaf/kit/palette.ts";
@@ -47,11 +38,11 @@ import { cellOf, flowRows, said, SHORT, yardFlows } from "../flows.ts";
 import { layout } from "../layout.ts";
 import { alarm, layPlan, makePlan, paintPlan, type Plan } from "../plan.ts";
 import { S, seenFrom } from "../state.ts";
-import { troubled, troubleGroups } from "../trouble.ts";
+import { smoggy, troubled, troubleGroups } from "../trouble.ts";
 import { NOT_WALKING, type Walk, walkAt, type WalkEvent, walkStep } from "../walk.ts";
 import { closeCard, itemRef, openCard, plotRef, tileRef } from "./card.ts";
 import { mapPress } from "./mappress.ts";
-import { price } from "./mapprice.ts";
+import { price, type Sale, salesOf } from "./mapprice.ts";
 import { closePanel, openPanel, refreshPanel } from "./panels.ts";
 import { $, fitted, iconButton, yardIcon } from "./parts.ts";
 import { type Line, table } from "./table.ts";
@@ -75,8 +66,8 @@ const lastView = (): View => {
 
 /** Whether the yard has the map, the list of trouble and the count: from its second plot. Before that the sheet is the depot's panel alone. */
 export const hasViews = (): boolean => S.world.plots.length > 1;
-/** How many pieces are in trouble, for the count on the button; nothing is looked at in a yard of one plot. */
-export const wrongCount = (): number => (hasViews() ? troubled(S.world).count : 0);
+/** How many pieces are in trouble and plots slowed by smog, for the count on the button; nothing is looked at in a yard of one plot. */
+export const wrongCount = (): number => (hasViews() ? troubled(S.world).count + smoggy(S.world).length : 0);
 
 /** The sheet's name and picture: the yard's, or in a yard of one plot the depot's. */
 export const sheetTitle = (): string => (hasViews() ? "The yard" : "The depot");
@@ -210,35 +201,21 @@ const MAP = 3;
 /** How near a tap must be to a piece in trouble to mean it, in CSS pixels: a finger's reach. */
 const REACH = 14;
 
-/**
- * The plots for sale, each with its price as it is written, the middle of it on the map, and whether
- * it is in an odd column of plots: worked out when what stands changes, not each frame.
- */
-let sales: { yard: Yard; rev: number; plots: { price: string; x: number; y: number; odd: boolean }[] } | null = null;
-function forSale(y: Yard): readonly { price: string; x: number; y: number; odd: boolean }[] {
+/** The plots for sale as the map writes them (`salesOf`): worked out when what stands changes, not each frame. */
+let sales: { yard: Yard; rev: number; plots: readonly Sale[] } | null = null;
+function forSale(y: Yard): readonly Sale[] {
   if (sales?.yard === y && sales.rev === y.rev) return sales.plots;
-  const plots = y.land.plots.flatMap((plot) =>
-    !y.plots.includes(plot.plot) && plotState(y, plot.plot).state === "for sale"
-      ? [
-          {
-            price: whole(plot.price),
-            x: (plot.x + plot.w / 2) * MAP,
-            y: (plot.y + plot.h / 2) * MAP,
-            odd: Math.floor(plot.x / plot.w) % 2 === 1,
-          },
-        ]
-      : [],
-  );
+  const plots = salesOf(y, MAP);
   sales = { yard: y, rev: y.rev, plots };
   return plots;
 }
 
-/** The price on each plot for sale. One wider than its plot would run into the next one's: neighbours' go above and below the middle. */
+/** The price on each plot for sale, gold where it can be bought now. One wider than its plot would run into the next one's: neighbours' go above and below the middle. */
 function prices(g: CanvasRenderingContext2D, y: Yard): void {
   const room = (y.land.plots[0]?.w ?? 0) * MAP;
   for (const plot of forSale(y)) {
     const wide = widthOf(g, plot.price, 1) + 7 > room;
-    price(g, plot.price, plot.x, plot.y + (wide ? (plot.odd ? 5 : -5) : 0));
+    price(g, plot.price, plot.x, plot.y + (wide ? (plot.odd ? 5 : -5) : 0), plot.ready);
   }
 }
 
@@ -400,19 +377,27 @@ function troubleView(art: Art, host: HTMLElement): () => void {
         : [],
     );
     const groups = troubleGroups(y);
-    list.el.hidden = groups.length === 0;
-    none.hidden = groups.length > 0;
+    const smog = smoggy(y);
+    list.el.hidden = groups.length + smog.length === 0;
+    none.hidden = groups.length + smog.length > 0;
     // Short of power is trouble too, in the row above: then it is only the pieces that are fine.
     none.textContent = cells ? "No piece is in trouble." : "Nothing is wrong.";
-    list.set(
-      groups.map((g): Line => ({
+    list.set([
+      // A plot slowed by its smog, first: a tap goes to the plot's card.
+      ...smog.map((s): Line => ({
+        key: `smog:${s.n}:${s.line}`,
+        head: () => el("span", "wrong", {}, el("span", "k-grow", { text: s.line })),
+        cells: [""],
+        on: () => show(plotRef(s.plot)),
+      })),
+      ...groups.map((g): Line => ({
         // Its pictures are built once for a row: a group that gains a kind of piece is a new row.
         key: `${g.title}|${g.kinds.join()}`,
         head: () => head(g.title, g.kinds, g.stuck),
         cells: [String(g.tiles.length)],
         on: () => startWalk(g.title),
       })),
-    );
+    ]);
   };
 }
 

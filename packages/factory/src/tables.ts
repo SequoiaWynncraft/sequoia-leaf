@@ -9,8 +9,9 @@
  */
 import { ITEM, type ItemName, ITEMS, type Wants } from "./content/items.ts";
 import { BLUEPRINT, BUFFER, GRADES, TICKS } from "./content/machines.ts";
+import { MIXES } from "./content/mixes.ts";
 import { NODES, START, type Tool, TOOLS, type Unlocks } from "./content/nodes.ts";
-import { PLOT_IDS, type PlotName } from "./content/plots.ts";
+import { PLOT_IDS, type PlotName, PLOTS } from "./content/plots.ts";
 import { RECIPES } from "./content/recipes.ts";
 import { RESEARCH } from "./content/research.ts";
 import type { KindDef, KindInfo } from "./kinds/kind.ts";
@@ -94,6 +95,7 @@ export const BOILER = kind("boiler");
 export const DEPOT = kind("depot");
 export const STUDY = kind("study");
 export const STOP = kind("stop");
+export const BREAKER = kind("breaker");
 export const SORTER = kind("sorter");
 export const DEADFALL = item("deadfall");
 
@@ -144,6 +146,10 @@ export const LINED = flagOf((d) => d.tint === "line");
 export const WAYS = Uint8Array.from(KIND_DEFS, (d: KindDef) => d.ways ?? 0);
 /** The depot; the kinds that cannot be turned; those that run under tiles; those power reaches out from. */
 export const FIXED = flagOf((d) => d.fixed);
+/** The kinds where what reaches them has reached the depot (`KindDef.sinks`). */
+export const SINKS = flagOf((d) => d.sinks);
+/** Smog each kind adds to its plot for each thing it finishes (`KindInfo.smog`), by its number. */
+export const SMOG_OF = KIND_DEFS.map((d: KindDef) => d.info.smog ?? 0);
 export const FAST = flagOf((d) => d.fast);
 export const SPANS = flagOf((d) => d.spans);
 export const REACHES = flagOf((d) => d.reaches);
@@ -239,6 +245,12 @@ export function countsOf(w: Wants): Float64Array {
   return out;
 }
 
+/** What clearing each plot wants delivered before it is bought (`PlotInfo.clearing`), by its number; null for a plot Coins alone buy. */
+export const CLEARING: readonly (Float64Array | null)[] = PLOT_IDS.map((id) => {
+  const wants = PLOTS.find((p) => p.id === id)?.clearing;
+  return wants ? countsOf(wants) : null;
+});
+
 // ---------- recipes ----------
 
 /**
@@ -268,10 +280,54 @@ export const RECIPES_N: readonly Recipe[] = RECIPES.map((r) => {
  * lock, are by it. What makes a thing, its by-products too, is `makersOf`.
  */
 export const RECIPE: readonly (Recipe | null)[] = ALL_ITEMS.map((n) => RECIPES_N.find((r) => r.out === n) ?? null);
-/** Every recipe that makes each thing: the one it is the thing of first, then those that make it beside their own. */
+/**
+ * What a piece that breaks one thing into several makes (`content/mixes.ts`): 1 of `from` at a time,
+ * for `work` half-ticks at grade 1, gives the next of `gives`, round and round.
+ */
+export interface Mix {
+  readonly by: Kind;
+  readonly from: Item;
+  readonly work: number;
+  readonly holds: number;
+  readonly doing: string;
+  readonly gives: readonly Item[];
+}
+export const MIXES_N: readonly Mix[] = MIXES.map((m) => ({
+  by: kind(m.by),
+  from: item(m.from),
+  work: m.ticks * 2,
+  holds: m.holds,
+  doing: m.doing,
+  gives: m.gives.map(item),
+}));
+/** The mix each kind makes, by its number, or null. */
+export const MIX_OF: readonly (Mix | null)[] = ALL_KINDS.map((k) => MIXES_N.find((m) => m.by === k) ?? null);
+/**
+ * Each thing a mix gives, as a recipe for planning alone (no machine makes it so): the mix's share of
+ * it, 1 for every so many of `from`, at the work of so many of the mix's runs. A thing only a mix gives
+ * is planned by it (`recipeFor`): 20 salvage for 8 copper.
+ */
+const MIXED: readonly (Recipe | null)[] = ALL_ITEMS.map((n) => {
+  const m = MIXES_N.find((x) => x.gives.includes(n));
+  if (!m) return null;
+  const every = m.gives.length / m.gives.filter((g) => g === n).length;
+  return {
+    out: n,
+    also: NONE,
+    from: [m.from],
+    need: [every],
+    by: m.by,
+    ticks: (m.work / 2) * every,
+    work: m.work * every,
+  };
+});
+/** The recipe of each thing, or a mix's share of it: what says where it is made (`locked`). */
+const OWN: readonly (Recipe | null)[] = ALL_ITEMS.map((n) => RECIPE[n] ?? MIXED[n] ?? null);
+/** Every recipe that makes each thing: the one it is the thing of first, then those that make it beside their own, then a mix's share of it. */
 const MAKING: readonly (readonly Recipe[])[] = ALL_ITEMS.map((n) => [
   ...RECIPES_N.filter((r) => r.out === n),
   ...RECIPES_N.filter((r) => r.also === n),
+  ...(MIXED[n] ? [MIXED[n]] : []),
 ]);
 /**
  * The recipes that make a thing: the one it is the thing of first, then each that makes it beside its
@@ -301,7 +357,8 @@ export const makesThing = (k: number, n: number): n is Item => {
 };
 /** The kinds of machine that make a thing by the recipe it names: its own first, then those that make it as that one (`KindDef.as`). */
 export const kindsMaking = (n: Item): Kind[] => {
-  const r = RECIPE[n];
+  // A thing only a mix gives is made by its share of the mix (`makersOf`): by the kind that breaks it.
+  const r = RECIPE[n] ?? MIXED[n];
   return r ? [r.by, ...ALL_KINDS.filter((k) => k !== r.by && timesOf(k, r) > 0)] : [];
 };
 /** For each kind, the most of any machine it is one of (`TIMES`): what its pace on a recipe is at most times its grade's. */
@@ -327,8 +384,10 @@ export function partsOf(n: Item): Item[] {
   return [n, ...(recipeFor(n)?.from ?? []).flatMap(partsOf)];
 }
 
-/** The work in one of a thing: every tick a gatherer and every machine at grade 1 spends on it, all the way down. */
+/** The work in one of a thing: every tick a gatherer and every machine at grade 1 spends on it, all the way down; or as its table gives it. */
 export function workOf(n: Item): number {
+  const given = ITEM_INFO[n]?.work;
+  if (given !== undefined) return given;
   const r = recipeFor(n);
   if (!r) return TICKS.gather;
   return r.ticks + r.from.reduce((sum, k, p) => sum + (r.need[p] ?? 0) * workOf(k), 0);
@@ -390,6 +449,22 @@ export const SPAN_MOST = most((u) => u.span);
 // A span is kept in a signed byte (`spanByte`), a far mouth's below 0.
 if (SPAN_MOST > 127) throw new Error("a tunnel runs under at most 127 tiles");
 export const BLUEPRINTS_MOST = most((u) => u.blueprints?.count);
+/** The largest box any blueprint holds, across and down. */
+export const BOX_MOST = {
+  w: Math.max(
+    BLUEPRINT.w,
+    most((u) => u.blueprints?.w),
+  ),
+  h: Math.max(
+    BLUEPRINT.h,
+    most((u) => u.blueprints?.h),
+  ),
+} as const;
+/**
+ * How many places for blueprints any yard had before tier 5's plan room: a yard's check and its save
+ * name a place past these only where it holds something, so a yard that uses none is as it was.
+ */
+export const BLUEPRINTS_BEFORE = 4;
 export const CRATE_MOST = most((u) => u.crate);
 export const HOOKS_MOST = most((u) => u.hooks);
 /** The recipes some goal unlocks; every other is known from the start. */
@@ -411,6 +486,8 @@ export interface Open {
   readonly tools: number;
   readonly blueprints: number;
   readonly pieces: number;
+  /** The most tiles across and down a blueprint's box holds. */
+  readonly box: { readonly w: number; readonly h: number };
   readonly stops: number;
   readonly crate: number;
   /** How far a pylon reaches, in hundredths of its plain reach. */
@@ -472,6 +549,16 @@ export function openOf(goals: readonly Goal[]): Open {
     tools,
     blueprints: top((u) => u.blueprints?.count),
     pieces: top((u) => u.blueprints?.pieces),
+    box: {
+      w: Math.max(
+        BLUEPRINT.w,
+        top((u) => u.blueprints?.w),
+      ),
+      h: Math.max(
+        BLUEPRINT.h,
+        top((u) => u.blueprints?.h),
+      ),
+    },
     stops: top((u) => u.stops),
     crate: top((u) => u.crate),
     reach: top((u) => u.reach),
@@ -538,7 +625,8 @@ export function locked(open: Open, ask: Lock): string | null {
     return g > top ? `A grade ${g} ${kindWord(ask.build)} is not unlocked yet` : null;
   }
   if ("make" in ask) {
-    const r = RECIPE[ask.make];
+    // A thing a mix gives is made where its maker may stand.
+    const r = OWN[ask.make];
     const many = ITEM_INFO[ask.make]?.many ?? "";
     if (!r) return `Nothing makes ${many}`;
     return open.recipes[ask.make] === 1 ? locked(open, { build: r.by }) : `The recipe for ${many} is not unlocked yet`;
@@ -559,8 +647,8 @@ export function locked(open: Open, ask: Lock): string | null {
   if (open.blueprints === 0) return "Blueprints are not unlocked yet";
   if (slot < 0 || slot >= open.blueprints) return "There is no such blueprint";
   if (pieces > open.pieces) return `A blueprint holds at most ${open.pieces} pieces. This is ${pieces}`;
-  if (w > BLUEPRINT.w || h > BLUEPRINT.h)
-    return `A blueprint is at most ${BLUEPRINT.w} tiles by ${BLUEPRINT.h}. This is ${w} by ${h}`;
+  if (w > open.box.w || h > open.box.h)
+    return `A blueprint is at most ${open.box.w} tiles by ${open.box.h}. This is ${w} by ${h}`;
   return null;
 }
 

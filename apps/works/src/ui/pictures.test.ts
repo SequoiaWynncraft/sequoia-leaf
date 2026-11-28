@@ -58,8 +58,9 @@ function pictured(u: Unlock): boolean {
     case "felling":
     case "mouths":
       return typeof PERK_ART[u.is] === "function";
-    // A plot's card has the one picture every plot has.
+    // A plot's card has the one picture every plot has, and plots put up for sale together are the cheapest's.
     case "plot":
+    case "land":
       return true;
   }
 }

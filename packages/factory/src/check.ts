@@ -4,7 +4,7 @@
  * clock, the power put by, the till and its counter, the goals (those done, in order, the node in
  * hand and those in line after it, the line of research, and what each goal not done has been
  * given) and the board (each order's wants, what came in, its pay, its words and when it began to
- * count), the plots owned and the redwoods felled, the depot's books (what awards and the standing are read from), what was seen at the
+ * count), the plots owned, cleared and being cleared (with what it has been given), and the redwoods felled, the depot's books (what awards and the standing are read from), what was seen at the
  * owner's last command, the pieces to hand, the blueprints, what Undo would undo (each entry's bytes:
  * its id is worked out from them), and every part of every piece, tile by
  * tile, numbered by the tables. Every tile it mixes in (a piece's, a redwood felled, a piece of a plan
@@ -27,7 +27,7 @@ import { fromCorner, tileFromCorner } from "./keptland.ts";
 import type { Land } from "./land.ts";
 import { counting } from "./orders.ts";
 import { waysOn } from "./pieces.ts";
-import { ITEM_COUNT, NONE, SPAN_MOST } from "./tables.ts";
+import { BLUEPRINTS_BEFORE, ITEM_COUNT, NODE_COUNT, NONE, SPAN_MOST } from "./tables.ts";
 import { type Counts, holderOf, type Holders, PIECE_BYTES, tunnelOf, type Tunnels, type Yard } from "./yard.ts";
 
 /** The kinds a kind's first four bits name: what every yard's check was taken over before kinds went past them. */
@@ -98,7 +98,13 @@ function mixPlan(land: Land, b: Uint8Array, mix: (v: number) => void): void {
  * whole yard, then what Undo would undo, how many entries and each one's bytes (its id among them).
  */
 function mixKept(y: Yard, mix: (v: number) => void): void {
-  for (const b of y.blueprints) {
+  for (let s = 0; s < y.blueprints.length; s++) {
+    const b = y.blueprints[s] ?? null;
+    // A place past those every yard had (`BLUEPRINTS_BEFORE`) is mixed in, by its number, only where it holds something.
+    if (s >= BLUEPRINTS_BEFORE) {
+      if (b === null) continue;
+      mix(0x40000 | s);
+    }
     if (b === null) mix(-1);
     else if (b.whole) {
       mix(-2);
@@ -112,9 +118,39 @@ function mixKept(y: Yard, mix: (v: number) => void): void {
   for (const { bytes } of y.history) mixBytes(bytes, mix);
 }
 
-/** Mixes in the plots owned, in the order they were bought, and each redwood felled by its first tile; making nothing. */
+/** Mixes in some text: how long it is, then each of its characters. */
+function mixText(mix: (v: number) => void, text: string): void {
+  mix(text.length);
+  for (let k = 0; k < text.length; k++) mix(text.charCodeAt(k));
+}
+
+/** Mixes in the smog on each plot that has any, by the plot's place in the land's list: a yard with none mixes in nothing. */
+function mixSmog(y: Yard, mix: (v: number) => void): void {
+  const { level, made } = y.smog;
+  for (let p = 0; p < level.length; p++) {
+    if ((level[p] ?? 0) === 0 && (made[p] ?? 0) === 0) continue;
+    mix(0x40000 | p);
+    mix(level[p] ?? 0);
+    mix(made[p] ?? 0);
+  }
+}
+
+/**
+ * Mixes in the plots owned, in the order they were bought; those cleared, in the order they were
+ * handed over, how many were begun, and the one being cleared with its name, what it asks for and
+ * what it has been given, only where there are any; and
+ * each redwood felled by its first tile; making nothing.
+ */
 function mixLand(y: Yard, mix: (v: number) => void): void {
   for (let k = 0; k < y.plots.length; k++) mix((y.plots[k] ?? 0) + 32);
+  for (let k = 0; k < y.cleared.length; k++) mix(0x20000 + (y.cleared[k] ?? 0));
+  if (y.begun > 0) mix(0x60000 + y.begun);
+  if (y.clearing) {
+    mix(0x30000 + y.clearing.plot);
+    mixText(mix, y.clearing.start);
+    mixTally(mix, y.clearing.want);
+    mixTally(mix, y.clearing.filled);
+  }
   for (let t = 0; t < y.felled.length; t++)
     if (y.felled[t] === 1) {
       mix(0x10000);
@@ -157,18 +193,31 @@ function mixWords(mix: (v: number) => void, s: string): void {
   for (let c = 0; c < s.length; c++) mix(s.charCodeAt(c));
 }
 
+/**
+ * How many nodes the tables had when every yard's check was first taken over its goals: tiers 0 to
+ * 4's. The tables number the nodes first and research after them, so a node added since moves every
+ * piece of research along; the check mixes in each goal by the number it had then (`goalWord`), so
+ * that a yard's check does not change with nodes it has nothing to do with.
+ */
+const NODES_THEN = 31;
+/** Where a node added since is mixed in: above every number a piece of research may have. */
+const LATER_NODES = 0x10000;
+/** A goal as the check mixes it in: by the number it had among the nodes there were then, and -1 for none. */
+const goalWord = (g: number): number =>
+  g < NODES_THEN ? g : g < NODE_COUNT ? LATER_NODES + g - NODES_THEN : g - (NODE_COUNT - NODES_THEN);
+
 /** Mixes in the goals done, in hand, queued and in line, and what was got for each, then what was handed and paid. */
 function mixGoals(y: Yard, mix: (v: number) => void): void {
-  for (const g of y.done) mix(g);
+  for (const g of y.done) mix(goalWord(g));
   mix(-1);
-  mix(y.hand);
-  for (const g of y.queue) mix(g);
+  mix(goalWord(y.hand));
+  for (const g of y.queue) mix(goalWord(g));
   mix(-1);
-  for (const g of y.line) mix(g);
+  for (const g of y.line) mix(goalWord(g));
   mix(-1);
   y.got.forEach((got, g) => {
     if (got === null) return;
-    mix(g);
+    mix(goalWord(g));
     mixTally(mix, got);
   });
   mix(y.handed);
@@ -208,6 +257,7 @@ export function check(y: Yard): number {
   mixNum(mix, y.seen.till);
   mixTally(mix, y.seen.depot);
   mixLand(y, mix);
+  mixSmog(y, mix);
   mixSpare(y.spare, mix);
   mixKept(y, mix);
   mixTally(mix, y.depot);
@@ -231,13 +281,23 @@ export function check(y: Yard): number {
   return h >>> 0;
 }
 
+/**
+ * What a holder's row has that only some pieces do, each mixed in only where there is one, so a yard
+ * of pieces that have none checks as before: a by-product held; more finished things waiting behind
+ * the first (`Holders.more`, only an assembler); a place in a mix past its first (a breaker); and work
+ * past a whole half-tick (a piece smog slows).
+ */
+function mixExtras(hs: Yard["holders"], r: number, mix: (n: number) => void): void {
+  if (hs.also[r] !== NONE) mix(0x10000 | (hs.also[r] ?? 0));
+  if ((hs.more[r] ?? 0) > 0) mix(0x20000 | (hs.more[r] ?? 0));
+  if ((hs.mix[r] ?? 0) !== 0) mix(0x50000 | (hs.mix[r] ?? 0));
+  if ((hs.quarter[r] ?? 0) !== 0) mix(0x70000 | (hs.quarter[r] ?? 0));
+}
+
 /** A holder's row: what it is doing and holding, its work, and how many of each thing. */
 function mixHolder(hs: Yard["holders"], r: number, mix: (n: number) => void): void {
   mix(doingWord(hs, r));
-  // A by-product held is mixed in only where there is one, so a yard of pieces that make none checks as before.
-  if (hs.also[r] !== NONE) mix(0x10000 | (hs.also[r] ?? 0));
-  // So are more finished things waiting behind the first (`Holders.more`): only an assembler holds any.
-  if ((hs.more[r] ?? 0) > 0) mix(0x20000 | (hs.more[r] ?? 0));
+  mixExtras(hs, r, mix);
   mix(heldWord(hs, r));
   mix(hs.work[r] ?? 0);
   for (let n = 0; n < ITEM_COUNT; n++) {

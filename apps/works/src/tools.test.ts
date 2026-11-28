@@ -14,6 +14,7 @@ import {
   build,
   buyPlot,
   check,
+  CLEARING,
   CRATE,
   create,
   deliver,
@@ -29,9 +30,14 @@ import {
   NONE,
   piecesAt,
   placed,
+  play,
+  type Plot,
   plot,
+  plotName,
+  plotPrice,
   plotState,
   put,
+  readCommand,
   SORTER,
   SPLITTER,
   takes,
@@ -98,7 +104,7 @@ const sent = (leaf: { commands: unknown[] }): unknown[] =>
 describe("Select's copy", () => {
   test("of more than 160 pieces is one command, done alike on the page and on Leaf", async () => {
     const y = yardAt(3);
-    buyPlot(y, plot("meadow"), Infinity);
+    buyPlot(y, plot("meadow"), 300, Infinity);
     // 161 belts on the yard's own plot, clear of the depot, and of where the meadow's redwoods would meet a copy of them.
     for (let dy = -6; dy < 6; dy++)
       for (let dx = -8; dx < 8; dx++) {
@@ -235,6 +241,35 @@ describe("what is worked out from the yard and kept", () => {
     runYard(1000);
     expect([S.world.done.at(-1), plotState(S.world, meadow).state]).toEqual([goal("gears"), "for sale"]);
     expect(signed()).toBe(true);
+  });
+
+  test("puts a signpost on every plot for sale, whatever has been bought: Skyfall Edge too, whose redwoods stand along the middle of its edge", () => {
+    const y = create({ seed: 3, tier: 5 });
+    const sale = (): Plot[] => y.land.plots.flatMap((p) => (plotState(y, p.plot).state === "for sale" ? [p.plot] : []));
+    const signed = (): Plot[] => layout(y).signs.map((s) => s.plot.plot);
+    // Bought as the page buys, by commands, so that the yard counts the change and its layout is
+    // worked out again: a plot past the first ring cleared first, its goods put straight in.
+    const give = (c: Record<string, unknown>): void => {
+      const read = readCommand({ tick: y.tick, ...c });
+      if (!read || "refused" in play(y, read)) throw new Error(`${String(c.do)} was refused`);
+    };
+    const buy = (p: Plot): void => {
+      const want = CLEARING[p];
+      if (want) {
+        give({ do: "clearPlot", plot: plotName(p) });
+        y.clearing?.filled.set(want);
+        give({ do: "handClearing", plot: plotName(p), start: y.clearing?.start });
+      }
+      give({ do: "buyPlot", plot: plotName(p), price: plotPrice(y, p) });
+    };
+    buy(plot("meadow"));
+    buy(plot("workings"));
+    expect(signed()).toContain(plot("skyfall"));
+    // Every plot, bought cheapest first: at each step, every plot for sale has its sign and no other has one.
+    for (let left = sale(); left.length > 0; left = sale()) {
+      expect(signed().toSorted((a, b) => a - b)).toEqual(left.toSorted((a, b) => a - b));
+      buy(left.reduce((a, b) => (plotPrice(y, b) < plotPrice(y, a) ? b : a)));
+    }
   });
 
   test("is worked out again when a line is coloured: a colour is part of what stands", async () => {

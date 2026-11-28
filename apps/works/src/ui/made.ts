@@ -1,15 +1,29 @@
-/** Where a thing comes from, on its card: the parts it is made from and every machine that makes it, or the gatherer and the plots it lies in. */
-import { GATHERING, isRaw, makes, RECIPE } from "@sequoia-leaf/factory";
+/** Where a thing comes from, on its card: the parts it is made from and every machine that makes it, what a mix of it is broken from and by what, or the gatherer and the plots it lies in. */
+import { GATHERING, isRaw, makes, MIX_OF, mixPerMinute, mixShare, RECIPE } from "@sequoia-leaf/factory";
 import type { Row } from "@sequoia-leaf/kit/card.ts";
 import { perMinute } from "@sequoia-leaf/kit/say.ts";
 
 import type { ItemPrint } from "./cards.ts";
 import { itemRef, machineRef, plotRef } from "./refs.ts";
 
-/** A thing's rows of where it comes from: what it is made from and in which machines, each with what one of grade 1 makes a minute; or for a thing from the ground, who gathers it and where it lies. */
+/**
+ * A thing's rows of where it comes from: what it is made from and in which machines, each with what
+ * one of grade 1 makes a minute; for a thing a mix gives, what is broken for it and in what, each with
+ * how many of it one of grade 1 gives a minute; or for a thing from the ground, who gathers it and
+ * where it lies.
+ */
 export function madeRows(p: ItemPrint): Row[] {
   const k = p.item;
   const recipe = RECIPE[k];
+  const mix = p.makers.map((m) => MIX_OF[m]).find((m) => m?.gives.includes(k));
+  if (!recipe && mix)
+    return [
+      { label: "Broken from", things: [{ ref: itemRef(mix.from) }] },
+      {
+        label: "In",
+        things: p.makers.map((m) => ({ ref: machineRef(m), note: perMinute(mixPerMinute(m, 1) * mixShare(m, k)) })),
+      },
+    ];
   if (recipe)
     return [
       {

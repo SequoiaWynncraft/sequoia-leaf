@@ -60,7 +60,7 @@ import type { CoinChange } from "@sequoia-leaf/core";
 import { rulesVersions } from "@sequoia-leaf/core/build/rules.ts" with { type: "macro" };
 
 import { at, type Dir, insTo, isDir, otherMouth, tunnelExit } from "./build.ts";
-import { fromBase64, Reader, spanByte, spanOfByte, Writer } from "./bytes.ts";
+import { fromBase64, NEWER, type Newer, Reader, spanByte, spanOfByte, Writer } from "./bytes.ts";
 import type { Act, ActOf } from "./commands.ts";
 import type { Land } from "./land.ts";
 import { lineOf } from "./lines.ts";
@@ -113,7 +113,8 @@ export function stampOf(land: Land): string {
     h = Math.imul(h ^ v, 0x01000193);
   };
   for (const v of [land.w, land.h, ...land.depot]) mix(v);
-  for (const a of [land.deposit, land.water, land.tree, land.plot]) for (let i = 0; i < a.length; i++) mix(a[i] ?? 0);
+  for (const a of [land.deposit, land.water, land.ford, land.tree, land.plot])
+    for (let i = 0; i < a.length; i++) mix(a[i] ?? 0);
   for (const p of land.plots) for (const v of [p.plot, p.price, p.x, p.y, p.w, p.h]) mix(v);
   const stamp = `${RULES}.${(h >>> 0).toString(36)}`;
   STAMPS.set(land, stamp);
@@ -135,6 +136,10 @@ const UP = 1;
 const MOVED = 1;
 const STROKE = 2;
 const TOO_BIG = 4;
+/** The bits of an entry's flags this Leaf keeps: any other is a newer Leaf's. */
+export const ENTRY_FLAGS = MOVED | STROKE | TOO_BIG;
+/** The bits of the byte saying which parts of a piece's settings follow (`packSettings`): any other is a newer Leaf's. */
+export const SETTING_PARTS = 127;
 
 /** Why an Undo is refused. */
 const UNDO_SAYS = {
@@ -223,6 +228,8 @@ const SETTINGS: readonly {
     },
   },
 ];
+/** The bits of what a command did to a piece (`masks`) this Leaf keeps: `UP`, and one for each setting. */
+export const MASK_BITS = (2 << SETTINGS.length) - 1;
 
 /** The settings of the piece on a tile that differ from how one stood (`s`), a bit each by its place in `SETTINGS`. */
 const changedOf = (y: Yard, s: Setting): number =>
@@ -266,7 +273,8 @@ export interface Named {
   readonly span: number;
   readonly recipe: number | undefined;
 }
-type Seen = (piece: Named) => void;
+/** Told each piece an entry names, and `NEWER` for a bit no reader here knows. */
+type Seen = (piece: Named | Newer) => void;
 
 /** Whether Undo may stand a piece of a kind and span again: a kind there is, not the depot, and no longer than tunnels go. */
 const standsBack = (kind: number, span: number): kind is Kind =>
@@ -275,16 +283,21 @@ const standsBack = (kind: number, span: number): kind is Kind =>
 /**
  * One piece's settings read back, after its tile; null for bytes that are not a piece's, and for a
  * kind or span this Leaf does not know. What it names is told to `seen` first, known here or not, for
- * what asks what a history names (`historyNamed`).
+ * what asks what a history names (`historyNamed`); and a part no reader here knows, as `NEWER`.
  */
 function readSetting(r: Reader, tile: number, seen?: Seen): Setting | null {
   const kd = r.byte();
   const f = kd & 128 ? r.byte() : 0;
+  if (f > SETTING_PARTS) {
+    seen?.(NEWER);
+    return null;
+  }
   const [recipe, closed, tint, ways, grade, span, high = 0] = [1, 2, 4, 8, 16, 32, 64].map((bit) =>
     f & bit ? r.byte() : undefined,
   );
+  // A kind's bits past four that are none no Leaf keeps; past 15 they make a kind no Leaf here has.
   const [kind, dir] = [(kd & 15) | (high << 4), (kd >> 4) & 3];
-  if (r.over || f > 127 || (f & 64 && (high === 0 || high > 15)) || !isDir(dir)) return null;
+  if (r.over || (f & 64 && high === 0) || !isDir(dir)) return null;
   const spans = span === undefined ? 0 : spanOfByte(span);
   seen?.({ kind, span: spans, recipe });
   if (!standsBack(kind, spans)) return null;
@@ -527,11 +540,19 @@ function readTiles(r: Reader, tiles: number): number[] | null {
 }
 
 /** What a command did to each piece that stood on an entry's tiles, after their count: `UP` alone, or settings changed; null past `most`. */
-function readMasks(r: Reader, most: number): number[] | null {
+/**
+ * What an entry did to each piece, read back; null for bytes that are not that, and for a bit past
+ * the settings this Leaf has (`MASK_BITS`), which is told to `seen` as `NEWER` first.
+ */
+function readMasks(r: Reader, most: number, seen?: Seen): number[] | null {
   const n = r.varint();
   const out: number[] = [];
   for (let k = 0; k < Math.min(n, most) && !r.over; k++) out.push(r.varint());
-  return n > most || out.some((m) => m >= 2 << SETTINGS.length || (m & UP && m !== UP)) ? null : out;
+  if (!r.over && out.some((m) => (m & ~MASK_BITS) !== 0 || m > MASK_BITS)) {
+    seen?.(NEWER);
+    return null;
+  }
+  return n > most || out.some((m) => m & UP && m !== UP) ? null : out;
 }
 
 /** The rest of an entry's bytes, after its Coins and check: its tiles, the way back, the settings changed and how the pieces stood. */
@@ -543,7 +564,7 @@ function readBody(
 ): Pick<Undoing, "tiles" | "was" | "masks" | "back"> | null {
   const fresh = readTiles(r, tiles);
   const back = flags & MOVED ? { turns: r.byte(), x: r.byte(), y: r.byte() } : null;
-  const masks = readMasks(r, tiles);
+  const masks = readMasks(r, tiles, seen);
   const was = fresh && masks && !r.over && (back?.turns ?? 0) <= 3 ? readSettings(r, tiles, seen) : null;
   if (!fresh || !masks || !was || masks.length !== was.length) return null;
   const all = [...new Set([...fresh, ...was.map((s) => s.tile)])].toSorted((i, j) => i - j);
@@ -556,11 +577,16 @@ function readEntry(bytes: Uint8Array, tiles: number, seen?: Seen): Undoing | nul
   const id = readId(r);
   const flags = r.byte();
   if (id === null) return null;
+  // A flag no reader here knows: what follows is past reading, and the entry a newer Leaf's.
+  if (r.over) return null;
+  if ((flags & ~(MOVED | STROKE | TOO_BIG)) !== 0) {
+    seen?.(NEWER);
+    return null;
+  }
   if (flags & TOO_BIG) {
-    const big = r.done && !r.over && (flags & ~(TOO_BIG | STROKE)) === 0;
+    const big = r.done && (flags & MOVED) === 0;
     return big ? { id, flags, coins: 0, sum: 0, tiles: [], was: [], masks: [], back: null } : null;
   }
-  if ((flags & ~(MOVED | STROKE)) !== 0) return null;
   const zig = r.varint();
   const sum = (r.byte() | (r.byte() << 8) | (r.byte() << 16) | (r.byte() << 24)) >>> 0;
   const body = readBody(r, flags, tiles, seen);
@@ -569,11 +595,11 @@ function readEntry(bytes: Uint8Array, tiles: number, seen?: Seen): Undoing | nul
 
 /**
  * What the pieces in a history's entries name (each as base64, `kept`), known here or not, on a land
- * of so many tiles: what a reader asks before it reads them. An entry stops at the first piece that
- * names something not known here, which is told first.
+ * of so many tiles, and `NEWER` for a bit no reader here knows: what a reader asks before it reads
+ * them. An entry stops at the first piece that names something not known here, which is told first.
  */
-export function historyNamed(kept: unknown, tiles: number): Named[] {
-  const named: Named[] = [];
+export function historyNamed(kept: unknown, tiles: number): (Named | Newer)[] {
+  const named: (Named | Newer)[] = [];
   for (const b of Array.isArray(kept) ? kept : []) {
     const bytes = typeof b === "string" ? fromBase64(b) : b instanceof Uint8Array ? b : null;
     if (bytes) readEntry(bytes, tiles, (p) => named.push(p));
@@ -592,7 +618,8 @@ export function historyOf(kept: unknown, stamp: unknown, land: Land): Entry[] {
   const read = kept.flatMap((b) => {
     const bytes = typeof b === "string" ? fromBase64(b) : null;
     const named: Named[] = [];
-    return bytes && readEntry(bytes, tiles, (p) => named.push(p)) ? [entry(bytes, named)] : [];
+    const seen = (p: Named | Newer): void => void (p !== NEWER && named.push(p));
+    return bytes && readEntry(bytes, tiles, seen) ? [entry(bytes, named)] : [];
   });
   return read.length === kept.length ? capped(read) : [];
 }

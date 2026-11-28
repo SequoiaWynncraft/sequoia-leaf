@@ -6,14 +6,15 @@
  * paints only the part it needs (`floor.ts`).
  */
 
-import { isItem, itemName, type Land, RAW, type RawName } from "@sequoia-leaf/factory";
-import { BARK, CREAM, EARTH, GOLD, GREEN, INK, PAPER, SKY, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
-import { bitmap, ell, outlined, R, rgb } from "@sequoia-leaf/kit/pix.ts";
+import type { Land } from "@sequoia-leaf/factory";
+import { EARTH, GREEN, SKY, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
+import { bitmap, R, rgb } from "@sequoia-leaf/kit/pix.ts";
 import { clamp, type Ctx, hash, makeCanvas, vnoise } from "@sequoia-leaf/kit/util.ts";
 
 import { TILE } from "./belts.ts";
-import { nearFerns, rock, stump, trunkBox, trunkPixel } from "./nature.ts";
-import { CLAY, DEEP, PAL, tone } from "./pal.ts";
+import { lie, LYING, patchOf, rawAt } from "./lying.ts";
+import { nearFerns, trunkBox, trunkPixel } from "./nature.ts";
+import { DEEP, PAL, tone } from "./pal.ts";
 
 /** How far the picture runs past the map on each side, for the forest that rings the clearing. */
 export const MARGIN = { l: 56, r: 56, t: 88, b: 56 } as const;
@@ -52,14 +53,6 @@ export interface Ground extends Box {
 const ringed = (x: number, y: number, r: number, of: (ax: number, ay: number) => boolean): boolean =>
   of(x - r, y) && of(x + r, y) && of(x, y - r) && of(x, y + r);
 
-const RAWS: readonly RawName[] = ["deadfall", "stone", "ore", "clay", "sand", "resin"];
-/** What lies in the ground on a tile of a land, by name, or nothing. */
-const rawAt = (land: Land, i: number): RawName | null => {
-  const n = land.deposit[i] ?? -1;
-  const name = isItem(n) ? itemName(n) : null;
-  return RAW.find((r) => r === name) ?? null;
-};
-
 /** By tile of a land: 1 where `on` is set on the tile or on any of the eight round it. */
 function nearby(land: Land, on: Uint8Array): Uint8Array {
   const out = new Uint8Array(land.w * land.h);
@@ -91,11 +84,7 @@ function streamOf(land: Land): (x: number, y: number, jx: number, jy: number, i:
   const dry = (x: number, y: number): boolean => land.water[tile(x, y)] !== 1;
   return (x, y, jx, jy, i) => {
     if (wetNear[i] !== 1) return null;
-    if (land.water[i] === 1) {
-      if (!ringed(jx, jy, 3, wet)) return WATER[2];
-      if (!ringed(jx, jy, 8, wet)) return WATER[1];
-      return (y & 3) === 0 && hash(x >> 2, y, 52) > 0.86 ? WATER[1] : WATER[0];
-    }
+    if (land.water[i] === 1) return waterAt(land.ford[tile(x, y)] === 1, x, y, jx, jy, wet);
     if (!ringed(jx, jy, 3, dry)) {
       const peb = hash(x >> 1, y >> 1, 53);
       return peb > 0.9 ? STONE[2] : peb > 0.8 ? STONE[1] : EARTH[2];
@@ -149,7 +138,7 @@ export function floorOf(land: Land): (x: number, y: number, wild: boolean) => st
   const dep = new Uint8Array(land.w * land.h);
   for (let i = 0; i < dep.length; i++) {
     const raw = rawAt(land, i);
-    dep[i] = raw ? RAWS.indexOf(raw) + 1 : 0;
+    dep[i] = raw ? LYING.indexOf(raw) + 1 : 0;
   }
   const tile = (x: number, y: number): number =>
     clamp(Math.floor(y / TILE), 0, land.h - 1) * land.w + clamp(Math.floor(x / TILE), 0, land.w - 1);
@@ -191,26 +180,7 @@ export function floorOf(land: Land): (x: number, y: number, wild: boolean) => st
       const rim = near > reach - 1.5;
       const f = hash(x, y, 30 + d);
       const g2 = hash(x >> 1, y >> 1, 40 + d);
-      switch (d) {
-        case 1: // Deadfall: leaf litter over the grass, dark and soft.
-          return rim ? GREEN[0] : g2 > 0.55 ? EARTH[0] : f > 0.9 ? BARK[1] : f < 0.08 ? GREEN[1] : GREEN[0];
-        case 2: // Stone: bare rock showing through.
-          return rim ? EARTH[0] : g2 > 0.8 ? STONE[1] : f > 0.95 ? STONE[2] : STONE[0];
-        case 3: // Ore: dark red earth, with a glint in it.
-          return rim ? BARK[0] : f > 0.965 ? GOLD[0] : g2 > 0.8 ? BARK[2] : BARK[1];
-        case 4: // Clay: a red bank, laid down in bands.
-          return rim
-            ? CLAY[0]
-            : Math.floor(jy + vnoise(x / 9, y / 30, 47) * 6) % 5 === 0
-              ? CLAY[0]
-              : g2 > 0.84
-                ? CLAY[2]
-                : CLAY[1];
-        case 5: // Sand: pale, and brighter where it is dry.
-          return rim ? EARTH[2] : g2 > 0.7 ? PAPER[1] : f > 0.95 ? CREAM : PAPER[0];
-        default: // Resin: the litter under old stumps, spotted with amber.
-          return rim ? GREEN[0] : f > 0.975 ? GOLD[0] : g2 > 0.6 ? EARTH[0] : GREEN[0];
-      }
+      return patchOf(d, rim, f, g2, x, y, jy);
     }
 
     if (wild) {
@@ -244,34 +214,6 @@ export function floorOf(land: Land): (x: number, y: number, wild: boolean) => st
   };
 }
 
-function line(g: Ctx, x0: number, y0: number, x1: number, y1: number, col: string): void {
-  const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1);
-  for (let k = 0; k <= n; k++)
-    R(g, Math.round(x0 + ((x1 - x0) * k) / n), Math.round(y0 + ((y1 - y0) * k) / n), 1, 1, col);
-}
-
-/** A fallen bough: pale where the light catches it, dark under, a twig or two, sometimes still in leaf. */
-function branch(g: Ctx, x: number, y: number, seed: number): void {
-  const len = 7 + Math.floor(hash(seed, 1, 61) * 6);
-  const lean = Math.round((hash(seed, 2, 61) - 0.5) * 6);
-  const x1 = x + len;
-  const y1 = y + lean;
-  line(g, x, y + 2, x1, y1 + 2, BARK[0]);
-  line(g, x, y + 1, x1, y1 + 1, BARK[2]);
-  line(g, x, y, x1, y1, hash(seed, 3, 61) > 0.5 ? BARK[4] : BARK[3]);
-  R(g, x, y, 1, 2, PAPER[0]);
-  R(g, x1, y1, 1, 2, GOLD[0]);
-  const mid = Math.floor(len / 2);
-  const my = y + Math.round((lean * mid) / len);
-  const up = hash(seed, 4, 61) > 0.5 ? -1 : 1;
-  line(g, x + mid, my + (up > 0 ? 2 : 0), x + mid + 3, my + up * 4, BARK[3]);
-  if (hash(seed, 5, 61) > 0.45) {
-    R(g, x + mid + 3, my + up * 4 - 1, 2, 2, GREEN[3]);
-    R(g, x + mid + 4, my + up * 4 - 2, 1, 1, GREEN[4]);
-  }
-}
-
-const ORE_ROCK = [BARK[0], STONE[0], STONE[1], STONE[2]];
 const FLOWERS = [
   ["..p..", ".pyp.", "..p..", "..G..", ".GG..", "..G.."],
   ["..w..", ".wyw.", "..w..", "..G..", "..GG.", "..G.."],
@@ -292,64 +234,12 @@ const tilesUnder = (land: Land, b: Box): Tiles => ({
   ty1: Math.min(land.h - 1, Math.floor((b.y + b.h) / TILE) + 2),
 });
 
-/** What lies in the ground, drawn over the floor: branches, rocks, banks and stumps, none of them in ranks. */
+/** What lies in the ground, drawn over the floor: branches, rocks, banks and stumps, none of them in ranks (`lying.ts`). */
 function* deposits(g: Ctx, land: Land, t: Tiles): Generator<void, void, undefined> {
   for (let ty = t.ty0; ty <= t.ty1; ty++, yield)
     for (let tx = t.tx0; tx <= t.tx1; tx++) {
       const d = rawAt(land, ty * land.w + tx);
-      if (!d) continue;
-      const ox = tx * TILE;
-      const oy = ty * TILE;
-      const seed = Math.floor(hash(tx, ty, 90) * 9973);
-      const a = hash(tx, ty, 91);
-      const b = hash(tx, ty, 92);
-      switch (d) {
-        case "deadfall":
-          branch(g, ox + 1 + Math.floor(a * 4), oy + 4 + Math.floor(b * 3), seed);
-          branch(g, ox + 3 + Math.floor(b * 4), oy + 10 + Math.floor(a * 3), seed + 7);
-          if (a > 0.6) branch(g, ox + Math.floor(b * 6), oy + 7, seed + 13);
-          break;
-        case "stone":
-        case "ore": {
-          const ramp = d === "ore" ? ORE_ROCK : STONE;
-          const big = outlined(rock(9 + Math.floor(a * 4), 7 + Math.floor(b * 3), seed, ramp), INK);
-          const bx = ox + Math.floor(a * (TILE - big.width));
-          const by = oy + 1 + Math.floor(b * (TILE - big.height - 3));
-          g.drawImage(big, bx, by);
-          if (d === "ore") {
-            for (let k = 0; k < 4; k++) {
-              const fx = bx + 2 + Math.floor(hash(seed, k, 93) * (big.width - 5));
-              const fy = by + 2 + Math.floor(hash(seed, k, 94) * (big.height - 5));
-              R(g, fx, fy, k % 2 ? 1 : 2, 1, k === 0 ? GOLD[2] : GOLD[1]);
-              R(g, fx, fy + 1, 1, 1, GOLD[0]);
-            }
-          }
-          if (b > 0.45) g.drawImage(outlined(rock(5, 4, seed + 3, ramp), INK), ox + Math.floor((1 - a) * 9), oy + 10);
-          break;
-        }
-        case "clay": {
-          const cx = ox + 5 + Math.floor(a * 6);
-          const cy = oy + 6 + Math.floor(b * 5);
-          ell(g, cx, cy + 1, 6, 3.4, CLAY[0]);
-          ell(g, cx, cy, 6, 3.2, CLAY[1]);
-          ell(g, cx - 1, cy - 1, 3.6, 1.6, CLAY[2]);
-          R(g, cx - 3, cy - 2, 2, 1, CLAY[3]);
-          break;
-        }
-        case "sand": {
-          const cx = ox + 5 + Math.floor(a * 6);
-          const cy = oy + 7 + Math.floor(b * 5);
-          ell(g, cx, cy + 1, 6, 2.6, PAPER[0]);
-          ell(g, cx, cy, 5.4, 2.2, PAPER[1]);
-          R(g, cx - 3, cy - 1, 4, 1, CREAM);
-          if (a > 0.7) R(g, cx + 5, cy + 3, 1, 1, CREAM);
-          break;
-        }
-        case "resin":
-          g.drawImage(stump(seed, true), ox + Math.floor(a * 3), oy + 1 + Math.floor(b * 3));
-          R(g, ox + 12 + Math.floor(a * 2), oy + 12 - Math.floor(b * 3), 2, 1, GOLD[1]);
-          break;
-      }
+      if (d) lie(g, d, tx, ty);
     }
 }
 
@@ -568,6 +458,38 @@ export function glint(g: Ctx, land: Land, tx: number, ty: number, sx: number, sy
   const x = sx + 2 + Math.floor(hash(tx, ty, 55) * 9);
   const y = sy + 2 + Math.floor(((k * 31 + t * 5) % 1) * 12);
   R(g, x, y, phase < 0.3 ? 3 : 2, 1, phase < 0.15 ? WATER[3] : WATER[2]);
+}
+
+/** A pixel of the stream: deep in the middle, lighter at its banks, a stepping stone where it is forded. */
+function waterAt(
+  forded: boolean,
+  x: number,
+  y: number,
+  jx: number,
+  jy: number,
+  wet: (x: number, y: number) => boolean,
+): string {
+  const stone = forded ? steppingStone(x & 15, y & 15) : null;
+  if (stone) return stone;
+  if (!ringed(jx, jy, 3, wet)) return WATER[2];
+  if (!ringed(jx, jy, 8, wet)) return WATER[1];
+  return (y & 3) === 0 && hash(x >> 2, y, 52) > 0.86 ? WATER[1] : WATER[0];
+}
+
+/** Three flat stones across a forded tile, corner to corner, each lit on its top left and dark on its foot: a pixel of one, or null. */
+function steppingStone(x: number, y: number): string | null {
+  for (const [cx, cy] of [
+    [3, 4],
+    [8, 8],
+    [13, 12],
+  ] as const) {
+    const dx = x - cx;
+    const dy = y - cy;
+    if (dx * dx * 0.6 + dy * dy > 4.5) continue;
+    if (dy >= 1.5) return STONE[0];
+    return dx + dy <= -2 ? STONE[2] : STONE[1];
+  }
+  return null;
 }
 
 /** The colour the view is cleared to before the floor is drawn. */

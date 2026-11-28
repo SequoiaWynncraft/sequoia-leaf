@@ -57,6 +57,15 @@ const read = (code: unknown): F.Command | null => F.readCommand({ tick: 0, do: "
 /** The pieces on the area `kept` keeps a blueprint of. */
 const keptArea = (y: F.Yard): F.Piece[] => F.piecesAt(y, F.within(y, 2, 2, 10, 4));
 
+/** A yard on a bare land of 56 by 40 with every goal done, the plan room among them. */
+function big(): F.Yard {
+  const y = F.create({ land: bareLand(56, 40, [], [52, 4]), tier: 6, seed: 1 });
+  y.open = F.openOf([...F.ALL_GOALS]);
+  return y;
+}
+/** How long a command is on the wire, with a tick and the longest id. */
+const command = (c: Record<string, unknown>): number => JSON.stringify({ ...c, tick: 1e12, id: "x".repeat(40) }).length;
+
 describe("a blueprint's code", () => {
   test("is the same each time for the same blueprint, and pasted in another yard keeps that blueprint", () => {
     const a = kept();
@@ -226,6 +235,52 @@ describe("a blueprint's code", () => {
       refused: "cannot_place_blueprint",
       why: "The sorter is not unlocked yet",
     });
+  });
+
+  test("the plan room's box is 40 tiles by 30, 1,200 pieces: kept, pasted, and its longest code and its tiles each fit one command", () => {
+    // Before the shelves, 32 by 24; with them, 40 by 25; with the plan room too, 40 by 30.
+    expect([F.create({ seed: 1, tier: 4 }).open.box, F.create({ seed: 1, tier: 5 }).open.box, big().open.box]).toEqual([
+      { w: 32, h: 24 },
+      { w: 40, h: 25 },
+      { w: 40, h: 30 },
+    ]);
+    const y = big();
+    for (let z = 1; z <= 30; z++) for (let x = 1; x <= 40; x++) put(y, "belt", x, z, 0, { grade: 3 });
+    for (let z = 1; z <= 30; z++) must(y, { do: "paint", tint: 1 + (z % 6), x: 1, y: z });
+    const tiles = F.within(y, 1, 1, 40, 30);
+    must(y, { do: "saveBlueprint", slot: 5, tiles });
+    const code = codeIn(y, 5);
+    expect([F.piecesOf(y.blueprints[5]?.pieces ?? new Uint8Array()).length, code.length <= F.CODE_MOST]).toEqual([
+      1200,
+      true,
+    ]);
+    must(big(), { do: "pasteBlueprint", slot: 5, code });
+    // One tile wider is refused.
+    put(y, "belt", 41, 1, 0, { grade: 3 });
+    expect(give(y, { do: "saveBlueprint", slot: 4, tiles: F.within(y, 1, 1, 41, 1) })).toMatchObject({
+      why: "A blueprint is at most 40 tiles by 30. This is 41 by 1",
+    });
+    // The longest code there can be, and every tile of the largest box on the guild's land, each in
+    // a command under what the page sends alone in one request (15,500 characters, of the 16 KiB Leaf reads).
+    const corner = F.LAND.w * F.LAND.h - 40 * 30;
+    expect(command({ do: "pasteBlueprint", slot: 5, code: "x".repeat(F.CODE_MOST) })).toBeLessThan(15_500);
+    expect(
+      command({ do: "saveBlueprint", slot: 5, tiles: Array.from({ length: 1200 }, (_, k) => corner + k) }),
+    ).toBeLessThan(15_500);
+  });
+
+  test("the shelves' box is 40 tiles by 25, so all 1,000 of their pieces fit, and their line says so", () => {
+    const y = F.create({ land: bareLand(56, 40, [], [52, 4]), tier: 5, seed: 1 });
+    expect([y.open.blueprints, y.open.pieces, y.open.box]).toEqual([4, 1000, { w: 40, h: 25 }]);
+    for (let z = 1; z <= 25; z++) for (let x = 1; x <= 40; x++) put(y, "belt", x, z);
+    must(y, { do: "saveBlueprint", slot: 3, tiles: F.within(y, 1, 1, 40, 25) });
+    expect(F.piecesOf(y.blueprints[3]?.pieces ?? new Uint8Array()).length).toBe(1000);
+    put(y, "belt", 1, 26);
+    expect(give(y, { do: "saveBlueprint", slot: 2, tiles: F.within(y, 1, 1, 1, 26) })).toMatchObject({
+      why: "A blueprint is at most 40 tiles by 25. This is 1 by 26",
+    });
+    const line = F.unlockedBy(F.goal("shelves")).find((u) => u.is === "blueprints");
+    expect(line?.says).toBe("Keep 4 blueprints of up to 1,000 pieces each, in a box of up to 40 tiles by 25.");
   });
 
   test("off the wire, is text no longer than the longest code there can be", () => {

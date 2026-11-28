@@ -135,6 +135,55 @@
     ]
   },
   {
+    "id": "works-tier-5-wire",
+    "at": "2026-11-28T03:39Z",
+    "title": "The Works: tier 5, The wire",
+    "lines": [
+      "Tier 5 is open. Copper comes from salvage, on the new land. A breaker turns salvage into copper, ingots, glass, slag and gears, mixed on one belt. The depot does not take slag.",
+      "Breakers make smog on the plot they stand on. The ground clears 300 a minute and each redwood 120. A plot with too much slows every machine on it."
+    ],
+    "more": [
+      {
+        "head": "New",
+        "points": [
+          "A mill makes wire from copper and gravel from slag.",
+          "Coils, bulbs, telegraphs, strings of lights and the Spark folio.",
+          "A redwood's card says what it clears. Felling one loses that for good."
+        ]
+      },
+      {
+        "head": "Also",
+        "points": ["Shelves for the plan chest keep blueprints of up to 40 by 25 tiles, so all 1,000 pieces fit."]
+      }
+    ]
+  },
+  {
+    "id": "works-outer-land",
+    "at": "2026-11-28T03:38Z",
+    "title": "The Works: 40 more plots",
+    "lines": [
+      "40 new plots of land are for sale, in two rings round the yard, to every yard that has finished tier 4. Each is cleared with goods, then bought with Coins.",
+      "The first plot costs 100,000 Coins, and each plot you buy raises the price of the rest by 15%."
+    ],
+    "more": [
+      {
+        "head": "Clearing",
+        "points": [
+          "Press Clear it on a plot's card, then deliver the goods it asks for to the depot. You clear one plot at a time.",
+          "Hand the clearing over in Orders. Then the plot's card offers Buy."
+        ]
+      },
+      {
+        "head": "New",
+        "points": ["Two new projects, A survey of the outer woods and Stakes and string, pay 35,000 Coins toward one."]
+      },
+      {
+        "head": "Also",
+        "points": ["You can walk across every plot. Where water would cut a plot in two, stepping stones cross it."]
+      }
+    ]
+  },
+  {
     "id": "works-assembler",
     "at": "2026-11-27T23:25Z",
     "title": "The assembler",

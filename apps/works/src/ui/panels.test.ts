@@ -32,7 +32,6 @@ import {
   step,
   STUDY,
   study,
-  TIERS,
   type Yard,
 } from "@sequoia-leaf/factory";
 import { xy } from "@sequoia-leaf/factory/test/near.ts";
@@ -332,12 +331,14 @@ describe("the tier's screen", () => {
       title: "Lanterns for the great tree",
       line: "10 research left",
     });
-    // Every goal of the slice done: the last tier is open, its commission still to come.
+    // Every goal of the slice done: the last tier any goal is of is open, or, once its commission is done, the one after.
     y.done = [...ALL_GOALS];
     reopen(y);
     S.world = y;
+    const last = Math.max(...ALL_GOALS.map((g) => GOALS[g]?.tier ?? 0));
+    const opens = ALL_GOALS.some((g) => GOALS[g]?.tier === last && GOALS[g]?.kind === "commission") ? last + 1 : last;
     expect([y.open.tier, nextWords(nextUp())]).toEqual([
-      TIERS.length - 1,
+      opens,
       { label: "", title: "Every project is done", line: "More tiers are coming." },
     ]);
   });

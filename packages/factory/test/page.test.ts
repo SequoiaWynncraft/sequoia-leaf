@@ -72,8 +72,11 @@ describe("what the page writes for an act", () => {
     { do: "first", way: null, x: 6, y: 7 },
     { do: "wayIn", way: 2, on: true, x: 6, y: 7 },
     { do: "wayIn", way: 0, on: false, x: 6, y: 7 },
-    { do: "buyPlot", plot: F.plot("meadow") },
-    { do: "fell", x: 22, y: 33 },
+    { do: "buyPlot", plot: F.plot("meadow"), price: 300 },
+    { do: "clearPlot", plot: F.plot("workings") },
+    { do: "handClearing", plot: F.plot("workings"), start: "a-3" },
+    { do: "stopClearing", plot: F.plot("workings"), start: "a-3" },
+    { do: "fell", x: 22, y: 33, price: 1000 },
     { do: "take", node: F.goal("crates") },
     { do: "queue", node: F.goal("signs") },
     { do: "unqueue", node: F.goal("culvert") },
@@ -173,7 +176,7 @@ describe("what the page writes for an act", () => {
   test("names every thing, kind, plot and goal, and holds no number for one", () => {
     const wired = acts.map((a) => JSON.stringify(F.writeAct(a)));
     expect(wired[0]).toBe('{"do":"build","kind":"mill","x":20,"y":15,"dir":2}');
-    expect(wired.find((w) => w.includes("buyPlot"))).toBe('{"do":"buyPlot","plot":"meadow"}');
+    expect(wired.find((w) => w.includes("buyPlot"))).toBe('{"do":"buyPlot","plot":"meadow","price":300}');
     expect(wired.find((w) => w.includes("take"))).toBe('{"do":"take","node":"crates"}');
     expect(wired.find((w) => w.includes('"bench"'))).toContain('"recipe":"tool"');
   });
@@ -219,7 +222,7 @@ describe("a command played with the purse, as the page plays it", () => {
         },
         `Not enough Coins: ${2 * crate} short`,
       ],
-      [{ do: "buyPlot", plot: F.plot("meadow") }, "Not enough Coins"],
+      [{ do: "buyPlot", plot: F.plot("meadow"), price: 300 }, "Not enough Coins"],
     ];
     const kept = F.encode(y);
     for (const [a, why] of cases) {

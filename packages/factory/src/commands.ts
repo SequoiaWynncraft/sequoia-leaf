@@ -5,7 +5,7 @@
  *
  * On the wire things, kinds, plots and goals go by their names; everywhere else they are numbers.
  */
-import { type CoinChange, LOGGED, type Logged, type Refused } from "@sequoia-leaf/core";
+import { LOGGED } from "@sequoia-leaf/core";
 
 import {
   at,
@@ -14,7 +14,6 @@ import {
   type Dir,
   fell,
   isDir,
-  type Refund,
   remove,
   setFirst,
   setIn,
@@ -23,12 +22,13 @@ import {
   setSide,
   setSort,
   setWay,
-  type Spent,
   tipOut,
   turn,
 } from "./build.ts";
+import { clearRefusal, handClearing, isStart, stopClearing, takeClearing } from "./clearing.ts";
 import { isCode, pasteBlueprint } from "./code.ts";
 import { STAND_MOST } from "./content/machines.ts";
+import { type Did, done, doneUnless, payIn, priced, refunded, spent, type Turned } from "./did.ts";
 import {
   type At,
   type Fields,
@@ -81,7 +81,7 @@ import {
   TINTS,
 } from "./tables.ts";
 import { placeYard, saveYard } from "./whole.ts";
-import { collect, type Yard } from "./yard.ts";
+import type { Yard } from "./yard.ts";
 
 /** What each command carries, by its name. */
 interface Carries {
@@ -112,9 +112,18 @@ interface Carries {
   way: At & { readonly way: number; readonly open: boolean };
   first: At & { readonly way: number | null };
   wayIn: At & { readonly way: number; readonly on: boolean };
-  buyPlot: { readonly plot: Plot };
-  /** Any tile of the redwood. */
-  fell: At;
+  /** At the price the player was shown: refused if it is not the price now. */
+  buyPlot: { readonly plot: Plot; readonly price: number };
+  /**
+   * Takes on clearing a plot; hands the clearing over once it has all it wants; or stops it
+   * (`clearing.ts`): each of the last two by the clearing's plot and the number it was begun as,
+   * refused if that is not the clearing being done.
+   */
+  clearPlot: { readonly plot: Plot };
+  handClearing: { readonly plot: Plot; readonly start: string };
+  stopClearing: { readonly plot: Plot; readonly start: string };
+  /** Any tile of the redwood, and the price the player was shown. */
+  fell: At & { readonly price: number };
   take: { readonly node: Goal };
   queue: { readonly node: Goal };
   unqueue: { readonly node: Goal };
@@ -140,37 +149,8 @@ export type Act = { [D in Name]: ActOf<D> }[Name];
 /** A command as it goes on the wire: what was done, with every thing, kind, plot and goal by its name. */
 export type Wired = { readonly do: Act["do"]; readonly [field: string]: unknown };
 
-/** A command the rules turned down: the code Leaf answers, and the sentence the page says. */
-export type Turned = Refused & { readonly why: string };
-
 /** The code a command is refused with when it needs what the yard has not unlocked: a tool, or putting a way first. */
 export const LOCKED = "locked";
-
-/** What a command did: the Coins it moved and what it logged, or the rules' refusal. */
-export type Did = { readonly coins: CoinChange[]; readonly log: Logged[] } | Turned;
-const done = (coins: CoinChange[] = [], log: Logged[] = []): Did => ({ coins, log });
-
-function change(y: Yard, amount: number, reason: string, free: boolean): CoinChange {
-  const key = `bank:${y.bank++}`;
-  return free ? { amount, reason, key, free: true } : { amount, reason, key };
-}
-function payIn(y: Yard): CoinChange[] {
-  const coins = collect(y);
-  return coins > 0 ? [change(y, coins, REASON.till, true)] : [];
-}
-/** A price paid: the till paid in first, then the price taken (or, below nothing, given back, free, for `back`). */
-function priced(y: Yard, price: number, reason: string, back: string = REASON.lower): CoinChange[] {
-  const paid = payIn(y);
-  if (price < 0) return [...paid, change(y, -price, back, true)];
-  return price > 0 ? [...paid, change(y, -price, reason, false)] : paid;
-}
-
-/** Done, if the rules spent Coins, with what it cost paid as `reason`; else refused with their reason. */
-const spent = (y: Yard, did: Spent, reason: string, no: (why: string) => Turned): Did =>
-  did.ok ? done(priced(y, did.cost, reason)) : no(did.why);
-/** Done, if the rules took something away, with what came back given free; else refused with their reason. */
-const refunded = (y: Yard, did: Refund, no: (why: string) => Turned): Did =>
-  did.ok ? done(did.refund > 0 ? [change(y, did.refund, REASON.remove, true)] : []) : no(did.why);
 
 const goalId = (g: Goal): string => GOALS[g]?.id ?? "";
 
@@ -184,8 +164,8 @@ interface Spec<D extends Name> {
   readonly read: (v: Record<string, unknown>, f: Fields) => ActOf<D> | null;
   /** What it carries as the wire names it. */
   readonly write: (a: ActOf<D>) => Record<string, unknown>;
-  /** Does it to a yard at its tick, with `coins` to spend: the purse's and the till's whole Coins. Nothing changes unless it is done. */
-  readonly act: (y: Yard, a: ActOf<D>, coins: number, no: (why: string) => Turned) => Did;
+  /** Does it to a yard at its tick, with `coins` to spend (the purse's and the till's whole Coins), its id `id` ("" for none). Nothing changes unless it is done. */
+  readonly act: (y: Yard, a: ActOf<D>, coins: number, no: (why: string) => Turned, id: string) => Did;
 }
 
 const needs = (lock: Lock) => (): Lock | null => lock;
@@ -199,12 +179,18 @@ const writeItem = (a: At & { readonly item: Item | null }): Record<string, unkno
   item: a.item === null ? null : itemName(a.item),
   ...spot(a),
 });
-/** Refused with what the rules said; or where they said null, done, `then` done first. */
-function doneUnless(why: string | null, no: (why: string) => Turned, then?: () => void): Did {
-  if (why !== null) return no(why);
-  then?.();
-  return done();
-}
+
+/** Reads a command for one clearing: its plot, and its name (`start`, not `id`, which on the wire is each command's own). */
+const oneClearing =
+  <D extends "handClearing" | "stopClearing">(name: D) =>
+  (v: Record<string, unknown>): ActOf<D> | null => {
+    const plot = plotNamed(v.plot);
+    return plot !== null && isStart(v.start) ? { do: name, plot, start: v.start } : null;
+  };
+const writeClearing = (a: { readonly plot: Plot; readonly start: string }): Record<string, unknown> => ({
+  plot: plotName(a.plot),
+  start: a.start,
+});
 
 /** Every command, by its name. */
 export const COMMANDS: { readonly [D in Name]: Spec<D> } = {
@@ -431,23 +417,46 @@ export const COMMANDS: { readonly [D in Name]: Spec<D> } = {
     refused: "plot_not_for_sale",
     read: (v) => {
       const p = plotNamed(v.plot);
-      return p === null ? null : { do: "buyPlot", plot: p };
+      return p === null || !whole(v.price, Number.MAX_SAFE_INTEGER) ? null : { do: "buyPlot", plot: p, price: v.price };
     },
-    write: (a) => ({ plot: plotName(a.plot) }),
+    write: (a) => ({ plot: plotName(a.plot), price: a.price }),
     act: (y, a, coins, no) => {
-      const did = buyPlot(y, a.plot, coins);
+      const did = buyPlot(y, a.plot, a.price, coins);
       if (!did.ok) return no(did.why);
       return done(priced(y, did.cost, REASON.buyPlot), [
         { kind: LOGGED.worksPlot, data: { plot: plotName(a.plot), price: did.cost } },
       ]);
     },
   },
+  clearPlot: {
+    refused: "cannot_clear",
+    read: (v) => {
+      const p = plotNamed(v.plot);
+      return p === null ? null : { do: "clearPlot", plot: p };
+    },
+    write: (a) => ({ plot: plotName(a.plot) }),
+    act: (y, a, _coins, no, id) => doneUnless(clearRefusal(y, a.plot), no, () => takeClearing(y, a.plot, id)),
+  },
+  handClearing: {
+    refused: "not_cleared",
+    read: oneClearing("handClearing"),
+    write: writeClearing,
+    act: (y, a, _coins, no) => doneUnless(handClearing(y, a.plot, a.start), no),
+  },
+  stopClearing: {
+    refused: "not_clearing",
+    read: oneClearing("stopClearing"),
+    write: writeClearing,
+    act: (y, a, _coins, no) => doneUnless(stopClearing(y, a.plot, a.start), no),
+  },
   fell: {
     refused: "cannot_fell",
     lock: needs({ fell: true }),
-    read: (_v, f) => f.spot && { do: "fell", ...f.spot },
-    write: spot,
-    act: (y, a, coins, no) => spent(y, fell(y, a.x, a.y, coins), REASON.fell, no),
+    // A fell with no price (from a page before prices were sent) does not read, and is refused.
+    read: (v, f) =>
+      f.spot && whole(v.price, Number.MAX_SAFE_INTEGER) ? { do: "fell", ...f.spot, price: v.price } : null,
+    write: (a) => ({ ...spot(a), price: a.price }),
+    act: (y, a, coins, no) => spent(y, fell(y, a.x, a.y, a.price, coins), REASON.fell, no),
   },
   take: {
     refused: "cannot_take",
@@ -525,12 +534,12 @@ export const REFUSED: Readonly<Record<string, string>> = Object.fromEntries(
 const isName = (v: unknown): v is Name => typeof v === "string" && Object.hasOwn(COMMANDS, v);
 
 /** Does one command, as its entry has it: refused `LOCKED` first if the yard has not unlocked what it needs. */
-function actOne<D extends Name>(y: Yard, a: ActOf<D>, coins: number): Did {
+function actOne<D extends Name>(y: Yard, a: ActOf<D>, coins: number, id: string): Did {
   const spec: Spec<D> = COMMANDS[a.do];
   const lock = spec.lock?.(a) ?? null;
   const why = lock === null ? null : locked(y.open, lock);
   if (why !== null) return { refused: LOCKED, why };
-  return spec.act(y, a, coins, (said) => ({ refused: spec.refused ?? LOCKED, why: said }));
+  return spec.act(y, a, coins, (said) => ({ refused: spec.refused ?? LOCKED, why: said }), id);
 }
 
 /**
@@ -540,7 +549,7 @@ function actOne<D extends Name>(y: Yard, a: ActOf<D>, coins: number): Did {
  */
 export function act(y: Yard, a: Act, coins: number, id = ""): Did {
   const was = before(y, a);
-  const did = actOne(y, a, coins);
+  const did = actOne(y, a, coins, id);
   if (!("refused" in did)) after(y, a, was, did.coins, id);
   return did;
 }

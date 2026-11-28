@@ -18,12 +18,16 @@ function does(act: Act): string | null {
   return "refused" in did ? did.why : null;
 }
 
-/** Buys a plot: the undergrowth comes down from its signpost outwards, before the member's eyes. */
-export function buyLand(id: Plot): boolean {
+/**
+ * Buys a plot at the price the member was shown: the undergrowth comes down from its signpost
+ * outwards, before their eyes. If the price has changed since (another tab bought a plot), nothing is
+ * bought and the rules say what it costs now.
+ */
+export function buyLand(id: Plot, price: number): boolean {
   const w = S.world;
   const plot = w.land.plots.find((p) => p.plot === id);
   const sign = layout(w).signs.find((s) => s.plot.plot === id);
-  const no = plot ? does({ do: "buyPlot", plot: id }) : "There is no such plot";
+  const no = plot ? does({ do: "buyPlot", plot: id, price }) : "There is no such plot";
   if (!plot || no !== null) {
     yardSfx.no();
     toolHooks.said(`${no}.`);
@@ -33,6 +37,46 @@ export function buyLand(id: Plot): boolean {
   S.clearing.set(id, { at: S.t, x: from.x, y: from.y });
   yardSfx.clear();
   float(from.x, from.y - 20, plot.name, GOLD[2], 2.4);
+  return true;
+}
+
+/** Takes on a plot's clearing: its goods go to it as the depot takes them in, after the project in hand. */
+export function clearLand(id: Plot): boolean {
+  const plot = S.world.land.plots.find((p) => p.plot === id);
+  const no = plot ? does({ do: "clearPlot", plot: id }) : "There is no such plot";
+  if (!plot || no !== null) {
+    yardSfx.no();
+    toolHooks.said(`${no}.`);
+    return false;
+  }
+  yardSfx.plan();
+  toolHooks.said(`Clearing ${plot.name}: its goods go to it as the depot takes them in.`);
+  return true;
+}
+
+/** Hands the clearing the card showed over, once it has all it wants: its plot is cleared, and its card offers Buy. */
+export function handClearing(plot: Plot, start: string): boolean {
+  const name = S.world.land.plots.find((p) => p.plot === plot)?.name ?? "";
+  const no = does({ do: "handClearing", plot, start });
+  if (no !== null) {
+    yardSfx.no();
+    toolHooks.said(`${no}.`);
+    return false;
+  }
+  yardSfx.handOver();
+  toolHooks.said(`${name} is cleared. Buy it from its card.`);
+  return true;
+}
+
+/** Stops the clearing the card showed: what was delivered to it is not given back. */
+export function stopClearing(plot: Plot, start: string): boolean {
+  const no = does({ do: "stopClearing", plot, start });
+  if (no !== null) {
+    yardSfx.no();
+    toolHooks.said(`${no}.`);
+    return false;
+  }
+  yardSfx.plan();
   return true;
 }
 

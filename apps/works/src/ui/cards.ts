@@ -168,6 +168,8 @@ export interface StandingPrint extends SorterPrint {
   readonly flow: Flow | null;
   readonly gathering: Item | null;
   readonly perMinute: string | null;
+  /** How many it makes a minute now, as a number (`perMinute` says it): null where it makes nothing of its own. */
+  readonly rate: number | null;
   /** What it makes, needs, gathers, studies or carries a minute, in sentences (`numbers.ts`): none until the yard counts. */
   readonly numbers: readonly string[];
   /** The one thing it is told to make, or a sorter to send to its side, or nothing. */
@@ -192,6 +194,8 @@ export interface StandingPrint extends SorterPrint {
   readonly refund: number;
   readonly free: boolean;
   readonly ways: WaysPrint | null;
+  /** For a piece that breaks a mix (the breaker): the place in its mix of the next thing it gives. */
+  readonly mix: number | null;
   readonly visiting: boolean;
 }
 
@@ -310,9 +314,13 @@ const listBlocks = (...lists: readonly (Listed | null)[]): Block[] => some(...li
 /** A machine's picture cut to a card's slot: a tall machine is known by its head. */
 const machinePic = (art: Art, k: Kind, grade = 1): HTMLCanvasElement => fitted(art.icon(k, grade), 22, 22);
 
-/** What a kind of piece is called on its card: "Belt", and once the yard may build it higher, "Belt I" or "Belt II". */
+/**
+ * What a kind of piece is called on its card: "Belt", and once the yard may build it higher, "Belt I"
+ * or "Belt II", its grade held to its name by a space that does not break, so the title stays whole
+ * and the price beside it goes onto a line of its own first.
+ */
 const gradedName = (p: MachinePrint): string =>
-  p.graded ? `${nameOf(p.kind)} ${numeral(Math.max(1, p.grade))}` : nameOf(p.kind);
+  p.graded ? `${nameOf(p.kind)}\u00a0${numeral(Math.max(1, p.grade))}` : nameOf(p.kind);
 
 /** Rows of another card named, with the words beside each. */
 const entries = (named: readonly Named[]): Entry[] =>
@@ -386,15 +394,14 @@ const pressWay = (p: StandingPrint, hands: Hands): ((way: number) => void) | nul
 /** What takes a standing piece up: as the tool in hand, facing the same way (Another), or itself, to set down elsewhere (Move). */
 function takeUp(p: StandingPrint, hands: Hands): Action[] {
   const { x, y } = p;
-  const another = p.hints.another;
   const name = nameOf(p.machine.kind).toLowerCase();
   return [
-    ...(another === null
+    ...(p.hints.another === null
       ? []
       : [
           {
             label: "Another",
-            hint: another,
+            hint: p.hints.another,
             about: `Picks the ${name} as your tool, facing the same way.`,
             on: () => hands.another(x, y),
           },
@@ -443,7 +450,8 @@ function standingCard(art: Art, p: StandingPrint, hands: Hands): Description {
   const page = pageOf(k);
   const own = page?.standing;
   rows.push(...(own?.rows?.(p) ?? []));
-  rows.push(...(base.rows ?? []));
+  // Its kind's rows, but where it has its own of the same name: a breaker's mix with the next picked out.
+  rows.push(...(base.rows ?? []).filter((r) => !rows.some((o) => o.label === r.label)));
 
   const actions: Action[] = own?.actions?.(art, p, hands) ?? [];
   if (p.count > 0 && (page?.empties === true || p.spare !== null || p.state === "idle"))

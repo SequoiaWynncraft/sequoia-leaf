@@ -4,17 +4,20 @@
  * piece may be or be set to is each kind's to say (`kinds/`): where it may stand, what it is laid
  * over, the other tiles it stands on, and what each command that sets something on a piece does.
  */
+import { coinsText } from "@sequoia-leaf/core";
+
 import { FELLING } from "./content/plots.ts";
 import { coverRefusal } from "./footprint.ts";
 import type { Setters } from "./kinds/kind.ts";
 import { RULES } from "./kinds/list.ts";
 import { keepsFor } from "./kinds/maker.ts";
 import { digs, exitOf } from "./kinds/tunnel.ts";
-import { type Plotted, touching } from "./land.ts";
+import { plotPrice, type Plotted, touching } from "./land.ts";
 import { join } from "./lines.ts";
 import { isBig, pieceOf } from "./sizes.ts";
 import {
   ALL_ITEMS,
+  CLEARING,
   FAST,
   FIXED,
   gradeOf,
@@ -405,12 +408,19 @@ export function plotState(y: Yard, id: Plot): { state: "owned" | "for sale" | "n
   return { state: "for sale", why: null };
 }
 
-/** Why a plot cannot be bought with `coins` in the purse, or nothing if it can. */
-export function plotRefusal(y: Yard, id: Plot, coins: number): string | null {
+/**
+ * Why a plot cannot be bought at `shown` with `coins` in the purse, or nothing if it can. The price is
+ * the one the player was shown: a plot that rises costs more once another is bought (from another
+ * tab, or earlier in the same batch), and then it is not bought at all.
+ */
+export function plotRefusal(y: Yard, id: Plot, shown: number, coins: number): string | null {
   const { state, why } = plotState(y, id);
   if (state === "owned") return "You already own that plot";
   if (state === "not yet") return why;
-  return coins < (plotOf(y, id)?.price ?? 0) ? "Not enough Coins" : null;
+  if (CLEARING[id] && !y.cleared.includes(id)) return `${plotOf(y, id)?.name ?? "That plot"} must be cleared first`;
+  const now = plotPrice(y, id);
+  if (shown !== now) return `The price has changed: it is now ${coinsText(now)}`;
+  return coins < now ? "Not enough Coins" : null;
 }
 
 /**
@@ -424,28 +434,36 @@ export function fellPrice(y: Yard): number {
 }
 
 /** Why the redwood on a tile cannot be felled with `coins` in the purse, or nothing if it can. */
-export function fellRefusal(y: Yard, x: number, z: number, coins: number): string | null {
+export function fellRefusal(y: Yard, x: number, z: number, coins: number, shown?: number): string | null {
   const i = at(y, x, z);
   if (i < 0 || !redwoodAt(y, i)) return "There is no redwood here";
   const plot = y.land.plots[y.land.plot[i] ?? NONE];
   if (!plot || !y.plots.includes(plot.plot)) return plot ? `${plot.name} is not the yard's yet` : "That is off the map";
-  return coins < fellPrice(y) ? "Not enough Coins" : null;
+  const now = fellPrice(y);
+  if (shown !== undefined && shown !== now) return `The price has changed: it is now ${coinsText(now)}`;
+  return coins < now ? "Not enough Coins" : null;
 }
 
-/** Fells the redwood on a tile, every tile of it, and says what it cost. It is never undone, and its Coins never come back. */
-export function fell(y: Yard, x: number, z: number, coins: number): Spent {
-  const why = fellRefusal(y, x, z, coins);
+/**
+ * Fells the redwood on a tile, every tile of it, at the price the player was shown (`shown`: refused
+ * as a plot is if it has changed since), and says what it cost. It is never undone, and its Coins
+ * never come back.
+ */
+export function fell(y: Yard, x: number, z: number, shown: number, coins: number): Spent {
+  const why = fellRefusal(y, x, z, coins, shown);
   if (why !== null) return { ok: false, why };
   const cost = fellPrice(y);
   y.felled[standingTree(y, at(y, x, z))] = 1;
   return { ok: true, cost };
 }
 
-/** Buys a plot and says what it cost. */
-export function buyPlot(y: Yard, id: Plot, coins: number): Spent {
-  const why = plotRefusal(y, id, coins);
+/** Buys a plot at the price the player was shown, and says what it cost. */
+export function buyPlot(y: Yard, id: Plot, shown: number, coins: number): Spent {
+  const why = plotRefusal(y, id, shown, coins);
   if (why !== null) return { ok: false, why };
+  // Its price before it is the yard's: owned, it would count toward its own rise.
+  const cost = plotPrice(y, id);
   y.plots.push(id);
   changed(y);
-  return { ok: true, cost: plotOf(y, id)?.price ?? 0 };
+  return { ok: true, cost };
 }

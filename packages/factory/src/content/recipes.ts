@@ -47,4 +47,13 @@ export const RECIPES: readonly RecipeInfo[] = [
   { out: "spyglass", from: { pipe: 1, glass: 2 }, by: "bench", ticks: 30 },
   { out: "clock", from: { gear: 2, frame: 1, glass: 1 }, by: "workshop", ticks: 40 },
   { out: "orrery", from: { clock: 2, spyglass: 1, brass: 1 }, by: "workshop", ticks: 80 },
+  // Tier 5, the wire: what is made of a breaker's copper and slag. Each is after every older recipe
+  // of its machine, and no new one's parts are all found in another's of its machine.
+  { out: "gravel", from: { slag: 1 }, by: "mill", ticks: 12, face: "press" },
+  { out: "wire", from: { copper: 1 }, by: "mill", ticks: 12, face: "press" },
+  { out: "coil", from: { wire: 2, ingot: 1 }, by: "bench", ticks: 20 },
+  { out: "bulb", from: { wire: 1, glass: 1 }, by: "bench", ticks: 20 },
+  { out: "spark", from: { coil: 1, bulb: 1, gear: 1 }, by: "workshop", ticks: 40 },
+  { out: "telegraph", from: { coil: 2, bulb: 1, frame: 1 }, by: "workshop", ticks: 80 },
+  { out: "lights", from: { bulb: 3, wire: 2, pole: 1 }, by: "workshop", ticks: 40 },
 ];

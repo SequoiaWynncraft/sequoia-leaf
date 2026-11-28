@@ -38,8 +38,8 @@ function running(ticks = 3000): F.Yard {
   return y;
 }
 
-/** A whole number below 16,384 as the packed bytes write it, seven bits a byte. */
-const varint = (v: number): number[] => (v < 128 ? [v] : [(v & 127) | 128, v >> 7]);
+/** A whole number as the packed bytes write it, seven bits a byte, the lowest first. */
+const varint = (v: number): number[] => (v < 128 ? [v] : [(v % 128) | 128, ...varint(Math.floor(v / 128))]);
 
 /** A piece on tile 5 whose kind has its bits past four (`high`) in a part of their own (0x4000), as only a kind past 15 has. */
 const wide = (high: number): number[] => [1, 5, F.SPLITTER | 128, 0x80, 0x80, 0x01, high];
@@ -181,7 +181,7 @@ describe("decode refuses whole", () => {
     expect(F.decode(withCells(good, bytes))).not.toBeNull();
   });
 
-  test("a count no yard could have: more pieces than tiles, pairs short of the count, a part unknown; what today's tables allow is no part of the shape", () => {
+  test("a count no yard could have: more pieces than tiles, pairs short of the count; what today's tables allow is no part of the shape", () => {
     const good = F.encode(F.create({ seed: 1 }));
     // One crate on tile 5 holding `kinds` things, `many` of each, with as many pairs as `given` says.
     const crate = (kinds: number, given = kinds, many = 1): number[] => [
@@ -218,17 +218,35 @@ describe("decode refuses whole", () => {
       ]);
     // More pieces than the land has tiles.
     expect(F.decode(withCells(good, varint(F.LAND.w * F.LAND.h + 1)))).toBeNull();
-    // A part this version does not know: the lowest bit, and the one past the highest.
-    expect(F.decode(withCells(good, [1, 5, F.BELT | 128, 1]))).toBeNull();
-    expect(F.decode(withCells(good, [1, 5, F.BELT | 128, ...varint(8192)]))).toBeNull();
   });
 
-  test("a kind's bits past four that are none, or more than four", () => {
-    expect(unpackCells(Uint8Array.from(wide(1)), 100)?.map((p) => p.kind)).toEqual([F.SPLITTER | 16]);
-    expect(unpackCells(Uint8Array.from(wide(15)), 100)?.map((p) => p.kind)).toEqual([F.SPLITTER | 240]);
-    expect(unpackCells(Uint8Array.from(wide(0)), 100)).toBeNull();
-    expect(unpackCells(Uint8Array.from(wide(16)), 100)).toBeNull();
-    expect(F.decode(withCells(F.encode(F.create({ seed: 1 })), wide(0)))).toBeNull();
+  test("a part no reader here knows, on a piece, is a newer Leaf's: never broken bytes, and never read with it let go", () => {
+    const good = F.encode(F.create({ seed: 1 }));
+    // The lowest bit; the one past the highest this Leaf keeps, as a newer Leaf keeps a part after
+    // them all; and one no Leaf has ever kept. What follows each is past reading.
+    for (const bit of [1, 0x80000, 0x100000, 2 ** 40]) {
+      const text = withCells(good, [1, 5, F.BELT | 128, ...varint(bit), 7, 7, 7]);
+      expect([bit, F.decode(text), F.keptLater(text)]).toEqual([bit, null, true]);
+    }
+    // Cut short before its parts are said, the bytes are broken.
+    const short = withCells(good, [1, 5, F.BELT | 128]);
+    expect([F.decode(short), F.keptLater(short)]).toEqual([null, false]);
+  });
+
+  test("a kind's bits past four that are none, which is broken; or more than four, a kind no Leaf here has: a newer Leaf's", () => {
+    const kinds = (high: number) => {
+      const read = unpackCells(Uint8Array.from(wide(high)), 100);
+      return Array.isArray(read) ? read.map((p) => p.kind) : read;
+    };
+    expect([kinds(1), kinds(15), kinds(16), kinds(0)]).toEqual([
+      [F.SPLITTER | 16],
+      [F.SPLITTER | 240],
+      [F.SPLITTER | 256],
+      null,
+    ]);
+    const good = F.encode(F.create({ seed: 1 }));
+    expect([F.decode(withCells(good, wide(0))), F.keptLater(withCells(good, wide(0)))]).toEqual([null, false]);
+    expect([F.decode(withCells(good, wide(16))), F.keptLater(withCells(good, wide(16)))]).toEqual([null, true]);
   });
 });
 
@@ -336,6 +354,10 @@ const LEFT_OUT = new Set([
   "supply",
   "demand",
   "holders.idle",
+  // Worked out from the smog levels, which are mixed in: each plot's pace, how many are slowed, and a place to count redwoods.
+  "smog.pace",
+  "smog.slowed",
+  "smog.standing",
   // Read only by a screen, and never kept: the recipe a machine last began.
   "holders.last",
   // Which row of a side table holds a piece's parts: reading a yard back may change it.
@@ -391,6 +413,17 @@ function change(y: F.Yard, path: string): void {
   else if (Array.isArray(v)) v.push(v[0] ?? 0);
   else throw new Error(`${path}: nothing to change`);
 }
+
+/** A plot being cleared, given something, and a plot cleared, added to a copy of a yard, and then whatever `more` adds. */
+const and =
+  (more: (c: F.Yard) => void = () => {}) =>
+  (c: F.Yard): void => {
+    const want = F.countsOf({ lantern: 600, pipe: 900 });
+    c.clearing = { plot: F.plot("workings"), start: "a-2", want, filled: F.countsOf({ pipe: 3 }) };
+    c.cleared = [F.plot("flats")];
+    c.begun = 2;
+    more(c);
+  };
 
 /** The parts of a yard that change without the check changing, `add` having first added to a copy whatever it adds. */
 function unmixed(y: F.Yard, add: (copy: F.Yard) => void = () => {}): string[] {
@@ -453,11 +486,25 @@ describe("the check", () => {
       y.blueprints.some((b) => b),
       y.history.length > 0,
     ]).toEqual([true, true, true, true, true]);
-    expect(unmixed(y)).toEqual([]);
-    expect(unmixed(y, (c) => Object.assign(c, { glow: 3 }))).toEqual(["glow"]);
-    expect(unmixed(y, (c) => Object.assign(c.holders, { heat: new Uint8Array(c.holders.tile.length) }))).toEqual([
-      "holders.heat",
-    ]);
-    expect(unmixed(y, (c) => (c.board = c.board.map((o) => ({ ...o, tip: 2 }))))).toEqual(["board.0.tip"]);
+    // And a plot being cleared, given something, and a plot cleared, as a yard past tier 4's commission has them (`and`).
+    expect(unmixed(y, and())).toEqual([]);
+    expect(
+      unmixed(
+        y,
+        and((c) => Object.assign(c, { glow: 3 })),
+      ),
+    ).toEqual(["glow"]);
+    expect(
+      unmixed(
+        y,
+        and((c) => Object.assign(c.holders, { heat: new Uint8Array(c.holders.tile.length) })),
+      ),
+    ).toEqual(["holders.heat"]);
+    expect(
+      unmixed(
+        y,
+        and((c) => (c.board = c.board.map((o) => ({ ...o, tip: 2 })))),
+      ),
+    ).toEqual(["board.0.tip"]);
   });
 });

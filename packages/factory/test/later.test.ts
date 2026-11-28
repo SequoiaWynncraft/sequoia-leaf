@@ -7,9 +7,12 @@
  */
 import { describe, expect, test } from "bun:test";
 
+import { PARTS } from "../src/cells.ts";
+import { ENTRY_FLAGS, MASK_BITS, SETTING_PARTS } from "../src/history.ts";
 import * as F from "../src/index.ts";
 import { KNOWN_AT_10 } from "../src/known10.ts";
 import { beforeReach } from "./goals.ts";
+import { near, xy } from "./near.ts";
 import { Player } from "./player.ts";
 import { bare, TIER5, tunnel } from "./tier5.ts";
 import { generated, must, saved, SAVES, staged } from "./yards.ts";
@@ -68,8 +71,10 @@ describe("the version a yard is kept as", () => {
     expect(record(F.encode(y)).v).toBe(F.PLACED);
   });
 
-  test("asked cheaply as it is kept, it says what the whole scan of the kept yard says: staged, kept, random play, tier 5", () => {
-    expect(F.WIDER).toBe(false);
+  test("its version is what the whole scan of the kept yard says, and asked cheaply it says the same: staged, kept, random play, tier 5", () => {
+    // The land's 40 plots are past what version 10 knew: while the tables have anything past it, the
+    // whole scan decides (`WIDER`), and the cheap rule is asked only while they have nothing.
+    expect(F.WIDER).toBe(true);
     const yards = [
       ...(["new", "small", "mid", "gate", "large"] as const).map((n) => staged(n)),
       ...SAVES.map(saved),
@@ -94,8 +99,9 @@ describe("the version a yard is kept as", () => {
       const text = F.encode(y);
       const names = F.namesOf(record(text), y.land);
       if (!names) throw new Error("the yard's pieces do not read");
-      expect([F.pastTen(y), record(text).v]).toEqual([!F.knownAt10(names), F.knownAt10(names) ? F.PLACED : F.VERSION]);
-      if (F.pastTen(y)) later++;
+      expect(record(text).v).toBe(F.knownAt10(names) ? F.PLACED : F.VERSION);
+      if (!F.WIDER) expect(F.pastTen(y)).toBe(!F.knownAt10(names));
+      if (!F.knownAt10(names)) later++;
     }
     expect(later).toBeGreaterThan(10);
   });
@@ -103,6 +109,72 @@ describe("the version a yard is kept as", () => {
   test("the version 10 a kind past 15 was kept as still reads", () => {
     const text = JSON.stringify({ ...record(F.encode(staged("mid"))), v: 10 });
     expect(F.decode(text)).not.toBeNull();
+  });
+});
+
+/** A whole number as packed bytes write it, seven bits a byte, the lowest first. */
+const varint = (v: number): number[] => (v < 128 ? [v] : [(v % 128) | 128, ...varint(Math.floor(v / 128))]);
+
+/** The bits below `width` that `known` does not have, and for a varint one far past them all. */
+const unknownBits = (known: number, width: number): number[] => [
+  ...Array.from({ length: width }, (_, b) => 2 ** b).filter((bit) => Math.floor(known / bit) % 2 === 0),
+  ...(width > 8 ? [2 ** 40] : []),
+];
+
+/**
+ * A yard with one entry in its history, a belt taken away ("r-1"), as kept: its record, and the
+ * entry's bytes, with where its parts are. The entry's flags follow its id (its length, then a byte
+ * each); last are what it did to the one piece (a count, then `UP`), and the piece it stands again (a
+ * count, the tile, then its first byte: no parts follow).
+ */
+function oneEntry(): { kept: Rec; bytes: Uint8Array; mask: number } {
+  const y = F.create({ seed: 1, tier: 4 });
+  must(y, { do: "build", kind: "belt", ...near(0, -6), dir: 0 });
+  y.history = [];
+  must(y, { do: "remove", ...near(0, -6), id: "r-1" });
+  const kept = record(F.encode(y));
+  const bytes = F.fromBase64(words(kept.history)[0] ?? "");
+  if (!bytes) throw new Error("no entry");
+  const mask = bytes.length - 3 - varint(F.at(y, ...xy(0, -6))).length;
+  expect([bytes[0], bytes[4], bytes[mask - 1], bytes[mask], (bytes.at(-1) ?? 0) & 128]).toEqual([3, 0, 1, 1, 0]);
+  return { kept, bytes, mask };
+}
+
+describe("every bit a save keeps that this Leaf does not use", () => {
+  test("is a newer Leaf's, in every mask and flag field: pieces and their parts, Undo entries, their pieces and their settings, blueprints", () => {
+    const good = record(F.encode(F.create({ seed: 1 })));
+    const { kept, bytes, mask } = oneEntry();
+    const entry = (b: readonly number[]): string =>
+      JSON.stringify({ ...kept, history: [F.toBase64(Uint8Array.from(b))] });
+    const at = (i: number, v: readonly number[]): number[] => [...bytes.subarray(0, i), ...v, ...bytes.subarray(i + 1)];
+    // Each field: the bits this Leaf keeps in it, how wide it is, and a save with one other bit set.
+    // A field with every bit in use (a piece's first byte, a setting's first byte, a blueprint piece's
+    // flags) has none to set; the clearing keeps no field of bits, only names, which a name no Leaf
+    // knows already makes a newer Leaf's (`clearing.test.ts`).
+    const fields: readonly (readonly [string, number, number, (bit: number) => string])[] = [
+      [
+        "a piece's parts",
+        PARTS,
+        31,
+        (bit) =>
+          JSON.stringify({ ...good, cells: F.toBase64(Uint8Array.from([1, 5, F.BELT | 128, ...varint(bit), 7, 7])) }),
+      ],
+      ["an Undo entry's flags", ENTRY_FLAGS, 8, (bit) => entry(at(4, [bit]))],
+      ["what an Undo entry did to a piece", MASK_BITS, 31, (bit) => entry(at(mask, varint(bit)))],
+      [
+        "the parts of a piece an Undo entry stands again",
+        SETTING_PARTS,
+        8,
+        (bit) => entry([...at(bytes.length - 1, [(bytes.at(-1) ?? 0) | 128]), bit]),
+      ],
+      ["a piece's first byte, a setting's, a blueprint piece's flags", 0xff, 8, () => ""],
+    ];
+    expect([F.keptLater(entry([...bytes])), F.decode(entry([...bytes])) === null]).toEqual([false, false]);
+    for (const [name, known, width, save] of fields)
+      for (const bit of unknownBits(known, width)) {
+        const text = save(bit);
+        expect([name, bit, F.keptLater(text), F.decode(text)]).toEqual([name, bit, true, null]);
+      }
   });
 });
 

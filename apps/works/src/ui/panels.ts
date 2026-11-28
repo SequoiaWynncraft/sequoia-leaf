@@ -32,6 +32,7 @@ import { yardSfx } from "../sound.ts";
 import { pressKey, S } from "../state.ts";
 import { doNow } from "../yard.ts";
 import { board } from "./board.ts";
+import { clearingCard, clearingLine } from "./clearing.ts";
 import {
   goalCard,
   leaves,
@@ -123,6 +124,7 @@ export function ordersPrint(): {
   readonly orders: readonly OrderLine[];
   /** How many side orders the yard has handed over, ever: as the Tally's board in town counts them. */
   readonly handed: number;
+  readonly clearing: ReturnType<typeof clearingLine>;
 } {
   const w = S.world;
   return {
@@ -142,8 +144,19 @@ export function ordersPrint(): {
       why: swapRefusal(w, s.id),
     })),
     handed: w.handed,
+    clearing: clearingLine(),
   };
 }
+
+/** What comes before the side orders while there are none: the lesson they open after. */
+const boardStart = (p: ReturnType<typeof ordersPrint>): HTMLElement[] =>
+  !p.board && BOARD_AT !== undefined
+    ? [
+        el("div", "k-d", {
+          text: `Side orders open after lesson ${LESSONS.indexOf(BOARD_AT) + 1}: ${GOALS[BOARD_AT]?.title}.`,
+        }),
+      ]
+    : [];
 
 /**
  * What closes the side orders, once there are any: a place for each order Leaf has yet to hang (the
@@ -208,12 +221,8 @@ function orders(_art: Art, body: HTMLElement, life: Scope): () => void {
         ),
       );
     }
-    if (!p.board && BOARD_AT !== undefined)
-      kids.push(
-        el("div", "k-d", {
-          text: `Side orders open after lesson ${LESSONS.indexOf(BOARD_AT) + 1}: ${GOALS[BOARD_AT]?.title}.`,
-        }),
-      );
+    // Before the side orders: when they open, or the plot being cleared.
+    kids.push(...boardStart(p), ...clearingCard(life, () => draw(ordersPrint()), live));
     const shown = placed(places, p.orders);
     places = shown.map((s) => s.id);
     for (const s of shown) {

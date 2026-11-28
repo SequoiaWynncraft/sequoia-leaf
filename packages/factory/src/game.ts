@@ -9,7 +9,8 @@ import { type Ctx, type Done, type Game, LOGGED, type Logged } from "@sequoia-le
 import { check } from "./check.ts";
 import { awayOf, here, stillAt, TICK_MS } from "./clock.ts";
 import { decode, encode, type KeptOrder } from "./codec.ts";
-import { type Act, act, readAct, type Turned } from "./commands.ts";
+import { type Act, act, readAct } from "./commands.ts";
+import type { Turned } from "./did.ts";
 import { isId } from "./history.ts";
 import { LAND, type Land } from "./land.ts";
 import { fillBoard, ORDER_TOLD, ORDER_WAITS } from "./orders.ts";

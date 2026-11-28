@@ -18,6 +18,17 @@ const NUMBERED = ["stops", "crate", "reach", "depot", "span", "away", "hooks", "
 /** The first goal whose unlocks hold a field. */
 const withField = (has: (u: F.Unlocks) => boolean): F.Unlocks => ALL.find(([, u]) => has(u))?.[1] ?? {};
 
+/** Whether a plot, by its name, rises in price. */
+const rising = (name: F.PlotName): boolean => {
+  const p = F.LAND.plots.find((q) => q.plot === F.plot(name));
+  return p !== undefined && F.rises(p);
+};
+/** The rows plots put up for sale make: one each, but plots that rise in price, two or more of them, are one. */
+const plotRows = (names: readonly F.PlotName[]): number => {
+  const up = names.filter(rising).length;
+  return names.length - up + Math.min(up, 1);
+};
+
 describe("what is unlocked", () => {
   test("every field of every unlock in the tables is one thing in the list, named and said, and nothing is listed twice", () => {
     for (const [id, u] of ALL) {
@@ -34,7 +45,7 @@ describe("what is unlocked", () => {
         kinds.length +
         Object.keys(u.grades ?? {}).length +
         (u.recipes ?? []).length +
-        (u.plots ?? []).length +
+        plotRows(u.plots ?? []) +
         (u.tools ?? []).length +
         (u.blueprints ? 1 : 0) +
         NUMBERED.filter((of) => u[of] !== undefined).length -
@@ -46,7 +57,8 @@ describe("what is unlocked", () => {
         (u.mouths ? 1 : 0);
       expect([id, list.length]).toEqual([id, fields]);
       for (const e of list) {
-        expect([id, e.name.length > 0, /^[A-Z].*\.$/.test(e.says)]).toEqual([id, true, true]);
+        // A sentence, begun with a capital or a number (numbers are written as numbers).
+        expect([id, e.name.length > 0, /^[A-Z0-9].*\.$/.test(e.says)]).toEqual([id, true, true]);
         if (e.is === "number" || e.is === "blueprints") expect(e.amount.length).toBeGreaterThan(0);
       }
       expect(new Set(list.map((e) => `${e.is}:${e.name}`)).size).toBe(list.length);
@@ -147,6 +159,25 @@ describe("what is unlocked", () => {
         if (e.is === "board") expect(e.says).toContain(String(F.HOOKS_MOST));
       }
     for (const tool of F.TOOLS) expect(F.TOOL_INFO[tool].name.length).toBeGreaterThan(0);
+  });
+
+  test("plots that rise in price, put up for sale together, are one thing: how many, from the cheapest's price, and how they rise", () => {
+    const kits = F.goal("kits");
+    expect(F.unlockedBy(kits)).toEqual([
+      {
+        is: "land",
+        plots: F.OUTER_IDS.map(F.plot),
+        first: F.plot("workings"),
+        price: 100_000,
+        name: "40 plots",
+        says: "40 plots are for sale, from 100,000 Coins. Each plot you buy raises the price of the rest by 15%.",
+      },
+    ]);
+    // One alone is a plot, with the same sentence after its price; plots that do not rise are listed one by one.
+    expect(F.unlocked({ plots: ["ridge", "meadow"] }).map((e) => [e.is, e.says])).toEqual([
+      ["plot", "Copper Ridge is for sale, for 160,000 Coins. Each plot you buy raises the price of the rest by 15%."],
+      ["plot", "Long Meadow is for sale, for 300 Coins."],
+    ]);
   });
 
   test("by a goal is the list of that goal's unlocks, so a screen asks by the goal and holds no `Unlocks`", () => {

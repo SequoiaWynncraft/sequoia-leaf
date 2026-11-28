@@ -7,10 +7,11 @@
  * frame, in their order.
  */
 
-import { GOLD } from "@sequoia-leaf/kit/palette.ts";
+import { CREAM, GOLD } from "@sequoia-leaf/kit/palette.ts";
 import { type Ctx, hash } from "@sequoia-leaf/kit/util.ts";
 
 import type { Box } from "./art/ground.ts";
+import { isSpark } from "./era.ts";
 import type { Layout } from "./layout.ts";
 import { PATCH, Patches, placeOf, spanOf } from "./patches.ts";
 import { S } from "./state.ts";
@@ -161,20 +162,21 @@ function glints(s: Strung, L: Layout, view: Box, corner: { x: number; y: number 
   }
 }
 
-/** The glints on the picture, and the pixels more than one line lies on, darker or in the glint. */
+/** The glints on the picture, and the pixels more than one line lies on, darker or in the glint: gold, or from the Spark era cream. */
 function gold(g: Ctx, s: Strung, cx: number, cy: number): void {
+  const glint = isSpark(S.world) ? CREAM : GOLD[2];
   // A pixel at a time, a thousand or more of them on a large yard: the colour is given only when it
   // changes, as reading a colour again for each pixel costs more than drawing it.
-  g.fillStyle = GOLD[2];
+  g.fillStyle = glint;
   for (const line of s.lines)
     for (let k = line.lit - 1; k <= line.lit + 1; k++)
       if (line.alone[k] === 1) g.fillRect((line.xs[k] ?? 0) - cx, (line.ys[k] ?? 0) - cy, 1, 1);
-  let fill: string = GOLD[2];
+  let fill: string = glint;
   for (let j = 0; j < s.shared.length; j += 2) {
     const line = s.lines[s.shared[j] ?? 0];
     const k = s.shared[j + 1] ?? 0;
     if (!line) continue;
-    const col = Math.abs(k - line.lit) < 2 ? GOLD[2] : WIRE;
+    const col = Math.abs(k - line.lit) < 2 ? glint : WIRE;
     if (col !== fill) {
       g.fillStyle = col;
       fill = col;

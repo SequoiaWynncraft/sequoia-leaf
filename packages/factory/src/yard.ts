@@ -61,6 +61,10 @@ export interface Holders {
   last: Uint8Array;
   /** The work done on the next piece, in half-ticks (`tick.ts`). */
   work: Uint16Array;
+  /** For a piece that breaks one thing into several, its place in its mix: what it gives next (`kinds/mix.ts`). */
+  mix: Uint8Array;
+  /** For a piece smog slows, the quarters of a half-tick of work done past its whole half-ticks, 0 to 3, toward its next tick's (`tick.ts`). */
+  quarter: Uint8Array;
   /** 1 while a machine has looked at what it holds and found nothing it can start on. */
   idle: Uint8Array;
   /** 1 while a crate lets things out. */
@@ -97,7 +101,9 @@ export interface Standing {
 export type News =
   | { readonly kind: "done"; readonly goal: string; readonly title: string; readonly pay: number }
   | { readonly kind: "filled"; readonly id: number; readonly title: string; readonly pay: number }
-  | { readonly kind: "standing"; readonly id: number; readonly title: string; readonly pay: number };
+  | { readonly kind: "standing"; readonly id: number; readonly title: string; readonly pay: number }
+  /** A plot being cleared has all it wants: it waits to be handed over (`handClearing`). */
+  | { readonly kind: "clearing"; readonly plot: string; readonly title: string; readonly pay: number };
 
 /** A time the yard worked on while its owner was away: for how long, the Coins its till gained, and what its depot took in. */
 export interface Away {
@@ -111,6 +117,21 @@ export interface Seen {
   readonly tick: number;
   readonly till: number;
   readonly depot: Counts;
+}
+
+/**
+ * Smog on each plot, by its place in the land's `plots` (`smog.ts`): its level, 0 to `SMOG.most`, and
+ * what was made on it since it was last counted, both kept and checked. Worked out from the level, and
+ * neither kept nor checked: each plot's pace in fourths (4, or 3, 2 and 1 at smog's steps) and how many
+ * plots are slowed, changed only where a level is set (`setLevel`), so the tick reads a plot's pace
+ * only while some plot is slowed; and a place to count the redwoods standing on each plot (`standingInto`).
+ */
+export interface Smog {
+  readonly level: Uint16Array;
+  readonly made: Uint16Array;
+  readonly pace: Uint8Array;
+  slowed: number;
+  readonly standing: Uint8Array;
 }
 
 /** The yard's plumbing, worked out from what stands where (`wire.ts`). */
@@ -236,6 +257,29 @@ export interface Yard {
   /** Plots owned, in the order they were bought. */
   plots: Plot[];
   /**
+   * The plot being cleared, one at a time, what it asks for and what has been delivered to it; the plots cleared, in
+   * the order they were handed over, for good (`clearing.ts`).
+   */
+  clearing: {
+    readonly plot: Plot;
+    /** Its name: the id of the command that took it on, or for one taken on with none, `#` and the count of starts (`begun`). */
+    readonly start: string;
+    /** What it asks for, as the table had it when it was begun: a later change to the table does not touch it. */
+    readonly want: Counts;
+    readonly filled: Counts;
+  } | null;
+  cleared: Plot[];
+  /**
+   * How many clearings the yard has taken on, ever: a start with no command id is named by it
+   * (`start` above), so that it too has a name no other start of the yard has.
+   */
+  begun: number;
+  /**
+   * Smog on each plot, by its place in the land's `plots` (`smog.ts`): its level, 0 to `SMOG.most`,
+   * and what was made on it since it was last counted.
+   */
+  readonly smog: Smog;
+  /**
    * 1 for each of the land's redwoods the yard has felled (`fell`), by its place in the land's
    * `trees`. Every rule asks whether one stands on a tile through `redwoodAt`, never the land alone.
    */
@@ -284,6 +328,8 @@ const holders = (cap: number): Holders => ({
   making: new Uint8Array(cap),
   last: new Uint8Array(cap),
   work: new Uint16Array(cap),
+  mix: new Uint8Array(cap),
+  quarter: new Uint8Array(cap),
   idle: new Uint8Array(cap),
   open: new Uint8Array(cap),
   fuel: new Uint8Array(cap),
@@ -297,6 +343,15 @@ const tunnels = (cap: number): Tunnels => ({
   under: new Uint8Array(cap * SPAN_MOST),
   along: new Uint8Array(cap * SPAN_MOST),
 });
+
+/**
+ * Room in a yard's side tables, still empty, for so many holders and tunnels: a yard read back takes
+ * the room its pieces need, where rows added one by one would leave a third more as they grow by half.
+ */
+export function reserve(y: Yard, holderRows: number, tunnelRows: number): void {
+  if (y.holders.size === 0) y.holders = holders(Math.max(16, holderRows));
+  if (y.tunnels.size === 0) y.tunnels = tunnels(Math.max(8, tunnelRows));
+}
 
 /** A yard with nothing on it but the depot, and the starting pieces to hand; every goal below `tier` done, for trying later parts. */
 export function emptyYard(land: Land, tier = 0): Yard {
@@ -338,6 +393,16 @@ export function emptyYard(land: Land, tier = 0): Yard {
     away: null,
     seen: { tick: 0, till: 0, depot: counts() },
     plots: [plot("yard")],
+    clearing: null,
+    cleared: [],
+    begun: 0,
+    smog: {
+      level: new Uint16Array(land.plots.length),
+      made: new Uint16Array(land.plots.length),
+      pace: new Uint8Array(land.plots.length).fill(4),
+      slowed: 0,
+      standing: new Uint8Array(land.plots.length),
+    },
     felled: new Uint8Array(land.trees.length),
     spare: Uint8Array.from(STARTING),
     blueprints: Array.from({ length: BLUEPRINTS_MOST }, () => null),
@@ -448,6 +513,8 @@ export function holderRow(y: Yard, tile: number): number {
       "making",
       "last",
       "work",
+      "mix",
+      "quarter",
       "idle",
       "open",
       "fuel",
@@ -467,6 +534,8 @@ export function holderRow(y: Yard, tile: number): number {
   h.making[r] = NONE;
   h.last[r] = NONE;
   h.work[r] = 0;
+  h.mix[r] = 0;
+  h.quarter[r] = 0;
   h.idle[r] = 0;
   h.open[r] = 1;
   h.fuel[r] = 0;
@@ -510,6 +579,8 @@ export function dropRow(y: Yard, tile: number): void {
         "making",
         "last",
         "work",
+        "mix",
+        "quarter",
         "idle",
         "open",
         "fuel",

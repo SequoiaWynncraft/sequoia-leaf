@@ -479,7 +479,7 @@ export class Player {
     if (!read) return 0;
     if (read.do === "build") return F.priceAt(this.y, read.kind, read.x, read.y, read.grade);
     if (read.do === "lay") return F.priceOf(this.y, read.legs.map(F.legPiece));
-    if (read.do === "buyPlot") return this.y.land.plots.find((p) => p.plot === read.plot)?.price ?? 0;
+    if (read.do === "buyPlot") return read.price;
     return 0;
   }
 

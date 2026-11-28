@@ -39,6 +39,28 @@ export function give(y: F.Yard, c: Rec): ReturnType<typeof F.play> {
   if (!read) throw new Error(`${JSON.stringify(c)} does not read`);
   return F.play(y, read);
 }
+/** The command to buy a plot, by its name, at what it costs the yard now, as the page sends it (nothing for no such plot). */
+export function buying(y: F.Yard, plot: string): Rec {
+  const p = F.plotNamed(plot);
+  return { do: "buyPlot", plot, price: p === null ? 0 : F.plotPrice(y, p) };
+}
+/**
+ * Clears a plot past the first ring by the commands a player gives, the goods it wants put straight
+ * into it as if delivered, so that it can be bought; nothing for a plot Coins alone buy, or one cleared.
+ */
+export function clearedFor(y: F.Yard, plot: string): void {
+  const p = F.plotNamed(plot);
+  const want = p === null ? null : F.CLEARING[p];
+  if (p === null || !want || y.cleared.includes(p)) return;
+  must(y, { do: "clearPlot", plot });
+  y.clearing?.filled.set(y.clearing.want);
+  must(y, { do: "handClearing", plot, start: y.clearing?.start });
+}
+/** Clears a plot if it needs it, and buys it at its price now. */
+export function bought(y: F.Yard, plot: string): void {
+  clearedFor(y, plot);
+  must(y, buying(y, plot));
+}
 /** Gives a yard a command that must be done. */
 export function must(y: F.Yard, c: Rec): void {
   const did = give(y, c);
@@ -163,7 +185,7 @@ export function junctions(): F.Yard {
     ["stop", -9, 3, 0],
     ["pylon", -11, 0, 0],
   ];
-  must(y, { do: "buyPlot", plot: "bank" });
+  must(y, buying(y, "bank"));
   for (const [kind, dx, dy, dir, grade] of pieces)
     must(y, { do: "build", kind, ...near(dx, dy), dir, ...(grade === undefined ? {} : { grade }) });
   must(y, { do: "stand", pieces: [{ kind: "tunnel", ...near(-5, -2), dir: 1, span: 2, grade: 2 }] });
@@ -375,7 +397,7 @@ function built(name: Stage, seed: number): F.Yard {
       600,
       seed,
       (gen) => {
-        for (const plot of plots) gen.cmd({ do: "buyPlot", plot });
+        for (const plot of plots) gen.cmd(buying(gen.y, plot));
       },
       start,
     );
@@ -391,7 +413,7 @@ function built(name: Stage, seed: number): F.Yard {
   workOn(y, ["tools"]);
   if (name === "short") return y;
   finishBelow(y, 2);
-  for (const plot of ["meadow", "bank", "stream"]) must(y, { do: "buyPlot", plot });
+  for (const plot of ["meadow", "bank", "stream"]) must(y, buying(y, plot));
   // The bricks' line splits at its second belt: its right way to a crate, its left way shut.
   must(y, { do: "build", kind: "splitter", ...near(-3, 3), dir: 0 });
   must(y, { do: "build", kind: "crate", ...near(-3, 4), dir: 1 });

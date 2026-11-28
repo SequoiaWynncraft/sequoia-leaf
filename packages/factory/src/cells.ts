@@ -17,19 +17,23 @@
  *        sorter's right side (the same byte, as the way it puts first)   8192 a grade above 1 (byte)
  *   16384 a kind past 15: its bits above the first byte's four (byte)   32768 a by-product held (byte)
  *   65536 more of its finished thing waiting behind the first (byte, `Holders.more`)
+ *   131072 its place in a mix (byte, `Holders.mix`)   262144 the quarters of a half-tick of work
+ *        past its whole ones, for a piece smog slows (byte, `Holders.quarter`)
  *
  * A piece of more than one tile is kept once, on its own tile (`sizes.ts`), and stands over the rest
  * of its tiles again as it is read back. A yard with no kind past 15 and no by-product has exactly the
- * bytes it had before either could be kept; one with either is refused whole by a reader that knows
+ * bytes it had before either could be kept; one with either is a newer Leaf's to a reader that knows
  * neither, as bytes with a part it does not know.
  *
- * Bytes that are not pieces are refused whole: bytes cut short or left over, a part this version
- * does not know, more pieces than the land has tiles, and counts no yard could have (more than 255
- * kinds of thing held, more than a million of one). What today's tables allow is no part of the
- * shape: a thing they do not have is let go, more of one than a piece holds is clamped as it is put
- * back, and a tunnel longer than tunnels go is a piece that cannot stand.
+ * A part this version does not know, a bit of the parts no reader here knows, is a newer Leaf's
+ * (`NEWER`): the yard is not read, and is left as it is for the Leaf that reads it (`keptLater`); so
+ * is a kind past 255. Bytes that are not pieces are refused whole: bytes cut short or left over, more
+ * pieces than the land has tiles, and counts no yard could have (more than 255 kinds of thing held,
+ * more than a million of one). What today's tables allow is no part of the shape: a thing they do not
+ * have is let go, more of one than a piece holds is clamped as it is put back, and a tunnel longer
+ * than tunnels go is a piece that cannot stand.
  */
-import { Reader, spanByte, spanOfByte, Writer } from "./bytes.ts";
+import { NEWER, type Newer, Reader, spanByte, spanOfByte, Writer } from "./bytes.ts";
 import { RULES } from "./kinds/list.ts";
 import { waysOn } from "./pieces.ts";
 import { OWN } from "./sizes.ts";
@@ -37,13 +41,17 @@ import { ALL_ITEMS, CARRIES, FIXED, type Goal, isItem, keptKind, NONE, SHUTS, SP
 import { KIT } from "./wire.ts";
 import { held, holderOf, type Holders, tunnelOf, type Yard } from "./yard.ts";
 
-/** The parts a piece's bytes may say follow, a bit each. */
-const PARTS = 0x1fffe;
+/** The parts a piece's bytes may say follow, a bit each: any other is a newer Leaf's. */
+export const PARTS = 0x7fffe;
 /** The parts kept since a kind could pass 15 and a piece hold a by-product, after all the others. */
 const HIGH = 0x4000;
 const ALSO = 0x8000;
 /** The part kept since a machine could hold more than one finished thing (an assembler). */
 const MORE = 0x10000;
+/** A piece that breaks one thing into several: its place in its mix (`kinds/mix.ts`), kept since tier 5. */
+const MIX = 0x20000;
+/** A piece smog slows: the quarters of a half-tick of work past its whole ones (`Holders.quarter`), kept since tier 5. */
+const QUARTER = 0x40000;
 /** The most kinds of thing, and of one thing, a piece's bytes may say it holds: past these the bytes are no yard's. */
 const KINDS_MOST = 255;
 const MANY_MOST = 1_000_000;
@@ -60,6 +68,8 @@ export interface KeptPiece {
   readonly out?: number;
   readonly also?: number;
   readonly more?: number;
+  readonly mix?: number;
+  readonly quarter?: number;
   readonly work?: number;
   readonly making?: number;
   readonly turn?: number;
@@ -93,17 +103,25 @@ const LATE = [
 
 // ---------- off the yard ----------
 
+/** What a holder's row holds ready beside its finished thing, as kept: a by-product, more of the thing, its place in a mix, and its work past a whole half-tick, where it has any. */
+function heldOut(h: Holders, r: number): Partial<Building> {
+  const [also, more, mix, quarter] = [h.also[r] ?? NONE, h.more[r] ?? 0, h.mix[r] ?? 0, h.quarter[r] ?? 0];
+  return {
+    ...(also === NONE ? {} : { also }),
+    ...(more === 0 ? {} : { more }),
+    ...(mix === 0 ? {} : { mix }),
+    ...(quarter === 0 ? {} : { quarter }),
+  };
+}
+
 /** What a holder's row holds and is doing, as kept: only what there is. */
 function heldBy(h: Holders, r: number): Partial<Building> {
   const kinds = ALL_ITEMS.filter((n) => held(h, r, n) > 0);
   const [out, work, making, fuel] = [h.out[r] ?? NONE, h.work[r] ?? 0, h.making[r] ?? NONE, h.fuel[r] ?? 0];
-  const also = h.also[r] ?? NONE;
-  const more = h.more[r] ?? 0;
   return {
     ...(kinds.length > 0 ? { held: kinds.map((n): [number, number] => [n, held(h, r, n)]) } : {}),
     ...(out === NONE ? {} : { out }),
-    ...(also === NONE ? {} : { also }),
-    ...(more === 0 ? {} : { more }),
+    ...heldOut(h, r),
     ...(work === 0 ? {} : { work }),
     ...(making === NONE ? {} : { making }),
     ...(fuel === 0 ? {} : { fuel }),
@@ -178,6 +196,8 @@ function partsOf(p: KeptPiece): number {
     [HIGH, p.kind > 15 ? true : undefined],
     [ALSO, p.also],
     [MORE, p.more],
+    [MIX, p.mix],
+    [QUARTER, p.quarter],
   ];
   return has.reduce((f, [bit, v]) => (v === undefined || v === false ? f : f | bit), 0);
 }
@@ -227,6 +247,8 @@ function writeKept(o: Writer, p: KeptPiece): void {
   if (f & HIGH) o.byte(p.kind >> 4);
   if (p.also !== undefined) o.byte(p.also);
   if (p.more !== undefined) o.byte(p.more);
+  if (p.mix !== undefined) o.byte(p.mix);
+  if (p.quarter !== undefined) o.byte(p.quarter);
 }
 
 /** Pieces as kept (in tile order, none twice) as bytes: `unpackCells` reads back the same. */
@@ -284,22 +306,24 @@ function readParts(r: Reader, p: Building, f: number): boolean {
   return true;
 }
 
-/** Reads what a piece holds ready beside its finished thing, as `f` says follows: a by-product, and more of the thing. */
+/** Reads what a piece holds ready beside its finished thing, as `f` says follows: a by-product, more of the thing, its place in a mix, and its work past a whole half-tick. */
 function readHeldOut(r: Reader, p: Building, f: number): void {
   if (f & ALSO) p.also = r.byte();
   if (f & MORE) p.more = r.byte();
+  if (f & MIX) p.mix = r.byte();
+  if (f & QUARTER) p.quarter = r.byte();
 }
 
-/** Reads a kind's bits past four onto a piece: 1 to 15, as only a kind past 15 has (none past 255); false for any other. */
+/** Reads a kind's bits past four onto a piece, as only a kind past 15 has; false for none, which no Leaf keeps. Past 15 they make a kind past 255, which no Leaf here has. */
 function readHigh(r: Reader, p: Building): boolean {
   const high = r.byte();
-  if (high === 0 || high > 15) return false;
+  if (high === 0) return false;
   p.kind |= high << 4;
   return true;
 }
 
-/** Reads a piece on a tile, from its first byte; null for bytes that are no yard's. */
-function readKept(r: Reader, tile: number): KeptPiece | null {
+/** Reads a piece on a tile, from its first byte; a newer Leaf's for a part this one does not know, null for bytes that are no yard's. */
+function readKept(r: Reader, tile: number): KeptPiece | Newer | null {
   const kd = r.byte();
   const p: Building = { tile, kind: kd & 15, dir: (kd >> 4) & 3 };
   if (kd & 64) {
@@ -309,12 +333,16 @@ function readKept(r: Reader, tile: number): KeptPiece | null {
     p.via = pv >> 4;
   }
   const f = kd & 128 ? r.varint() : 0;
-  if (f > PARTS || (f & ~PARTS) !== 0 || !readParts(r, p, f)) return null;
-  return r.over ? null : p;
+  // What follows a part this Leaf does not know is past reading: the yard is a newer Leaf's.
+  if (!r.over && (f > PARTS || (f & ~PARTS) !== 0)) return NEWER;
+  return !readParts(r, p, f) || r.over ? null : p;
 }
 
-/** The pieces read back from their bytes, on a land of `tiles` tiles; null for bytes that are not pieces. */
-export function unpackCells(bytes: Uint8Array, tiles: number): KeptPiece[] | null {
+/**
+ * The pieces read back from their bytes, on a land of `tiles` tiles; a newer Leaf's (`NEWER`) for a
+ * piece with a part this one does not know; null for bytes that are not pieces.
+ */
+export function unpackCells(bytes: Uint8Array, tiles: number): KeptPiece[] | Newer | null {
   const r = new Reader(bytes);
   const out: KeptPiece[] = [];
   const pieces = r.varint();
@@ -323,7 +351,7 @@ export function unpackCells(bytes: Uint8Array, tiles: number): KeptPiece[] | nul
   for (let n = 0; n < pieces; n++) {
     tile += r.varint() + 1;
     const p = tile < tiles ? readKept(r, tile) : null;
-    if (!p) return null;
+    if (!p || p === NEWER) return p;
     out.push(p);
   }
   return r.done ? out : null;
@@ -365,6 +393,9 @@ function underOnto(y: Yard, i: number, o: KeptPiece): void {
  */
 export function keptOnto(y: Yard, i: number, o: KeptPiece, studied: Goal | undefined): void {
   carriedOnto(y, i, o);
-  RULES[y.kind[i] ?? NONE]?.onto(KIT, y, i, holderOf(y, i), o, studied);
+  const r = holderOf(y, i);
+  RULES[y.kind[i] ?? NONE]?.onto(KIT, y, i, r, o, studied);
+  // Work past a whole half-tick, below one, on whatever works (`Holders.quarter`).
+  if (r >= 0 && RULES[y.kind[i] ?? NONE]?.work) y.holders.quarter[r] = whole(o.quarter, 3) ?? 0;
   underOnto(y, i, o);
 }

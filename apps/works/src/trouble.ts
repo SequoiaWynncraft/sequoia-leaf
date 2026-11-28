@@ -20,6 +20,8 @@ import {
   type Item,
   type Kind,
   NONE,
+  type Plot,
+  smogTrouble,
   STATES,
   status,
   TROUBLE,
@@ -173,6 +175,14 @@ export function troubleGroups(y: Yard): readonly Group[] {
   );
   grouped = { turn: f.turn, groups };
   return groups;
+}
+
+/** Each of the yard's plots at step 1 or more of smog, by its place in the land's list, with the rules' words for it. */
+export function smoggy(y: Yard): readonly { readonly n: number; readonly plot: Plot; readonly line: string }[] {
+  return y.land.plots.flatMap((p, n) => {
+    const line = y.plots.includes(p.plot) ? smogTrouble(y, n) : null;
+    return line === null ? [] : [{ n, plot: p.plot, line }];
+  });
 }
 
 /** Forgets what was found (for tests). */
