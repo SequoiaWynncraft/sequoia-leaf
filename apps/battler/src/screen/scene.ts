@@ -33,7 +33,7 @@ import { DIM, shineOf } from "./light.ts";
 import { drawLitter } from "./litter.ts";
 import { arrivalOf, handing, watchersOf } from "./logic.ts";
 import { aloft, FOOT, type Pawn, pawns, spotOfPawn } from "./pawns.ts";
-import { drawPlate, drawStars, plateAt, starsWide } from "./plate.ts";
+import { badgeOnly, drawPlate, plateAt } from "./plate.ts";
 import { heldOver, planPlate } from "./plates.ts";
 import { drawRisings } from "./rising.ts";
 import { drawRoots } from "./roots.ts";
@@ -163,7 +163,7 @@ function pawnStanding(g: Ctx, p: Pawn, ox: number, oy: number): Standing {
     },
     top: () => {
       if (p.alpha < 0.6 || !S.run) return;
-      // Its plate, its stars popping onto it as three become one.
+      // Its plate, its badge flashing as three become one.
       const grew = pop >= 0 && pop < 0.7;
       const plate = planPlate(S.run, { ...p, items }, 0, spot?.on === "board" ? spot.at : null);
       const foot = y - 3 - hover - f.tall;
@@ -231,7 +231,7 @@ function foeStanding(
     },
     top: () => {
       if (!S.run) return;
-      drawPlate(g, x, y - 3 - hover - f.tall, { ...planPlate(S.run, { kind, stars, items }, 1, seat), big });
+      drawPlate(g, x, y - 3 - hover - f.tall, planPlate(S.run, { kind, stars, items }, 1, seat));
     },
   };
 }
@@ -531,8 +531,7 @@ export function drawOver(g: Ctx): boolean {
       g.fillStyle = "rgba(26,15,30,0.25)";
       g.fillRect(Math.round(x) - 6, Math.round(y) + 3, 12, 2);
       drawStanding(g, catalogFor(S.run), p.kind, x, y - 4, S.looks.bases, { beat: 1 });
-      const stars = isSummonId(p.kind) ? 0 : p.stars;
-      drawStars(g, stars, Math.round(x) - Math.floor(starsWide(stars) / 2), Math.round(y) - 12 - framesOf(p.kind).tall);
+      drawPlate(g, x, y - 7 - framesOf(p.kind).tall, badgeOnly(isSummonId(p.kind) ? 0 : p.stars));
     } else {
       const s = pawnStanding(g, p, V.bx, V.by);
       s.draw();
@@ -580,12 +579,12 @@ export function heldUnder(run: RunView, x: number, y: number): HeldAt | null {
     const spot = spotOfPawn(p);
     if (!spot || p.id === handMarks().held) continue;
     const piece = pieceAt(run, spot);
-    const hit = piece ? heldAt(heldOver(p.kind, piece.items, p.x, p.y, p.phase), x, y) : null;
+    const hit = piece ? heldAt(heldOver(piece, spot.on !== "board", p.x, p.y, p.phase), x, y) : null;
     if (hit) return hit;
   }
   for (const foe of run.foe.figures) {
     const at = cellXY(seatCell(1, foe.seat), V.gap);
-    const hit = heldAt(heldOver(foe.kind, foe.items, at.x, at.y + FOOT, (foe.seat * 0.23) % 1), x, y);
+    const hit = heldAt(heldOver(foe, false, at.x, at.y + FOOT, (foe.seat * 0.23) % 1), x, y);
     if (hit) return hit;
   }
   return null;

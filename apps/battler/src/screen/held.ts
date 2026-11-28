@@ -1,8 +1,8 @@
 /**
  * What a figure holds, on the table: a row of small boxes, up to three in the order held, each the
- * item's own picture (`heldPic`), a made one's box gold. The row is as narrow as a hex at most (three
- * share their edges), so it never reaches a neighbour on the same row; it is drawn with its figure,
- * so a nearer figure stands in front of it rather than under it.
+ * item's own picture (`heldPic`), each box sharing its ink edge with the next. Three are 19 wide, a
+ * pixel short of a hex, so a row never reaches a neighbour's on the same row; it is drawn with its
+ * figure, so a nearer figure stands in front of it rather than under it.
  */
 import type { RackItem } from "@sequoia-leaf/raid";
 
@@ -17,16 +17,24 @@ export interface HeldAt {
   h: number;
 }
 
-/** How far the pictures overlap their neighbours' edges, by how many there are: three share their edges. */
-const OVERLAP = [0, 0, 0, 1] as const;
+/** How far one box is from the next: they share an edge. */
+const STEP = HELD_BOX - 1;
+/** How many boxes a row shows at most. */
+const MOST = 3;
+
+/** How wide a row holding `n` items is, edges and all. */
+export const heldWide = (n: number): number => (n > 0 ? STEP * Math.min(n, MOST) + 1 : 0);
+
+/** Where each held item's box goes, for a row whose top edge is at `top` and left edge at `left`. */
+export function heldFrom(items: readonly RackItem[], left: number, top: number): HeldAt[] {
+  const x = Math.round(left);
+  const y = Math.round(top);
+  return items.slice(0, MOST).map((item, i) => ({ item, x: x + i * STEP, y, w: HELD_BOX, h: HELD_BOX }));
+}
 
 /** Where each held item's box goes, for a row whose top edge is at `top`, centred on `x`. */
-export function heldRow(items: readonly RackItem[], x: number, top: number): HeldAt[] {
-  const shown = items.slice(0, 3);
-  const step = HELD_BOX - (OVERLAP[shown.length] ?? 0);
-  const left = Math.round(x - (step * (shown.length - 1) + HELD_BOX) / 2);
-  return shown.map((item, i) => ({ item, x: left + i * step, y: Math.round(top), w: HELD_BOX, h: HELD_BOX }));
-}
+export const heldRow = (items: readonly RackItem[], x: number, top: number): HeldAt[] =>
+  heldFrom(items, Math.round(x - heldWide(items.length) / 2), top);
 
 /** Draws a figure's row, offset by the board's corner: each box on its own dark ground, so it reads on any ground. */
 export function drawHeld(g: CanvasRenderingContext2D, row: readonly HeldAt[], ox: number, oy: number): void {

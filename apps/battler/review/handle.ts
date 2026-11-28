@@ -481,7 +481,7 @@ export function openHandle(): void {
       const p = pawns.get(id);
       const spot = spotOfPawn(p);
       const piece = S.run && spot ? pieceAt(S.run, spot) : null;
-      const at = p && piece ? heldOver(p.kind, piece.items, p.x, p.y, p.phase)[i] : undefined;
+      const at = p && piece && spot ? heldOver(piece, spot.on !== "board", p.x, p.y, p.phase)[i] : undefined;
       return at ? stage.boardToPage(at.x + at.w / 2, at.y + at.h / 2) : null;
     },
     rack() {
