@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { at, BELT, create, item, NONE, step, type Yard } from "@sequoia-leaf/factory";
+import { ALL_ITEMS, at, BELT, create, item, ITEM_INFO, itemName, NONE, step, type Yard } from "@sequoia-leaf/factory";
 import { bareLand } from "@sequoia-leaf/factory/test/land.ts";
 import { lay, must } from "@sequoia-leaf/factory/test/yards.ts";
 
-import { carriedAt } from "./plan.ts";
+import { carriedAt, hueOf, liesOf, lineColour, lineField, LYING } from "./plan.ts";
 
 const plank = item("plank");
 
@@ -73,5 +73,27 @@ describe("what a plan's lines carry", () => {
     const gone = tiles[2] ?? 0;
     must(y, { do: "remove", x: gone % y.land.w, y: Math.floor(gone / y.land.w) });
     expect(carriedAt(y, gone)).toBe(NONE);
+  });
+});
+
+describe("the map's colours", () => {
+  test("a line draws what it carries in that thing's own colour, every thing, and a paint over it in the paint's", () => {
+    for (const n of ALL_ITEMS) expect([itemName(n), lineColour(lineField(0, n))]).toEqual([itemName(n), hueOf(n)]);
+    // Every field fits the 8 bits the map keeps it in, and a painted line is its paint, whatever it carries.
+    expect(Math.max(...ALL_ITEMS.map((n) => lineField(0, n)))).toBeLessThan(256);
+    expect(lineColour(lineField(3, item("copper")))).toBe(lineColour(lineField(3, NONE)));
+    expect(lineColour(lineField(3, NONE))).not.toBe(lineColour(lineField(0, NONE)));
+  });
+
+  test("everything that lies in the ground shows where it lies, salvage too: a raw each, in the 3 bits the map keeps", () => {
+    const raws = ALL_ITEMS.filter((n) => ITEM_INFO[n]?.step === 0);
+    expect(LYING).toEqual(raws);
+    expect(raws.map(liesOf)).toEqual(raws.map((_, k) => k + 1));
+    expect([raws.includes(item("salvage")), raws.length <= 7, liesOf(item("plank")), liesOf(NONE)]).toEqual([
+      true,
+      true,
+      0,
+      0,
+    ]);
   });
 });
