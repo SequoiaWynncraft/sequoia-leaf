@@ -302,6 +302,31 @@ describe("the powerhouse", () => {
     expect(F.status(y, i)?.trouble).toBe(false);
   });
 
+  test("holding fuel, a powerhouse and a boiler are burning on every tick, the tick a piece burns out on too: power, card and picture", () => {
+    const y = yard();
+    const p = piece(y, "powerhouse", 4, 4);
+    const b = piece(y, "boiler", 8, 4);
+    fill(y, p, PITCH, 8);
+    fill(y, b, F.DEADFALL, 4);
+    F.rewire(y);
+    const steady = y.wire?.steady ?? 0;
+    const said = new Set<string>();
+    let gaps = 0;
+    for (let k = 0; k < 70; k++) {
+      F.step(y);
+      if (y.supply - steady !== 600 + 60) gaps++;
+      for (const i of [p, b]) {
+        const st = F.status(y, i);
+        said.add(`${st?.state ?? ""}${st?.trouble === true ? " in trouble" : ""}`);
+        if (!F.burningAt(y, i)) gaps++;
+      }
+    }
+    expect([gaps, [...said]]).toEqual([0, ["giving"]]);
+    // Once the last piece has burnt out, cold, and in trouble.
+    for (let k = 0; k < 400; k++) F.step(y);
+    expect([F.burningAt(y, p), F.status(y, p)?.state, F.status(y, p)?.trouble]).toEqual([false, "cold", true]);
+  });
+
   test("the yard counts what it needs a minute, and the smog card what it makes: 60 pitch and 240 smog on pitch, 30 spirit and 30 smog on spirit", () => {
     const y = yard();
     const i = piece(y, "powerhouse", 4, 4);

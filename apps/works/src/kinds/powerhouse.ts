@@ -4,7 +4,7 @@
  * thicker on pitch than on creosote, and thinnest on spirit; cold, its window is dark and it makes no
  * smoke. Its card says what it burns a minute of each fuel, heaviest first, and the smog each makes.
  */
-import { BURNS, holderOf, kind, MINUTE, type Yard } from "@sequoia-leaf/factory";
+import { burningAt, BURNS, kind, MINUTE } from "@sequoia-leaf/factory";
 import type { Row } from "@sequoia-leaf/kit/card.ts";
 import { STONE } from "@sequoia-leaf/kit/palette.ts";
 import { perMinute } from "@sequoia-leaf/kit/say.ts";
@@ -39,13 +39,11 @@ function fuelRows(): Row[] {
   ];
 }
 
-/** Whether the powerhouse with a holder's row `r` is burning: power reaches it and a piece is alight. */
-const burning = (y: Yard, r: number, powered: boolean): boolean => powered && r >= 0 && (y.holders.fuel[r] ?? 0) > 0;
-
 export const powerhouse: KindPage = {
   picture: () => powerhouseIcon(),
   draw(_art, y, at) {
-    const lit = at.real && burning(y, at.r, at.powered);
+    // Burning, as its card says it (with the next piece taken the moment the last burns out).
+    const lit = at.real && burningAt(y, at.i);
     at.put(powerhouseOf(lit ? 1 + (Math.floor(at.t * 5) % 2) : 0), at.x - PAD, at.top - PAD - TALL, at.z, at.a);
     if (lit && at.t > (at.mem.puffAt[at.i] ?? 0)) {
       const f = Math.max(
@@ -60,7 +58,7 @@ export const powerhouse: KindPage = {
     return at.top - TALL;
   },
   lamps: (y, i, x, foot, _at, out) => {
-    if (burning(y, holderOf(y, i), true)) out.push({ x, y: foot - 10, r: 24, power: 0.8, reach: false });
+    if (burningAt(y, i)) out.push({ x, y: foot - 10, r: 24, power: 0.8, reach: false });
   },
   rows: fuelRows,
   holdsUp: () => BURNS[POWERHOUSE]?.holds ?? 8,

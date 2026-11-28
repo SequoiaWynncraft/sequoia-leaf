@@ -52,9 +52,25 @@ export function fuelNow(k: Kit, y: Yard, i: number): Fuel | undefined {
   return b.fuels[0];
 }
 
+/**
+ * Whether the burner on a tile is burning: a piece alight, or one of its fuels held, which it takes
+ * the moment the last burns out (`tick.ts`'s `power`), so that it gives power on every tick with no
+ * gap. One that holds nothing to burn, with the last piece burnt out, is cold. Makes nothing.
+ */
+export function alight(k: Kit, y: Yard, i: number): boolean {
+  const r = k.holderOf(y, i);
+  if ((y.holders.fuel[r] ?? 0) > 0) return true;
+  const fuels = burnsAt(k, y, i)?.fuels ?? NO_FUELS;
+  for (let f = 0; f < fuels.length; f++) {
+    const fuel = fuels[f];
+    if (fuel && k.held(y.holders, r, fuel.fuel) > 0) return true;
+  }
+  return false;
+}
+
 function condition(k: Kit, y: Yard, i: number, lit: boolean): number {
   if (!lit) return as("unpowered", true);
-  return (y.holders.fuel[k.holderOf(y, i)] ?? 0) > 0 ? as("giving") : as("cold", true);
+  return alight(k, y, i) ? as("giving") : as("cold", true);
 }
 
 /** Things by how many it holds of each: "5 pitch, 2 creosote and 0 spirit". */

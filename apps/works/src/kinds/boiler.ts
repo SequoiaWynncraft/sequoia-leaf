@@ -1,5 +1,8 @@
-/** The boiler on the page: cold, or burning with smoke and a glow while it has deadfall. */
-import { burned, DEADFALL, FUEL, holderOf } from "@sequoia-leaf/factory";
+/**
+ * The boiler on the page: cold, or burning with smoke and a glow while it has deadfall (with the next
+ * piece taken the moment the last burns out, as its card says).
+ */
+import { burned, burningAt, DEADFALL, FUEL } from "@sequoia-leaf/factory";
 import { WATER } from "@sequoia-leaf/kit/palette.ts";
 import { perMinute } from "@sequoia-leaf/kit/say.ts";
 import { clamp, hash, must } from "@sequoia-leaf/kit/util.ts";
@@ -15,7 +18,7 @@ export const boiler: KindPage = {
   picture: ({ m }) => must(m.boiler[1], "boiler").c,
   draw(art, y, at) {
     const { i, foot, cx, z, t } = at;
-    const burning = at.real && at.powered && at.r >= 0 && (y.holders.fuel[at.r] ?? 0) > 0;
+    const burning = at.real && burningAt(y, i);
     const s = first(art.m.boiler, burning ? 1 + (Math.floor(t * 7) % 2) : at.ghost > 0 ? 1 : 0);
     if (s) at.stand(s, cx, foot, z, at.a);
     if (burning && t > (at.mem.puffAt[i] ?? 0)) {
@@ -25,8 +28,7 @@ export const boiler: KindPage = {
     return foot - 23;
   },
   lamps: (y, i, x, foot, _at, out) => {
-    const r = holderOf(y, i);
-    if (r >= 0 && (y.holders.fuel[r] ?? 0) > 0) out.push({ x: x - 2, y: foot - 4, r: 24, power: 0.85, reach: false });
+    if (burningAt(y, i)) out.push({ x: x - 2, y: foot - 4, r: 24, power: 0.85, reach: false });
   },
   map: [CLAY[1], CLAY[0]],
   dot: WATER[3],

@@ -5,7 +5,7 @@
  * both for itself (`kinds/`), in the words they share (`kinds/say.ts`). Nothing here changes the yard
  * but working out its power and plumbing if a change left them unknown.
  */
-import { fuelNow } from "./kinds/burner.ts";
+import { alight, fuelNow } from "./kinds/burner.ts";
 import { RULES } from "./kinds/list.ts";
 import { holding as holdingOf, type MachineRate, rateOf, type State, STATES, TROUBLE } from "./kinds/say.ts";
 import { litAt } from "./power.ts";
@@ -100,6 +100,9 @@ export function flow(y: Yard, made: Counts, needed: Counts): void {
       needed[f.fuel] = (needed[f.fuel] ?? 0) + n * (KIT.MINUTE / f.ticks);
     }
 }
+
+/** Whether the burner on a tile (any of a big one's tiles) is burning, as its card and its picture say it: power reaches it, and it is alight (`alight`). */
+export const burningAt = (y: Yard, i: number): boolean => litAt(y, i) && alight(KIT, y, pieceOf(y, i));
 
 /** The kinds that burn for power, in the tables' order. */
 const BURNING: readonly Kind[] = ALL_KINDS.filter((k) => BURNS[k] !== null);

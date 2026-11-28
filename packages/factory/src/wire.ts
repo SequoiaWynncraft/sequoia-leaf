@@ -1,4 +1,5 @@
 import { BUFFER } from "./content/machines.ts";
+import { alight } from "./kinds/burner.ts";
 import { keep } from "./kinds/holder.ts";
 import type { Kit } from "./kinds/kit.ts";
 import { anything, empty, lay } from "./kinds/line.ts";
@@ -402,11 +403,10 @@ export function rewire(y: Yard): Wire {
   return wire;
 }
 
-/** The power what burns gives as it stands, in halves: each burning now, as its kind says (`KindDef.burns`). */
+/** The power what burns gives as it stands, in halves: each burning now (`alight`), as its kind says (`KindDef.burns`). */
 function burningNow(y: Yard, burners: readonly number[]): number {
   let burning = 0;
-  for (const i of burners)
-    if ((y.holders.fuel[holderOf(y, i)] ?? 0) > 0) burning += BURNS[y.kind[i] ?? NONE]?.halves ?? 0;
+  for (const i of burners) if (alight(KIT, y, i)) burning += BURNS[y.kind[i] ?? NONE]?.halves ?? 0;
   return burning;
 }
 
