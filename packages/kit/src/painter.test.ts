@@ -128,7 +128,18 @@ describe("the painter", () => {
     expect(card.batches[4]?.disc).toEqual([5, 5, 3]);
     expect(card.batches[5]?.disc).toEqual([0, 0, -1]);
     // The layer's picture is drawn from the texture that was drawn onto.
-    expect(card.batches[6]?.from).toBe(card.batches[5]?.onto ?? -1);
+    const drawnOn = card.batches[5]?.onto ?? -1;
+    expect(card.batches[6]?.from).toBe(drawnOn);
+    // Let go of, its texture is given back; begun again, it has one of that size again.
+    expect(card.textures.has(drawnOn)).toBe(true);
+    layer.release();
+    expect(card.textures.has(drawnOn)).toBe(false);
+    card.clear();
+    layer.begin(32, 16);
+    p.pic(a, 0, 0);
+    layer.end();
+    const again = must(card.textures.get(card.batches[0]?.onto ?? -1), "the layer's texture");
+    expect([again.w, again.h]).toEqual([32, 16]);
   });
 
   test("starts the atlas again, larger, when it is full: what was gathered is drawn first, and every picture is copied again when next drawn", () => {

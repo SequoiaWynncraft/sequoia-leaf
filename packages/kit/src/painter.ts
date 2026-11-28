@@ -102,6 +102,8 @@ export interface Layer {
   /** Everything drawn until `end` goes on this layer, `w` by `h`, cleared first to a colour (four numbers, already multiplied by how solid it is) or to nothing. */
   begin(w: number, h: number, clear?: Rgba): void;
   end(): void;
+  /** Gives its picture's memory back to the card, until it is next begun. */
+  release(): void;
 }
 
 /** What the card holds for the painter: made when it opens, and again when the card comes back. */
@@ -519,6 +521,13 @@ export class Painter {
       },
       end: () => {
         if (!this.#lost) this.#aim(null);
+      },
+      release: () => {
+        if (l.w === 0) return;
+        if (this.#tex === l) this.#flush();
+        gl.deleteTexture(l.t);
+        gl.deleteFramebuffer(l.f);
+        Object.assign(l, { t: null, f: null, w: 0, h: 0 });
       },
     };
     this.#layers.set(layer, l);

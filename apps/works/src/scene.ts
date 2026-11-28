@@ -10,7 +10,8 @@
  * The graphics card draws it (`@sequoia-leaf/kit/painter.ts`): the art is what the painters draw on
  * canvases, copied to the card the first time each picture is drawn, and every frame is drawn whole,
  * a layer at a time, from what is in view. The ground is kept on the card, painted before it can be
- * seen (`floor.ts`); nothing else is kept between frames.
+ * seen (`floor.ts`), and the pieces in hand are drawn once for each place they are aimed; nothing
+ * else is kept between frames.
  */
 
 import {
@@ -676,7 +677,9 @@ export function drawYard(art: Art, now: Moment): void {
     marksLayer(f);
     lap("marks");
   } else {
-    // Further out than a screen pixel for each of the yard's, the yard is its plan (`far.ts`).
+    // Further out than a screen pixel for each of the yard's, the yard is its plan (`far.ts`), and
+    // the dusk is not laid: its layer, as large as the picture was near, is let go of until then.
+    on.dusk.release();
     const [dx, dy] = drawPlan(g, w, L, corner.x, corner.y);
     lap("plan");
     drawPlanMarks(g, w, dx, dy);
