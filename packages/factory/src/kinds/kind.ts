@@ -16,6 +16,7 @@
  */
 import type { Lay } from "../build.ts";
 import type { KeptPiece } from "../cells.ts";
+import type { ItemName } from "../content/items.ts";
 import type { Kept, Piece } from "../pieces.ts";
 import type { Goal, Item, Open, Recipe } from "../tables.ts";
 import type { Counts, Wire, Yard } from "../yard.ts";
@@ -183,7 +184,7 @@ export interface KindDef<N extends string = string> {
    * piece for every burner every tick cost the tick more than all the burning.
    */
   readonly burns?: {
-    readonly fuels: readonly { readonly fuel: string; readonly ticks: number; readonly smog?: number }[];
+    readonly fuels: readonly { readonly fuel: ItemName; readonly ticks: number; readonly smog?: number }[];
     readonly holds: number;
   };
   /** Half-ticks of work in each thing it finishes, for one whose work is not a recipe's (a gatherer, a Study). */
@@ -242,7 +243,7 @@ export interface Ports {
   readonly out: readonly {
     readonly at: readonly [x: number, y: number];
     readonly sends: "out" | "also";
-    readonly only?: string;
+    readonly only?: ItemName;
   }[];
 }
 

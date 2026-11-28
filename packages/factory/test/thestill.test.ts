@@ -157,6 +157,18 @@ describe("tier 6's tables", () => {
   });
 });
 
+describe("a way out for one thing only", () => {
+  test("names a thing there is: a misspelt name does not type-check, and is refused as the tables are built", () => {
+    const right: F.Ports["out"][number] = { at: [2, 1], sends: "out", only: "creosote" };
+    // @ts-expect-error: "creosot" is no thing's name, so a way out for it cannot be written.
+    const wrong: F.Ports["out"][number] = { at: [2, 1], sends: "out", only: "creosot" };
+    expect(F.item(right.only ?? "plank")).toBe(CREOSOTE);
+    // Written past the type, the name is refused where the tables read it (`sizes.ts`, `item`), not
+    // taken as a way out for anything.
+    expect(() => F.item(wrong.only ?? "plank")).toThrow("creosot");
+  });
+});
+
 describe("the still", () => {
   test("is three tiles by three, takes tar on the nine tile-sides of its back and sides, and holds up to 8", () => {
     const y = yard();

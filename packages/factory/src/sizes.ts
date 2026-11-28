@@ -19,7 +19,7 @@
  */
 import type { Opened } from "./kinds/kind.ts";
 import { KIND_DEFS } from "./kinds/list.ts";
-import { BIG, itemNamed, NONE, SIZE_H, SIZE_W } from "./tables.ts";
+import { BIG, item, NONE, SIZE_H, SIZE_W } from "./tables.ts";
 import type { Yard } from "./yard.ts";
 
 /** The part a tile is of a piece of more than one tile: where the piece's own tile is from it, four bits each way, 8 for none. */
@@ -117,7 +117,9 @@ function facing(k: number, d: number): Facing {
   });
   const outs = (ports?.out ?? []).map((o): Out => {
     const [bx, by] = asFacing(w, h, d, o.at[0], o.at[1]);
-    const only = o.only === undefined ? NONE : (itemNamed(o.only) ?? NONE);
+    // A thing by its name, which the type holds to the things there are; one written past the type is
+    // refused as the tables are built (`item` throws), never read as a way out for anything.
+    const only = o.only === undefined ? NONE : item(o.only);
     return { dx: bx + cx, dy: by + cy, way: d, also: o.sends === "also", only };
   });
   return { dx, dy, takes, opened: [...opened].map(([when, bits]) => ({ when, takes: bits })), outs };

@@ -223,7 +223,7 @@ export const BURNS: readonly (Burns | null)[] = KIND_DEFS.map((d: KindDef) => {
   const b = d.burns;
   if (!b) return null;
   const fuels = b.fuels.map((f): Fuel => ({
-    fuel: sure(itemNamed(f.fuel), f.fuel),
+    fuel: item(f.fuel),
     ticks: f.ticks,
     smog: f.smog ?? 0,
   }));
