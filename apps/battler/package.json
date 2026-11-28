@@ -8,7 +8,6 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@discord/embedded-app-sdk": "2.5.0",
     "@sequoia-leaf/core": "workspace:*",
     "@sequoia-leaf/figures": "workspace:*",
     "@sequoia-leaf/kit": "workspace:*",

@@ -7,7 +7,6 @@
 import { describe, expect, test } from "bun:test";
 
 import { BARK, CORAL, CREAM, EARTH, GOLD, GREEN, INK, LEAF, WATER } from "@sequoia-leaf/kit/palette.ts";
-import { rgb } from "@sequoia-leaf/kit/pix.ts";
 import { eraAt, RELEASES } from "@sequoia-leaf/raid";
 import { catalogAt } from "@sequoia-leaf/raid/content/catalog.ts";
 import {
@@ -22,7 +21,7 @@ import {
 import { LAST_ERA } from "@sequoia-leaf/raid/content/releases.ts";
 
 import { stacksOf } from "../stacks.ts";
-import { boonGrid, FRAME_GROUND, FRAMED, type Grid, heldEdge, heldGrid, itemGrid } from "./icons.ts";
+import { boonGrid, FRAME_GROUND, FRAMED, type Grid, HELD_BOX, heldBox, heldGrid, itemGrid } from "./icons.ts";
 import { COMPONENT_TONE, TRAIT_COLOUR } from "./pal.ts";
 
 const NOW = catalogAt(LAST_ERA);
@@ -31,6 +30,9 @@ const sizeOf = (g: Grid): readonly [number, number] => [Math.max(...g.map((row) 
 const rimOf = (g: Grid): (string | null)[] =>
   g.flatMap((row, y) => row.filter((_, x) => [x, y].some((v) => v === 0 || v === FRAMED - 1)));
 const insideOf = (g: Grid): (string | null)[] => g.slice(1, -1).flatMap((row) => row.slice(1, -1));
+/** A held box's edge. */
+const rimOf7 = (g: Grid): (string | null)[] =>
+  g.flatMap((row, y) => row.filter((_, x) => [x, y].some((v) => v === 0 || v === HELD_BOX - 1)));
 
 /** Every tone a component's drawings are made of: its shade and light, and the steps beside them. */
 const FAMILY: Readonly<Record<Exclude<ComponentId, "knife">, readonly string[]>> = {
@@ -80,11 +82,6 @@ const tooAlike = (grid: (id: ComponentId) => Grid): string[] =>
   COMPONENT_IDS.flatMap((a, i) =>
     COMPONENT_IDS.slice(i + 1).flatMap((b) => (apart(grid(a), grid(b)) < 0.2 ? [`${a}/${b}`] : [])),
   );
-/** A tone's grey (its luminance, 0 to 255). */
-const grey = (hex: string): number => {
-  const [r, g, b] = rgb(hex);
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-};
 
 describe("items' pictures", () => {
   test("a component is 12 by 12 and 5 by 5 held; a finished item and an emblem are framed at a component's 12, held at 5 by 5 at most", () => {
@@ -119,11 +116,28 @@ describe("items' pictures", () => {
   test("in grey, the six components are told apart by shape alone, and so is how a figure holds each", () => {
     expect(tooAlike(itemGrid)).toEqual([]);
     expect(tooAlike(heldGrid)).toEqual([]);
-    // A held component is never the made items' square tile, and a made one's gold edge is far lighter than a component's ink.
-    const square = Array.from({ length: 5 }, () => Array.from({ length: 5 }, () => INK));
-    for (const id of COMPONENT_IDS) expect([id, apart(heldGrid(id), square) >= 0.15]).toEqual([id, true]);
-    expect(grey(heldEdge("blackthorn")) - grey(heldEdge("thorn"))).toBeGreaterThan(150);
-    expect(heldEdge("embercharm")).toBe(heldEdge("blackthorn"));
+  });
+
+  test("held, a finished item is its own picture at half size, never a sign for it: only its drawing's colours, in its box", () => {
+    for (const id of FINISHED_IDS) {
+      const own = new Set(insideOf(itemGrid(id)));
+      const held = heldGrid(id)
+        .flat()
+        .filter((t) => t !== null);
+      expect([id, held.filter((t) => !own.has(t))]).toEqual([id, []]);
+      // Most of its half-size picture is drawn: a picture, not a tile of two colours.
+      expect([id, new Set(held).size >= 2, held.length >= 8]).toEqual([id, true, true]);
+    }
+    for (const id of [...COMPONENT_IDS, ...FINISHED_IDS, ...EMBLEM_IDS]) {
+      const box = heldBox(id);
+      const inside = insideOf(box);
+      expect([id, sizeOf(box), new Set(rimOf7(box)), inside.includes(null)]).toEqual([
+        id,
+        [HELD_BOX, HELD_BOX],
+        new Set([INK]),
+        false,
+      ]);
+    }
   });
 
   test("the Knife is on the rack and An Extra Chair framed in its cream only from Penguin Month's moment", () => {

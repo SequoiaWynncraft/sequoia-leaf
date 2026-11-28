@@ -130,6 +130,8 @@ export interface Fakes {
   readonly meter?: (times: JobTimes) => void;
   /** Where Leaf's warnings and errors go, as the JSON logger would write them, for tests that read them. */
   readonly logged?: LogLine[];
+  /** The least a line logged must be to be kept: warnings and errors (`Warn`) unless a test reads Leaf's info lines too. */
+  readonly logLevel?: "Info" | "Warn";
   /**
    * Leaf's clock as Effect's test clock, from `clock.now` as Leaf starts: its waits (Live's ticks,
    * a stream's beats, a session's recheck) pass only as the test moves it, with `adjust`. Without
@@ -215,7 +217,7 @@ export function testLeaf(clock: TestClock, fetcher: Fetcher, config: Partial<Set
               ? [Logger.consoleJson]
               : [Logger.map(Logger.formatStructured, (line) => void fakes.logged?.push(line))],
           ),
-          Layer.succeed(References.MinimumLogLevel)("Warn"),
+          Layer.succeed(References.MinimumLogLevel)(fakes.logLevel ?? "Warn"),
         )
       : Layer.succeed(References.MinimumLogLevel)("None"),
     // Each Leaf counts on its own.

@@ -1057,6 +1057,7 @@ function signedInAs(id: typeof alice) {
     via: "sequoia" as const,
     linked: true,
     askLink: false,
+    inCall: false,
   };
 }
 

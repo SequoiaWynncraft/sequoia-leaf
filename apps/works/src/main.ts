@@ -15,13 +15,14 @@
  */
 
 import { ALL_ITEMS, ITEM_INFO, power } from "@sequoia-leaf/factory";
+import { callLine, openLeaf } from "@sequoia-leaf/kit/call.ts";
 import { unit } from "@sequoia-leaf/kit/dom.ts";
-import { keepLeaf, pageCard, serverCard, shutCard, start, troubleCard } from "@sequoia-leaf/kit/live.ts";
+import { keepLeaf, pageCard, serverCard, shutCard, troubleCard } from "@sequoia-leaf/kit/live.ts";
 import { paced } from "@sequoia-leaf/kit/pace.ts";
 import { askPerson } from "@sequoia-leaf/kit/person.ts";
 import type { Trouble } from "@sequoia-leaf/kit/play.ts";
 import { here } from "@sequoia-leaf/kit/presence.ts";
-import { failedToOpen, watchPage } from "@sequoia-leaf/kit/report.ts";
+import { failedToOpen } from "@sequoia-leaf/kit/report.ts";
 import { scope } from "@sequoia-leaf/kit/scope.ts";
 import { fromTown, tell } from "@sequoia-leaf/kit/shell.ts";
 import { fontsReady } from "@sequoia-leaf/kit/text.ts";
@@ -162,10 +163,13 @@ function card(why: Trouble): void {
   else troubleCard(why);
 }
 
-/** Who the member is (their id and name), once the yard is open from Leaf; or nothing, with the card that says why it is not. */
+/**
+ * Who the member is (their id and name), once the yard is open from Leaf; or nothing, with the card
+ * that says why it is not. In a Discord call, the page's line says where the member is.
+ */
 async function opened(params: URLSearchParams): Promise<{ id: string; name: string } | null> {
-  watchPage("works");
-  const where = await start();
+  const where = await openLeaf("works");
+  if (where === null) return null;
   if (where.mode === "shut") {
     shutCard(where.why);
     return null;
@@ -186,6 +190,7 @@ async function opened(params: URLSearchParams): Promise<{ id: string; name: stri
     return null;
   }
   if (S.visiting && owner) S.visiting.name = owner.name;
+  callLine(scope(), () => "In the Works");
   return me;
 }
 

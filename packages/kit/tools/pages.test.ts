@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { ignoring, pageSources, repository } from "./pages.ts";
@@ -28,5 +28,19 @@ describe("the image's page stage", () => {
     expect(sources).toContain("apps/battler");
     expect(sources).toContain("packages/kit");
     expect(sources).not.toContain("apps/api");
+  });
+});
+
+describe("every page of Leaf", () => {
+  test("sends no address on to the page after it: in a Discord call, Discord's SDK answers whatever address a page came from", () => {
+    const apps = readdirSync(join(import.meta.dir, "..", "..", "..", "apps")).filter((app) =>
+      existsSync(join(import.meta.dir, "..", "..", "..", "apps", app, "index.html")),
+    );
+    const pages = apps.map((app) =>
+      readFileSync(join(import.meta.dir, "..", "..", "..", "apps", app, "index.html"), "utf8"),
+    );
+
+    expect(apps.toSorted()).toEqual(["battler", "town", "works"]);
+    for (const page of pages) expect(page).toContain('<meta name="referrer" content="no-referrer" />');
   });
 });

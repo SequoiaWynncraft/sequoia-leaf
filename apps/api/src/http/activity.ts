@@ -1,12 +1,13 @@
 /**
- * The raid in a Discord call. Discord frames the raid's page at `https://<client id>.discordsays.com`
- * and proxies every request it makes to Leaf. The page asks Discord to sign the player in
+ * Leaf in a Discord call. Discord frames Leaf's town at `https://<client id>.discordsays.com` and
+ * proxies every request it makes to Leaf. The page asks Discord to sign the player in
  * (`authorize`) and sends the code it gets to `POST /v1/activity/sign-in`. Leaf trades the code with
  * Discord, with the application's secret, for the player's token, reads who they are (`/users/@me`),
  * and signs them in as Discord sign-in does (`discordPlayer`): a Discord account Leaf knows is its
  * player, one it does not is a new one. The Leaf session's cookie is set for Discord's frame alone
  * (`frameCookie`). The answer is the token, which the page hands back to Discord (`authenticate`).
- * `GET /v1/activity` tells the page the application's client id, which `authorize` needs.
+ * `GET /v1/activity` tells the page the application's client id, which `authorize` needs, and Leaf's
+ * own address outside Discord, which the page links to for what is only there.
  */
 import { Clock, Duration, Effect, Layer, Option, Redacted, Schema } from "effect";
 import type { SecureRandom } from "effect/crypto";
@@ -101,26 +102,42 @@ const trade = (code: string, app: Activity) =>
     return { status: "signed", token: accessToken, user: user.value } satisfies Traded;
   });
 
-/** `POST /v1/activity/sign-in`, from the raid's page in a Discord call. */
+/**
+ * A sign-in's answer, with its log line (`call_sign_in`): how it went, by the code of its answer (or
+ * `ok`, with who signed in), never the code Discord gave or a token.
+ */
+const told = (outcome: string, response: HttpServerResponse.HttpServerResponse, player?: string) =>
+  Effect.as(
+    Effect.logInfo("call_sign_in").pipe(Effect.annotateLogs(player === undefined ? { outcome } : { outcome, player })),
+    response,
+  );
+
+/** `POST /v1/activity/sign-in`, from the page Discord frames in a call. */
 const signIn = Effect.gen(function* () {
   const settings = yield* AppConfig;
   const app = settings.activity;
-  if (app === undefined) return notFound;
+  if (app === undefined) return yield* told("not_found", notFound);
   const request = yield* HttpServerRequest.HttpServerRequest;
   // Another site's page may not sign a browser in as someone it chose.
   if (!fromLeafPage(settings, request.headers["origin"])) {
-    return answer(403, "bad_origin", "Leaf takes this only from its own pages");
+    return yield* told("bad_origin", answer(403, "bad_origin", "Leaf takes this only from its own pages"));
   }
   const body = yield* HttpServerRequest.schemaBodyJson(Body).pipe(Effect.option);
-  if (Option.isNone(body)) return answer(400, "invalid_code", 'Send { "code": "<the code Discord gave>" }');
+  if (Option.isNone(body))
+    return yield* told("invalid_code", answer(400, "invalid_code", 'Send { "code": "<the code Discord gave>" }'));
   const traded = yield* trade(body.value.code, app).pipe(
     // Logged with the route and why alone: never the request, which holds the secret.
     Effect.catchTag("BackendFailure", (failure) =>
       Effect.as(logFailure("Discord could not be asked about a sign-in", failure), null),
     ),
   );
-  if (traded === null) return answer(503, "discord_unavailable", "Discord did not answer. Try again shortly");
-  if (traded.status === "refused") return answer(401, "discord_refused", "Discord did not sign you in. Try again");
+  if (traded === null)
+    return yield* told(
+      "discord_unavailable",
+      answer(503, "discord_unavailable", "Discord did not answer. Try again shortly"),
+    );
+  if (traded.status === "refused")
+    return yield* told("discord_refused", answer(401, "discord_refused", "Discord did not sign you in. Try again"));
   const { id, username } = traded.user;
   const now = yield* Clock.currentTimeMillis;
   const sql = yield* SqlClient.SqlClient;
@@ -128,20 +145,24 @@ const signIn = Effect.gen(function* () {
   const signIns = yield* SignIns;
   // Whether Sequoia's Discord calls them a member is the backend's to say; Leaf keeps what it said last.
   const member = yield* signIns.memberOf(id);
-  const token = yield* signIns.begin({ playerId, discord: id, name: username, member }, now);
+  const token = yield* signIns.begin({ playerId, discord: id, name: username, member, inCall: true }, now);
   const { name, options } = frameCookie(settings.publicOrigin);
-  return HttpServerResponse.setCookieUnsafe(
-    HttpServerResponse.jsonUnsafe({ access_token: traded.token }, { headers: { "cache-control": "no-store" } }),
-    name,
-    token,
-    options,
+  const answered = HttpServerResponse.jsonUnsafe(
+    { access_token: traded.token },
+    { headers: { "cache-control": "no-store" } },
   );
+  return yield* told("ok", HttpServerResponse.setCookieUnsafe(answered, name, token, options), playerId);
 });
 
-/** `GET /v1/activity`: the Discord application's client id, for the page's `authorize`. */
+/**
+ * `GET /v1/activity`: the Discord application's client id, for the page's `authorize`, and Leaf's own
+ * address (`site`), where what is not in a call is.
+ */
 const hello = Effect.gen(function* () {
-  const { activity } = yield* AppConfig;
-  return activity === undefined ? notFound : HttpServerResponse.jsonUnsafe({ client_id: activity.clientId });
+  const { activity, publicOrigin } = yield* AppConfig;
+  return activity === undefined
+    ? notFound
+    : HttpServerResponse.jsonUnsafe({ client_id: activity.clientId, site: publicOrigin });
 });
 
 export const ActivityRoutes = Layer.effectDiscard(

@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { playerId } from "@sequoia-leaf/core";
 
 import { API_POLICY } from "../src/http/headers.ts";
-import { CALL_PAGE_POLICY, PAGE_POLICY } from "../src/http/pages.ts";
+import { CALL_PAGE_POLICY, entryPage, PAGE_POLICY } from "../src/http/pages.ts";
 import { fakeBackend, sessionOf, testLeaf } from "./support.ts";
 
 const alice = playerId("10000000-0000-0000-0000-000000000001");
@@ -24,6 +24,8 @@ beforeAll(() => {
     );
     writeFileSync(join(publicDir, app, "index-meamkakx.js"), `console.log("${app}")`);
     writeFileSync(join(publicDir, app, "index-78k15kx1.css"), "body { margin: 0 }");
+    // A part of the page, fetched when it is needed, as `bun build --splitting` names it.
+    writeFileSync(join(publicDir, app, "main-yxtpzszz.js"), "void 0");
   }
   writeFileSync(join(publicDir, "guard.js"), "void 0");
 });
@@ -179,28 +181,43 @@ describe("the game's pages, with PUBLIC_DIR set", () => {
   });
 });
 
-describe("the raid in a Discord call", () => {
-  /** Discord's launch query, as its frame opens the raid. */
+describe("Leaf in a Discord call", () => {
+  /** Discord's launch query, as its frame opens Leaf. */
   const LAUNCH = "?instance_id=i-1-gc-2-3&location_id=gc-2-3&launch_id=1&frame_id=f-9&platform=desktop";
 
-  it("serves the raid's page in a call with no rule on who frames it, as Discord's phone apps frame it from no origin, and the rest as every page", () => {
+  it("lets any page frame a page opened as part of a launch: Discord's phone app frames it from no origin", () => {
     expect(CALL_PAGE_POLICY).toBe(PAGE_POLICY.replace("frame-ancestors 'self'; ", ""));
     expect(CALL_PAGE_POLICY).not.toContain("frame-ancestors");
   });
 
-  it("sends Discord's launch of / to the raid's page, with its query as it came", async () => {
+  it("answers Discord's launch of / with a page that goes on to the town itself, not a redirect Discord's proxy would follow", async () => {
     const app = leafServing(publicDir);
 
     const entry = await app.request(`/${LAUNCH}`);
 
-    expect(entry.status).toBe(302);
-    expect(entry.headers.get("Location")).toBe(`/play/battler/${LAUNCH}`);
+    // A redirect is followed by Discord's proxy on its own server, which serves the town at `/`, where
+    // the town's relative script and style addresses find nothing: the browser must make the step.
+    expect(entry.status).toBe(200);
+    expect(entry.headers.get("Location")).toBeNull();
+    expect(entry.headers.get("Content-Type")).toContain("text/html");
+    const page = await entry.text();
+    const to = `/play/town/${LAUNCH}`.replaceAll("&", "&amp;");
+    expect(page).toContain(`<meta http-equiv="refresh" content="0; url=${to}">`);
+    // The town is then the page Discord frames, and Discord's SDK answers the address it came from: none.
+    expect(page).toContain('<meta name="referrer" content="no-referrer">');
+    expect(page).not.toContain("<script");
     expect(entry.headers.get("Content-Security-Policy")).toBe(CALL_PAGE_POLICY);
     expect(entry.headers.get("Cache-Control")).toBe("no-store");
     await app.dispose();
   });
 
-  it("sends / to the town for anything but Discord's launch", async () => {
+  it("puts nothing a launch query says into the page unescaped", () => {
+    const page = entryPage(new URLSearchParams({ frame_id: '"><script>alert(1)</script>', instance_id: "i'1" }));
+    expect(page).not.toContain("<script");
+    expect(page).toContain("frame_id=%22%3E%3Cscript%3Ealert%281%29%3C%2Fscript%3E");
+  });
+
+  it("sends / to the town for anything but Discord's launch, framed by Leaf's own pages alone", async () => {
     const app = leafServing(publicDir);
 
     for (const query of ["", "?frame_id=f-9", "?instance_id=i-1", "?frame_id=&instance_id=i-1"]) {
@@ -212,30 +229,47 @@ describe("the raid in a Discord call", () => {
     await app.dispose();
   });
 
-  it("serves the raid's page opened by Discord with Discord's frames allowed, and every other page as ever", async () => {
+  it("serves each page opened as part of a launch with the call's policy, and every other page as ever", async () => {
     const app = leafServing(publicDir);
+    // As the town carries the launch to a game's frame: Leaf's own words first, Discord's after them.
+    const carried = `?of=10000000-0000-0000-0000-000000000002&${LAUNCH.slice(1)}`;
+    const paths = [
+      `/play/town/${LAUNCH}`,
+      `/play/town/?camp=someone&${LAUNCH.slice(1)}`,
+      `/play/works/index.html${carried}`,
+      `/play/battler/index.html${LAUNCH}`,
+      "/play/town/",
+      "/play/works/?of=someone",
+      "/play/battler/?frame_id=f-9",
+      "/play/town/?instance_id=i-1",
+      "/play/battler/index-meamkakx.js",
+    ];
     const policies = await Promise.all(
-      [
-        `/play/battler/${LAUNCH}`,
-        `/play/battler/index.html${LAUNCH}`,
-        "/play/battler/",
-        "/play/battler/?frame_id=f-9",
-        `/play/town/${LAUNCH}`,
-        `/play/works/${LAUNCH}`,
-        "/play/battler/index-meamkakx.js",
-      ].map(async (path) => [path, (await app.request(path)).headers.get("Content-Security-Policy")]),
+      paths.map(async (path) => [path, (await app.request(path)).headers.get("Content-Security-Policy")]),
     );
 
     expect(policies).toEqual([
-      [`/play/battler/${LAUNCH}`, CALL_PAGE_POLICY],
+      [`/play/town/${LAUNCH}`, CALL_PAGE_POLICY],
+      [`/play/town/?camp=someone&${LAUNCH.slice(1)}`, CALL_PAGE_POLICY],
+      [`/play/works/index.html${carried}`, CALL_PAGE_POLICY],
       [`/play/battler/index.html${LAUNCH}`, CALL_PAGE_POLICY],
-      ["/play/battler/", PAGE_POLICY],
+      ["/play/town/", PAGE_POLICY],
+      ["/play/works/?of=someone", PAGE_POLICY],
       ["/play/battler/?frame_id=f-9", PAGE_POLICY],
-      [`/play/town/${LAUNCH}`, PAGE_POLICY],
-      [`/play/works/${LAUNCH}`, PAGE_POLICY],
+      ["/play/town/?instance_id=i-1", PAGE_POLICY],
       // A script is framed by nothing: its policy says nothing a frame needs.
       ["/play/battler/index-meamkakx.js", PAGE_POLICY],
     ]);
+    await app.dispose();
+  });
+
+  it("keeps each part of a page built in parts for good, as it keeps a page's script", async () => {
+    const app = leafServing(publicDir);
+
+    const part = await app.request("/play/town/main-yxtpzszz.js");
+
+    expect(part.status).toBe(200);
+    expect(part.headers.get("Cache-Control")).toBe("public, max-age=31536000, immutable");
     await app.dispose();
   });
 });

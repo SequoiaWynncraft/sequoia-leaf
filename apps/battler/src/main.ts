@@ -5,24 +5,23 @@
  * This file only puts the parts together: the rules are `@sequoia-leaf/raid`, the table and
  * everything on it is in `screen/`. The table is Leaf's: the page opens it from the guild's server
  * and sends every move there as a command. Inside the town it says when it is ready, and sends news
- * worth a line in the town's feed. Opened by Discord in a call, it signs the player in through Discord
- * first, and is the call's table alone (`screen/call/`).
+ * worth a line in the town's feed. In a Discord call it sits the player at the call's table at once,
+ * and says the table's state in one line when Discord shows the call small (`screen/call/`).
  */
 import { nameOf } from "@sequoia-leaf/figures/sprites.ts";
+import { openLeaf } from "@sequoia-leaf/kit/call.ts";
 import { refresh, settle } from "@sequoia-leaf/kit/card.ts";
-import { keepLeaf, pageCard, serverCard, shutCard, start, troubleCard, type Where } from "@sequoia-leaf/kit/live.ts";
-import { outside } from "@sequoia-leaf/kit/net.ts";
+import { LAUNCH } from "@sequoia-leaf/kit/launch.ts";
+import { keepLeaf, serverCard, shutCard, troubleCard } from "@sequoia-leaf/kit/live.ts";
 import { here } from "@sequoia-leaf/kit/presence.ts";
-import { failedToOpen, watchPage } from "@sequoia-leaf/kit/report.ts";
+import { failedToOpen } from "@sequoia-leaf/kit/report.ts";
 import { type Scope, scope } from "@sequoia-leaf/kit/scope.ts";
 import { fromTown, tell } from "@sequoia-leaf/kit/shell.ts";
 import { fontsReady } from "@sequoia-leaf/kit/text.ts";
 import { must } from "@sequoia-leaf/kit/util.ts";
 import type { RaidNote, Way } from "@sequoia-leaf/raid";
 
-import { LAUNCH } from "./screen/call/launch.ts";
 import { openCallLine } from "./screen/call/line.ts";
-import { signInToCall } from "./screen/call/signin.ts";
 import { onTraitWoke } from "./screen/fightshow.ts";
 import { stepFightView } from "./screen/fightview.ts";
 import {
@@ -66,26 +65,6 @@ import { buildTable, placeFoe, renderTable, stepTable, toast, wakeChip } from ".
 
 /** What the page says where no Leaf answers: the table is the guild's server's. */
 const NEEDS_LEAF = "The table needs the guild's server.";
-/** What a call's page says when the browser did not keep the sign-in Discord gave it. */
-const NOT_KEPT = "This browser did not keep your sign-in.";
-
-/** The card of a call's page that will not open, and why: Try again opens it again. */
-const callCard = (why: string): void => pageCard("The raid did not open", why, "Try again", () => outside.reload());
-
-/**
- * Where the game is (`start()`), with the page watched; in a call, once Discord has signed the player
- * in, as the watch asks who they are as it starts. Null where the call's card says why the raid will
- * not open.
- */
-async function signedIn(): Promise<Where | null> {
-  const refused = LAUNCH ? await signInToCall() : null;
-  watchPage("battler");
-  const where = refused === null ? await start() : null;
-  const kept = !(LAUNCH && where?.mode === "shut" && where.why === "signedout");
-  if (where !== null && kept) return where;
-  callCard(refused ?? NOT_KEPT);
-  return null;
-}
 
 /** In a call: the call's table, sat at (or opened) at once, and its line for Discord's small picture. */
 function openCall(tables: Scope): void {
@@ -154,7 +133,7 @@ const STAGE: stage.Hooks = {
 async function boot(): Promise<void> {
   await fontsReady();
   // Who the member is, and then the table as Leaf has it. Without Leaf there is no table.
-  const where = await signedIn();
+  const where = await openLeaf("battler");
   if (where === null) return;
   if (where.mode === "shut") {
     shutCard(where.why);

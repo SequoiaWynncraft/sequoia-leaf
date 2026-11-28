@@ -12,7 +12,7 @@ import { SqlClient } from "effect/sql";
 
 import { frameCookie, leafCookies, SIGN_IN_MS, SignIns } from "../auth/sign-ins.ts";
 import { askBackend, logFailure } from "../backend/failure.ts";
-import { AppConfig, fromLeafPage } from "../config.ts";
+import { AppConfig, fromCall, fromLeafPage } from "../config.ts";
 import { discordPlayer } from "../players/link.ts";
 import type { Logins } from "../players/logins.ts";
 import { DiscordId } from "../wire.ts";
@@ -143,7 +143,7 @@ const cameBack = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   const playerId = yield* sql.withTransaction(discordPlayer(proof.discord_id, proof.username, now)).pipe(Effect.orDie);
   const token = yield* (yield* SignIns).begin(
-    { playerId, discord: proof.discord_id, name: proof.username, member: proof.sequoia_member },
+    { playerId, discord: proof.discord_id, name: proof.username, member: proof.sequoia_member, inCall: false },
     now,
   );
   return back(to, [forgetNonce, [session, token, SIGN_IN_MS / 1000]], secure);
@@ -164,11 +164,10 @@ const signOut = Effect.gen(function* () {
   const token = cookieOf(request.headers["cookie"], session);
   if (token !== "") yield* (yield* SignIns).end(token);
   // From Discord's frame, its own cookie is taken away, as it was set (`frameCookie`).
-  const inFrame = settings.activity !== undefined && request.headers["origin"] === settings.activity.origin;
   return HttpServerResponse.expireCookieUnsafe(
     HttpServerResponse.empty({ status: 204 }),
     session,
-    inFrame ? frameCookie(publicOrigin).gone : { path: "/", secure },
+    fromCall(settings, request.headers["origin"]) ? frameCookie(publicOrigin).gone : { path: "/", secure },
   );
 });
 

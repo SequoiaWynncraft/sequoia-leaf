@@ -1,4 +1,4 @@
-import { beatAt, drawFigure, drawStanding, drawStars, framesOf, hoverAt } from "@sequoia-leaf/figures/sprites.ts";
+import { beatAt, drawFigure, drawStanding, framesOf, hoverAt } from "@sequoia-leaf/figures/sprites.ts";
 /**
  * The table's moving parts, drawn over the painted table every frame: the two halves of the board,
  * the hexes lit for a figure in the hand, whoever is across the table and whoever is watching, the
@@ -33,7 +33,7 @@ import { DIM, shineOf } from "./light.ts";
 import { drawLitter } from "./litter.ts";
 import { arrivalOf, handing, watchersOf } from "./logic.ts";
 import { aloft, FOOT, type Pawn, pawns, spotOfPawn } from "./pawns.ts";
-import { drawPlate, plateAt } from "./plate.ts";
+import { drawPips, drawPlate, pipsWide, plateAt } from "./plate.ts";
 import { heldOver, planPlate } from "./plates.ts";
 import { drawRisings } from "./rising.ts";
 import { drawRoots } from "./roots.ts";
@@ -531,7 +531,12 @@ export function drawOver(g: Ctx): boolean {
       g.fillStyle = "rgba(26,15,30,0.25)";
       g.fillRect(Math.round(x) - 6, Math.round(y) + 3, 12, 2);
       drawStanding(g, catalogFor(S.run), p.kind, x, y - 4, S.looks.bases, { beat: 1 });
-      drawStars(g, p.stars, x, y - 7 - framesOf(p.kind).tall);
+      drawPips(
+        g,
+        p.stars,
+        Math.round(x) - Math.floor(pipsWide(p.stars) / 2),
+        Math.round(y) - 11 - framesOf(p.kind).tall,
+      );
     } else {
       const s = pawnStanding(g, p, V.bx, V.by);
       s.draw();
