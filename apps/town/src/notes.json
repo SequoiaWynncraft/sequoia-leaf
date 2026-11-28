@@ -1,24 +1,5 @@
 [
   {
-    "id": "works-tier-6-still",
-    "at": "TBD",
-    "title": "The Works: tier 6, The still",
-    "lines": [
-      "Tier 6 is open. A still turns every 6 tar into 3 pitch, 2 creosote and 1 spirit, each out of its own side. It stops while any one of them cannot leave, and the depot takes none of them.",
-      "A cracker makes 1 creosote from 2 pitch, or 1 spirit from 2 creosote. A powerhouse burns any of the three and makes 300 power."
-    ],
-    "more": [
-      {
-        "head": "New",
-        "points": [
-          "Tarmac, sleepers and varnish.",
-          "Stills, crackers and powerhouses make smog.",
-          "Research lets a tunnel pass under 20 tiles."
-        ]
-      }
-    ]
-  },
-  {
     "id": "up-the-tree",
     "at": "2027-01-05T00:00Z",
     "title": "Up The Tree",
@@ -149,6 +130,25 @@
         "points": [
           "Four new charms: Grooter Ping (Grooter), Tin Whistle (Chorus), Party Finder (Graid: its holder gets back up as itself) and False Moustache (Sneak).",
           "Every emblem gives its holder 10% more health."
+        ]
+      }
+    ]
+  },
+  {
+    "id": "works-tier-6-still",
+    "at": "TBD",
+    "title": "The Works: tier 6, The still",
+    "lines": [
+      "Tier 6 is open. A still turns every 6 tar into 3 pitch, 2 creosote and 1 spirit, each out of its own side. It stops while any one of them cannot leave, and the depot takes none of them.",
+      "A cracker makes 1 creosote from 2 pitch, or 1 spirit from 2 creosote. A powerhouse burns any of the three and makes 300 power."
+    ],
+    "more": [
+      {
+        "head": "New",
+        "points": [
+          "Tarmac, sleepers and varnish.",
+          "Stills, crackers and powerhouses make smog.",
+          "Research lets a tunnel pass under 20 tiles."
         ]
       }
     ]
