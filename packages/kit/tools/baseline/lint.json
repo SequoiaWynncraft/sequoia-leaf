@@ -61,7 +61,7 @@
     "packages/factory/src/orders.ts": 19,
     "packages/factory/src/route.ts": 48,
     "packages/factory/src/tables.ts": 47,
-    "packages/factory/src/unlocks.ts": 32,
+    "packages/factory/src/unlocks.ts": 31,
     "packages/kit/src/play.ts": 48,
     "packages/kit/src/realtime.ts": 82,
     "packages/kit/src/skin.ts": 49,

@@ -364,7 +364,8 @@ export const NODES: readonly NodeInfo[] = [
     from: "Tindra",
     say: "The plans are on the floor again. Four shelves, please.",
     want: { frame: 300, glass: 200 },
-    unlocks: { blueprints: { count: 4, pieces: 1000 } },
+    // A box of 40 by 25 holds the 1,000 pieces: a code of them all still goes in one command (`CODE_MOST`).
+    unlocks: { blueprints: { count: 4, pieces: 1000, w: 40, h: 25 } },
     needs: ["planchest"],
   },
   {

@@ -238,9 +238,10 @@ describe("a blueprint's code", () => {
   });
 
   test("the plan room's box is 40 tiles by 30, 1,200 pieces: kept, pasted, and its longest code and its tiles each fit one command", () => {
-    // Before the plan room, 32 by 24.
-    expect([F.create({ seed: 1, tier: 5 }).open.box, big().open.box]).toEqual([
+    // Before the shelves, 32 by 24; with them, 40 by 25; with the plan room too, 40 by 30.
+    expect([F.create({ seed: 1, tier: 4 }).open.box, F.create({ seed: 1, tier: 5 }).open.box, big().open.box]).toEqual([
       { w: 32, h: 24 },
+      { w: 40, h: 25 },
       { w: 40, h: 30 },
     ]);
     const y = big();
@@ -266,6 +267,20 @@ describe("a blueprint's code", () => {
     expect(
       command({ do: "saveBlueprint", slot: 5, tiles: Array.from({ length: 1200 }, (_, k) => corner + k) }),
     ).toBeLessThan(15_500);
+  });
+
+  test("the shelves' box is 40 tiles by 25, so all 1,000 of their pieces fit, and their line says so", () => {
+    const y = F.create({ land: bareLand(56, 40, [], [52, 4]), tier: 5, seed: 1 });
+    expect([y.open.blueprints, y.open.pieces, y.open.box]).toEqual([4, 1000, { w: 40, h: 25 }]);
+    for (let z = 1; z <= 25; z++) for (let x = 1; x <= 40; x++) put(y, "belt", x, z);
+    must(y, { do: "saveBlueprint", slot: 3, tiles: F.within(y, 1, 1, 40, 25) });
+    expect(F.piecesOf(y.blueprints[3]?.pieces ?? new Uint8Array()).length).toBe(1000);
+    put(y, "belt", 1, 26);
+    expect(give(y, { do: "saveBlueprint", slot: 2, tiles: F.within(y, 1, 1, 1, 26) })).toMatchObject({
+      why: "A blueprint is at most 40 tiles by 25. This is 1 by 26",
+    });
+    const line = F.unlockedBy(F.goal("shelves")).find((u) => u.is === "blueprints");
+    expect(line?.says).toBe("Keep 4 blueprints of up to 1,000 pieces each, in a box of up to 40 tiles by 25.");
   });
 
   test("off the wire, is text no longer than the longest code there can be", () => {

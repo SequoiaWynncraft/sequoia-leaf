@@ -234,6 +234,21 @@ function number(of: Numbered, to: number): Unlock {
 const ofKind = (of: Numbered): Kind | undefined => ALL_KINDS.find((k) => OWNS[k]?.includes(of));
 const NUMBERED: readonly Numbered[] = ["stops", "crate", "reach", "depot", "span", "away", "hooks", "range"];
 
+/** The line of blueprints an unlock gives: how many, of how many pieces each, in a box of so many tiles where it says. */
+function blueprintsLine(b: NonNullable<Unlocks["blueprints"]>): Unlock {
+  const { count, pieces, w, h } = b;
+  const box = w === undefined || h === undefined ? "" : `, in a box of up to ${num(w)} tiles by ${num(h)}`;
+  return {
+    is: "blueprints",
+    count,
+    pieces,
+    was: { count: before(count, (o) => o.blueprints?.count), pieces: before(pieces, (o) => o.blueprints?.pieces) },
+    name: "Blueprints",
+    amount: `${num(count)} of ${num(pieces)} pieces`,
+    says: `Keep ${num(count)} blueprint${s(count)} of up to ${num(pieces)} pieces${count === 1 ? "" : " each"}${box}.`,
+  };
+}
+
 /**
  * What an `Unlocks` unlocks, each thing once, in the order a screen lists them: kinds of piece,
  * grades, recipes, tools, blueprints, numbers, the board, a way put first, and plots put up for sale. A number that
@@ -277,22 +292,7 @@ export function unlocked(u: Unlocks): Unlock[] {
     out.push({ is: "recipe", item: made, name: ITEM_INFO[made]?.name ?? "", says: recipeSays(made) });
   }
   for (const tool of u.tools ?? []) out.push({ is: "tool", tool, ...TOOL_INFO[tool] });
-  if (u.blueprints) {
-    const { count, pieces } = u.blueprints;
-    const was = {
-      count: before(count, (o) => o.blueprints?.count),
-      pieces: before(pieces, (o) => o.blueprints?.pieces),
-    };
-    out.push({
-      is: "blueprints",
-      count,
-      pieces,
-      was,
-      name: "Blueprints",
-      amount: `${num(count)} of ${num(pieces)} pieces`,
-      says: `Keep ${num(count)} blueprint${s(count)} of up to ${num(pieces)} pieces${count === 1 ? "" : " each"}.`,
-    });
-  }
+  if (u.blueprints) out.push(blueprintsLine(u.blueprints));
   for (const of of NUMBERED) {
     const to = u[of];
     if (to === undefined) continue;
