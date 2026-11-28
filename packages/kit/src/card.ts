@@ -106,7 +106,7 @@ export class Deck {
   #told: string = "|";
   /** Whoever asked for a card whose description is still coming, and whether to pin it. */
   #awaited: { from: object; pinned: boolean } | null = null;
-  /** What the card on show holds while it is the one on show (`confirms`): a scope for each pinned card drawn, kept while it is drawn again. */
+  /** What the card on show holds while it is the one on show (`confirms`): a scope for each pinned card drawn, kept by its things while it is drawn again or moves with its thing. */
   readonly #entries = scope().turns();
 
   constructor(view: View) {
@@ -148,7 +148,7 @@ export class Deck {
   #set(open: Open | null, description: Description | null): void {
     this.open = open;
     // Another card on show (followed to, gone back to, pinned anew, put away): what the last held goes.
-    this.#entries(open?.pinned ? open : null);
+    this.#entries(open?.pinned ? open.stack : null);
     this.view.render(open, description);
     this.#tell();
   }
@@ -160,7 +160,7 @@ export class Deck {
    * Drawn again with what it says changed (`refresh`), it is still the same card.
    */
   confirms(a: Action, redraw: () => void): boolean {
-    const life = this.open?.pinned ? this.#entries(this.open) : null;
+    const life = this.open?.pinned ? this.#entries(this.open.stack) : null;
     return !a.ask || (life !== null && pressedTwice(life, actionSpend(this.shown() ?? "", a), redraw));
   }
 

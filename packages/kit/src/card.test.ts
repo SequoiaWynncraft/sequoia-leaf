@@ -366,6 +366,14 @@ describe("an action that asks to be pressed again", () => {
     expect([confirmed(deck, BUY, redraw), confirmed(deck, BUY, redraw)]).toEqual([false, false]);
   });
 
+  test("goes ahead on its second press after its card moved with its thing (the view moved under it)", () => {
+    const { deck } = plotTable();
+    deck.press("plot:meadow", spot, "mouse", A);
+    expect(confirmed(deck, BUY, redraw)).toBe(false);
+    expect(deck.moveTo(A, { ...spot, x: spot.x - 40 })).toBe(true);
+    expect(confirmed(deck, BUY, redraw)).toBe(true);
+  });
+
   test("asks again once its card has followed something in it and come back", () => {
     const { deck } = plotTable();
     deck.press("plot:meadow", spot, "mouse", A);
