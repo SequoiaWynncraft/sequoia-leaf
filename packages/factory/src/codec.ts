@@ -30,6 +30,7 @@ import { keptOnto, type KeptPiece, keptPieces, packKept, unpackCells } from "./c
 import { clearRefusal, isStart } from "./clearing.ts";
 import { here } from "./clock.ts";
 import { NODES } from "./content/nodes.ts";
+import { tally, untally } from "./counted.ts";
 import { historyOf, stampOf } from "./history.ts";
 import { FIRST_LAND, holdsFirst, type KeptLand, keptLandOf, keptOn, piecesOn, tileOn } from "./keptland.ts";
 import { LAND, type Land, plotPrice } from "./land.ts";
@@ -54,7 +55,6 @@ import {
   isGoal,
   isKind,
   isNode,
-  itemName,
   itemNamed,
   kindNamed,
   LINED,
@@ -68,18 +68,7 @@ import {
   REGRADED,
   SPANS,
 } from "./tables.ts";
-import {
-  type Away,
-  type Counts,
-  counts,
-  emptyYard,
-  hold,
-  type Print,
-  reopen,
-  reserve,
-  type Standing,
-  type Yard,
-} from "./yard.ts";
+import { type Away, counts, emptyYard, hold, type Print, reopen, reserve, type Standing, type Yard } from "./yard.ts";
 
 /**
  * 11: a yard naming anything the last Leaf of version 10 did not know, anywhere in it (`knownAt10`:
@@ -134,25 +123,7 @@ const whole = (v: unknown, most: number): number | null =>
   typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= most ? v : null;
 const words = (v: unknown): string | null => (typeof v === "string" && v.length <= 200 ? v : null);
 
-/** A count by name, as kept: only real things, only sensible counts, always in the same order. */
-export function tally(c: Counts): Record<string, number> {
-  const out: Record<string, number> = {};
-  for (const n of ALL_ITEMS) {
-    const v = c[n] ?? 0;
-    if (Number.isFinite(v) && v > 0) out[itemName(n)] = v;
-  }
-  return out;
-}
-/** A count by name read back. */
-export function untally(v: unknown, most: number): Counts {
-  const out = counts();
-  if (!isRec(v)) return out;
-  for (const n of ALL_ITEMS) {
-    const got = whole(v[itemName(n)], most);
-    if (got !== null && got > 0) out[n] = got;
-  }
-  return out;
-}
+export { tally, untally };
 
 // ---------- writing ----------
 
@@ -171,22 +142,20 @@ export interface Keep {
 export function encode(y: Yard, keep: Keep = {}): string {
   const pieces = keptPieces(y);
   const rec = record(y, keep, pieces);
-  return JSON.stringify({
-    v: anyLaunches(y.launches) ? LAUNCHED : keptPastTen(y, rec, pieces) ? VERSION : PLACED,
-    ...rec,
-  });
+  return JSON.stringify({ v: versionFor(y, rec, pieces), ...rec });
 }
 
 /**
- * Whether a yard, kept as `rec` with its `pieces`, keeps anything the last Leaf of version 10 did not
- * know: cheaply, of what these tables have past it (`pastTen`), or while they have a thing, kind or
- * plot past it, by the whole scan (`WIDER`).
+ * The version a yard, kept as `rec` with its `pieces`, is kept as: 12 keeping launches; 11 keeping
+ * anything the last Leaf of version 10 did not know, asked cheaply, of what these tables have past it
+ * (`pastTen`), or while they have a thing, kind or plot past it, by the whole scan (`WIDER`); else 9.
  */
-function keptPastTen(y: Yard, rec: Rec, pieces: readonly KeptPiece[]): boolean {
+function versionFor(y: Yard, rec: Rec, pieces: readonly KeptPiece[]): number {
+  if (anyLaunches(y.launches)) return LAUNCHED;
   // A yard that has begun a clearing keeps the count of them, which that Leaf would let go.
-  if (y.begun > 0) return true;
-  if (!WIDER) return pastTen(y);
-  return !knownAt10(keptNames(rec, pieces, keptPrints(rec), y.land.w * y.land.h));
+  if (y.begun > 0) return VERSION;
+  if (!WIDER) return pastTen(y) ? VERSION : PLACED;
+  return knownAt10(keptNames(rec, pieces, keptPrints(rec), y.land.w * y.land.h)) ? PLACED : VERSION;
 }
 
 /** A kept record's blueprints, each as kept (`keptBlueprint`). */

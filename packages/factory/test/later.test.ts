@@ -257,16 +257,16 @@ describe("a yard naming what this Leaf does not know is a newer Leaf's", () => {
   });
 });
 
-describe("the yard's 15 launch numbers", () => {
-  /** A yard that has launched: twice of any kind, with a level of a track and launches spent, kept. */
-  function launched(): { y: F.Yard; rec: Rec } {
-    const y = F.create({ seed: 1, tier: 9 });
-    y.launches.ever[0] = 2;
-    y.launches.spent[0] = 1;
-    y.launches.levels[4] = 1;
-    return { y, rec: record(F.encode(y)) };
-  }
+/** A yard that has launched: twice of any kind, with a level of a track and launches spent, kept. */
+function launched(): { y: F.Yard; rec: Rec } {
+  const y = F.create({ seed: 1, tier: 9 });
+  y.launches.ever[0] = 2;
+  y.launches.spent[0] = 1;
+  y.launches.levels[4] = 1;
+  return { y, rec: record(F.encode(y)) };
+}
 
+describe("the yard's 15 launch numbers", () => {
   test("are kept by name, only those above 0, and read back as they were, with the same check; a yard with none keeps none", () => {
     const { y, rec } = launched();
     expect(rec.launches).toEqual({ ever: { any: 2 }, spent: { any: 1 }, levels: { roots: 1 } });
