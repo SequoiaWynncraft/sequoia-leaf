@@ -1,16 +1,16 @@
 /**
  * Reach: you build by hand only near where you stand, on the plot you stand on and the plots round
  * it, as many plots out as the yard's range (`Open.range`: 1, the eight round it, until research
- * makes it more). On the guild's land today 1 is the whole yard from its middle plot, and 2 from any
- * plot; on a bigger map you walk out to build by hand far away.
+ * makes it more: 2 with `longreach`, 3 with `longerreach`). On the 7 by 7 land, 3 is the whole land
+ * from its middle plot; with less you walk out to build by hand far away.
  *
  * Reach is for building by hand and for nothing else (`footprint`): one piece built, raised or
  * turned in place by building over it, a run of belt, a tunnel, and one piece removed by hand. Every
  * tile such a command puts a piece on or takes one off must be in reach, whatever stood there
  * before. Nothing the select tool or a blueprint does is limited by reach: moving, copying or
  * removing an area, saving it, and setting down a blueprint (a pasted code's too) work anywhere on
- * the yard's land. They are the way to build far from where you stand. Neither is anything that puts
- * no piece down and takes none up: turning a piece, Upgrade, a card's settings, painting, Undo.
+ * the yard's land. They are the way to build far from where you stand. Nor is anything that puts no
+ * piece down and takes none up: turning a piece, Upgrade, a card's settings, painting, Undo.
  *
  * A preview asks it of the very command its press would send (`acts.ts`), and `doNow` asks it before
  * the rules, so a gold preview is never refused and a coral one never goes through. Without a figure

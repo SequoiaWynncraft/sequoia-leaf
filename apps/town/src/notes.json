@@ -1,14 +1,5 @@
 [
   {
-    "id": "works-reach-area",
-    "at": "TBD",
-    "title": "Select and blueprints anywhere",
-    "lines": [
-      "In The Works, the select tool and blueprints now work anywhere on your land: move, copy, remove, save and place far from where you stand.",
-      "Reach only limits building by hand: one piece, a run of belt, a tunnel, or removing one piece."
-    ]
-  },
-  {
     "id": "up-the-tree",
     "at": "2027-01-05T00:00Z",
     "title": "Up The Tree",
@@ -141,6 +132,15 @@
           "Every emblem gives its holder 10% more health."
         ]
       }
+    ]
+  },
+  {
+    "id": "works-reach-area",
+    "at": "2026-11-28T10:00Z",
+    "title": "Select and blueprints anywhere",
+    "lines": [
+      "In The Works, the select tool and blueprints now work anywhere on your land: move, copy, remove, save and place far from where you stand.",
+      "Reach only limits building by hand: one piece, a run of belt, a tunnel, or removing one piece."
     ]
   },
   {
