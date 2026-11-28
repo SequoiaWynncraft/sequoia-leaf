@@ -91,7 +91,8 @@ kit's card: "The table needs the guild's server."
   cost on a tab standing on the foot, and the name along the foot; every word sits 3 units inside the
   frame on a backing of the foot's tone. Where five cards are too narrow for a name of eight letters
   in the name face (a phone, a narrow window), they are small: a thin frame, the traits by their
-  signs, the name in the small face. Every part has a fixed size, so nothing moves as what it says
+  signs (on a phone in one row along the top, the count at its right, so the figure stays clear),
+  the name in the small face. Every part has a fixed size, so nothing moves as what it says
   changes; a name too long for its foot is cut short, and its card says it whole.
 - **Items.** Components, finished items and emblems sit on a rack. An emblem (what a charm boon
   gives) is drawn as its origin's sign; its card says its name, that its holder is of that origin

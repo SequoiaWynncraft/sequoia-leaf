@@ -1921,7 +1921,7 @@ body[data-rule] #says {
  */
 @media (max-aspect-ratio: 4/5), (max-width: 959px) {
   #plan {
-    /* Three trait signs at a unit to a pixel (11 each) and a level's tab under them: 60 units. */
+    /* A card: the row of trait signs, the figure clear under it, and the level's and the cost's tabs: 60 units. */
     --card-h: calc(var(--u) * 60);
     grid-template-columns: 1fr 1fr 1fr calc(var(--u) * 20);
     grid-template-rows: auto calc(var(--u) * 20) calc(var(--u) * 20);
@@ -1938,6 +1938,22 @@ body[data-rule] #says {
   /* A small card here is a phone's: its figure one unit to a pixel. */
   .offer {
     --fs: 1;
+    --half: calc(var(--u) / 2);
+  }
+  /*
+   * Its art kept clear: the trait signs in one row along its top, a CSS pixel to each of theirs (half
+   * the unit, so three and the count fit a phone's card), the count at the row's right, neither on a
+   * backing; the signs' own ink edge parts them from the picture.
+   */
+  @container stall (width < 35.3em) {
+    .offer .traits {
+      --u: var(--half);
+      flex-direction: row;
+    }
+    .offer :is(.tr, .have) {
+      padding: 0;
+      background: none;
+    }
   }
   /* The plaque over the middle of the cards, which are the panel's whole width; without what the next room pays. */
   #shop {
