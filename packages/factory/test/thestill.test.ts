@@ -215,9 +215,12 @@ describe("the still", () => {
       fill(y, F.at(y, x, z), TAR, 1);
       return F.holderOf(y, F.at(y, x, z));
     });
-    // And one against its front, which sends things out and takes nothing in.
-    must(y, { do: "build", kind: "crate", x: 6, y: 4, dir: 2 });
-    fill(y, F.at(y, 6, 4), TAR, 1);
+    // And one against each of its three front tiles, which send things out and take nothing in.
+    const front = [3, 4, 5].map((z) => {
+      must(y, { do: "build", kind: "crate", x: 6, y: z, dir: 2 });
+      fill(y, F.at(y, 6, z), TAR, 1);
+      return F.holderOf(y, F.at(y, 6, z));
+    });
     for (let k = 0; k < 60; k++) F.step(y);
     // What a crate still has of it: in it, or ready to hand on.
     const has = (r: number): number => F.held(y.holders, r, TAR) + (y.holders.out[r] === TAR ? 1 : 0);
@@ -228,9 +231,10 @@ describe("the still", () => {
       left.filter((n) => n === 0).length,
       left.filter((n) => n === 1).length,
     ]).toEqual([8, 8, 1]);
-    expect([has(F.holderOf(y, F.at(y, 6, 4))), F.MIX_OF[STILL]?.holds]).toEqual([1, 8]);
-    // Power reaches it: it distils one tar and stops, its pitch with nowhere to go; with room for one
-    // again, it takes the ninth from where it waits.
+    expect([front.map(has), F.MIX_OF[STILL]?.holds]).toEqual([[1, 1, 1], 8]);
+    // Power reaches it, with nothing at its front: it distils one tar and stops, its pitch with nowhere
+    // to go; with room for one again, it takes the ninth from where it waits.
+    for (const z of [3, 4, 5]) must(y, { do: "remove", x: 6, y: z });
     for (const x of [30, 26, 22, 18, 14, 10, 6]) must(y, { do: "build", kind: "pylon", x, y: 8, dir: 0 });
     for (let k = 0; k < 40; k++) F.step(y);
     const r = F.holderOf(y, i);

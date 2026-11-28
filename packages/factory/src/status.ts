@@ -10,7 +10,7 @@ import { RULES } from "./kinds/list.ts";
 import { holding as holdingOf, type MachineRate, rateOf, type State, STATES, TROUBLE } from "./kinds/say.ts";
 import { litAt } from "./power.ts";
 import { pieceOf } from "./sizes.ts";
-import { ALL_KINDS, BURNS, isMaker, type Item, type Kind, NONE, type Recipe } from "./tables.ts";
+import { ALL_KINDS, BURNS, type Fuel, isMaker, type Item, type Kind, NONE, type Recipe } from "./tables.ts";
 import { KIT, rewire } from "./wire.ts";
 import { type Counts, holderOf, type Yard } from "./yard.ts";
 
@@ -110,6 +110,9 @@ export function flow(y: Yard, made: Counts, needed: Counts): void {
 
 /** Whether the burner on a tile (any of a big one's tiles) is burning, as its card and its picture say it: power reaches it, and it is alight (`alight`). */
 export const burningAt = (y: Yard, i: number): boolean => litAt(y, i) && alight(KIT, y, pieceOf(y, i));
+
+/** What the burner on a tile (any of a big one's tiles) burns now, as its card says it (`fuelNow`). */
+export const fuelAt = (y: Yard, i: number): Fuel | undefined => fuelNow(KIT, y, pieceOf(y, i));
 
 /** The kinds that burn for power, in the tables' order. */
 const BURNING: readonly Kind[] = ALL_KINDS.filter((k) => BURNS[k] !== null);

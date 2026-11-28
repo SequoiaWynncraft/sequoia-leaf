@@ -4,7 +4,7 @@
  * thicker on pitch than on creosote, and thinnest on spirit; cold, its window is dark and it makes no
  * smoke. Its card says what it burns a minute of each fuel, heaviest first, and the smog each makes.
  */
-import { burningAt, BURNS, kind, MINUTE } from "@sequoia-leaf/factory";
+import { burningAt, BURNS, fuelAt, kind, MINUTE } from "@sequoia-leaf/factory";
 import type { Row } from "@sequoia-leaf/kit/card.ts";
 import { lessMotion } from "@sequoia-leaf/kit/dom.ts";
 import { STONE } from "@sequoia-leaf/kit/palette.ts";
@@ -55,9 +55,11 @@ export const powerhouse: KindPage = {
       at.a,
     );
     if (lit && !steady && at.t > (at.mem.puffAt[at.i] ?? 0)) {
+      // What it burns now, as its card says it: the piece alight, or the next it takes.
+      const now = fuelAt(y, at.i)?.fuel;
       const f = Math.max(
         0,
-        FUELS.findIndex((fuel) => fuel.fuel === at.making),
+        FUELS.findIndex((fuel) => fuel.fuel === now),
       );
       const [every, count, col] = SMOKE[f] ?? SMOKE[0] ?? [0.3, 1, IRON[3]];
       at.mem.puffAt[at.i] = at.t + every * (0.8 + hash(at.i, Math.floor(at.t * 3), 7) * 0.4);
