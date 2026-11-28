@@ -384,8 +384,11 @@ export function rewire(y: Yard): Wire {
   }
   const taken = new Uint8Array(n);
   for (let i = 0; i < n; i++) if (kind[i] !== NONE) taken[i] = sidesTaken(y, i);
+  const { order, rings } = handingOrder(y);
   const wire: Wire = {
-    order: handingOrder(y),
+    order,
+    rings,
+    again: new Int32Array(rings.length),
     taken,
     carry: Int32Array.from(carry),
     mouths: Int32Array.from(carry.filter((i) => tunnelOf(y, i) >= 0)),
@@ -415,24 +418,41 @@ const hands = (k: number): boolean => (RULES[k]?.hands ?? null) !== null;
 
 /**
  * The tiles that hand things on, each after the tiles it hands to, so that a full belt moves as
- * one: a walk from each tile in turn, a piece's ways in order, each tile once.
+ * one: a walk from each tile in turn, a piece's ways in order, each tile once. And the tiles of it
+ * that lie on a ring, in its order (`Wire.rings`): those the walk finds again while it is still
+ * walking on from them, and every tile it walked on the way (Tarjan's walk: `low` is the first tile of
+ * the walk a tile is found to lead back to, and a tile whose `low` is its own begins a part of the
+ * plumbing that every tile in it leads round to; a part of more than one tile is a ring).
  */
-function handingOrder(y: Yard): Int32Array {
+function handingOrder(y: Yard): { order: Int32Array; rings: Int32Array; count: number } {
   const n = y.kind.length;
-  const seen = new Uint8Array(n);
+  const at = new Int32Array(n).fill(-1);
+  const low = new Int32Array(n);
   const child = new Uint8Array(n);
   const stack = new Int32Array(n);
+  const open = new Int32Array(n);
+  const isOpen = new Uint8Array(n);
+  const ring = new Uint8Array(n);
   const order: number[] = [];
-  let top = 0;
-  // A piece of more than one tile hands on from its own tile, and is handed to on any.
-  const enter = (t: number): void => {
+  let [top, opened, walked, count] = [0, 0, 0, 0];
+  // A piece of more than one tile hands on from its own tile, and is handed to on any. One that hands
+  // nothing on is walked to and no further, and is on no ring.
+  const enter = (t: number, from: number): void => {
     const i = t < 0 ? t : pieceOf(y, t);
-    if (i < 0 || seen[i] === 1) return;
-    seen[i] = 1;
-    if (hands(y.kind[i] ?? NONE)) stack[top++] = i;
+    if (i < 0) return;
+    if (at[i] >= 0) {
+      if (from >= 0 && isOpen[i] === 1) low[from] = Math.min(low[from] ?? 0, at[i] ?? 0);
+      return;
+    }
+    at[i] = walked++;
+    if (!hands(y.kind[i] ?? NONE)) return;
+    low[i] = at[i] ?? 0;
+    stack[top++] = i;
+    open[opened++] = i;
+    isOpen[i] = 1;
   };
   for (let s = 0; s < n; s++) {
-    enter(s);
+    enter(s, -1);
     while (top > 0) {
       const i = stack[top - 1] ?? 0;
       const c = child[i] ?? 0;
@@ -441,13 +461,37 @@ function handingOrder(y: Yard): Int32Array {
       if (c >= Math.max(1, ways)) {
         top--;
         order.push(i);
+        closeWalk(i, top > 0 ? (stack[top - 1] ?? -1) : -1);
         continue;
       }
       child[i] = c + 1;
-      enter(outs > 0 ? portTo(y, i, c) : ways > 0 ? wayOut(y, i, c) : nextOf(y, i));
+      enter(outs > 0 ? portTo(y, i, c) : ways > 0 ? wayOut(y, i, c) : nextOf(y, i), i);
     }
   }
-  return Int32Array.from(order);
+  /** A tile walked from in full: what it leads back to, its walker does too; one that begins a part closes it, a ring if it is more than itself. */
+  function closeWalk(i: number, by: number): void {
+    if (by >= 0) low[by] = Math.min(low[by] ?? 0, low[i] ?? 0);
+    if (low[i] !== at[i]) return;
+    const from = opened;
+    for (let j = -1; j !== i;) {
+      j = open[--opened] ?? i;
+      isOpen[j] = 0;
+    }
+    if (from - opened < 2) return;
+    count++;
+    for (let k = opened; k < from; k++) ring[open[k] ?? 0] = 1;
+  }
+  return { order: Int32Array.from(order), rings: Int32Array.from(order.filter((i) => ring[i] === 1)), count };
+}
+
+/**
+ * The rings in a yard's plumbing (`handingOrder`): how many parts of it things handed on come back
+ * round in, and the tiles on them. For a look over kept yards (`tools/resave.ts`): a ring's tick
+ * changed with tier 7, so a yard with none plays as it did.
+ */
+export function ringsOf(y: Yard): { readonly rings: number; readonly tiles: number } {
+  const { rings, count } = handingOrder(y);
+  return { rings: count, tiles: rings.length };
 }
 
 /** The tile a piece of more than one tile's way out `port` sends to, or -1. */

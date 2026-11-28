@@ -136,8 +136,17 @@ export interface Smog {
 
 /** The yard's plumbing, worked out from what stands where (`wire.ts`). */
 export interface Wire {
-  /** Tiles that hand things on, each after the tiles it hands to. */
+  /** Tiles that hand things on, each after the tiles it hands to: but round a ring, where one of them must come first. */
   readonly order: Int32Array;
+  /**
+   * The tiles of `order` that lie on a ring (things handed on from one come back to it), in its order;
+   * none in most yards. Round a ring no order puts each tile after the tile it hands to, so the tick
+   * gives those that waited one more try once the rest have handed on (`tick.ts`), and a full ring
+   * with a way off it moves as one, as a full belt does.
+   */
+  readonly rings: Int32Array;
+  /** Room for the ring tiles a tick tries again, as many as `rings`. */
+  readonly again: Int32Array;
   /** Tiles that carry, tiles that work, and tiles that burn for power (a boiler) within reach of power. */
   readonly carry: Int32Array;
   /** Tunnels' way-in mouths, which carry things under the ground too. */

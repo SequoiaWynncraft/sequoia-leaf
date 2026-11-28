@@ -81,6 +81,7 @@ export {
   type Power,
   power,
   rewire,
+  ringsOf,
   sortWay,
   takes,
   wants,
