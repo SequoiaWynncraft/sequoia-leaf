@@ -1,4 +1,4 @@
-import { nameOf, portrait, portraitRoom } from "@sequoia-leaf/figures/sprites.ts";
+import { nameOf, portrait } from "@sequoia-leaf/figures/sprites.ts";
 /**
  * The interface round the table, built from the kit's pieces: the purse and the track along the
  * top, the traits the party has, the rack of items, and the stall along the bottom with the acorns,
@@ -14,6 +14,7 @@ import {
   catalogOf,
   ECONOMY,
   fielded,
+  type FigureId,
   figureIn,
   MAX_LEVEL,
   picksOf,
@@ -76,6 +77,33 @@ const byId = (id: string): HTMLElement | null => document.getElementById(id);
 
 /** An amount of acorns in words, for a control's name. */
 const acornsSaid = (n: number): string => `${n} acorn${n === 1 ? "" : "s"}`;
+
+/** The bar in the stall's place during a fight: the tally, its tabs, the speeds and Skip. */
+function fightBar(a: Asks): HTMLElement {
+  const speeds = el("div", "k-tabs", { id: "speeds", role: "tablist" });
+  for (const s of [1, 2, 4] as const) {
+    add(
+      speeds,
+      el("button", "k-btn sm", { type: "button", role: "tab", "data-speed": s, onclick: () => a.speed(s) }, `${s}x`),
+    );
+  }
+  const skip = el(
+    "button",
+    "k-btn wood",
+    { id: "skip", type: "button", "aria-label": "Skip", onclick: a.skipFight },
+    pic(glyph("skip")),
+    el("span", "wide-only", { text: "Skip" }),
+  );
+  tip(skip, "Skip to the end", "The fight comes out the same.");
+  panelTally = tallyView(unitRef, "panel");
+  return el(
+    "div",
+    "",
+    { id: "fightbar" },
+    el("div", "", { id: "tally" }, panelTally.el),
+    el("div", "controls", {}, panelTally.switcher, panelTally.tabs, el("div", "k-row speedrow", {}, speeds, skip)),
+  );
+}
 
 /** Builds everything round the table, once. */
 export function buildTable(a: Asks): void {
@@ -149,39 +177,20 @@ export function buildTable(a: Asks): void {
     "div",
     "",
     { id: "plan" },
+    // In the order they are read, left to right, for Tab: the left column, the acorns over the cards, the right column.
+    level,
     rustle,
-    hold,
+    levelUp,
+    acornsBtn,
     // Five empty slots until there is a run: the panel has its height from the start, which the table is fitted above.
     el("div", "", { id: "stall" }, ...Array.from({ length: 5 }, emptySlot)),
-    acornsBtn,
-    level,
-    levelUp,
+    hold,
     setOut,
+    // What letting a carried figure go does, over the cards only: the level and the acorns stay in view.
+    el("div", "k-over", { id: "sellhint" }),
   );
 
-  const speeds = el("div", "k-tabs", { id: "speeds", role: "tablist" });
-  for (const s of [1, 2, 4] as const) {
-    add(
-      speeds,
-      el("button", "k-btn sm", { type: "button", role: "tab", "data-speed": s, onclick: () => a.speed(s) }, `${s}x`),
-    );
-  }
-  const skip = el(
-    "button",
-    "k-btn wood",
-    { id: "skip", type: "button", "aria-label": "Skip", onclick: a.skipFight },
-    pic(glyph("skip")),
-    el("span", "wide-only", { text: "Skip" }),
-  );
-  tip(skip, "Skip to the end", "The fight comes out the same.");
-  panelTally = tallyView(unitRef, "panel");
-  const fightbar = el(
-    "div",
-    "",
-    { id: "fightbar" },
-    el("div", "", { id: "tally" }, panelTally.el),
-    el("div", "controls", {}, panelTally.switcher, panelTally.tabs, el("div", "k-row speedrow", {}, speeds, skip)),
-  );
+  const fightbar = fightBar(a);
 
   add(
     document.body,
@@ -196,7 +205,7 @@ export function buildTable(a: Asks): void {
       el("div", "", { id: "traits" }),
       // At the top right on a wide window; on a phone, beside the traits over the stall (`raid.css`).
       el("div", "", { id: "rack" }),
-      el("div", "k-panel", { id: "shop" }, plan, fightbar, el("div", "k-over", { id: "sellhint" })),
+      el("div", "k-panel", { id: "shop" }, plan, fightbar),
     ),
   );
   watch(() => renderPurse());
@@ -279,19 +288,23 @@ function renderTraits(run: RunView): void {
   paintLight();
 }
 
-/** What watches the stall's width, to fit its names again. */
-let stallWatcher: ResizeObserver | null = null;
+/** A place on the stall with nothing in it: a hollow the size of a card. */
+const emptySlot = (): HTMLElement => el("div", "k-slot offer gone");
 
-/** Where an offer's picture goes: as tall as the tallest figure's, on every card and empty slot alike. */
-const artRoom = (): string => `height: calc(var(--u) * ${portraitRoom()} * var(--fs))`;
-/** A slot of the stall with nothing in it, built as an offer is, so that it is just as tall. */
-const emptySlot = (): HTMLElement =>
-  el("div", "k-slot offer gone", {}, el("div", "art", { style: artRoom() }), el("div", "name"), el("div", "foot"));
+/** A figure's traits on its card, one to a line: the sign, and its name where the card has room (raid.css). */
+const traitLines = (run: RunView, kind: FigureId): HTMLElement =>
+  el(
+    "div",
+    "traits",
+    {},
+    ...traitsOf(catalogOf(run), kind).map((t) =>
+      el("span", "tr", {}, pic(traitIcon(t)), el("span", "tn", { text: traitIn(catalogOf(run), t).name })),
+    ),
+  );
 
 /**
- * The stall: cards of one height whatever they hold (raid.css), an offer bought leaving a slot built
- * as a card is, so that the panel under the table never changes size and the table above it never
- * moves.
+ * The stall: cards of one size whatever they hold (raid.css), an offer bought leaving a hollow of the
+ * same size, so that the panel under the table never changes size and the table above it never moves.
  */
 function renderStall(run: RunView): void {
   const stall = byId("stall");
@@ -300,9 +313,6 @@ function renderStall(run: RunView): void {
   const cat = catalogOf(run);
   if (key === stallKey) return;
   stallKey = key;
-  // A stall made narrower (the window shrank) asks again which names fit, on the next frame.
-  if (!stallWatcher && typeof ResizeObserver === "function")
-    (stallWatcher = new ResizeObserver(() => requestAnimationFrame(() => fitNames(stall)))).observe(stall);
   stall.replaceChildren();
   stall.style.setProperty("--n", String(run.stall.length));
   run.stall.forEach((kind, i) => {
@@ -314,29 +324,30 @@ function renderStall(run: RunView): void {
     const price = priceOf(run, i);
     const have = twins(run, kind);
     const owned = pieces(run).some((p) => p.kind === kind);
+    const level = runTag(run, kind);
+    level?.classList.add("tab");
     const card = el(
       "button",
-      `k-card offer t${spec.tier}${canBuy(run, i) ? "" : " cant"}${have >= 2 ? " lit" : ""}`,
+      `offer k-tier-${spec.tier}${canBuy(run, i) ? "" : " cant"}${have >= 2 ? " lit" : ""}`,
       { type: "button", "data-offer": i, "aria-label": `${nameOf(cat, kind)}, ${acornsSaid(price)}` },
-      el("div", "art", { style: artRoom() }, figPic(portrait(kind))),
-      el("div", "name", { text: nameOf(cat, kind) }),
       el(
         "div",
-        "foot",
+        "art",
         {},
-        el("span", `k-cur${price < spec.tier ? " cut" : ""}`, {}, icon("acorn"), String(price)),
-        el("span", "signs", {}, ...traitsOf(cat, kind).map((t) => pic(traitIcon(t)))),
+        figPic(portrait(kind)),
+        traitLines(run, kind),
+        owned
+          ? el("span", `have${have >= 2 ? " ready" : ""}`, { text: have >= 2 ? "3!" : have === 1 ? "2" : "+" })
+          : null,
+        level,
+        el("span", `k-cur tab cost${price < spec.tier ? " cut" : ""}`, {}, icon("acorn"), String(price)),
       ),
-      owned
-        ? el("span", `have${have >= 2 ? " ready" : ""}`, { text: have >= 2 ? "3!" : have === 1 ? "2" : "+" })
-        : null,
-      runTag(run, kind),
+      el("div", "foot", {}, el("span", "name", { text: nameOf(cat, kind) })),
     );
     // Tapping an offer buys it; a finger kept on it asks what it is.
     link(card, figureRef(kind), { acts: true });
     stall.append(card);
   });
-  fitNames(stall);
   paintLight();
 }
 
@@ -546,16 +557,4 @@ export function stepTable(): void {
 export function wakeChip(trait: string): void {
   const chip = document.querySelector<HTMLElement>(`#traits [data-trait="${trait}"]`);
   if (chip) replay(chip, "woke");
-}
-
-/**
- * A name too long for its card in the usual size (a word wider than the card, or more than two
- * lines) is set in the small style, card by card: the room for a name is the same either way
- * (raid.css), so no name changes the size of its card or of any other.
- */
-function fitNames(stall: HTMLElement): void {
-  for (const name of stall.querySelectorAll<HTMLElement>(".offer .name")) {
-    name.classList.remove("small");
-    name.classList.toggle("small", name.scrollWidth > name.clientWidth || name.scrollHeight > name.clientHeight);
-  }
 }

@@ -386,30 +386,38 @@ button.k-plaque:active {
 }
 
 /*
- * A thing with a tier, `k-tier-1` to `k-tier-5`: stone, jade, sapphire, amethyst, gold. The frame
- * is drawn over what it holds, so nothing inside cuts into its jewels; `--k-fill` is what is behind
- * it, and `--k-tier` the tier's colour for whatever inside wants it.
+ * A thing with a tier, `k-tier-1` to `k-tier-5`: stone, jade, sapphire, amethyst, gold. Every tier's
+ * frame is built alike (`tools/frames.ts`): an ink outline, a band of the tier's metal, one lighter
+ * line inside it. It is the thing's border exactly, five units thick, drawn over what it holds so
+ * nothing inside cuts into it, and nothing of it lies inside. A small thing sets `--k-fw: 3` and
+ * `--k-f: var(--k-f-thin)` for the three-unit frame. `--k-fill` is what is behind it, and `--k-tier`
+ * the tier's colour for whatever inside wants it.
  */
 .k-tier-1 {
-  --k-f: var(--k-f-tier-1);
+  --k-f-thick: var(--k-f-tier-1);
+  --k-f-thin: var(--k-f-tier-1-thin);
   --k-tier: var(--k-tier-1);
 }
 .k-tier-2 {
-  --k-f: var(--k-f-tier-2);
+  --k-f-thick: var(--k-f-tier-2);
+  --k-f-thin: var(--k-f-tier-2-thin);
   --k-tier: var(--k-tier-2);
 }
 .k-tier-3 {
-  --k-f: var(--k-f-tier-3);
+  --k-f-thick: var(--k-f-tier-3);
+  --k-f-thin: var(--k-f-tier-3-thin);
   --k-tier: var(--k-tier-3);
   --k-crest: var(--k-f-crest-3);
 }
 .k-tier-4 {
-  --k-f: var(--k-f-tier-4);
+  --k-f-thick: var(--k-f-tier-4);
+  --k-f-thin: var(--k-f-tier-4-thin);
   --k-tier: var(--k-tier-4);
   --k-crest: var(--k-f-crest-4);
 }
 .k-tier-5 {
-  --k-f: var(--k-f-tier-5);
+  --k-f-thick: var(--k-f-tier-5);
+  --k-f-thin: var(--k-f-tier-5-thin);
   --k-tier: var(--k-tier-5);
   --k-crest: var(--k-f-crest-5);
 }
@@ -417,9 +425,12 @@ button.k-plaque:active {
   position: relative;
 }
 [class*="k-tier-"] {
+  /* How many units thick the frame is, and its picture. */
+  --k-fw: 5;
+  --k-f: var(--k-f-thick);
   isolation: isolate;
   box-sizing: border-box;
-  border: calc(var(--u) * 5) solid transparent;
+  border: calc(var(--u) * var(--k-fw)) solid transparent;
   border-image: none;
   background: var(
       --k-fill,
@@ -432,9 +443,9 @@ button.k-plaque:active {
   content: "";
   position: absolute;
   z-index: 2;
-  inset: calc(var(--u) * -5);
-  border: calc(var(--u) * 9) solid transparent;
-  border-image: var(--k-f) 9 stretch;
+  inset: calc(var(--u) * var(--k-fw) * -1);
+  border: calc(var(--u) * var(--k-fw)) solid transparent;
+  border-image: var(--k-f) var(--k-fw) stretch;
   image-rendering: pixelated;
   pointer-events: none;
 }
