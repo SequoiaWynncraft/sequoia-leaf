@@ -20,16 +20,18 @@
  *
  * A piece of more than one tile is kept once, on its own tile (`sizes.ts`), and stands over the rest
  * of its tiles again as it is read back. A yard with no kind past 15 and no by-product has exactly the
- * bytes it had before either could be kept; one with either is refused whole by a reader that knows
+ * bytes it had before either could be kept; one with either is a newer Leaf's to a reader that knows
  * neither, as bytes with a part it does not know.
  *
- * Bytes that are not pieces are refused whole: bytes cut short or left over, a part this version
- * does not know, more pieces than the land has tiles, and counts no yard could have (more than 255
- * kinds of thing held, more than a million of one). What today's tables allow is no part of the
- * shape: a thing they do not have is let go, more of one than a piece holds is clamped as it is put
- * back, and a tunnel longer than tunnels go is a piece that cannot stand.
+ * A part this version does not know, a bit of the parts no reader here knows, is a newer Leaf's
+ * (`NEWER`): the yard is not read, and is left as it is for the Leaf that reads it (`keptLater`); so
+ * is a kind past 255. Bytes that are not pieces are refused whole: bytes cut short or left over, more
+ * pieces than the land has tiles, and counts no yard could have (more than 255 kinds of thing held,
+ * more than a million of one). What today's tables allow is no part of the shape: a thing they do not
+ * have is let go, more of one than a piece holds is clamped as it is put back, and a tunnel longer
+ * than tunnels go is a piece that cannot stand.
  */
-import { Reader, spanByte, spanOfByte, Writer } from "./bytes.ts";
+import { NEWER, type Newer, Reader, spanByte, spanOfByte, Writer } from "./bytes.ts";
 import { RULES } from "./kinds/list.ts";
 import { waysOn } from "./pieces.ts";
 import { OWN } from "./sizes.ts";
@@ -290,16 +292,16 @@ function readHeldOut(r: Reader, p: Building, f: number): void {
   if (f & MORE) p.more = r.byte();
 }
 
-/** Reads a kind's bits past four onto a piece: 1 to 15, as only a kind past 15 has (none past 255); false for any other. */
+/** Reads a kind's bits past four onto a piece, as only a kind past 15 has; false for none, which no Leaf keeps. Past 15 they make a kind past 255, which no Leaf here has. */
 function readHigh(r: Reader, p: Building): boolean {
   const high = r.byte();
-  if (high === 0 || high > 15) return false;
+  if (high === 0) return false;
   p.kind |= high << 4;
   return true;
 }
 
-/** Reads a piece on a tile, from its first byte; null for bytes that are no yard's. */
-function readKept(r: Reader, tile: number): KeptPiece | null {
+/** Reads a piece on a tile, from its first byte; a newer Leaf's for a part this one does not know, null for bytes that are no yard's. */
+function readKept(r: Reader, tile: number): KeptPiece | Newer | null {
   const kd = r.byte();
   const p: Building = { tile, kind: kd & 15, dir: (kd >> 4) & 3 };
   if (kd & 64) {
@@ -309,12 +311,16 @@ function readKept(r: Reader, tile: number): KeptPiece | null {
     p.via = pv >> 4;
   }
   const f = kd & 128 ? r.varint() : 0;
-  if (f > PARTS || (f & ~PARTS) !== 0 || !readParts(r, p, f)) return null;
-  return r.over ? null : p;
+  // What follows a part this Leaf does not know is past reading: the yard is a newer Leaf's.
+  if (!r.over && (f > PARTS || (f & ~PARTS) !== 0)) return NEWER;
+  return !readParts(r, p, f) || r.over ? null : p;
 }
 
-/** The pieces read back from their bytes, on a land of `tiles` tiles; null for bytes that are not pieces. */
-export function unpackCells(bytes: Uint8Array, tiles: number): KeptPiece[] | null {
+/**
+ * The pieces read back from their bytes, on a land of `tiles` tiles; a newer Leaf's (`NEWER`) for a
+ * piece with a part this one does not know; null for bytes that are not pieces.
+ */
+export function unpackCells(bytes: Uint8Array, tiles: number): KeptPiece[] | Newer | null {
   const r = new Reader(bytes);
   const out: KeptPiece[] = [];
   const pieces = r.varint();
@@ -323,7 +329,7 @@ export function unpackCells(bytes: Uint8Array, tiles: number): KeptPiece[] | nul
   for (let n = 0; n < pieces; n++) {
     tile += r.varint() + 1;
     const p = tile < tiles ? readKept(r, tile) : null;
-    if (!p) return null;
+    if (!p || p === NEWER) return p;
     out.push(p);
   }
   return r.done ? out : null;

@@ -10,6 +10,7 @@ import { describe, expect, test } from "bun:test";
 import * as F from "../src/index.ts";
 import { KNOWN_AT_10 } from "../src/known10.ts";
 import { beforeReach } from "./goals.ts";
+import { near } from "./near.ts";
 import { Player } from "./player.ts";
 import { bare, TIER5, tunnel } from "./tier5.ts";
 import { generated, must, saved, SAVES, staged } from "./yards.ts";
@@ -143,6 +144,32 @@ describe("a yard naming what this Leaf does not know is a newer Leaf's", () => {
     expect(later({ ...plan, blueprints: [{ whole: print }] })).toBe(true);
     const fits = F.toBase64(Uint8Array.from([F.TUNNEL, 0, 0, 4, F.SPAN_MOST]));
     expect(later({ ...plan, blueprints: [fits] })).toBe(false);
+  });
+
+  test("Undo's record with a flag no reader here knows, or a piece in it with a part none knows: never broken bytes", () => {
+    const y = F.create({ seed: 1, tier: 4 });
+    must(y, { do: "build", kind: "belt", ...near(0, -6), dir: 0 });
+    y.history = [];
+    must(y, { do: "remove", ...near(0, -6), id: "r-1" });
+    const kept = record(F.encode(y));
+    const bytes = F.fromBase64(words(kept.history)[0] ?? "");
+    if (!bytes) throw new Error("no entry");
+    const read = (b: Uint8Array): [boolean, boolean] => {
+      const text = JSON.stringify({ ...kept, history: [F.toBase64(b)] });
+      return [F.decode(text) === null, F.keptLater(text)];
+    };
+    // The entry's flags follow its id ("r-1": its length, then a byte each); the belt it stands
+    // again (one of the pieces to hand, 64), with no parts, is its last byte.
+    const kd = bytes.at(-1) ?? 0;
+    expect([bytes[0], kd & ~64]).toEqual([3, F.BELT]);
+    const flagged = Uint8Array.from(bytes);
+    flagged[4] = (flagged[4] ?? 0) | 0x80;
+    const parted = Uint8Array.from([...bytes.subarray(0, -1), kd | 128, 0x80]);
+    expect([read(bytes), read(flagged), read(parted)]).toEqual([
+      [false, false],
+      [true, true],
+      [true, true],
+    ]);
   });
 
   test("Undo's record of a tunnel longer than this Leaf's longest: never stood again into another tunnel's row", () => {

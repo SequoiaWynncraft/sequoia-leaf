@@ -4,8 +4,8 @@
  * number; the kinds of its pieces; its plots, those it cleared and the one it is clearing; and the most tiles any of its tunnels passes under. Its
  * pieces, its blueprints and plans of the whole yard, and what Undo would put back all count.
  *
- * One rule reads it: a yard naming anything this Leaf does not know, or a tunnel longer than this
- * Leaf's longest, is a newer Leaf's (`knownHere`, which `decode` and `keptLater` ask), never read with
+ * One rule reads it: a yard naming anything this Leaf does not know, a tunnel longer than this
+ * Leaf's longest, or a bit in a piece or an Undo entry that no reader here knows, is a newer Leaf's (`knownHere`, which `decode` and `keptLater` ask), never read with
  * that thing let go or its Coins paid back. And one writes it: a yard naming nothing past what the
  * last Leaf of version 10 knew (`knownAt10`) is kept so that Leaf reads it. Writing asks it before
  * every save, so it asks it cheaply (`pastTen`): of the yard itself, only what these tables have past
@@ -18,6 +18,7 @@
  * (on a piece or in a blueprint), a colour past the 7 tints, a blueprint slot past its 4, or a felled
  * redwood on a tile that Leaf's map has no redwood on.
  */
+import { NEWER, type Newer } from "./bytes.ts";
 import type { KeptPiece } from "./cells.ts";
 import { PLOT_IDS } from "./content/plots.ts";
 import { historyNamed } from "./history.ts";
@@ -49,6 +50,8 @@ export interface KeptNames {
   readonly plots: ReadonlySet<string>;
   /** The most tiles a tunnel in it passes under, from either mouth. */
   readonly span: number;
+  /** Whether a piece or an Undo entry in it has a bit no reader here knows (`NEWER`). */
+  readonly newer: boolean;
 }
 
 type Rec = Record<string, unknown>;
@@ -90,7 +93,7 @@ const pieceItems = (p: KeptPiece): number[] => [
 /** What a kept yard names (its record, its pieces, its blueprints, and its history on a land of so many tiles). */
 export function keptNames(
   raw: Rec,
-  pieces: readonly KeptPiece[],
+  pieces: readonly KeptPiece[] | Newer,
   prints: readonly KeptBlueprint[],
   tiles: number,
 ): KeptNames {
@@ -103,17 +106,21 @@ export function keptNames(
     span = Math.max(span, Math.abs(s ?? 0));
     for (const n of made) if (n !== undefined) items.add(n);
   };
-  for (const p of pieces) piece(p.kind, p.span, pieceItems(p));
+  let newer = pieces === NEWER;
+  for (const p of pieces === NEWER ? [] : pieces) piece(p.kind, p.span, pieceItems(p));
   for (const b of prints) for (const p of b.pieces ?? []) piece(p.kind, p.span, [p.recipe]);
-  for (const p of historyNamed(raw.history, tiles)) piece(p.kind, p.span, [p.recipe]);
+  for (const p of historyNamed(raw.history, tiles))
+    if (p === NEWER) newer = true;
+    else piece(p.kind, p.span, [p.recipe]);
   items.delete(NONE);
-  return { goals, things, items, kinds, plots, span };
+  return { goals, things, items, kinds, plots, span, newer };
 }
 
 const every = <T>(set: ReadonlySet<T>, ok: (v: T) => boolean): boolean => [...set].every(ok);
 
 /** Whether this Leaf knows everything a kept yard names, and runs tunnels as long as its longest. */
 export const knownHere = (n: KeptNames): boolean =>
+  !n.newer &&
   every(n.goals, (id) => goalNamed(id) !== null) &&
   every(n.things, (name) => itemNamed(name) !== null) &&
   every(n.items, isItem) &&

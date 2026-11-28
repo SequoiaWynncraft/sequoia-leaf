@@ -441,8 +441,9 @@ export function decode(text: string | null | undefined, land: Land = LAND): Yard
   // A yard kept on more land is not read on less (`keptOn`).
   const on = keptOn(raw, land);
   const bytes = fromBase64(raw.cells);
-  const pieces = on && bytes && unpackCells(bytes, on.w * on.h);
-  if (!on || !pieces) return null;
+  // Pieces with a part this Leaf does not know are a newer Leaf's (`NEWER`): not read, as bytes that are not pieces.
+  const pieces = on && bytes ? unpackCells(bytes, on.w * on.h) : null;
+  if (!on || !Array.isArray(pieces)) return null;
   const prints: unknown[] = Array.isArray(raw.blueprints) ? raw.blueprints : [];
   const kept = prints.map(keptBlueprint);
   // Anything this Leaf does not know, anywhere: a newer Leaf's yard (`keptLater`), not read with it let go.
@@ -554,15 +555,19 @@ function clearedOnto(y: Yard, cleared: unknown): void {
  */
 function clearingOnto(y: Yard, kept: unknown, begun: unknown): void {
   y.begun = whole(begun, 1e9) ?? 0;
-  const p = isRec(kept) ? plotNamed(kept.plot) : null;
-  const n = isRec(kept) ? whole(kept.begun, y.begun) : null;
-  if (p === null || !isRec(kept) || !n || clearRefusal(y, p) !== null) return;
+  y.clearing = isRec(kept) ? clearingOf(y, kept) : null;
+}
+
+/** A kept clearing as `clearingOnto` puts it back, once the count begun is back; nothing for one it does not. */
+function clearingOf(y: Yard, kept: Record<string, unknown>): Yard["clearing"] {
+  const p = plotNamed(kept.plot);
+  const n = whole(kept.begun, y.begun);
   const want = untally(kept.want, 1e6);
-  if (!want.some((k) => k > 0)) return;
+  if (p === null || !n || clearRefusal(y, p) !== null || !want.some((k) => k > 0)) return null;
   const given = untally(kept.filled, 1e6);
   const filled = counts();
   for (const k of ALL_ITEMS) filled[k] = Math.min(given[k] ?? 0, want[k] ?? 0);
-  y.clearing = { plot: p, begun: n, want, filled };
+  return { plot: p, begun: n, want, filled };
 }
 
 /**
