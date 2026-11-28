@@ -12,6 +12,7 @@ import type { Rarity } from "./catalog.ts";
 import type { FigureId, FigureSpec } from "./figures.ts";
 import type { ItemId, ItemSpec } from "./items.ts";
 import type { ReleaseId } from "./releases.ts";
+import type { FightRules } from "./rules.ts";
 import type { TraitId, TraitSpec } from "./traits.ts";
 
 /** What a release brings of one kind of thing, and what it changes of those already out. */
@@ -57,6 +58,12 @@ export interface Figures extends Part<FigureId, Arrival> {
 
 export interface Patch {
   readonly release: ReleaseId;
+  /**
+   * The rules every fight of this era on is fought under, beside its room's (`rules.ts`, bound with
+   * them): late in a fight, healing and shields waning and damage rising. A later patch's fields
+   * replace these.
+   */
+  readonly fight?: Partial<Pick<FightRules, "wanes" | "wane" | "rises" | "risesMost">>;
   readonly figures?: Figures;
   readonly traits?: Part<TraitId, TraitSpec>;
   /** Items of every sort: components, finished items, emblems. */

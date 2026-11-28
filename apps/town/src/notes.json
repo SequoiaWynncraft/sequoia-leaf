@@ -93,6 +93,12 @@
     ],
     "more": [
       {
+        "head": "Fights",
+        "points": [
+          "From 20 seconds into a fight, healing and shields are 20% weaker, and all damage rises 5% each second, up to 50% more."
+        ]
+      },
+      {
         "head": "Leaving every raid",
         "points": [
           "Every raid now has 29 figures at a time: when new ones arrive, as many leave.",

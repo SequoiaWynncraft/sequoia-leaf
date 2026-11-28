@@ -47,6 +47,12 @@ import { bump, weigh } from "./weight.ts";
 /** The kinds of damage, coloured as the cards colour their words: coral, rose, cream. */
 const DAMAGE_COL = { physical: "#e67967", magic: "#d88ad0", true: CREAM } as const;
 const UP = -Math.PI / 2;
+/** What the table says as healing and shields wane and damage starts to rise, a line each, with the fight's numbers. */
+function waneLines(ev: { by: number; rises: number; most: number }): string[] {
+  const waned = ev.by === 50 ? "Healing and shields halved." : `Healing and shields ${ev.by}% weaker.`;
+  const risen = `Damage rises ${ev.rises}% each second, up to ${ev.most}%.`;
+  return [ev.by > 0 ? waned : "", ev.rises > 0 ? risen : ""].filter((line) => line !== "");
+}
 
 const actor = (id: number): Actor | undefined => FV.actors[id];
 const tallOf = (a: Actor): number => framesOf(a.unit.kind, false, a.form).tall;
@@ -291,6 +297,10 @@ const ON: On = {
   item: (ev, at) => {
     const a = actor(ev.id);
     if (a) FV.signs.push({ pic: itemPic(ev.item), id: a.unit.id, t0: at });
+  },
+  wane: (ev) => {
+    if (FV.wane === 0) waneLines(ev).forEach((line, i) => say(75, 38 + i * 6, line, "#cdb6d8", { ttl: 2.4 }));
+    FV.wane = Math.max(1, ev.by);
   },
   dusk: (ev) => {
     if (FV.dusk === 0) {

@@ -43,6 +43,8 @@ export const FV: {
   flashes: Flash[];
   signs: Sign[];
   dusk: number;
+  /** How much healing and shields have waned, in percent: 0 until they do (`FightRules.wanes`). */
+  wane: number;
   clacked: boolean;
   /** When the board last bumped for a big moment, and how far, in art pixels. */
   bump: { at: number; px: number };
@@ -65,6 +67,7 @@ export const FV: {
   flashes: [],
   signs: [],
   dusk: 0,
+  wane: 0,
   clacked: false,
   bump: { at: -99, px: 0 },
   bases: "plain",

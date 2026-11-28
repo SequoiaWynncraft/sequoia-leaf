@@ -11,7 +11,7 @@ import { carriedTraits, type ItemId, itemNumber } from "../content/items.ts";
 import { FIGHT } from "../content/rooms.ts";
 import { traitDraw } from "../content/traits.ts";
 import { distance, line, mirror, neighboursFor, type Side } from "../hex.ts";
-import { emit, FOREVER, later, secs } from "./clock.ts";
+import { emit, FOREVER, HZ, later, secs } from "./clock.ts";
 import { whenFalls, whenFell, whenHurt, whenStruck } from "./hooks.ts";
 import type { DamageKind, DamageSource, Fight, HealSource, LeapWhy, Unit } from "./types.ts";
 
@@ -315,12 +315,27 @@ export function hide(f: Fight, u: Unit, ticks: number, by: Unit = u): void {
 
 // ---------- healing and shields ----------
 
+/** What is left of a heal or a shield as it comes: all of it, or less from when they wane (`FightRules.wanes`). */
+const waned = (f: Fight, amount: number): number =>
+  f.tick >= secs(f.wilds.wanes) ? (amount * (100 - f.wilds.wane)) / 100 : amount;
+/**
+ * Damage as it lands: from the same moment, `rises` percent more for each second begun since, up to
+ * `risesMost`. Dusk's own hurt grows by its own count, and is left as it is.
+ */
+function risen(f: Fight, amount: number, source: DamageSource): number {
+  const from = secs(f.wilds.wanes);
+  if (f.tick < from || f.wilds.rises <= 0 || source === "dusk") return amount;
+  const seconds = Math.floor((f.tick - from) / HZ) + 1;
+  return (amount * (100 + Math.min(f.wilds.risesMost, f.wilds.rises * seconds))) / 100;
+}
+
 export function heal(f: Fight, target: Unit, raw: number, source: HealSource, by: Unit | null): number {
   if (!reaches(f, target, by) || raw <= 0) return 0;
   const mended = by !== null && by.mending > 0 && (source === "ability" || source === "item");
   let amount = raw;
   if (mended) amount *= 1 + by.mending / 100;
   if (target.burnUntil > f.tick) amount *= 1 - target.burnDamp / 100;
+  amount = waned(f, amount);
   const n = Math.min(Math.round(amount), target.maxHp - target.hp);
   if (mended) overflow(f, target, amount - Math.max(0, n), by);
   if (n <= 0) return 0;
@@ -346,7 +361,8 @@ export function shieldUp(f: Fight, target: Unit, raw: number, seconds: number, b
   return shieldOn(f, target, Math.round(amount), seconds, by);
 }
 /** Puts a shield of `n` up as it is, given by `by` (nobody for one a figure has of itself), on its own clock, and says so. */
-function shieldOn(f: Fight, target: Unit, n: number, seconds: number, by: Unit | null): number {
+function shieldOn(f: Fight, target: Unit, raw: number, seconds: number, by: Unit | null): number {
+  const n = Math.round(waned(f, raw));
   if (n <= 0) return 0;
   const ticks = secs(seconds);
   target.shields.push({ left: n, until: ticks <= 0 ? FOREVER : f.tick + ticks });
@@ -384,9 +400,10 @@ export function poolUp(f: Fight, group: readonly Unit[], left: number, back: num
   if (group.length === 0 || left <= 0) return;
   const at = f.pools.length;
   const ids = group.map((u) => u.id);
-  f.pools.push({ left: Math.round(left), ids, back, wait: secs(wait) });
+  const held = Math.round(waned(f, left));
+  f.pools.push({ left: held, ids, back, wait: secs(wait) });
   for (const u of group) u.pool = at;
-  emit(f, { t: "pool", group: at, ids: [...ids], left: Math.round(left), on: true });
+  emit(f, { t: "pool", group: at, ids: [...ids], left: held, on: true });
 }
 /** What a figure's group's shield takes of a hit of `n`: all of it while it holds that much. Gives back what it took. */
 function drain(f: Fight, u: Unit, n: number): number {
@@ -404,7 +421,7 @@ function drain(f: Fight, u: Unit, n: number): number {
         const o = f.units[id];
         return o?.alive ? [o] : [];
       });
-      pool.left = Math.round((up.reduce((sum, o) => sum + o.maxHp, 0) * back) / 100);
+      pool.left = Math.round(waned(f, (up.reduce((sum, o) => sum + o.maxHp, 0) * back) / 100));
       if (pool.left > 0) emit(f, { t: "pool", group, ids: [...pool.ids], left: pool.left, on: true });
     });
   }
@@ -441,6 +458,7 @@ export function hurt(
     amount = (amount * 100) / (100 + Math.max(0, target.ward));
   }
   if (direct && target.bracedUntil > f.tick) amount *= 1 - target.bracedBy / 100;
+  amount = risen(f, amount, source);
   const n = Math.max(1, Math.round(amount));
   let soaked = 0;
   const shielded = target.shield > 0;

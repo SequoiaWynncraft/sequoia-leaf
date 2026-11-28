@@ -27,6 +27,10 @@ const STATS: Partial<ItemSpec> = { stats: { ...NO_STATS, ...EMBLEM } };
 
 export const GROOT_NIGHT: Patch = {
   release: "groot-night",
+  // Ember's burn, the one thing that cut healing, leaves normal mode with this release. Instead, from
+  // 20 seconds into a fight, healing and shields of every source are 20% weaker and damage rises 5%
+  // each second, up to 50% more, so that long fights end before dusk (`review/balance.ts`).
+  fight: { wanes: 20, wane: 20, rises: 5, risesMost: 50 },
   figures: {
     // Out of normal mode from this release (`RAID-SETS.md`): Flint, Toast, Shrub, Reed and Vesta, one a
     // figure it brings, cost for cost. Ember leaves but Brew, Chorus's two-acorn figure.

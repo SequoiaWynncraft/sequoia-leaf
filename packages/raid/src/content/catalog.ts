@@ -40,6 +40,7 @@ import { GROOT_NIGHT } from "./releases/groot-night.ts";
 import { GROOT } from "./releases/groot.ts";
 import { PENGUIN_MONTH } from "./releases/penguin-month.ts";
 import { UP_THE_TREE } from "./releases/up-the-tree.ts";
+import { type FightRules, ruled } from "./rules.ts";
 import { TRAIT_IDS, type TraitId, type TraitSpec } from "./traits.ts";
 
 export type { FigureId } from "./figures.ts";
@@ -139,6 +140,8 @@ export interface Catalog {
   readonly ids: Open;
   /** The banners whose release is open. */
   readonly banners: readonly Banner[];
+  /** The rules every fight of this era is fought under, bound with its room's: healing and shields waning late. */
+  readonly fight: FightRules;
   /** The catalogue of an era up to this one: what a banner's pool was when it opened. */
   readonly earlier: (era: Era) => Catalog;
 }
@@ -232,6 +235,8 @@ export function catalogsOf(patches: readonly Patch[]): readonly Catalog[] {
   const banners: Banner[] = [];
   let was: Kinds = { traits: {}, items: {}, boons: {} };
   let retired: ReadonlySet<FigureId> = new Set();
+  /** The fight rules the patches so far set, the later's fields over the earlier's. */
+  const fight: Partial<FightRules> = {};
   for (const { id: release } of RELEASES) {
     const found = patches.filter((p) => p.release === release);
     if (found.length > 1) throw new Error(`${release} has ${found.length} patches`);
@@ -239,6 +244,7 @@ export function catalogsOf(patches: readonly Patch[]): readonly Catalog[] {
     const before = arrived;
     arrived = fold(ALL_FIGURES, before, patch?.figures, fields);
     retired = retiredAfter(retired, before, release, patch?.figures);
+    Object.assign(fight, patch?.fight);
     for (const id of ALL_FIGURES.filter((f) => arrived[f] && !before[f])) {
       since[id] = release;
       came.push(id);
@@ -271,7 +277,7 @@ export function catalogsOf(patches: readonly Patch[]): readonly Catalog[] {
       if (!cat || at > era) throw new RangeError(`Era ${era} has no catalogue of era ${at}`);
       return cat;
     };
-    out.push({ era, figures, order, ...was, ids, banners: [...banners], earlier });
+    out.push({ era, figures, order, ...was, ids, banners: [...banners], fight: ruled(fight), earlier });
   }
   return out;
 }

@@ -23,6 +23,14 @@ export interface FightRules {
   readonly dusk: number;
   /** How much more attack a figure that starts touching no friend has, in percent. */
   readonly alone: number;
+  /** From when healing and shields of every source wane, in seconds; Infinity for never. */
+  readonly wanes: number;
+  /** How much they wane by then, in percent: 50 halves them. */
+  readonly wane: number;
+  /** From the same moment, how much more damage of every kind hits each second, in percent: 10 is 10% more after 1 second, 20% after 2. */
+  readonly rises: number;
+  /** The most damage rises by, in percent. */
+  readonly risesMost: number;
 }
 /** A fight bound by nothing. */
 export const PLAIN_RULES: FightRules = {
@@ -31,17 +39,28 @@ export const PLAIN_RULES: FightRules = {
   reach: Number.POSITIVE_INFINITY,
   dusk: FIGHT.dusk,
   alone: 0,
+  wanes: Number.POSITIVE_INFINITY,
+  wane: 0,
+  rises: 0,
+  risesMost: 0,
 };
 
 const together = (a: readonly number[], b: readonly number[]): number[] =>
   [...new Set([...a, ...b])].toSorted((x, y) => x - y);
-/** Two rules in force at once: the seats either closes, the lower reach and dusk, and both rules' extra attack added. */
+/**
+ * Two rules in force at once: the seats either closes, the lower reach and dusk, both rules' extra
+ * attack added, and healing and shields waning and damage rising from the earlier moment, by the more.
+ */
 export const bind = (a: FightRules, b: FightRules): FightRules => ({
   closed: together(a.closed, b.closed),
   closedToSit: together(a.closedToSit, b.closedToSit),
   reach: Math.min(a.reach, b.reach),
   dusk: Math.min(a.dusk, b.dusk),
   alone: a.alone + b.alone,
+  wanes: Math.min(a.wanes, b.wanes),
+  wane: Math.max(a.wane, b.wane),
+  rises: Math.max(a.rises, b.rises),
+  risesMost: Math.max(a.risesMost, b.risesMost),
 });
 /** Rules from what they set apart from plain. */
 export const ruled = (set: Partial<FightRules> = {}): FightRules => ({ ...PLAIN_RULES, ...set });
@@ -56,6 +75,10 @@ export function apart(r: FightRules): Partial<FightRules> {
   if (r.reach !== PLAIN_RULES.reach) set.reach = r.reach;
   if (r.dusk !== PLAIN_RULES.dusk) set.dusk = r.dusk;
   if (r.alone !== PLAIN_RULES.alone) set.alone = r.alone;
+  if (r.wanes !== PLAIN_RULES.wanes) set.wanes = r.wanes;
+  if (r.wane !== PLAIN_RULES.wane) set.wane = r.wane;
+  if (r.rises !== PLAIN_RULES.rises) set.rises = r.rises;
+  if (r.risesMost !== PLAIN_RULES.risesMost) set.risesMost = r.risesMost;
   return set;
 }
 /** The seats nobody may sit on as the parties sit down: those closed, and those closed only for sitting down. */
