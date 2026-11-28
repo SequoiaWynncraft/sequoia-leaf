@@ -6,6 +6,10 @@
  * splitter's way put first), and otherwise the yard is left to explain itself when something goes
  * wrong.
  *
+ * Each idea after the first tier is said only to a yard that met it recently (`OPENS`, `RECENT`), so a
+ * yard past it never hears it, on whatever device: the lessons taken that the browser keeps are a
+ * second record, not the only one.
+ *
  * A nudge is about a tile of the yard, or about a part of the interface (`part`), beside which it is
  * then said. Nothing here draws anything or touches the yard.
  */
@@ -99,6 +103,76 @@ function nearest(w: Yard, test: (i: number) => boolean): { x: number; y: number 
   return best;
 }
 
+/**
+ * The tier where the idea of each lesson after the first tier's opens: where the first thing it is
+ * about may be met (a two-part machine and power already in tier 0, the board and the tier's screen in
+ * tier 1, and so on). A test holds each to the rules.
+ */
+export const OPENS: Readonly<Record<string, number>> = {
+  short: 0,
+  starved: 0,
+  board: 1,
+  tier: 1,
+  numbers: 2,
+  grades: 3,
+  study: 3,
+  research: 3,
+  select: 3,
+  first: 5,
+};
+/**
+ * How many goals of a lesson's tier and above a yard may have done and still hear it. The early
+ * tiers are short, so this runs about a tier past where the idea opened; the later ones are long, and
+ * it ends within the tier.
+ */
+export const RECENT = 12;
+
+/** Whether a yard is past what a lesson is about: it has done `RECENT` goals since its idea opened. */
+function past(w: Yard, id: string): boolean {
+  const from = OPENS[id];
+  if (from === undefined) return false;
+  return w.done.filter((g) => (GOALS[g]?.tier ?? 0) >= from).length >= RECENT;
+}
+
+/** The nudge said at the last step, and the tile it was about: a nudge about a tile stays on it while it fits. */
+export interface Kept {
+  readonly id: string;
+  readonly x: number;
+  readonly y: number;
+}
+
+/**
+ * After the lessons, the yard speaks up only when something has gone wrong for the first time: the
+ * yard short of power, or a machine full of one part waiting for another. That machine is the one
+ * said before, while it still waits, so the nudge does not hop as others start and stop.
+ */
+function trouble(w: Yard, told: (id: string) => boolean, kept: Kept | null): Nudge | null {
+  const [cx, cy] = w.land.depot;
+  if (!told("short") && power(w).pace < 1)
+    return {
+      id: "short",
+      text: "The yard uses more power than it makes, so every machine works slower. The power bar at the top shows the speed.",
+      x: cx,
+      y: cy - 1,
+      tool: null,
+      lasting: false,
+    };
+  if (told("starved")) return null;
+  // Only a machine of two parts or more can fill up with one while it waits for another.
+  const fits = (i: number): boolean => isMaker(w.kind[i] ?? NONE) && condition(w, i) === STARVED;
+  const there = kept?.id === "starved" ? kept.y * w.land.w + kept.x : -1;
+  const stuck = there >= 0 && fits(there) ? there : w.kind.findIndex((_, i) => fits(i));
+  if (stuck < 0) return null;
+  return {
+    id: "starved",
+    text: "This machine is full of one item and is waiting for another. Tap it to see which.",
+    x: stuck % w.land.w,
+    y: Math.floor(stuck / w.land.w),
+    tool: null,
+    lasting: false,
+  };
+}
+
 const owned = (w: Yard, i: number): boolean => {
   const plot = w.land.plots[w.land.plot[i] ?? NONE];
   return plot !== undefined && w.plots.includes(plot.plot);
@@ -120,16 +194,18 @@ function orPress(act: WorksAction): string {
 /**
  * The next thing worth saying, or nothing. `finger` words a lesson for taps rather than a mouse;
  * `at` is what the member has before them (a card open, a kind in hand), for the ideas that are
- * taught where they are met.
+ * taught where they are met; `kept` is the nudge said at the last step. A lesson counts as told once
+ * taken, or once the yard is past it.
  */
 export function nudge(
   w: Yard,
   taught: ReadonlySet<string>,
   finger: boolean,
   at: Looking = { picked: -1, hand: null },
+  kept: Kept | null = null,
 ): Nudge | null {
   const [cx, cy] = w.land.depot;
-  const told = (id: string): boolean => taught.has(id);
+  const told = (id: string): boolean => taught.has(id) || past(w, id);
   const lit = litOf(w);
   const empty = (i: number): boolean => w.kind[i] === NONE;
 
@@ -326,30 +402,7 @@ export function nudge(
       lasting: false,
     };
 
-  // After the lessons, the yard speaks up only when something has gone wrong for the first time.
-  if (!told("short") && power(w).pace < 1)
-    return {
-      id: "short",
-      text: "The yard uses more power than it makes, so every machine works slower. The power bar at the top shows the speed.",
-      x: cx,
-      y: cy - 1,
-      tool: null,
-      lasting: false,
-    };
-  if (!told("starved")) {
-    // Only a machine of two parts or more can fill up with one while it waits for another.
-    const stuck = w.kind.findIndex((k, i) => isMaker(k) && condition(w, i) === STARVED);
-    if (stuck >= 0)
-      return {
-        id: "starved",
-        text: "This machine is full of one item and is waiting for another. Tap it to see which.",
-        x: stuck % w.land.w,
-        y: Math.floor(stuck / w.land.w),
-        tool: null,
-        lasting: false,
-      };
-  }
-  return null;
+  return trouble(w, told, kept);
 }
 
 /**
@@ -361,13 +414,20 @@ const LEARNT: Readonly<Record<string, (w: Yard) => boolean>> = {
   research: (w) => w.line.length > 0,
 };
 
-/** Where the lessons stand between steps: the nudge being said and since when, and the lasting lessons said and not yet learnt. */
+/**
+ * Where the lessons stand between steps: the nudge being said and when the last step was; how long
+ * each lesson not yet taken has been said, added up over every time it was; and the lasting lessons
+ * said and not yet learnt. Time said is each lesson's own, so two said in turn cannot keep each other
+ * from being taken.
+ */
 export interface Lessons {
-  readonly said: { readonly id: string; readonly since: number } | null;
+  readonly said: Kept | null;
+  readonly t: number;
+  readonly heard: Readonly<Record<string, number>>;
   readonly owed: readonly string[];
 }
-export const NO_LESSONS: Lessons = { said: null, owed: [] };
-/** How long a lesson that is not learnt by doing is said, in seconds of the screen's clock, before it counts as taken. */
+export const NO_LESSONS: Lessons = { said: null, t: 0, heard: {}, owed: [] };
+/** How long a lesson that is not learnt by doing is said, in seconds of the screen's clock, all told, before it counts as taken. */
 export const SAID_FOR = 14;
 
 /** One step of the lessons: what is said now, whether it has just begun to be, and the lessons taken in this step. */
@@ -379,10 +439,11 @@ export interface LessonStep {
 }
 
 /**
- * Moves the lessons on at a moment of the screen's clock (`t`). A lasting lesson is taken once its
- * own condition is met (`LEARNT`), whether or not it is being said; never because something hid it
- * (`hidden`: the letter about a time away, a visit) or another nudge was said in its place. One that
- * is not learnt by doing is taken once it has been said for `SAID_FOR` seconds.
+ * Moves the lessons on at a moment of the screen's clock (`t`). The time since the last step goes to
+ * the lesson said then. A lasting lesson is taken once its own condition is met (`LEARNT`), whether or
+ * not it is being said; never because something hid it (`hidden`: the letter about a time away, a
+ * visit) or another nudge was said in its place. One that is not learnt by doing is taken once it has
+ * been said for `SAID_FOR` seconds in all.
  */
 export function stepLessons(
   was: Lessons,
@@ -392,14 +453,21 @@ export function stepLessons(
 ): LessonStep {
   const learnt = was.owed.filter((id) => LEARNT[id]?.(w) === true);
   const owed = was.owed.filter((id) => !learnt.includes(id));
-  const n = at.hidden
-    ? null
-    : nudge(w, learnt.length > 0 ? new Set([...taught, ...learnt]) : taught, at.finger, at.looking);
-  if (!n) return { lessons: { said: null, owed }, show: null, fresh: false, taken: learnt };
+  const heard = was.said ? { ...was.heard, [was.said.id]: (was.heard[was.said.id] ?? 0) + (at.t - was.t) } : was.heard;
+  const told = learnt.length > 0 ? new Set([...taught, ...learnt]) : taught;
+  const n = at.hidden ? null : nudge(w, told, at.finger, at.looking, was.said);
+  const left = (taken: readonly string[]): Record<string, number> =>
+    Object.fromEntries(Object.entries(heard).filter(([id]) => !taken.includes(id)));
+  const quiet = (taken: readonly string[]): LessonStep => ({
+    lessons: { said: null, t: at.t, heard: left(taken), owed },
+    show: null,
+    fresh: false,
+    taken,
+  });
+  if (!n) return quiet(learnt);
+  if (!n.lasting && (heard[n.id] ?? 0) > SAID_FOR) return quiet([...learnt, n.id]);
   const fresh = was.said?.id !== n.id;
-  const since = fresh || !was.said ? at.t : was.said.since;
-  if (!n.lasting && at.t - since > SAID_FOR)
-    return { lessons: { said: null, owed }, show: null, fresh: false, taken: [...learnt, n.id] };
   const kept = n.lasting && LEARNT[n.id] !== undefined && !owed.includes(n.id) ? [...owed, n.id] : owed;
-  return { lessons: { said: { id: n.id, since }, owed: kept }, show: n, fresh, taken: learnt };
+  const said = { id: n.id, x: n.x, y: n.y };
+  return { lessons: { said, t: at.t, heard: left(learnt), owed: kept }, show: n, fresh, taken: learnt };
 }
