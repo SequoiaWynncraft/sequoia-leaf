@@ -440,7 +440,12 @@ function handingOrder(y: Yard): { readonly order: Int32Array; readonly rings: Ri
   const all = walk(plumbingOf(y, false));
   if (all.rings.length === 0) return { order: Int32Array.from(all.order), rings: NO_RINGS };
   const real = plumbingOf(y, true);
-  const rings = ringsFound(all.order, walk(real).rings, real);
+  const rings = ringsFound(
+    all.order,
+    walk(real).rings,
+    real,
+    (i) => carries(y.kind[i] ?? NONE) && (y.span[i] ?? 0) <= 0,
+  );
   if (rings.count === 0) return { order: Int32Array.from(all.order), rings };
   return { order: orderAround(all.order, (i) => ringAt(rings, i), rings.count), rings };
 }

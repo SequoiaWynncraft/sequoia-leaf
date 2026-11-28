@@ -18,6 +18,8 @@ export interface Rings {
   /** Each ring's tiles, ring by ring, each ring's in the handing order: ring `k`'s from `starts[k]` to `starts[k + 1]`. */
   readonly tiles: Int32Array;
   readonly starts: Int32Array;
+  /** 1 for each ring tile (as `tiles`) that carries on its own tile alone: what carries, but a tunnel's way-in mouth. */
+  readonly plain: Uint8Array;
   /** 1 for each ring with a way off it: a tile of it hands to a tile off it, on a side that takes from it. */
   readonly exits: Uint8Array;
   /** The ring tiles by tile, ascending, and each one's ring (`ringAt`). */

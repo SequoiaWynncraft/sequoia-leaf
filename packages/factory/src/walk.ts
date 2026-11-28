@@ -136,10 +136,15 @@ export function orderAround(order: readonly number[], ringOf: (i: number) => num
 
 /**
  * The rings found (`walk` over the ways things can really go), as the plumbing keeps them: each ring's
- * tiles in the handing order, which ring each tile is on, and whether each has a way off it (`real`
- * from one of its tiles to a tile off it).
+ * tiles in the handing order, which of them are `plain`, which ring each tile is on, and whether each
+ * has a way off it (`real` from one of its tiles to a tile off it).
  */
-export function ringsFound(order: readonly number[], found: readonly number[][], real: Plumbing): Rings {
+export function ringsFound(
+  order: readonly number[],
+  found: readonly number[][],
+  real: Plumbing,
+  plain: (i: number) => boolean,
+): Rings {
   const onRing = new Map<number, number>();
   found.forEach((tiles, k) => {
     for (const i of tiles) onRing.set(i, k);
@@ -160,9 +165,11 @@ export function ringsFound(order: readonly number[], found: readonly number[][],
       : 0,
   );
   const sorted = [...onRing.keys()].toSorted((a, b) => a - b);
+  const tiles = byRing.flat();
   return {
     count: found.length,
-    tiles: Int32Array.from(byRing.flat()),
+    tiles: Int32Array.from(tiles),
+    plain: Uint8Array.from(tiles, (i) => (plain(i) ? 1 : 0)),
     starts: Int32Array.from(starts),
     exits: Uint8Array.from(exits),
     sorted: Int32Array.from(sorted),
@@ -175,6 +182,7 @@ export function ringsFound(order: readonly number[], found: readonly number[][],
 export const NO_RINGS: Rings = {
   count: 0,
   tiles: new Int32Array(0),
+  plain: new Uint8Array(0),
   starts: Int32Array.of(0),
   exits: new Uint8Array(0),
   sorted: new Int32Array(0),

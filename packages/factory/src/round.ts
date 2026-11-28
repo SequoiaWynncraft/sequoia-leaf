@@ -76,25 +76,21 @@ function turnRing(y: Yard, wire: Wire, k: number, waiting: Uint8Array): void {
 
 /**
  * One time round a ring, from its tile `from` (in `Rings.tiles`) to `to`: where the next must begin,
- * the first tile not done if something moved after it, or -1. A belt's step (most of a ring's tiles)
- * is asked here, without the calls of the rest (`tryOn`), as the tick asks it (`tick.ts`).
+ * the first tile not done if something moved after it, or -1.
  */
 function roundOnce(y: Yard, wire: Wire, from: number, to: number, waiting: Uint8Array): number {
-  const { kind, item, prog, span, tick } = y;
-  const { tiles, done } = wire.rings;
+  const { tick, prog } = y;
+  const { tiles, done, plain } = wire.rings;
   let open = to;
   let last = -1;
   for (let t = from; t < to; t++) {
-    const i = tiles[t] ?? 0;
     if (done[t] === tick) continue;
-    let did = 0;
-    if (waiting[i] === 1) did = HELD;
-    else if (HANDS[kind[i] ?? NONE] !== carryOn || (span[i] ?? 0) > 0) did = tryOn(y, wire, i, waiting);
-    // A thing on a belt that has not crossed its tile does not this turn: one that has hands on or waits.
-    else if (item[i] !== NONE && (prog[i] ?? 0) >= 8) {
-      carryOn(KIT, y, i, wire);
-      did = item[i] !== NONE && (prog[i] ?? 0) >= 8 ? HELD : MOVED;
-    }
+    const i = tiles[t] ?? 0;
+    // What carries on its own tile alone holds at most one thing, which stays this turn till it has
+    // crossed it: most of a ring's tiles most ticks, so asked here, without a call.
+    let did = HELD;
+    if (waiting[i] !== 1)
+      did = plain[t] !== 1 ? tryOn(y, wire, i, waiting) : (prog[i] ?? 0) < 8 ? 0 : tryPlain(y, wire, i);
     if ((did & MOVED) !== 0) last = t;
     if ((did & HELD) === 0) done[t] = tick;
     else if (t < open) open = t;
@@ -102,32 +98,42 @@ function roundOnce(y: Yard, wire: Wire, from: number, to: number, waiting: Uint8
   return open < last ? open : -1;
 }
 
-/**
- * A ring tile's try at handing on but a belt's (`turnRing`): what it did (`MOVED`, `HELD`). A holder
- * that moved holds nothing it may hand on this turn, so says only that it moved.
- */
+/** A ring tile's try at handing on but a plain carrier's (`tryPlain`): what it did (`MOVED`, `HELD`). */
 function tryOn(y: Yard, wire: Wire, i: number, waiting: Uint8Array): number {
   const k = y.kind[i] ?? NONE;
-  if (CARRIES[k] !== 1) {
-    const had = heldIn(y, i);
-    if (had === 0) return 0;
-    const hands = HANDS[k];
-    if (hands === handOut) handOut(KIT, y, i, wire);
-    else hands?.(KIT, y, i, wire);
-    if (heldIn(y, i) < had) return MOVED;
-    return readyIn(y, i) ? HELD : 0;
-  }
-  if ((y.span[i] ?? 0) > 0) {
-    const had = crossed(y, i);
-    if (had === 0) return 0;
-    passUnder(KIT, y, i, waiting);
-    const left = crossed(y, i);
-    return (left < had ? MOVED : 0) | (left > 0 ? HELD : 0);
-  }
-  // One thing at most, on its own tile: it has crossed it, or it has not and stays this turn.
-  if (y.item[i] === NONE || (y.prog[i] ?? 0) < 8) return 0;
-  HANDS[k]?.(KIT, y, i, wire);
+  return CARRIES[k] === 1 ? tryMouth(y, i, waiting) : tryHolder(y, wire, i, k);
+}
+
+/**
+ * What carries on its own tile alone, its thing across it, tries to hand it on: it does, or waits. A
+ * belt's step (most of a ring's tiles) is called by its own name, as the tick calls it (`tick.ts`).
+ */
+function tryPlain(y: Yard, wire: Wire, i: number): number {
+  if (y.item[i] === NONE) return 0;
+  const hands = HANDS[y.kind[i] ?? NONE];
+  if (hands === carryOn) carryOn(KIT, y, i, wire);
+  else hands?.(KIT, y, i, wire);
   return y.item[i] !== NONE && (y.prog[i] ?? 0) >= 8 ? HELD : MOVED;
+}
+
+/** A tunnel's way-in mouth's try: it moves what is under it and takes in what has crossed its tile, as it can. */
+function tryMouth(y: Yard, i: number, waiting: Uint8Array): number {
+  const had = crossed(y, i);
+  if (had === 0) return 0;
+  passUnder(KIT, y, i, waiting);
+  const left = crossed(y, i);
+  return (left < had ? MOVED : 0) | (left > 0 ? HELD : 0);
+}
+
+/** A holder's try (a crate, a grower): one that moved holds nothing it may hand on this turn, so says only that it moved. */
+function tryHolder(y: Yard, wire: Wire, i: number, k: number): number {
+  const had = heldIn(y, i);
+  if (had === 0) return 0;
+  const hands = HANDS[k];
+  if (hands === handOut) handOut(KIT, y, i, wire);
+  else hands?.(KIT, y, i, wire);
+  if (heldIn(y, i) < had) return MOVED;
+  return readyIn(y, i) ? HELD : 0;
 }
 
 /** How many things a tunnel's way-in mouth holds that have crossed its tile, or its tiles under the ground. */
