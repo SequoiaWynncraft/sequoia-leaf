@@ -142,7 +142,10 @@ function begin(k: Kit, y: Yard, i: number, r: number, wire: Wire): boolean {
   const only = h.out[r] !== k.NONE ? (h.out[r] ?? k.NONE) : (y.set[i] ?? k.NONE);
   const found = choose(k, h, r, wire.recipes[y.kind[i] ?? k.NONE] ?? NO_RECIPES, only);
   if (found === k.NONE) {
-    h.idle[r] = 1;
+    // Only a machine free to choose keeps that it found nothing, to look again once given something.
+    // One held to more of what it holds looks again each tick, so a recipe newly set on its card
+    // starts once those have left, whether or not anything more comes in.
+    if (h.out[r] === k.NONE) h.idle[r] = 1;
     return false;
   }
   h.making[r] = found;

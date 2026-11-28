@@ -283,6 +283,30 @@ describe("the assembler", () => {
     expect([b.holders.out[br], b.holders.more[br]]).toEqual([F.item("tool"), 0]);
   });
 
+  test("told a new recipe while it holds finished things, it starts the new one once they have left", () => {
+    const y = alone(ASSEMBLER, 1);
+    const r = F.holderOf(y, tile(y, 20, 10));
+    made(y, 20, 10, F.item("tool"), 0);
+    for (let t = 0; t < 200; t++) {
+      for (const n of [F.item("plank"), F.item("ingot")]) while (F.held(y.holders, r, n) < 2) F.put(y.holders, r, n);
+      F.step(y);
+    }
+    expect([y.holders.out[r], (y.holders.more[r] ?? 0) + 1]).toEqual([F.item("tool"), 9]);
+    // Told gears, with the parts for gears already in and nothing more coming: while it holds tools it
+    // may make only tools, and has no parts for them.
+    expect(F.setRecipe(y, 20, 10, F.item("gear"))).toBeNull();
+    for (const n of [F.item("ingot"), F.item("brick")]) while (F.held(y.holders, r, n) < 9) F.put(y.holders, r, n);
+    for (let t = 0; t < 20; t++) F.step(y);
+    // A belt to the depot takes the tools away; then it makes gears.
+    for (const x of [22, 23, 24]) expect(F.build(y, F.BELT, x, 10, 0, Infinity).ok).toBe(true);
+    let gears = 0;
+    for (let t = 0; t < 600; t++) {
+      F.step(y);
+      if (y.holders.out[r] === F.item("gear")) gears++;
+    }
+    expect(gears).toBeGreaterThan(0);
+  });
+
   test("keeps 9 times what a bench keeps of each part, and tips out what it no longer keeps when told otherwise", () => {
     const plank = F.item("plank");
     const hamper = F.item("hamper");
