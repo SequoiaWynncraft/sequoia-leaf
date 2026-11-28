@@ -12,7 +12,7 @@ import { hash, type Pt } from "@sequoia-leaf/kit/util.ts";
 import { flights, send, speak, toss, type Walker, walker, walkers } from "./actors.ts";
 import { TILE } from "./art/belts.ts";
 import { MARGIN } from "./art/ground.ts";
-import { PIPWICK_HAT } from "./art/machines.ts";
+import { PIPWICK_HAT } from "./art/hats.ts";
 import { burst, sparkle } from "./fx.ts";
 import { layout } from "./layout.ts";
 import { yardSfx } from "./sound.ts";

@@ -16,8 +16,10 @@ import {
 import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
 import { arms, beltTile, marksOf, woodOf } from "../src/art/belts.ts";
+import { cart } from "../src/art/grade4.ts";
+import { gathererHat } from "../src/art/hats.ts";
 import type { Art } from "../src/art/index.ts";
-import { FLAG_AT, gathererHat, lookOf } from "../src/art/machines.ts";
+import { FLAG_AT, lookOf } from "../src/art/machines.ts";
 import { meetingTile } from "../src/art/meeting.ts";
 import type { Sprite } from "../src/art/pal.ts";
 import { type Entry, showSheet } from "./sheet.ts";
@@ -54,7 +56,9 @@ const step = (art: Art, n: number): Entry[] =>
     pics: [art.item(k)],
   }));
 
+/** The grades a machine has, and those a line and a gatherer have: no machine has a fourth. */
 const GRADES = [1, 2, 3] as const;
+const LINE_GRADES = [1, 2, 3, 4] as const;
 /** A straight belt's arms pointing each way, as `beltTile` takes them. */
 const STRAIGHT = [arms(2, 0, 1, 0), arms(0, 2, 0, 1), arms(1, 0, 2, 0), arms(0, 1, 0, 2)];
 /** A sorter's arms pointing each way: in from behind, out ahead and to its left. */
@@ -117,6 +121,9 @@ function line(art: Art, grade: number): HTMLCanvasElement {
   return c;
 }
 
+/** The grades a kind has a picture at: a line's and a gatherer's four, a machine's three. */
+const gradesOf = (name: string): readonly number[] =>
+  ["belt", "tunnel", "splitter", "joiner", "sorter", "gatherer"].includes(name) ? LINE_GRADES : GRADES;
 /** A grade, as a label names it. */
 const at = (grade: number): string => `grade ${numeral(grade)}`;
 
@@ -127,7 +134,7 @@ function grades(art: Art): Entry[] {
   const out: Entry[] = [];
   const head = (name: string): void => void out.push({ name, pics: [], head: true });
   head("Belts: each grade, each way, empty and carrying; painted; a corner");
-  for (const grade of GRADES) {
+  for (const grade of LINE_GRADES) {
     out.push({ name: `${at(grade)}, east and west`, pics: [run(art, grade, 0, NONE), run(art, grade, 2, plank)] });
     out.push({ name: "south and north", pics: [run(art, grade, 1, plank), run(art, grade, 3, NONE)] });
     out.push({ name: "painted blue", pics: [run(art, grade, 0, plank, 4)] });
@@ -140,19 +147,19 @@ function grades(art: Art): Entry[] {
     });
   }
   head("Tunnels: each grade, its four mouths");
-  for (const grade of GRADES)
+  for (const grade of LINE_GRADES)
     out.push({
       name: at(grade),
       pics: [0, 1, 2, 3].map((side) => standing(art, m.hood[lookOf(grade)]?.[side], grade, -1)),
     });
   head("Gatherers: each grade in its hat, standing, bent, lifting and asleep; facing left");
-  for (const grade of GRADES) {
+  for (const grade of LINE_GRADES) {
     const gnome = (pose: number, left = false): HTMLCanvasElement => {
       const c = standing(art, (left ? m.gnomeLeft : m.gnome)[gathererHat(grade)]?.[pose], grade, 1);
       const g = c.getContext("2d");
       const rake = left ? m.rakeLeft : m.rake;
       if (grade >= 2) g?.drawImage(rake.c, 2 + (left ? 2 : 13) - rake.ax, 16 + 15 - rake.ay);
-      const gear = grade >= 3 ? m.barrow : m.basket;
+      const gear = grade >= 4 ? cart(left ? m.barrowLeft : m.barrow, left) : grade >= 3 ? m.barrow : m.basket;
       g?.drawImage(gear, left ? 2 + 15 - gear.width : 2, 16 + 16 - gear.height);
       return c;
     };
@@ -191,7 +198,7 @@ function grades(art: Art): Entry[] {
       pics: [0, 1, 2, 3, 4].map((state) => standing(art, m.study[lookOf(grade)]?.[state], grade)),
     });
   head("Splitters, joiners and sorters: each grade, each way, and in a line of belt of their grade");
-  for (const grade of GRADES) {
+  for (const grade of LINE_GRADES) {
     out.push({
       name: `${at(grade)}, splitters`,
       pics: WAYS.map((dir) => meetingTile(m, SPLITS[dir] ?? 0, dir, m.splitter[dir], grade)),
@@ -214,10 +221,10 @@ function grades(art: Art): Entry[] {
   for (const folio of FOLIOS)
     out.push({
       name: ITEM_INFO[folio]?.name ?? "",
-      pics: [art.item(folio), ...GRADES.map((grade) => run(art, grade, 0, folio))],
+      pics: [art.item(folio), ...LINE_GRADES.map((grade) => run(art, grade, 0, folio))],
     });
   head("The grade's mark, and each kind's picture for a button at each grade");
-  out.push({ name: "II, III", pics: m.pips });
+  out.push({ name: "II, III, IV", pics: m.pips });
   for (const name of [
     "belt",
     "tunnel",
@@ -230,7 +237,7 @@ function grades(art: Art): Entry[] {
     "workshop",
     "study",
   ] as const)
-    out.push({ name: named(name), pics: GRADES.map((grade) => art.icon(kind(name), grade)) });
+    out.push({ name: named(name), pics: gradesOf(name).map((grade) => art.icon(kind(name), grade)) });
   out.push({ name: "cart stop", pics: [art.icon(kind("stop"))] });
   return out;
 }

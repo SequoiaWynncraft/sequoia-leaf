@@ -11,12 +11,13 @@
  *     sed 's#./src/main.ts#./review/gallery.ts#' index.html > gallery.html
  *     bun build gallery.html --outdir <site>/works-gallery
  *
- * and opened at `/play/works-gallery/gallery.html`. The grades are three rows, I at the top, in two
+ * and opened at `/play/works-gallery/gallery.html`. The grades are four rows, I at the top, in two
  * blocks: north of the depot, where pylons bring power, every piece is at work; south of it, past
- * power's reach, the same pieces stand in the dark. Along a row: belts east, west, south and north
+ * power's reach, the same pieces stand in the dark. Grade IV's row has no machines, as no machine
+ * has a fourth grade. Along a row: belts east, west, south and north
  * (the lit ones carrying a plank and the two folios), gatherers facing each way, a mill sawing,
  * firing and pressing, a bench, a workshop, a Study, and a tunnel each way round. East of them,
- * sorters each way (not set at grade I, set to planks at II, to lanterns at III); a line of belt
+ * sorters each way (not set at grade I, set to planks at II, to lanterns at III and IV); a line of belt
  * east through a splitter, a joiner and a sorter, all at the row's grade, with their side belts;
  * then a splitter each way round, its belt in and its three ways out, and a joiner each way round,
  * its three belts in and its way out. By the depot: a Study with nothing to study, and a cart stop.
@@ -27,7 +28,7 @@ import { bareLand } from "@sequoia-leaf/factory/test/land.ts";
 import { S } from "../src/state.ts";
 import { installHandles } from "./handles.ts";
 
-const GRADES = [1, 2, 3] as const;
+const GRADES = [1, 2, 3, 4] as const;
 const WAYS = [0, 1, 2, 3] as const;
 /** The row each grade's pieces stand on: in the light, and in the dark. */
 const lit = (grade: number): number => 3 + (grade - 1) * 4;
@@ -42,7 +43,7 @@ const GATHER: readonly (readonly [number, F.Dir])[] = [
 
 const land = bareLand(
   100,
-  40,
+  44,
   ROWS.flatMap(({ z }) => GATHER.map(([x]) => [x, z, "deadfall"] as const)),
   [32, 18],
 );
@@ -85,7 +86,7 @@ function riding(x: number, z: number, thing: F.Item): void {
 }
 
 // Power for the northern block: two rows of pylons between the grades' rows, and boilers by the depot.
-for (const x of [6, 16, 26, 36, 46, 56, 64, 72, 80, 88, 96]) for (const z of [5, 9]) build("pylon", x, z, 0);
+for (const x of [6, 16, 26, 36, 46, 56, 64, 72, 80, 88, 96]) for (const z of [5, 9, 13]) build("pylon", x, z, 0);
 for (const x of [27, 28, 29, 30, 34, 35]) {
   const i = build("boiler", x, 22, 0);
   y.holders.fuel[F.holderOf(y, i)] = 20;
@@ -109,7 +110,17 @@ for (const { grade, z, on } of ROWS) {
     const i = build("gatherer", x, z, dir, grade);
     y.holders.work[F.holderOf(y, i)] = Math.floor(F.WORK.gather * ([0.1, 0.5, 0.85][k] ?? 0));
   });
-  // A mill at each of its faces, a bench with its hammer down, and a workshop.
+  // The machines, at the grades they have: no machine has a fourth.
+  if (grade <= 3) machines(grade, z, on);
+  // A tunnel each way round.
+  build("tunnel", 36, z, 0, grade);
+  build("tunnel", 42, z, 2, grade);
+  build("tunnel", 44, z - 1, 1, grade);
+  build("tunnel", 46, z + 1, 3, grade);
+}
+
+/** A mill at each of its faces, a bench with its hammer down, a workshop and a Study, at a grade, on row `z`, at work if `on`. */
+function machines(grade: number, z: number, on: boolean): void {
   (["plank", "brick", "oil"] as const).forEach((thing, k) => {
     const i = build("mill", 21 + k * 2, z, 0, grade);
     if (on) making(i, thing, 0.7);
@@ -129,11 +140,6 @@ for (const { grade, z, on } of ROWS) {
     y.holders.making[r] = folio;
     y.holders.work[r] = Math.floor(F.WORK.study * ([0.3, 0.7, 0.9][grade - 1] ?? 0));
   }
-  // A tunnel each way round.
-  build("tunnel", 36, z, 0, grade);
-  build("tunnel", 42, z, 2, grade);
-  build("tunnel", 44, z - 1, 1, grade);
-  build("tunnel", 46, z + 1, 3, grade);
 }
 
 /** The tile one step from (x, z) a way. */
@@ -146,8 +152,8 @@ const asDir = (way: number): F.Dir => WAYS[way & 3] ?? 0;
 const belt = ([x, z]: [number, number], way: number, grade: number): number => build("belt", x, z, asDir(way), grade);
 
 for (const { grade, z, on } of ROWS) {
-  // Sorters each way: not set at grade I, set to planks at II, to lanterns at III.
-  const thing = ([null, "plank", "lantern"] as const)[grade - 1] ?? null;
+  // Sorters each way: not set at grade I, set to planks at II, to lanterns at III and IV.
+  const thing = ([null, "plank", "lantern", "lantern"] as const)[grade - 1] ?? null;
   for (const dir of WAYS) {
     const x = 50 + dir * 3;
     build("sorter", x, z, dir, grade);

@@ -4,7 +4,7 @@ import { describe, expect, test } from "bun:test";
 
 import { GRADES } from "@sequoia-leaf/factory/content/machines.ts";
 
-import { gathererHat, PIPWICK_HAT } from "./art/machines.ts";
+import { gathererHat, PIPWICK_HAT } from "./art/hats.ts";
 
 describe("a gatherer's hat", () => {
   test("each grade has a hat of its own, and none is Pipwick's", () => {
