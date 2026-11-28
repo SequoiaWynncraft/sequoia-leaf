@@ -1,8 +1,9 @@
-import { BunRuntime } from "@effect/platform-bun";
+import { BunRuntime, BunSocket } from "@effect/platform-bun";
 import { Cause, Effect, Exit, Layer, Logger, Metric, References, Runtime } from "effect";
 
 import { serveLeaf, Services } from "./app.ts";
 import { AppConfig } from "./config.ts";
+import { BotPresence } from "./discord/presence.ts";
 import { EveryMinute, Startup } from "./jobs.ts";
 import { MetricsListener, RuntimeMetrics } from "./metrics.ts";
 import { Stop } from "./stop.ts";
@@ -19,11 +20,13 @@ const Server = Layer.unwrap(
 // once everything above it has: the server (live players are told Leaf is restarting, event streams
 // end, requests in flight have a moment to finish and are then cut), the scheduled work (a sync cut
 // short rolls back), and the services underneath them all, the database last, folding its write-ahead
-// log back in. Should that take over two seconds, the process exits anyway.
+// log back in. Should that take over two seconds, the process exits anyway. The bot's session on
+// Discord's gateway closes with the rest, with 1000, which ends it.
 Layer.mergeAll(
   Startup,
   MetricsListener,
   RuntimeMetrics,
+  BotPresence.pipe(Layer.provide(BunSocket.layerWebSocketConstructor)),
   Stop.begins("server").pipe(
     Layer.provideMerge(Server),
     Layer.provideMerge(Stop.begins("scheduled_work")),
