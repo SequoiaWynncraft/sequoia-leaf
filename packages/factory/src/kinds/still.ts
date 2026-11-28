@@ -32,7 +32,7 @@ function condition(k: Kit, y: Yard, i: number, lit: boolean): number {
   return stuck === as("waiting") && !jammedAhead(k, y, i, out) ? stuck : as("blocked", true);
 }
 
-/** Its words: the breaker's, but stopped it says which thing cannot leave, and by which way out. */
+/** Its words: the breaker's, but stopped or waiting for room it says which thing cannot leave, and by which way out. */
 function words(k: Kit, y: Yard, i: number, state: string): Words {
   if (state === "unpowered") return { line: NO_POWER };
   const out = asItem(k, y.holders.out[k.holderOf(y, i)] ?? k.NONE);
@@ -42,7 +42,7 @@ function words(k: Kit, y: Yard, i: number, state: string): Words {
         line: `Stopped: its ${many(k, out)} cannot leave by its ${wayOf(k, y, i, out)} way out. It makes nothing else until it does.`,
         stuck: out,
       }
-    : { line: `Waiting: no room ahead for its ${many(k, out)}.` };
+    : { line: `Waiting: no room ahead for its ${many(k, out)}, by its ${wayOf(k, y, i, out)} way out.` };
 }
 
 export const still = kind({
