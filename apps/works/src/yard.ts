@@ -89,7 +89,7 @@ import { balance } from "@sequoia-leaf/kit/purse.ts";
 import { joinVisit, type LiveRoom } from "@sequoia-leaf/kit/realtime.ts";
 
 import { beyondReach } from "./figure/reach.ts";
-import { commanded, counting, keepCounts, noteGrowers } from "./grown.ts";
+import { beginCounts, commanded, counting, keepCounts, noteGrowers } from "./grown.ts";
 import { S } from "./state.ts";
 import { askDue, leafOf, type Link, type LinkEvent, type Room, type RoomEvent, roomStep, step } from "./sync.ts";
 import { ZOOM } from "./zoom.ts";
@@ -550,6 +550,7 @@ function runOn(w: Yard, tick: number): void {
     stepTo(w, tick);
     return;
   }
+  beginCounts(w);
   for (let was = -1; w.tick < tick && w.tick !== was;) {
     was = w.tick;
     stepTo(w, w.tick + 1);

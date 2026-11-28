@@ -147,6 +147,17 @@ test("standing, its card says what it took in and gave out of star crystals in t
   ]);
 });
 
+test("its card counts the first tick it is seen in: one handed on in the yard's first tick shows as given out", async () => {
+  const y = yard();
+  const i = growerAt(y, 3, 3);
+  const [x0, z0] = corner(y);
+  build(y, kind("belt"), x0 + 5, z0 + 3, 0, Infinity);
+  y.holders.out[holderOf(y, i)] = CRYSTAL;
+  await opened(y, 1_000);
+  runYard(1000 + 100);
+  expect([S.world.tick, countedAt(S.world, i)?.gave]).toEqual([1, 1]);
+});
+
 test("a grower built where one stood is counted afresh: it does not take on the minute of the one before", async () => {
   const y = yard();
   const i = growerAt(y, 3, 3);

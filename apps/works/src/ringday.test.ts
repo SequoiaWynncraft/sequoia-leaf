@@ -19,6 +19,8 @@ import {
   put,
   readCommand,
   ringsOf,
+  route,
+  writeAct,
   type Yard,
 } from "@sequoia-leaf/factory";
 
@@ -40,36 +42,65 @@ function must(y: Yard, c: Record<string, unknown>): void {
   if ("refused" in did) throw new Error(`${JSON.stringify(c)}: ${did.refused}`);
 }
 
+/** Where the ring stands: its north-west corner's tile, on the guild's land south of the yard plot. */
+const [OX, OZ] = [42, 48];
+
 /**
- * The yard plot of the guild's land (x 48 to 63, rows 36 to 47, the depot at 55 to 57, rows 41 to 43)
- * with a ring of 32 belts above the depot (rows 39 and 40), and two growers on it facing south, each
- * dropping onto the ring's top row and fed star crystals off it by a splitter that sends them up into
- * its east side first, and crystal feed from a full crate on its west side. A plain splitter on the
- * ring's bottom row sends every other thing down into the depot. 8 star crystals ride the ring. The
- * growers and the belts up into them are on the ring too: 38 tiles things go round.
+ * Tier 7's shared ring (SPEC-2 0.2), as the rules' tests and bench have it (`growers.ts`), on the
+ * guild's land, the yard owning the Long Meadow and the Old Quarry south of the yard plot: a ring of
+ * 40 belts (x 2 to 20 of it, rows 6 to 8) with 4 growers along its top, each facing south, fed star
+ * crystals off the ring by a splitter that sends them up into its east side first and dropping onto the
+ * ring from its middle way out, and fed crystal feed from two full crates on its back. A splitter on the
+ * ring's east side sends every other thing on to the depot. 8 star crystals ride the ring. The growers
+ * and the belts up into them are on the ring too: 60 tiles things go round.
  */
 function ringYard(): Yard {
   const y = create({ seed: 5, tier: 8 });
   y.at = ctx().now;
-  const belt = (x: number, z: number, dir: number): void => must(y, { do: "build", kind: "belt", x, y: z, dir });
-  for (let x = 48; x < 63; x++) belt(x, 39, 0);
-  belt(63, 39, 1);
-  for (let x = 63; x > 48; x--) belt(x, 40, 2);
-  belt(48, 40, 3);
-  for (const gx of [50, 56]) {
-    must(y, { do: "build", kind: "grower", x: gx, y: 37, dir: 1 });
-    must(y, { do: "build", kind: "splitter", x: gx + 2, y: 39, dir: 0 });
-    must(y, { do: "first", x: gx + 2, y: 39, way: 1 });
-    belt(gx + 2, 38, 3);
-    belt(gx + 2, 37, 2);
-    must(y, { do: "build", kind: "crate", x: gx - 2, y: 37, dir: 0 });
-    const r = holderOf(y, gx - 2 + 37 * y.land.w);
-    for (let k = 0; k < y.open.crate; k++) put(y.holders, r, FEED);
+  for (const name of ["Long Meadow", "The Old Quarry"]) {
+    const plot = y.land.plots.find((p) => p.name === name)?.plot ?? null;
+    if (plot === null) throw new Error(`no plot named ${name}`);
+    y.plots.push(plot);
   }
-  must(y, { do: "build", kind: "splitter", x: 56, y: 40, dir: 2 });
-  for (const x of [49, 51, 53, 55, 57, 59, 61, 62]) {
-    y.item[x + 40 * y.land.w] = CRYSTAL;
-    y.prog[x + 40 * y.land.w] = 4;
+  const build = (kind: string, x: number, z: number, dir: number): void =>
+    must(y, { do: "build", kind, x: OX + x, y: OZ + z, dir });
+  for (let x = 2; x < 20; x++) build("belt", x, 6, 0);
+  for (let z = 6; z < 8; z++) build("belt", 20, z, 1);
+  for (let x = 20; x > 2; x--) build("belt", x, 8, 2);
+  for (let z = 8; z > 6; z--) build("belt", 2, z, 3);
+  for (const gx of [4, 8, 12, 16]) {
+    build("grower", gx, 3, 1);
+    build("belt", gx, 5, 1);
+    build("splitter", gx + 2, 6, 0);
+    must(y, { do: "first", x: OX + gx + 2, y: OZ + 6, way: 1 });
+    for (const [z, dir] of [
+      [5, 3],
+      [4, 3],
+      [3, 2],
+    ] as const)
+      build("belt", gx + 2, z, dir);
+    for (const z of [1, 0]) {
+      build("crate", gx, z, 1);
+      const r = holderOf(y, OX + gx + (OZ + z) * y.land.w);
+      for (let k = 0; k < y.open.crate; k++) put(y.holders, r, FEED);
+    }
+  }
+  build("splitter", 20, 7, 1);
+  const legs = route(y, [OX + 21, OZ + 7], y.land.depot);
+  if (!legs) throw new Error("no way to the depot");
+  must(y, writeAct({ do: "lay", legs }));
+  for (const [x, z] of [
+    [14, -2],
+    [18, 0],
+    [14, 1],
+    [10, 0],
+    [6, 1],
+    [2, 0],
+  ] as const)
+    build("pylon", x, z, 0);
+  for (const x of [3, 5, 7, 9, 11, 13, 15, 17]) {
+    y.item[OX + x + (OZ + 8) * y.land.w] = CRYSTAL;
+    y.prog[OX + x + (OZ + 8) * y.land.w] = 4;
   }
   y.history = [];
   return y;
@@ -77,8 +108,11 @@ function ringYard(): Yard {
 
 test("a ring with growers on it, Leaf tending its yard now and then across a day and the page running its copy by its own loop, stand at one tick with one check all the way", async () => {
   const fake = await opened(ringYard());
-  const growers = [50, 56].map((x) => x + 37 * S.world.land.w);
-  expect([ringsOf(S.world), growers.map((i) => litAt(S.world, i))]).toEqual([{ rings: 1, tiles: 38 }, [true, true]]);
+  const growers = [4, 8, 12, 16].map((x) => OX + x + (OZ + 3) * S.world.land.w);
+  expect([ringsOf(S.world), growers.map((i) => litAt(S.world, i))]).toEqual([
+    { rings: 1, tiles: 60 },
+    [true, true, true, true],
+  ]);
   const marks = new Set([
     ...Array.from({ length: 12 }, (_, m) => m + 1),
     ...Array.from({ length: 24 }, (_, h) => (h + 1) * 60),
@@ -110,9 +144,7 @@ test("a ring with growers on it, Leaf tending its yard now and then across a day
   expect([seen, fake.leaf.reads.length]).toEqual([[...marks].map((m) => `${m}: true`), 1]);
   // It grew, sent its net to the depot until its feed ran out, and the page counted its growers as it went.
   const counted = growers.map((i) => countedAt(S.world, i)?.seconds);
-  expect([grown > 1000, counted, held(S.world.holders, holderOf(S.world, 48 + 37 * S.world.land.w), FEED)]).toEqual([
-    true,
-    [60, 60],
-    0,
-  ]);
+  expect([grown > 1000, counted, held(S.world.holders, holderOf(S.world, OX + 4 + OZ * S.world.land.w), FEED)]).toEqual(
+    [true, [60, 60, 60, 60], 0],
+  );
 }, 120_000);

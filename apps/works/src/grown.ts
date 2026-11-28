@@ -10,7 +10,8 @@
  * Counted a second of the yard's clock at a time, a minute of seconds kept, for each grower by its own
  * tile; another yard begins again. Only what a tick moved is counted: after each command the page
  * plays, each grower's row is read again as it stands (`commanded`), and one no longer standing is
- * forgotten, so one built or moved where it stood is counted afresh. Leaf's yard read in place of the
+ * forgotten, so one built or moved where it stood is counted afresh; each begins its count as it
+ * stands before the tick after it is first seen (`beginCounts`). Leaf's yard read in place of the
  * page's copy keeps the count of each grower standing in both (`keepCounts`). A yard with no grower
  * runs on as it always has (`counting`). Counting a tick makes no objects.
  */
@@ -114,6 +115,16 @@ export function noteGrowers(y: Yard): void {
   }
 }
 
+/** Begins the count of each grower that has none, as its row stands now, before the next tick: that tick is counted too. */
+export function beginCounts(y: Yard): void {
+  if (!GROW) return;
+  const tiles = growersOf(y);
+  for (let g = 0; g < tiles.length; g++) {
+    const i = tiles[g] ?? 0;
+    if (!kept.counts.has(i)) kept.counts.set(i, begun(y, i));
+  }
+}
+
 /**
  * A command was played on the copy: what it did to a grower is no tick's work. Each grower standing is
  * read again as it now stands, and one no longer standing forgotten (`growersOf`), so one built where
@@ -126,6 +137,7 @@ export function commanded(y: Yard): void {
     const c = kept.counts.get(i);
     if (c) read(c, y, i);
   }
+  beginCounts(y);
 }
 
 /** What the grower on its own tile `i` took in and gave out in the yard's last minute, as counted; nothing for one not counted yet. */
