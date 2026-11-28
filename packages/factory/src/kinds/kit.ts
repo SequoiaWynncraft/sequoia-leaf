@@ -128,14 +128,6 @@ export interface Kit {
   readonly refused: typeof Wire.refused;
   readonly roomBeside: typeof Wire.roomBeside;
   readonly wireOf: typeof Wire.wireOf;
-  readonly waysAt: typeof Wire.waysAt;
-  readonly realTo: typeof Wire.realTo;
-  readonly takesNow: typeof Wire.takesNow;
-  readonly sendsNow: typeof Wire.sendsNow;
-  readonly heldFor: typeof Wire.heldFor;
-  readonly inTrouble: typeof Wire.inTrouble;
-  readonly ringOn: typeof Wire.ringOn;
-  readonly ringTiles: typeof Wire.ringTiles;
 
   // What reaches the depot and the research; power.
   readonly deliver: typeof Orders.deliver;

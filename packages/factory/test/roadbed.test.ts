@@ -49,10 +49,6 @@ describe("the commission of tier 6, by the real rules", () => {
     expect([tarmac, sleepers < 4000, varnish < 1000]).toEqual([2000, true, true]);
     const said = lines(y);
     expect(said.has("Nowhere to send its pitch: nothing is on the tile it points at.")).toBe(true);
-    // Every way its pitch line goes ends at a piece in trouble, a bench starved of gravel or a belt
-    // pointing at nothing: the still has stopped for good, and says so.
-    expect(said.has("Stopped: its pitch cannot leave by its left way out. It makes nothing else until it does.")).toBe(
-      true,
-    );
+    expect(said.has("Waiting: no room ahead for its pitch, by its left way out.")).toBe(true);
   });
 });

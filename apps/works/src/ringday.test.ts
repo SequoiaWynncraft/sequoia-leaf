@@ -18,7 +18,6 @@ import {
   play,
   put,
   readCommand,
-  ringsOf,
   route,
   writeAct,
   type Yard,
@@ -109,10 +108,7 @@ function ringYard(): Yard {
 test("a ring with growers on it, Leaf tending its yard now and then across a day and the page running its copy by its own loop, stand at one tick with one check all the way", async () => {
   const fake = await opened(ringYard());
   const growers = [4, 8, 12, 16].map((x) => OX + x + (OZ + 3) * S.world.land.w);
-  expect([ringsOf(S.world), growers.map((i) => litAt(S.world, i))]).toEqual([
-    { rings: 1, tiles: 60 },
-    [true, true, true, true],
-  ]);
+  expect(growers.map((i) => litAt(S.world, i))).toEqual([true, true, true, true]);
   const marks = new Set([
     ...Array.from({ length: 12 }, (_, m) => m + 1),
     ...Array.from({ length: 24 }, (_, h) => (h + 1) * 60),

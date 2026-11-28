@@ -8,9 +8,6 @@
  * The yard keeps no purse: what it earns gathers in `till` until a command pays it in.
  */
 import type { Land } from "./land.ts";
-import type { Wire } from "./plumbing.ts";
-
-export type { Rings, Wire } from "./plumbing.ts";
 import { FACING, layOver, pieceOf } from "./sizes.ts";
 import {
   BLUEPRINTS_MOST,
@@ -135,6 +132,33 @@ export interface Smog {
   readonly pace: Uint8Array;
   slowed: number;
   readonly standing: Uint8Array;
+}
+
+/** The yard's plumbing, worked out from what stands where (`wire.ts`). */
+export interface Wire {
+  /** Tiles that hand things on, each after the tiles it hands to. */
+  readonly order: Int32Array;
+  /** Tiles that carry, tiles that work, and tiles that burn for power (a boiler) within reach of power. */
+  readonly carry: Int32Array;
+  /** Tunnels' way-in mouths, which carry things under the ground too. */
+  readonly mouths: Int32Array;
+  readonly work: Int32Array;
+  readonly burners: Int32Array;
+  /** For each tile, the sides it takes things in from, a bit each (`sidesTaken`). */
+  readonly taken: Uint8Array;
+  /** For each kind of machine, the recipes it may make (`recipesFor`): all a machine reads of what is unlocked. */
+  readonly recipes: readonly (readonly Recipe[])[];
+  /** Power always there (the depot, and what gives it steadily: the waterwheels), and power drawn. */
+  readonly steady: number;
+  readonly demand: number;
+  /**
+   * 1 for each tile that waits: it holds a thing the tile it hands to has no room for, so handing
+   * on passes it over until a tile beside it may have room (`tick.ts`). Forgotten whenever the yard
+   * is changed other than by its ticks: with the plumbing, and after a command (`waitingFrom`).
+   */
+  readonly waiting: Uint8Array;
+  /** The yard's `rev` when `waiting` was last forgotten. */
+  waitingFrom: number;
 }
 
 /** Something done that Undo would undo, as the rules keep it (`history.ts`): its bytes, and its id, read from them: the id of the command that did it. */

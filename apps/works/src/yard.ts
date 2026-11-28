@@ -347,13 +347,15 @@ function followTo(f: Follow, w: Yard, to: number): boolean {
       if (c.tick > to) return true;
       if (c.tick < w.tick) return late(f, w.tick - c.tick);
       f.upTo = batch.rev;
+      // Run on to it a tick at a time where there are growers, so their counts miss none (`runOn`).
+      runOn(w, c.tick);
       if ("refused" in play(w, c)) return unlike(f);
       commanded(w);
     }
     const { after } = batch;
     if (after.tick > to) return true;
     if (after.tick < w.tick) return late(f, w.tick - after.tick);
-    stepTo(w, after.tick);
+    runOn(w, after.tick);
     f.told.shift();
     f.counts.batches++;
     if (check(w) !== after.check || !hear(w, after.hung)) return unlike(f);

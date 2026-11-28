@@ -86,14 +86,14 @@ function sendings(k: Kit, y: Yard, i: number, n: Item, also: boolean): { from: n
 
 /**
  * Whether what stands where a piece sends a thing could ever take it, from the tile it leaves by: yes,
- * nothing stands there, or never. A full belt or machine still counts.
+ * nothing stands there, or never. A full belt or machine still counts; a crate full and shut never takes.
  */
 function takenAhead(k: Kit, y: Yard, i: number, n: Item, also = false): "yes" | "nothing" | "never" {
   let found: "nothing" | "never" = "nothing";
   for (const { from, to } of sendings(k, y, i, n, also)) {
     if (to < 0 || (y.kind[to] ?? k.NONE) === k.NONE) continue;
     found = "never";
-    if (k.takes(y, to, from) && k.wants(y, to, n)) return "yes";
+    if (k.takes(y, to, from) && k.wants(y, to, n) && !fullAndShut(k, y, to)) return "yes";
   }
   return found;
 }
@@ -103,98 +103,27 @@ export const stuckAs = (k: Kit, y: Yard, i: number, n: Item, also = false): numb
   takenAhead(k, y, i, n, also) === "yes" ? as("waiting") : as("blocked", true);
 
 /**
- * Whether the line a piece sends a thing into (with `also`, its by-product) has stopped, judged from
- * what the yard holds now (`stopsFrom`). One answer, read by its status, its Trouble and its picture.
+ * Whether the line a piece sends a thing into (with `also`, its by-product) has stopped: every tile of
+ * it ahead holds a thing at the end of its tile, waiting, up to one that is blocked (in trouble). A
+ * line with room on any tile, or that runs into a piece that is not a line, still moves. Each line is
+ * followed no further than the land has tiles.
  */
 export function jammedAhead(k: Kit, y: Yard, i: number, n: Item, also = false): boolean {
-  const ways = waysFor(k, y, i, n, also);
-  return ways.length > 0 && stopsFrom(k, y, i, ways);
-}
-
-/** The ways out (numbered as `realTo` numbers them) the piece on its own tile `i` sends the thing `n` by: by-products by `also`. */
-function waysFor(k: Kit, y: Yard, i: number, n: Item, also: boolean): number[] {
-  const outs = k.outsOf(y, i);
-  if (outs.length > 0) return outs.flatMap((o, p) => (o.also === also && k.sendsThing(o, n) ? [p] : []));
-  const ways = k.waysOf(y.kind[i] ?? k.NONE);
-  if (ways === 0) return [0];
-  const sends = k.sendsOf(y, i, n);
-  return [0, 1, 2].filter((w) => w < ways && ((sends >> w) & 1) === 1);
-}
-
-/** What a tile says of a line through it (`stopsFrom`): it still moves, it ends there stopped, or it goes on by its ways. */
-const MOVES = 0;
-const ENDS = 1;
-const ON = 2;
-
-/**
- * Whether everything the piece on tile `i` sends by its ways out `ways` could go on to has stopped:
- * by every way things can go from each tile (`realTo`), a splitter's and a sorter's alike, under the
- * ground through a tunnel, each way with no room now (`takesNow`) ends at a machine in trouble, at a
- * crate that is full and shut, or at a ring that is full with no way off it. A way with room, a thing
- * not yet across its tile, or a piece that may yet take things, still moves. Each tile is looked at once.
- */
-function stopsFrom(k: Kit, y: Yard, i: number, ways: readonly number[]): boolean {
-  const seen = new Set<number>();
-  const next: number[] = ways.flatMap((c) => [i, c]);
-  for (let c = next.pop(), g = next.pop(); c !== undefined && g !== undefined; c = next.pop(), g = next.pop()) {
-    const t = k.realTo(y, g, c);
-    if (t < 0) continue;
-    if (k.takesNow(y, g, c)) return false;
-    const ring = k.ringOn(y, t);
-    const key = ring >= 0 ? -1 - ring : t;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    if ((ring >= 0 ? ringEnd(k, y, ring, next) : lineEnd(k, y, t, next)) === MOVES) return false;
-  }
-  return true;
-}
-
-/**
- * A ring a line runs into: it moves unless every tile of it is full, each thing that carries holding a
- * thing across its tile and each holder taking nothing from the ring; then it has stopped if no way
- * goes off it that what is on the ring now would go by, and those ways off it go on (`next`) if some do.
- */
-function ringEnd(k: Kit, y: Yard, ring: number, next: number[]): number {
-  const off: number[] = [];
-  for (const p of k.ringTiles(y, ring)) {
-    if (k.carries(y.kind[p] ?? k.NONE) && !crossedAll(k, y, p)) return MOVES;
-    for (let c = 0; c < Math.max(1, k.waysAt(y, p)); c++) {
-      const t = k.realTo(y, p, c);
-      if (t < 0) continue;
-      if (k.ringOn(y, t) !== ring) {
-        if (k.sendsNow(y, p, c, k.heldFor(y, p, c))) off.push(p, c);
-      } else if (!k.carries(y.kind[t] ?? k.NONE) && k.takesNow(y, p, c)) return MOVES;
+  for (const { to } of sendings(k, y, i, n, also)) {
+    let t = to;
+    for (let step = 0; step < y.kind.length && t >= 0 && k.carries(y.kind[t] ?? k.NONE); step++) {
+      const held = y.item[t] ?? k.NONE;
+      if (!k.isItem(held) || (y.prog[t] ?? 0) < 8 || k.tunnelOf(y, t) >= 0) break;
+      if (stuckAs(k, y, t, held) !== as("waiting")) return true;
+      t = k.nextOf(y, t);
     }
   }
-  if (off.length === 0) return ENDS;
-  next.push(...off);
-  return ON;
-}
-
-/** A tile of a line off any ring with no room for what comes (`stopsFrom`): what it says, and where it goes on (`next`). */
-function lineEnd(k: Kit, y: Yard, t: number, next: number[]): number {
-  const kind = y.kind[t] ?? k.NONE;
-  if (!k.carries(kind)) return fullAndShut(k, y, t) || k.inTrouble(y, t) ? ENDS : MOVES;
-  const held = y.item[t] ?? k.NONE;
-  if (!k.isItem(held) || !crossedAll(k, y, t)) return MOVES;
-  // In trouble as its own status says, which knows a tunnel's way-in mouth hands on under the ground.
-  if (k.inTrouble(y, t)) return ENDS;
-  for (let c = 0; c < Math.max(1, k.waysAt(y, t)); c++) if (k.sendsNow(y, t, c, held)) next.push(t, c);
-  return ON;
-}
-
-/** Whether what carries on a tile holds a thing that has crossed it, and a tunnel's way-in mouth every tile under the ground. */
-function crossedAll(k: Kit, y: Yard, i: number): boolean {
-  if (y.item[i] === k.NONE || (y.prog[i] ?? 0) < 8) return false;
-  const span = y.span[i] ?? 0;
-  const at = k.tunnelOf(y, i) * k.SPAN_MOST;
-  for (let u = at; u < at + span; u++) if (y.tunnels.under[u] === k.NONE || (y.tunnels.along[u] ?? 0) < 8) return false;
-  return true;
+  return false;
 }
 
 /** Whether the piece on a tile holds things, is shut and can take no more: a crate, which alone shuts. */
 function fullAndShut(k: Kit, y: Yard, i: number): boolean {
-  const r = k.holderOf(y, i);
+  const r = i < 0 ? -1 : k.holderOf(y, i);
   const h = y.holders;
   return r >= 0 && h.open[r] === 0 && (h.count[r] ?? 0) + (h.out[r] === k.NONE ? 0 : 1) >= y.open.crate;
 }
@@ -239,6 +168,8 @@ function refusingSink(k: Kit, y: Yard, i: number, n: Item, also: boolean): strin
 export function nowhere(k: Kit, y: Yard, i: number, n: Item, also = false): string {
   const sink = refusingSink(k, y, i, n, also);
   if (sink !== null) return `${k.ITEM_INFO[n]?.name ?? ""} has nowhere to go: ${sink} does not take it.`;
+  if (sendings(k, y, i, n, also).some(({ to }) => fullAndShut(k, y, to)))
+    return "The crate it points at is full and shut.";
   if (takenAhead(k, y, i, n, also) === "never") return `The piece it points at does not take ${many(k, n)}.`;
   // Only a splitter has ways to shut, or to take things in by.
   const shut = y.shut[i] ?? 0;

@@ -1,6 +1,6 @@
 /**
- * Yards with rings of belts, for the tests of rings (`beltrings.test.ts`, `ringshapes.test.ts`): a bare
- * yard, a ring round a box, a drain off it, and a grower sending into what stands beside it.
+ * Yards with rings of belts, for the tests of rings (`beltrings.test.ts`, `parity.test.ts`): a bare
+ * yard, a ring round a box, and a drain off it.
  */
 import * as F from "../src/index.ts";
 import { bareLand } from "./land.ts";
@@ -65,25 +65,4 @@ export function fill(y: F.Yard, tiles: readonly number[]): void {
     y.prog[i] = 8;
   }
   F.changed(y);
-}
-
-/** A grower's status, stopped with star crystals it cannot send on. */
-export const STOPPED: F.Status = {
-  state: "blocked",
-  trouble: true,
-  line: "Stopped: its star crystals cannot leave by its middle way out. It grows nothing more until they do.",
-  stuck: F.item("crystal"),
-};
-
-/**
- * A grower facing east with its own tile at (x, z), holding a star crystal it grew and means to hand
- * on, power reaching it along row 10: its own tile.
- */
-export function sending(y: F.Yard, x: number, z: number): number {
-  for (const px of [31, 27, 23, 19, 15, 11, 7, 3]) must(y, { do: "build", kind: "pylon", x: px, y: 10, dir: 0 });
-  must(y, { do: "build", kind: "grower", x, y: z, dir: 0 });
-  const g = F.at(y, x, z);
-  y.holders.out[F.holderOf(y, g)] = F.item("crystal");
-  F.changed(y);
-  return g;
 }

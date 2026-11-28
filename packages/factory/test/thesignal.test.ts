@@ -383,7 +383,7 @@ describe("a grower fed its own way out", () => {
     }
     const got = F.held(y.holders, spill, CRYSTAL) - from;
     // The gatherer gives 1 in 1,500 ticks: 12 in 30 minutes, from which the loop makes 36. Flat out it would net 300.
-    expect([got, F.ringsOf(y).rings, starved > 0.9 * 30 * F.MINUTE]).toEqual([36, 1, true]);
+    expect([got, starved > 0.9 * 30 * F.MINUTE]).toEqual([36, true]);
   });
 
   test("through a splitter with the way back first, fills its loop and spills its net and the trickle", () => {

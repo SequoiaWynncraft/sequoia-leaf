@@ -13,7 +13,7 @@
     },
     {
       "head": "Fixed",
-      "points": ["A machine sending into a full, shut crate now says it has stopped. It shows in Trouble."]
+      "points": ["A machine with a full, shut crate just ahead now shows in Trouble."]
     }
   ]
 }

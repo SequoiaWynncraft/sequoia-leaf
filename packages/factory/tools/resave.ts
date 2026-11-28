@@ -9,11 +9,6 @@
  * one, a plot, a redwood felled or a plan not kept. A yard kept on more land than this Leaf's, or by
  * a newer version, does not read here: it is a newer Leaf's (`keptLater`). It reads nothing but the
  * folder, writes nothing, and ends with 1 if any yard differs.
- *
- * Beside each yard it reads it counts the rings of belts in it, and the tiles on them (`ringsOf`):
- * since tier 7 a full ring with a way off it moves as one (`tick.ts`), so a yard with a ring that
- * fills plays otherwise than it did, and one with none plays as it did. The last line says how many
- * yards have any.
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -94,23 +89,14 @@ function losses(raw: Rec, first: F.Yard): string[] {
   ];
 }
 
-/** The rings of belts in a yard read, as said beside it: ", 2 rings of belts (34 tiles)", or nothing for none. */
-function ringsNote(y: F.Yard): string {
-  const { rings, tiles } = F.ringsOf(y);
-  return rings === 0 ? "" : `, ${rings} ring${rings === 1 ? "" : "s"} of belts (${tiles} tiles)`;
-}
-
-/** What differs about one kept yard, as lines, a note of what it is, and whether it has a ring of belts. */
-function differences(text: string): { lines: string[]; note: string; ringed: boolean } {
+/** What differs about one kept yard, as lines, and a note of what it is. */
+function differences(text: string): { lines: string[]; note: string } {
   const raw = parsed(text);
-  if (raw === undefined) return { lines: ["is not a kept yard"], note: "", ringed: false };
-  const kept = isRec(raw) ? `v${String(raw.v)}, ${keptPieces(raw)} pieces kept` : "";
-  if (F.keptLater(text))
-    return { lines: ["a newer Leaf's (a later version, or kept on more land): not read"], note: kept, ringed: false };
+  if (raw === undefined) return { lines: ["is not a kept yard"], note: "" };
+  const note = isRec(raw) ? `v${String(raw.v)}, ${keptPieces(raw)} pieces kept` : "";
+  if (F.keptLater(text)) return { lines: ["a newer Leaf's (a later version, or kept on more land): not read"], note };
   const first = F.decode(text);
-  if (!isRec(raw) || !first) return { lines: ["does not read"], note: kept, ringed: false };
-  const rings = ringsNote(first);
-  const note = `${kept}${rings}`;
+  if (!isRec(raw) || !first) return { lines: ["does not read"], note };
   const lines = losses(raw, first);
   const again = F.decode(F.encode(first));
   if (!again) lines.push("kept again, does not read");
@@ -125,7 +111,7 @@ function differences(text: string): { lines: string[]; note: string; ringed: boo
     if (places(ringed) !== places(first)) lines.push("on a land with a ring, something kept is elsewhere");
     if (F.check(ringed) !== F.check(first)) lines.push("on a land with a ring, the check differs");
   }
-  return { lines, note, ringed: rings !== "" };
+  return { lines, note };
 }
 
 const folder = process.argv[2];
@@ -137,15 +123,12 @@ const files = readdirSync(folder)
   .filter((f) => f.endsWith(".json"))
   .toSorted();
 let differ = 0;
-let withRings = 0;
 for (const name of files) {
   const text = keptText(join(folder, name));
-  const { lines, note, ringed } =
-    text === null ? { lines: ["is not a kept yard"], note: "", ringed: false } : differences(text);
+  const { lines, note } = text === null ? { lines: ["is not a kept yard"], note: "" } : differences(text);
   if (lines.length > 0) differ++;
-  if (ringed) withRings++;
   console.log(`${lines.length > 0 ? "DIFFERS" : "same   "} ${name}${note ? `: ${note}` : ""}`);
   for (const line of lines) console.log(`        ${line}`);
 }
-console.log(`${files.length} yards, ${differ} differ, ${withRings} with a ring of belts`);
+console.log(`${files.length} yards, ${differ} differ`);
 process.exit(differ > 0 ? 1 : 0);
