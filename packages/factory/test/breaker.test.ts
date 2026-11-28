@@ -180,6 +180,37 @@ describe("slag, which the town does not buy", () => {
     expect(F.status(y, j)?.line).toBe("Slag has nowhere to go: the cart stop does not take it.");
   });
 
+  test("its first slag at the depot stops the line, and both are in trouble: the belt at the depot, and the breaker behind it", () => {
+    const y = yard();
+    must(y, { do: "build", kind: "crate", x: 3, y: 4, dir: 0 });
+    const from = F.holderOf(y, F.at(y, 3, 4));
+    for (let k = 0; k < 40; k++) F.put(y.holders, from, SALVAGE);
+    // A grade III breaker gives more than a grade I belt carries: it waits for room on the line.
+    const i = breaker(y, 4, 4, 3);
+    for (let x = 6; x <= 23; x++) must(y, { do: "build", kind: "belt", x, y: 4, dir: 0 });
+    const head = F.at(y, 23, 4);
+    // While the line moves, nothing is in trouble, though the breaker waits for room on it.
+    let moving = 0;
+    for (let k = 0; k < 3000 && y.item[head] !== SLAG; k++) {
+      F.step(y);
+      if (F.status(y, i)?.state === "waiting" && F.status(y, i)?.trouble === false) moving++;
+      expect(F.status(y, i)?.trouble).toBe(false);
+    }
+    expect([y.item[head], moving > 0]).toEqual([SLAG, true]);
+    for (let k = 0; k < 600; k++) F.step(y);
+    expect([F.status(y, head)?.line, F.status(y, head)?.trouble]).toEqual([
+      "Slag has nowhere to go: the depot does not take it.",
+      true,
+    ]);
+    expect(F.status(y, i)).toMatchObject({ state: "waiting", trouble: true });
+    expect(F.status(y, i)?.line).toMatch(/^Waiting: no room ahead for its [a-z]+\.$/);
+    // A crate in place of the belt at the depot takes the slag: the line moves, and the breaker is out of trouble.
+    must(y, { do: "remove", x: 23, y: 4 });
+    must(y, { do: "build", kind: "crate", x: 23, y: 4, dir: 0 });
+    for (let k = 0; k < 30; k++) F.step(y);
+    expect(F.status(y, i)?.trouble).toBe(false);
+  });
+
   test("is never asked for by the board, though copper is", () => {
     const y = F.create({ seed: 9, tier: 6 });
     for (const plot of ["meadow", "workings"]) bought(y, plot);

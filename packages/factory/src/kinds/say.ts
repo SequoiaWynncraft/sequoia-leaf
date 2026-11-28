@@ -100,6 +100,25 @@ function takenAhead(k: Kit, y: Yard, i: number, n: Item, also = false): "yes" | 
 export const stuckAs = (k: Kit, y: Yard, i: number, n: Item, also = false): number =>
   takenAhead(k, y, i, n, also) === "yes" ? as("waiting") : as("blocked", true);
 
+/**
+ * Whether the line a piece sends a thing into (with `also`, its by-product) has stopped: every tile of
+ * it ahead holds a thing at the end of its tile, waiting, up to one that is blocked (in trouble). A
+ * line with room on any tile, or that runs into a piece that is not a line, still moves. Each line is
+ * followed no further than the land has tiles.
+ */
+export function jammedAhead(k: Kit, y: Yard, i: number, n: Item, also = false): boolean {
+  for (const { to } of sendings(k, y, i, n, also)) {
+    let t = to;
+    for (let step = 0; step < y.kind.length && t >= 0 && k.carries(y.kind[t] ?? k.NONE); step++) {
+      const held = y.item[t] ?? k.NONE;
+      if (!k.isItem(held) || (y.prog[t] ?? 0) < 8 || k.tunnelOf(y, t) >= 0) break;
+      if (stuckAs(k, y, t, held) !== as("waiting")) return true;
+      t = k.nextOf(y, t);
+    }
+  }
+  return false;
+}
+
 /** The sink a thing held ready would go into and that never takes it, as named: "the depot", "the cart stop"; or nothing. */
 function refusingSink(k: Kit, y: Yard, i: number, n: Item, also: boolean): string | null {
   if (k.ITEM_INFO[n]?.unsold !== true) return null;

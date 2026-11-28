@@ -13,7 +13,7 @@ import { keep, stockOnto, workOnto } from "./holder.ts";
 import type { Hooks, Words } from "./kind.ts";
 import type { Kit } from "./kit.ts";
 import { outWords } from "./maker.ts";
-import { as, asItem, many, NO_POWER, slow, stuckAs } from "./say.ts";
+import { as, asItem, jammedAhead, many, NO_POWER, slow, stuckAs } from "./say.ts";
 
 /** The mix of the piece on a tile. */
 const mixOf = (k: Kit, y: Yard, i: number): Mix | null => k.MIX_OF[y.kind[i] ?? k.NONE] ?? null;
@@ -47,13 +47,20 @@ export function work(k: Kit, y: Yard, i: number, r: number, speed: number, wire:
   k.roomBeside(y, i, wire.waiting);
 }
 
-/** How it stands: with no power; holding a finished thing (waiting, or blocked where nothing ahead takes it); at work while it holds its mix's thing; else waiting for it. */
+/**
+ * How it stands: with no power; holding a finished thing (waiting, in trouble where the line ahead has
+ * stopped, as a mixed line does at the first thing nothing at its end takes; or blocked where nothing
+ * ahead takes it); at work while it holds its mix's thing; else waiting for it.
+ */
 function condition(k: Kit, y: Yard, i: number, lit: boolean): number {
   if (!lit) return as("unpowered", true);
   const m = mixOf(k, y, i);
   const r = k.holderOf(y, i);
   const out = asItem(k, y.holders.out[r] ?? k.NONE);
-  if (out !== null) return stuckAs(k, y, i, out);
+  if (out !== null) {
+    const stuck = stuckAs(k, y, i, out);
+    return stuck === as("waiting") && jammedAhead(k, y, i, out) ? as("waiting", true) : stuck;
+  }
   return m && k.held(y.holders, r, m.from) > 0 ? as("working") : as("waiting");
 }
 
