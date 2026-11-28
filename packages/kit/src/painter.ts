@@ -17,6 +17,10 @@
  * The card may take everything back (`webglcontextlost`). Nothing is drawn until it returns
  * (`webglcontextrestored`); then the program, the atlas, the sheets and the layers are made again,
  * empty, and whoever asked (`restored`) is told to paint what they keep on a sheet again.
+ *
+ * A card may also hand over a context and then refuse the painter's program (a phone's driver that
+ * will not compile or link it). That is the same as no WebGL2: no painter opens, and one whose card
+ * comes back refusing stays lost for good and says so (`broken`).
  */
 
 import { Atlas } from "./atlas.ts";
@@ -115,14 +119,13 @@ interface Made {
   readonly atlas: Tex;
 }
 
-function shader(gl: WebGL2RenderingContext, kind: number, source: string): WebGLShader {
+/** A shader compiled, or null where the card refuses it (or is lost). */
+function shader(gl: WebGL2RenderingContext, kind: number, source: string): WebGLShader | null {
   const s = gl.createShader(kind);
-  if (!s) throw new Error("no shader");
+  if (!s) return null;
   gl.shaderSource(s, source);
   gl.compileShader(s);
-  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS) && !gl.isContextLost())
-    throw new Error(`shader: ${gl.getShaderInfoLog(s) ?? ""}`);
-  return s;
+  return gl.getShaderParameter(s, gl.COMPILE_STATUS) ? s : null;
 }
 
 /** A texture of a size, clear, read a pixel for a pixel. */
@@ -137,16 +140,20 @@ function texture(gl: WebGL2RenderingContext, w: number, h: number): WebGLTexture
   return t;
 }
 
-/** The program, the boxes' buffer and how the card reads it, and the atlas's texture. */
-function make(gl: WebGL2RenderingContext, atlasSize: number): Made {
+/**
+ * The program, the boxes' buffer and how the card reads it, and the atlas's texture; or null where
+ * the card will not compile or link the program, or is lost: nothing can be drawn with it.
+ */
+function make(gl: WebGL2RenderingContext, atlasSize: number): Made | null {
   const program = gl.createProgram();
   const buffer = gl.createBuffer();
-  if (!program || !buffer) throw new Error("no program");
-  gl.attachShader(program, shader(gl, gl.VERTEX_SHADER, VERTEX));
-  gl.attachShader(program, shader(gl, gl.FRAGMENT_SHADER, FRAGMENT));
+  const vertex = shader(gl, gl.VERTEX_SHADER, VERTEX);
+  const fragment = shader(gl, gl.FRAGMENT_SHADER, FRAGMENT);
+  if (!program || !buffer || !vertex || !fragment) return null;
+  gl.attachShader(program, vertex);
+  gl.attachShader(program, fragment);
   gl.linkProgram(program);
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS) && !gl.isContextLost())
-    throw new Error(`program: ${gl.getProgramInfoLog(program) ?? ""}`);
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return null;
   gl.useProgram(program);
   gl.bindVertexArray(gl.createVertexArray());
   gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
@@ -193,6 +200,7 @@ export class Painter {
   readonly #sheets = new Map<Sheet, Tex>();
   readonly #layers = new Map<Layer, Target>();
   readonly #restored: (() => void)[] = [];
+  readonly #broken: (() => void)[] = [];
   #lost = false;
 
   /** The boxes gathered and not yet sent: as floats and as shorts over the same bytes, and how many. */
@@ -208,18 +216,24 @@ export class Painter {
   /** How many batches and boxes the frame has sent, for whoever measures it. */
   readonly sent = { batches: 0, boxes: 0 };
 
-  /** A painter on a canvas, or null where the browser has no WebGL2. `sc` holds its listening. */
+  /**
+   * A painter on a canvas, or null where the browser has no WebGL2 or its card refuses the painter's
+   * program. `sc` holds its listening.
+   */
   static open(c: HTMLCanvasElement, sc: Scope): Painter | null {
     const gl = c.getContext("webgl2", { alpha: true, antialias: false, depth: false, stencil: false });
-    return gl ? new Painter(c, gl, sc) : null;
+    if (!gl) return null;
+    const most = Math.min(ATLAS.most, Number(gl.getParameter(gl.MAX_TEXTURE_SIZE)) || ATLAS.first);
+    const atlas = new Atlas<object>(ATLAS.first, most);
+    const made = make(gl, atlas.size);
+    return made ? new Painter(c, gl, sc, atlas, made) : null;
   }
 
-  private constructor(c: HTMLCanvasElement, gl: WebGL2RenderingContext, sc: Scope) {
+  private constructor(c: HTMLCanvasElement, gl: WebGL2RenderingContext, sc: Scope, atlas: Atlas<object>, made: Made) {
     this.#c = c;
     this.#gl = gl;
-    const most = Math.min(ATLAS.most, Number(gl.getParameter(gl.MAX_TEXTURE_SIZE)) || ATLAS.first);
-    this.#atlas = new Atlas(ATLAS.first, most);
-    this.#made = make(gl, this.#atlas.size);
+    this.#atlas = atlas;
+    this.#made = made;
     this.#tex = this.#made.atlas;
     this.#white();
     sc.on(c, "webglcontextlost", (e) => {
@@ -231,12 +245,21 @@ export class Painter {
     sc.on(c, "webglcontextrestored", () => this.#remake());
   }
 
-  /** Everything on the card made again, empty, once the card is back; and those who keep sheets told. */
+  /**
+   * Everything on the card made again, empty, once the card is back; and those who keep sheets told.
+   * A card that comes back refusing the program is no card: the painter stays lost, and says so.
+   */
   #remake(): void {
     const gl = this.#gl;
-    this.#lost = false;
     this.#atlas.empty();
-    this.#made = make(gl, this.#atlas.size);
+    const made = make(gl, this.#atlas.size);
+    if (!made) {
+      // Lost again meanwhile, it will come back again; refused, it will not.
+      if (!gl.isContextLost()) for (const told of this.#broken) told();
+      return;
+    }
+    this.#lost = false;
+    this.#made = made;
     this.#tex = this.#made.atlas;
     this.#white();
     this.#onto = null;
@@ -264,6 +287,11 @@ export class Painter {
   /** Calls `told` each time the card comes back: every sheet is empty then. */
   restored(told: () => void): void {
     this.#restored.push(told);
+  }
+
+  /** Calls `told` if the card comes back and refuses the painter's program: it stays lost, and nothing is drawn again. */
+  broken(told: () => void): void {
+    this.#broken.push(told);
   }
 
   // ---------- a frame ----------

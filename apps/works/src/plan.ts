@@ -38,6 +38,7 @@ import {
 } from "@sequoia-leaf/factory";
 import { BARK, CREAM, GOLD, GREEN, INK, PAPER, SKY, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
 import type { Pen } from "@sequoia-leaf/kit/pix.ts";
+import { scope } from "@sequoia-leaf/kit/scope.ts";
 import { type Ctx, makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
 import { armAt, PAINTS } from "./art/belts.ts";
@@ -323,9 +324,12 @@ function mark(px: number, diamond: boolean, lit: string, shade: string): HTMLCan
   return c;
 }
 
+/** What a plan has drawn on a tile it has not painted: no tile's number is all ones, so it differs from whatever there is. */
+const UNPAINTED = 0xffffffff;
+
 /** A plan at so many pixels to a tile, with nothing drawn on it yet. */
 export function makePlan(px: number): Plan {
-  return {
+  const p: Plan = {
     px,
     ...makeCanvas(1, 1),
     drawn: new Uint32Array(0),
@@ -335,6 +339,13 @@ export function makePlan(px: number): Plan {
     stop: mark(px, false, GOLD[2], GOLD[0]),
     study: mark(px, true, CREAM, SKY[4]),
   };
+  // A browser may empty the picture and give it back (a phone, the page put away): nothing drawn is
+  // on it then, and every tile is painted again as at first.
+  scope().on(p.c, "contextrestored", () => {
+    p.drawn.fill(UNPAINTED);
+    p.turn = -1;
+  });
+  return p;
 }
 
 /**
@@ -487,12 +498,12 @@ export function paintPlan(p: Plan, y: Yard, L: Layout): HTMLCanvasElement {
   const s = look(y);
   const { land } = y;
   const n = y.kind.length;
-  // A tile's number is never all ones, so a new picture's tiles all differ from what there is.
+  // A new picture's tiles all differ from what there is (`UNPAINTED`).
   if (p.land !== land || p.c.width !== land.w * p.px || p.c.height !== land.h * p.px) {
     p.land = land;
     p.c.width = land.w * p.px;
     p.c.height = land.h * p.px;
-    p.drawn = new Uint32Array(n).fill(0xffffffff);
+    p.drawn = new Uint32Array(n).fill(UNPAINTED);
     p.turn = -1;
   }
   if (p.turn === s.turn) return p.c;

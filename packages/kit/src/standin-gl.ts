@@ -51,6 +51,8 @@ const BYTES = 32;
 export class FakeCard {
   /** With false, a canvas has no WebGL2 context at all: a browser without it. */
   has = true;
+  /** What the card refuses of a program, if anything: to compile its shaders, or to link it. */
+  refuses: "compile" | "link" | null = null;
   /** The longest side a texture may have. */
   most = 4096;
   readonly batches: SentBatch[] = [];
@@ -68,6 +70,8 @@ export class FakeCard {
   #blend = "";
   #disc: number[] = [];
   readonly #canvases = new Set<EventTarget>();
+  /** The canvases whose page asked for the card back when it was lost (`preventDefault`): only they are given it. */
+  readonly #asked = new Set<EventTarget>();
 
   /** Forgets what was drawn and copied so far, for a test that looks at what comes next. */
   clear(): void {
@@ -79,13 +83,18 @@ export class FakeCard {
   lose(): void {
     this.#lost = true;
     this.textures.clear();
-    for (const c of this.#canvases) c.dispatchEvent(new Event("webglcontextlost", { cancelable: true }));
+    this.#asked.clear();
+    for (const c of this.#canvases) {
+      const lost = new Event("webglcontextlost", { cancelable: true });
+      c.dispatchEvent(lost);
+      if (lost.defaultPrevented) this.#asked.add(c);
+    }
   }
 
-  /** Gives the card back, empty. */
+  /** Gives the card back, empty, to each canvas whose page asked for it when it was lost, as a browser does. */
   restore(): void {
     this.#lost = false;
-    for (const c of this.#canvases) c.dispatchEvent(new Event("webglcontextrestored"));
+    for (const c of this.#asked) c.dispatchEvent(new Event("webglcontextrestored"));
   }
 
   /** The batches' boxes drawn from one texture onto the canvas, in order. */
@@ -106,8 +115,8 @@ export class FakeCard {
     const known: Record<string, unknown> = {
       isContextLost: () => this.#lost,
       getParameter: (name: string) => (name === "MAX_TEXTURE_SIZE" ? this.most : 0),
-      getShaderParameter: () => true,
-      getProgramParameter: () => true,
+      getShaderParameter: () => this.refuses !== "compile",
+      getProgramParameter: () => this.refuses !== "link",
       createShader: () => ({}),
       createProgram: () => ({}),
       createBuffer: () => ({}),

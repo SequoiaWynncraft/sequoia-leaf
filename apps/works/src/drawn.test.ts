@@ -8,19 +8,24 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { create, step } from "@sequoia-leaf/factory";
 import { bareLand } from "@sequoia-leaf/factory/test/land.ts";
 import { lay, must } from "@sequoia-leaf/factory/test/yards.ts";
+import { Painter } from "@sequoia-leaf/kit/painter.ts";
 import { GOLD } from "@sequoia-leaf/kit/palette.ts";
 import type { Pen } from "@sequoia-leaf/kit/pix.ts";
+import { scope } from "@sequoia-leaf/kit/scope.ts";
 import { FakeCard, standInCanvases } from "@sequoia-leaf/kit/standin-gl.ts";
+import { must as sure } from "@sequoia-leaf/kit/util.ts";
 
+import { drawPlan } from "./far.ts";
 import { layout } from "./layout.ts";
 import { dashes } from "./marks.ts";
 import { makePlan, paintPlan } from "./plan.ts";
 import { S } from "./state.ts";
 import { Wires } from "./wires.ts";
 
+const card = new FakeCard();
 const away = { take: (): void => undefined };
 beforeAll(() => {
-  away.take = standInCanvases(new FakeCard());
+  away.take = standInCanvases(card);
 });
 afterAll(() => away.take());
 
@@ -120,5 +125,37 @@ describe("a plan's picture", () => {
     expect(plan.painted).toBe(2);
     paintPlan(plan, y, layout(y));
     expect(plan.painted).toBe(2);
+  });
+
+  test("emptied by the browser and given back, is painted again whole, and copied to the card again, though nothing in the yard changed", () => {
+    const y = create({ land: bareLand(18, 9, [[2, 4, "deadfall"]], [12, 4]), tier: 4, seed: 1 });
+    must(y, { do: "build", kind: "pylon", x: 6, y: 6, dir: 0 });
+    // The page's own state, as the tests after this one must find it.
+    const was = { world: S.world, view: S.view };
+    S.world = y;
+    S.view = { w: 600, h: 400, z: 0.5, dpr: 1 };
+    const p = sure(Painter.open(document.createElement("canvas"), scope()), "painter");
+    /** A frame at the plan's zoom: the plan's canvas, each time it was copied to the card. */
+    const frame = (): unknown[] => {
+      card.clear();
+      p.begin(null);
+      drawPlan(p, y, layout(y), 0, 0);
+      p.end();
+      return card.copied.filter((c) => c.w === y.land.w * 8).map((c) => c.pic);
+    };
+    const [canvas] = frame();
+    expect(canvas instanceof EventTarget).toBe(true);
+    expect(frame()).toEqual([]);
+    if (canvas instanceof EventTarget) canvas.dispatchEvent(new Event("contextrestored"));
+    expect(frame()).toEqual([canvas]);
+    expect(frame()).toEqual([]);
+    Object.assign(S, was);
+    // And the plan itself: every tile is as not painted until it is painted again.
+    const plan = makePlan(4);
+    paintPlan(plan, y, layout(y));
+    plan.c.dispatchEvent(new Event("contextrestored"));
+    expect(plan.drawn.every((n) => n === 0xffffffff)).toBe(true);
+    paintPlan(plan, y, layout(y));
+    expect([plan.painted, plan.drawn.some((n) => n === 0xffffffff)]).toEqual([2, false]);
   });
 });

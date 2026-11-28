@@ -199,14 +199,14 @@ describe("the floor on the screen", () => {
     expect(w.floor.waiting).toBe(0);
   });
 
-  test("after the card took everything back, the next frame paints its view before laying it", () => {
+  test("after the card took everything back and returned, the next frame paints its view before laying it", () => {
     const w = watched(LAND);
     const view = viewAt(56, 42);
     settle(w, hands(ALL));
     expect(frame(w, view, hands(ALL)).painted).toBe(0);
+    // The painter tells the floor itself that the card is back, empty.
     card.lose();
     card.restore();
-    w.floor.wipe();
     const back = frame(w, view, hands(ALL));
     expect([back.painted, back.copied]).toEqual([12, 12]);
     expect(area(back.drawn)).toBe(view.w * view.h);

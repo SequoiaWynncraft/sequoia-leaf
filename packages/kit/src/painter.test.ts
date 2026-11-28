@@ -39,6 +39,35 @@ describe("the painter", () => {
     card.has = true;
   });
 
+  test("a card that hands over a context and then will not compile or link the program is no card: no painter opens", () => {
+    for (const refuses of ["compile", "link"] as const) {
+      card.refuses = refuses;
+      expect(Painter.open(pic(10, 10), scope())).toBeNull();
+    }
+    card.refuses = null;
+    expect(Painter.open(pic(10, 10), scope())).not.toBeNull();
+  });
+
+  test("a card that comes back refusing the program stays lost: nothing is drawn again, and whoever asked is told", () => {
+    for (const refuses of ["compile", "link"] as const) {
+      const p = open();
+      const a = pic(16, 16);
+      const told = { restored: 0, broken: 0 };
+      p.restored(() => void told.restored++);
+      p.broken(() => void told.broken++);
+      card.lose();
+      card.refuses = refuses;
+      card.restore();
+      card.refuses = null;
+      card.clear();
+      expect([p.lost, p.begin(null), told.restored, told.broken]).toEqual([true, false, 0, 1]);
+      p.pic(a, 0, 0);
+      p.rect(0, 0, 4, 4, "#ffffff");
+      p.end();
+      expect([card.batches.length, card.copied.length]).toEqual([0, 0]);
+    }
+  });
+
   test("draws boxes in the order asked, in one batch while nothing but the boxes changes", () => {
     const p = open();
     const [a, b] = [pic(16, 16), pic(8, 24)];

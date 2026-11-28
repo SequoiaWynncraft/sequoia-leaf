@@ -111,6 +111,8 @@ export class Floor {
     this.#gr = gr;
     this.#p = p;
     this.#clock = clock;
+    // The card took everything back and has returned: nothing painted is on it.
+    p.restored(() => this.wipe());
     this.#c0 = Math.floor(gr.x / CHUNK.w);
     this.#r0 = Math.floor(gr.y / CHUNK.h);
     this.#cols = Math.floor((gr.x + gr.w - 1) / CHUNK.w) - this.#c0 + 1;
@@ -129,7 +131,7 @@ export class Floor {
     this.#under = Array.from({ length: count }, (_, n) => this.#plotsUnder(n));
   }
 
-  /** Nothing painted is on the card any more: it took everything back. */
+  /** Nothing painted is on the card any more: it took everything back, and has returned. */
   wipe(): void {
     this.#busy?.steps.return();
     this.#busy = null;

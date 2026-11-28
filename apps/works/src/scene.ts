@@ -120,13 +120,15 @@ export const wipe = (): void => {
 };
 
 /**
- * Opens the picture on the graphics card; false where the browser has no WebGL2, and nothing can be
- * drawn. `sc` holds its listening for the card taking everything back, and giving it back.
+ * Opens the picture on the graphics card; false where the browser has no WebGL2 or its card refuses
+ * to draw, and nothing can be drawn. `sc` holds its listening for the card taking everything back,
+ * and giving it back; `broken` is told if it comes back refusing to draw, and nothing is drawn again.
  */
-export function openPicture(sc: Scope): boolean {
+export function openPicture(sc: Scope, broken: () => void): boolean {
   const p = Painter.open(picture, sc);
   if (!p) return false;
   p.restored(wipe);
+  p.broken(broken);
   stage.on = { p, dusk: p.layer(), held: p.layer() };
   return true;
 }
@@ -560,16 +562,12 @@ function inHand(f: Frame, grp: Group): void {
 /** How many chunks of the floor are still to be painted, for a review page waiting for the land to be whole. */
 export const floorWaiting = (): number | null => floored?.floor.waiting ?? null;
 
-/** The floor on the screen (`floor.ts`): for the ground it was opened on, and the count of losses it last saw. */
-let floored: { gr: Ground; floor: Floor; lost: number } | null = null;
+/** The floor on the screen (`floor.ts`), for the ground it was opened on. */
+let floored: { gr: Ground; floor: Floor } | null = null;
 function floorFor(gr: Ground, p: Painter): Floor {
   if (floored?.gr !== gr) {
     floored?.floor.drop();
-    floored = { gr, floor: new Floor(gr, p), lost };
-  }
-  if (floored.lost !== lost) {
-    floored.lost = lost;
-    floored.floor.wipe();
+    floored = { gr, floor: new Floor(gr, p) };
   }
   return floored.floor;
 }
@@ -685,6 +683,12 @@ export function drawYard(art: Art, now: Moment): void {
     lap("plan");
     drawPlanMarks(g, w, dx, dy);
     lap("marks");
+  }
+  // The pieces in hand have a layer as large as they are (a whole yard's is some 10 MB): let go of
+  // once nothing is in hand, and at the plan's zoom, where they are boxes.
+  if ((!near || !S.group) && held.for !== null) {
+    on.held.release();
+    held.for = null;
   }
   g.end();
   lap("card");

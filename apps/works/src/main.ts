@@ -189,7 +189,7 @@ async function opened(params: URLSearchParams): Promise<{ id: string; name: stri
   return me;
 }
 
-/** Says in the yard's place that the browser cannot draw it: the page does not open. */
+/** Says in the yard's place that the browser cannot draw it: the page does not open, or (its graphics card back and refusing to draw) draws no more. */
 function cannotDraw(): null {
   const line = document.body.appendChild(document.createElement("p"));
   line.id = "nodraw";
@@ -208,7 +208,7 @@ async function boot(): Promise<Page | null> {
   const art = makeArt(S.world.land);
 
   // The yard's picture, shown small and enlarged by the page; over it, the words, which also take every press.
-  if (!openPicture(scope())) return cannotDraw();
+  if (!openPicture(scope(), cannotDraw)) return cannotDraw();
   document.body.prepend(picture);
   const canvas = must(document.querySelector<HTMLCanvasElement>("#words"), "canvas");
   const ctx = must(canvas.getContext("2d"), "2d context");
