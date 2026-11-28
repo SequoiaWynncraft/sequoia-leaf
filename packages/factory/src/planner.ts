@@ -5,7 +5,21 @@
  * held up; nothing that moves the yard reads it.
  */
 import { TICKS } from "./content/machines.ts";
-import { GATHERING, type Item, type Kind, MIX_OF, PACE, type Recipe, recipeFor, timesOf, WORK_OF } from "./tables.ts";
+import {
+  ALL_ITEMS,
+  GATHERING,
+  GROW_OF,
+  grownIn,
+  type Item,
+  ITEM_INFO,
+  type Kind,
+  MIX_OF,
+  PACE,
+  type Recipe,
+  recipeFor,
+  timesOf,
+  WORK_OF,
+} from "./tables.ts";
 
 /** Ticks in a minute. */
 export const MINUTE = 600;
@@ -22,6 +36,30 @@ export function makes(k: Kind, grade: number, r: Recipe | null): number {
   const work = own > 0 ? own : (r?.work ?? 0);
   const times = own > 0 || !r ? 1 : timesOf(k, r);
   return work > 0 ? (MINUTE * (PACE[grade] ?? 0) * times) / work : 0;
+}
+
+/**
+ * The work in gathering one of each thing, in half-ticks: its own time where its table says
+ * (`ItemInfo.gather`: star crystal, 1,500 ticks), else a gatherer's (`TICKS.gather`).
+ */
+export const GATHER_WORK = Uint16Array.from(ALL_ITEMS, (n) => (ITEM_INFO[n]?.gather ?? TICKS.gather) * 2);
+
+/** How many of a thing from the ground a gatherer of a grade gathers a minute, at the thing's own pace (`GATHER_WORK`). */
+export function gathers(n: number, grade: number): number {
+  const work = GATHER_WORK[n] ?? WORK_OF[GATHERING] ?? 0;
+  return work > 0 ? (MINUTE * (PACE[grade] ?? 0)) / work : 0;
+}
+
+/** How many runs a minute a kind that grows a thing (`GROW_OF`) makes at a grade, flat out: each takes 1 of each of what it takes. */
+export function growPerMinute(k: Kind, grade: number): number {
+  const g = GROW_OF[k];
+  return g ? (MINUTE * (PACE[grade] ?? 0)) / g.work : 0;
+}
+
+/** How many of what it grows a kind gives a minute for each run, on the whole: 3 for every 2 runs of a grower. */
+export function grownPerRun(k: Kind): number {
+  const g = GROW_OF[k];
+  return g ? grownIn(g) / g.extraEvery : 0;
 }
 
 /** How many pieces of deadfall a minute a boiler burns while it makes power, at any grade. */

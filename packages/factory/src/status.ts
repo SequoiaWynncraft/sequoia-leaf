@@ -1,3 +1,4 @@
+import { BURNS, type Fuel } from "./burns.ts";
 /**
  * How a piece in the yard stands, and whether it is in trouble: decided in one place (`condition`,
  * a number, making nothing, so that a screen can ask it of every piece in view each frame), and put
@@ -6,15 +7,23 @@
  * but working out its power and plumbing if a change left them unknown.
  */
 import { alight, fuelNow } from "./kinds/burner.ts";
+import { type Growth, growth } from "./kinds/grower.ts";
 import { RULES } from "./kinds/list.ts";
 import { holding as holdingOf, type MachineRate, rateOf, type State, STATES, TROUBLE } from "./kinds/say.ts";
 import { litAt } from "./power.ts";
 import { pieceOf } from "./sizes.ts";
-import { ALL_KINDS, BURNS, type Fuel, isMaker, type Item, type Kind, NONE, type Recipe } from "./tables.ts";
+import { ALL_KINDS, isMaker, type Item, type Kind, NONE, type Recipe } from "./tables.ts";
 import { KIT, rewire } from "./wire.ts";
 import { type Counts, holderOf, type Yard } from "./yard.ts";
 
 export { type MachineRate, type State, STATES, TROUBLE } from "./kinds/say.ts";
+export type { Growth } from "./kinds/grower.ts";
+
+/**
+ * What the grower on a tile holds and is doing (`kinds/grower.ts`): the one reading its status, its
+ * picture, its lamps and its card take. Nothing for a tile with no grower.
+ */
+export const growthAt = (y: Yard, i: number): Growth => growth(KIT, y, pieceOf(y, i));
 
 export interface Status {
   readonly state: State;

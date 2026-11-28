@@ -113,9 +113,9 @@ export function estimate(tier: number): Estimate {
 /** A number of the table, whole. */
 const n = (v: number): string => String(Math.round(v));
 
-/** The smog figure in a sentence, against SPEC-2's target. */
+/** The smog figure in a sentence, against SPEC-2's target where it has one. */
 const smogText = (s: SmogFigure): string =>
-  `Smog on ${s.plot}, with every dirty machine of the tier's lines on it and no second plot: the most ${n(s.most)} of ${F.SMOG.most}; its machines lose ${(s.lost * 100).toFixed(1)}% of their ticks; the target ${s.target[0]}% to ${s.target[1]}%.`;
+  `Smog on ${s.plot}, with every dirty machine of the tier's lines on it and no second plot: the most ${n(s.most)} of ${F.SMOG.most}; its machines lose ${(s.lost * 100).toFixed(1)}% of their ticks; ${s.target ? `the target ${s.target[0]}% to ${s.target[1]}%` : "no target for this tier"}.`;
 
 /** The estimate as a table, against SPEC-2's targets. */
 export function estimateText(e: Estimate): string {

@@ -209,4 +209,30 @@ export const ASKS: Partial<Record<ItemName, readonly Ask[]>> = {
       line: "The board has been rained on for years. It would like a coat of varnish before the next quest goes up.",
     },
   ],
+  crystal: [
+    { from: "Greg", line: "Greg has a lump you can see through. Greg wants another to look at it with." },
+    { from: "The cats", line: "The cats push star crystals off the shelf to hear them. They need more." },
+  ],
+  feed: [
+    {
+      from: "The scholars",
+      line: "The scholars are growing a crystal on a string. It wants feeding. They did not know that when they started.",
+    },
+    {
+      from: "Fika",
+      line: "Fika tasted the crystal feed. Fika does not recommend it. Fika would like more, to be sure. Meow.",
+    },
+  ],
+  lattice: [
+    { from: "The scholars", line: "The scholars keep an answer in a lattice. They have forgotten the question." },
+    { from: "Crab #3", line: "Crab #3 is redecorating again. Lattices, this time." },
+  ],
+  star: [
+    { from: "The scholars", line: "What the scholars hear from the sky does not fit in any folio they have." },
+    { from: "Pipwick", line: "Pipwick is pressing a star into a folio. It is going about as well as it sounds." },
+  ],
+  dish: [
+    { from: "The scholars", line: "The scholars want to hear the sky. A dish hears a little of it." },
+    { from: "The cats", line: "The cats have found that a dish is warm in the afternoon and exactly the right shape." },
+  ],
 };

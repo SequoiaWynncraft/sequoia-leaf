@@ -1,3 +1,4 @@
+import { BURNS } from "./burns.ts";
 /**
  * The yard's power book: where its power comes from and goes, counted once from what stands, as every
  * screen says it. What gives power is counted by kind, by how it gives (`kinds/`): what gives it
@@ -7,7 +8,7 @@
 import { RULES } from "./kinds/list.ts";
 import { litAt, litOf } from "./power.ts";
 import { OWN } from "./sizes.ts";
-import { ALL_KINDS, BURNS, DRAW, drawnAt, GIVES, HALF, type Kind, NONE } from "./tables.ts";
+import { ALL_KINDS, DRAW, drawnAt, GIVES, HALF, type Kind, NONE } from "./tables.ts";
 import { KIT, type Power, power, rewire } from "./wire.ts";
 import type { Yard } from "./yard.ts";
 

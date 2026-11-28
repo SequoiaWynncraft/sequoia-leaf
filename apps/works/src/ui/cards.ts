@@ -197,6 +197,8 @@ export interface StandingPrint extends SorterPrint {
   readonly ways: WaysPrint | null;
   /** For a piece that breaks a mix (the breaker): the place in its mix of the next thing it gives. */
   readonly mix: number | null;
+  /** For a grower: what it took in and gave out in the yard's last minute, as the page counted it (`grown.ts`). */
+  readonly counted: { readonly took: number; readonly gave: number; readonly seconds: number } | null;
   readonly visiting: boolean;
 }
 

@@ -1,3 +1,4 @@
+import type { Yard } from "../yard.ts";
 /**
  * The still, three tiles by three (tier 6): it takes tar in on the nine tile-sides of its back and
  * sides and parts it into pitch, creosote and spirit, 3, 2 and 1 of every 6, in the order of its mix
@@ -6,30 +7,20 @@
  * finished thing and makes nothing more until that has left, so the first of the three with nowhere to
  * go stops all three. Each it makes adds 1 to the smog on its plot.
  */
-import type { Item } from "../tables.ts";
-import type { Yard } from "../yard.ts";
 import { kind, type Words } from "./kind.ts";
 import type { Kit } from "./kit.ts";
 import { MIXER } from "./mix.ts";
-import { backAndSides, front, wayNames } from "./ports.ts";
-import { as, asItem, jammedAhead, many, NO_POWER, stuckAs } from "./say.ts";
-
-/** Which of its ways out sends a thing, by name: "left", "middle", "right". */
-function wayOf(k: Kit, y: Yard, i: number, n: Item): string {
-  const outs = k.outsOf(y, i);
-  const p = outs.findIndex((o) => o.only === n);
-  return wayNames(outs.length)[p] ?? "";
-}
+import { backAndSides, front } from "./ports.ts";
+import { as, asItem, heldAs, heldWords, NO_POWER } from "./say.ts";
 
 /**
  * How it stands: the breaker's way, but a thing that cannot leave, with nowhere ahead to take it or the
- * line ahead stopped, stops it: blocked, in trouble, whichever of its three it is.
+ * line ahead stopped, stops it: blocked, in trouble, whichever of its three it is (`heldAs`).
  */
 function condition(k: Kit, y: Yard, i: number, lit: boolean): number {
   const out = asItem(k, y.holders.out[k.holderOf(y, i)] ?? k.NONE);
   if (!lit || out === null) return MIXER.condition?.(k, y, i, lit) ?? as("waiting");
-  const stuck = stuckAs(k, y, i, out);
-  return stuck === as("waiting") && !jammedAhead(k, y, i, out) ? stuck : as("blocked", true);
+  return heldAs(k, y, i, out);
 }
 
 /** Its words: the breaker's, but stopped or waiting for room it says which thing cannot leave, and by which way out. */
@@ -37,12 +28,7 @@ function words(k: Kit, y: Yard, i: number, state: string): Words {
   if (state === "unpowered") return { line: NO_POWER };
   const out = asItem(k, y.holders.out[k.holderOf(y, i)] ?? k.NONE);
   if (out === null) return MIXER.words?.(k, y, i, state) ?? { line: "" };
-  return state === "blocked"
-    ? {
-        line: `Stopped: its ${many(k, out)} cannot leave by its ${wayOf(k, y, i, out)} way out. It makes nothing else until it does.`,
-        stuck: out,
-      }
-    : { line: `Waiting: no room ahead for its ${many(k, out)}, by its ${wayOf(k, y, i, out)} way out.` };
+  return heldWords(k, y, i, state, out, "It makes nothing else until it does.");
 }
 
 export const still = kind({

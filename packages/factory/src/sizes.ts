@@ -19,6 +19,7 @@
  */
 import type { Opened } from "./kinds/kind.ts";
 import { KIND_DEFS } from "./kinds/list.ts";
+import { wayNames } from "./kinds/ports.ts";
 import { BIG, item, NONE, SIZE_H, SIZE_W } from "./tables.ts";
 import type { Yard } from "./yard.ts";
 
@@ -63,8 +64,9 @@ function asFacing(w: number, h: number, d: number, lx: number, ly: number): read
 
 /**
  * An output, as a piece facing a way has it: its tile from the piece's own tile, the way it leaves,
- * what leaves (0 the thing finished, 1 a by-product), and the one thing it sends, or `NONE` for any
- * (`Ports.out.only`).
+ * what leaves (0 the thing finished, 1 a by-product), the one thing it sends, or `NONE` for any
+ * (`Ports.out.only`), and what it is called by its place along the piece's front, from its left as it
+ * faces (`wayNames`): a still's "left", "middle" and "right", a grower's one "middle".
  */
 export interface Out {
   readonly dx: number;
@@ -72,6 +74,7 @@ export interface Out {
   readonly way: number;
   readonly also: boolean;
   readonly only: number;
+  readonly name: string;
 }
 
 /** Whether a way out sends a thing: any it holds, or only the one it is for. */
@@ -120,7 +123,8 @@ function facing(k: number, d: number): Facing {
     // A thing by its name, which the type holds to the things there are; one written past the type is
     // refused as the tables are built (`item` throws), never read as a way out for anything.
     const only = o.only === undefined ? NONE : item(o.only);
-    return { dx: bx + cx, dy: by + cy, way: d, also: o.sends === "also", only };
+    const name = wayNames(h)[o.at[1]] ?? "";
+    return { dx: bx + cx, dy: by + cy, way: d, also: o.sends === "also", only, name };
   });
   return { dx, dy, takes, opened: [...opened].map(([when, bits]) => ({ when, takes: bits })), outs };
 }

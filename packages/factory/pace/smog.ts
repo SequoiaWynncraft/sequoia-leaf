@@ -13,12 +13,17 @@
  */
 import * as F from "../src/index.ts";
 
-/** The plot each tier's dirty work stands on with no second plot bought, and the share of ticks SPEC-2 means it to lose, in per cent. */
+/**
+ * The plot each tier's dirty work stands on with no second plot bought, and the share of ticks SPEC-2
+ * means it to lose, in per cent: none said for tier 7, whose figure is printed all the same (its
+ * growers make none; the breakers and stills of its folio lines and its spirit do).
+ */
 export const SMOG_FROM: Readonly<
-  Record<number, { readonly plot: F.PlotName; readonly lost: readonly [number, number] }>
+  Record<number, { readonly plot: F.PlotName; readonly lost?: readonly [number, number] }>
 > = {
   5: { plot: "workings", lost: [0, 0] },
   6: { plot: "workings", lost: [5, 30] },
+  7: { plot: "workings" },
 };
 
 /** What grade III lines making each thing at so many a minute make of smog a minute. */
@@ -45,8 +50,8 @@ export interface SmogFigure {
   readonly most: number;
   /** The share of ticks its machines lost, 0 to 1. */
   readonly lost: number;
-  /** What SPEC-2 means it to lose, in per cent. */
-  readonly target: readonly [number, number];
+  /** What SPEC-2 means it to lose, in per cent, where it says. */
+  readonly target: readonly [number, number] | null;
 }
 
 /**
@@ -87,5 +92,5 @@ export function smogFigure(
     counts++;
   }
   const name = y.land.plots.find((p) => p.plot === plot)?.name ?? at.plot;
-  return { plot: name, most, lost: counts === 0 ? 0 : lost / counts, target: at.lost };
+  return { plot: name, most, lost: counts === 0 ? 0 : lost / counts, target: at.lost ?? null };
 }

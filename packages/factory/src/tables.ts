@@ -7,6 +7,7 @@
  * Each kind of number has a type of its own, so the checker keeps a thing apart from a kind or a
  * tile. A number becomes one only through its guard (`isItem`, `isKind`, ...), which checks it.
  */
+import { GROW, type GrowInfo } from "./content/grow.ts";
 import { ITEM, type ItemName, ITEMS, type Wants } from "./content/items.ts";
 import { BLUEPRINT, BUFFER, GRADES, TICKS } from "./content/machines.ts";
 import { MIXES } from "./content/mixes.ts";
@@ -208,28 +209,6 @@ export const HALF = 2;
 export const DRAWN: readonly number[] = [HALF, ...halves((g) => g.draw)];
 /** The power a piece of a kind at a grade draws where power reaches it, in halves: its kind's, once for each half its grade draws. */
 export const drawnAt = (k: number, grade: number): number => (DRAW[k] ?? 0) * (DRAWN[isGraded(k) ? grade : 0] ?? HALF);
-/**
- * For each kind that burns for power (`KindDef.burns`): what it burns, in the order it takes them, each
- * a thing, the ticks a piece of it burns and the smog a piece taken adds to its plot; how many pieces
- * of each it holds; and the power it gives while it burns, in halves.
- */
-export interface Burns {
-  readonly fuels: readonly { readonly fuel: Item; readonly ticks: number; readonly smog: number }[];
-  readonly holds: number;
-  readonly halves: number;
-}
-export type Fuel = Burns["fuels"][number];
-export const BURNS: readonly (Burns | null)[] = KIND_DEFS.map((d: KindDef) => {
-  const b = d.burns;
-  if (!b) return null;
-  const fuels = b.fuels.map((f): Fuel => ({
-    fuel: item(f.fuel),
-    ticks: f.ticks,
-    smog: f.smog ?? 0,
-  }));
-  return { fuels, holds: b.holds, halves: d.info.gives * HALF };
-});
-
 /** The work in gathering one thing and in studying one folio, in half-ticks. */
 export const WORK = { gather: TICKS.gather * 2, study: TICKS.study * 2 } as const;
 /** For each kind that runs under tiles, what each tile past so many adds to its cost (`KindDef.deeper`). */
@@ -314,6 +293,45 @@ export const MIXES_N: readonly Mix[] = MIXES.map((m) => ({
 }));
 /** The mix each kind makes, by its number, or null. */
 export const MIX_OF: readonly (Mix | null)[] = ALL_KINDS.map((k) => MIXES_N.find((m) => m.by === k) ?? null);
+/**
+ * What a piece that grows a thing from itself does (`content/grow.ts`): a run takes 1 of each of
+ * `takes` and gives `gives`, for `work` half-ticks at grade 1, and every `extraEvery`th run gives 2.
+ */
+const grow = (g: GrowInfo) => ({
+  by: kind(g.by),
+  takes: g.takes.map(item),
+  work: g.ticks * 2,
+  gives: item(g.gives),
+  extraEvery: g.extraEvery,
+  holds: g.holds,
+});
+export type Grow = Readonly<ReturnType<typeof grow>>;
+const GROWS: readonly Grow[] = [grow(GROW)];
+/** What each kind grows, by its number, or null. */
+export const GROW_OF: readonly (Grow | null)[] = ALL_KINDS.map((k) => GROWS.find((g) => g.by === k) ?? null);
+/** The things a growing piece gives in every `extraEvery` runs: one each, and one more. */
+export const grownIn = (g: Grow): number => g.extraEvery + 1;
+/**
+ * A thing a piece grows, as a recipe for planning alone (no machine makes it so): its net, 1 for every
+ * `extraEvery` runs, from what those runs take beside the thing itself, at their work. So a grower is
+ * counted as making half its runs from 2 crystal feed each, and star crystal is no part of it.
+ */
+const GROWN: readonly (Recipe | null)[] = ALL_ITEMS.map((n) => {
+  const g = GROWS.find((x) => x.gives === n);
+  if (!g) return null;
+  const from = g.takes.filter((t) => t !== n);
+  return {
+    out: n,
+    also: NONE,
+    from,
+    need: from.map(() => g.extraEvery),
+    by: g.by,
+    ticks: (g.work / 2) * g.extraEvery,
+    work: g.work * g.extraEvery,
+  };
+});
+/** Whether a recipe is a thing grown (`GROWN`): planned so, though nothing grows it without some of it to begin. */
+export const isGrown = (r: Recipe): boolean => GROWN[r.out] === r;
 /** The mix that gives each thing, if one does. */
 const MIX_GIVING: readonly (Mix | null)[] = ALL_ITEMS.map((n) => MIXES_N.find((x) => x.gives.includes(n)) ?? null);
 /**
@@ -337,12 +355,17 @@ const MIXED: readonly (Recipe | null)[] = ALL_ITEMS.map((n) => {
 });
 /**
  * Every recipe that makes each thing: the one it is the thing of first, then those that make it beside
- * their own, then a mix's share of it; but the mix's share first where every recipe of its own only
- * turns other things of that mix into it (a cracker's creosote, from a still's pitch), so that the
- * mix is what makes it and the recipe what makes more of it.
+ * their own, then what grows it (`GROWN`), then a mix's share of it; but the mix's share first where
+ * every recipe of its own only turns other things of that mix into it (a cracker's creosote, from a
+ * still's pitch), so that the mix is what makes it and the recipe what makes more of it.
  */
 const MAKING: readonly (readonly Recipe[])[] = ALL_ITEMS.map((n) => {
-  const own = [...RECIPES_N.filter((r) => r.out === n), ...RECIPES_N.filter((r) => r.also === n)];
+  const grown = GROWN[n];
+  const own = [
+    ...RECIPES_N.filter((r) => r.out === n),
+    ...RECIPES_N.filter((r) => r.also === n),
+    ...(grown ? [grown] : []),
+  ];
   const [mixed, m] = [MIXED[n], MIX_GIVING[n]];
   if (!mixed || !m) return own;
   return own.every((r) => r.from.every((part) => m.gives.includes(part))) ? [mixed, ...own] : [...own, mixed];
@@ -355,8 +378,13 @@ const OWN: readonly (Recipe | null)[] = ALL_ITEMS.map((n) => MAKING[n]?.[0] ?? n
  * (`makeableOn`), how a thing is got (`recipeFor`), and so the planner, the work in it and its parts.
  */
 export const makersOf = (n: number): readonly Recipe[] => MAKING[n] ?? [];
-/** The recipe a thing is got by: none for a thing from the ground, which is gathered; else the first that makes it (`makersOf`). */
-export const recipeFor = (n: Item): Recipe | null => (isRaw(n) ? null : (makersOf(n)[0] ?? null));
+/**
+ * The recipe a thing is got by: for a thing from the ground, none, as it is gathered, though a machine
+ * may make it too; but one that is grown (star crystal) is got by growing it (`GROWN`), as what the
+ * ground gives of it is far too slow for anything else. Any other thing, the first that makes it
+ * (`makersOf`).
+ */
+export const recipeFor = (n: Item): Recipe | null => (isRaw(n) ? (GROWN[n] ?? null) : (makersOf(n)[0] ?? null));
 /**
  * For each kind, by the kind a recipe is made by, how many of that kind one piece of it is on the
  * recipe: 1 where they are the same, as many as it says for a machine that makes what another makes
@@ -471,16 +499,8 @@ export const SPAN_MOST = most((u) => u.span);
 if (SPAN_MOST > 127) throw new Error("a tunnel runs under at most 127 tiles");
 export const BLUEPRINTS_MOST = most((u) => u.blueprints?.count);
 /** The largest box any blueprint holds, across and down. */
-export const BOX_MOST = {
-  w: Math.max(
-    BLUEPRINT.w,
-    most((u) => u.blueprints?.w),
-  ),
-  h: Math.max(
-    BLUEPRINT.h,
-    most((u) => u.blueprints?.h),
-  ),
-} as const;
+const [widest, tallest] = [most((u) => u.blueprints?.w), most((u) => u.blueprints?.h)];
+export const BOX_MOST = { w: Math.max(BLUEPRINT.w, widest), h: Math.max(BLUEPRINT.h, tallest) } as const;
 /**
  * How many places for blueprints any yard had before tier 5's plan room: a yard's check and its save
  * name a place past these only where it holds something, so a yard that uses none is as it was.
@@ -561,6 +581,7 @@ export function openOf(goals: readonly Goal[]): Open {
     for (const t of u.tools ?? []) tools |= toolBit(t);
   }
   const top = (f: (u: Unlocks) => number | undefined): number => Math.max(0, ...unlocks.map((u) => f(u) ?? 0));
+  const [wide, tall] = [top((u) => u.blueprints?.w), top((u) => u.blueprints?.h)];
   return {
     done,
     tier: tierOf(done),
@@ -570,16 +591,7 @@ export function openOf(goals: readonly Goal[]): Open {
     tools,
     blueprints: top((u) => u.blueprints?.count),
     pieces: top((u) => u.blueprints?.pieces),
-    box: {
-      w: Math.max(
-        BLUEPRINT.w,
-        top((u) => u.blueprints?.w),
-      ),
-      h: Math.max(
-        BLUEPRINT.h,
-        top((u) => u.blueprints?.h),
-      ),
-    },
+    box: { w: Math.max(BLUEPRINT.w, wide), h: Math.max(BLUEPRINT.h, tall) },
     stops: top((u) => u.stops),
     crate: top((u) => u.crate),
     reach: top((u) => u.reach),

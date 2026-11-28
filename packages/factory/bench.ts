@@ -6,7 +6,8 @@
  * Times are medians, in milliseconds. Nothing is asserted here; the budgets are tests.
  *
  * Then the work of catching a yard up, as Leaf does for one its owner left: each staged yard, the
- * generated yard of about 1,000 pieces, and each save run on for eight hours of ticks, in
+ * generated yard of about 1,000 pieces, a ring of 40 belts with 4 growers on it (tier 7), and each
+ * save run on for eight hours of ticks, in
  * milliseconds of work for each hour of the yard's time, the best of three. And lines that never
  * wait: three of 41 belts each, from crates full of planks into the depot, in milliseconds for 1,500
  * ticks of twenty copies, the median of nine. `--hours` prints those two tables alone, `--lines` the
@@ -16,6 +17,7 @@ import { heapStats } from "bun:jsc";
 
 import * as F from "./src/index.ts";
 import { generate } from "./test/gen.ts";
+import { ringOfGrowers } from "./test/growers.ts";
 import { bareLand, makeLand } from "./test/land.ts";
 import { generated, must, saved, SAVES, staged, STAGES } from "./test/yards.ts";
 
@@ -101,6 +103,7 @@ function hours(): void {
   const yards: [string, F.Yard][] = [
     ...STAGES.map((s): [string, F.Yard] => [`staged ${s}`, staged(s)]),
     ["generated", generated().y],
+    ["a ring of 40 belts with 4 growers", ringOfGrowers()],
     ...SAVES.map((s): [string, F.Yard] => [`save ${s}`, saved(s)]),
   ];
   console.log("| yard | pieces | ms an hour |");

@@ -1,6 +1,6 @@
 /**
  * What lies in the ground, as the floor draws it (`ground.ts`): the six things gathered from the
- * start, tier 5's salvage and tier 6's tar. Each is drawn over the floor on its tile, never in ranks, by its own
+ * start, tier 5's salvage, tier 6's tar and tier 7's star crystal. Each is drawn over the floor on its tile, never in ranks, by its own
  * painter; and the floor round each tile that holds one is a soft-edged patch of its own colours.
  */
 import { isItem, itemName, type Land, RAW } from "@sequoia-leaf/factory";
@@ -10,10 +10,10 @@ import { type Ctx, hash, vnoise } from "@sequoia-leaf/kit/util.ts";
 
 import { TILE } from "./belts.ts";
 import { rock, stump } from "./nature.ts";
-import { CLAY, IRON } from "./pal.ts";
+import { CLAY, IRON, LILAC } from "./pal.ts";
 
-/** What lies in the ground and is drawn there: the six, tier 5's salvage and tier 6's tar, in the things' order. */
-export const LYING = [...RAW, "salvage", "tar"] as const;
+/** What lies in the ground and is drawn there: the six, tier 5's salvage, tier 6's tar and tier 7's star crystal, in the things' order. */
+export const LYING = [...RAW, "salvage", "tar", "crystal"] as const;
 export type Lying = (typeof LYING)[number];
 /** What lies in the ground on a tile of a land, by name, or nothing. */
 export const rawAt = (land: Land, i: number): Lying | null => {
@@ -113,6 +113,27 @@ function tar(g: Ctx, { ox, oy, a, b }: At): void {
     R(g, cx + 4 - Math.floor(b * 10), cy + 4, 1, 1, IRON[3]);
   }
 }
+/**
+ * Star crystal where it came down: a bed of dark rock with two or three lilac points standing out of
+ * it, each lit along one edge, quiet, with no glow.
+ */
+function crystal(g: Ctx, { ox, oy, seed, a, b }: At): void {
+  const cx = ox + 4 + Math.floor(a * 7);
+  const cy = oy + 9 + Math.floor(b * 3);
+  ell(g, cx + 1, cy + 1, 5.6, 2.8, IRON[0]);
+  ell(g, cx + 1, cy, 5, 2.4, IRON[1]);
+  R(g, cx - 2, cy - 1, 3, 1, IRON[2]);
+  const points = b > 0.5 ? 3 : 2;
+  for (let k = 0; k < points; k++) {
+    const px = cx - 2 + k * 3 + Math.floor(hash(seed, k, 71) * 2);
+    const tall = 3 + Math.floor(hash(seed, k, 72) * 3);
+    R(g, px, cy - tall, 2, tall, LILAC[2]);
+    R(g, px, cy - tall + 1, 1, tall - 1, LILAC[3]);
+    R(g, px, cy - tall, 1, 1, LILAC[4]);
+    R(g, px + 1, cy - 1, 1, 1, LILAC[1]);
+  }
+}
+
 /** How each thing lying in the ground is drawn on its tile. */
 const PAINT: Readonly<Record<Lying, (g: Ctx, at: At) => void>> = {
   deadfall(g, { ox, oy, seed, a, b }) {
@@ -144,6 +165,7 @@ const PAINT: Readonly<Record<Lying, (g: Ctx, at: At) => void>> = {
   },
   salvage,
   tar,
+  crystal,
 };
 
 /** Draws what lies in the ground on the tile (`tx`, `ty`). */
@@ -180,6 +202,8 @@ const PATCHES: readonly Patch[] = [
   (rim, f, g2) => (rim ? EARTH[0] : f > 0.98 ? PAPER[1] : g2 > 0.62 ? "#7a6a5c" : EARTH[0]),
   // Tar: earth soaked dark round the seep, black where it is wettest, a dull sheen here and there.
   (rim, f, g2) => (rim ? EARTH[0] : f > 0.975 ? IRON[3] : g2 > 0.6 ? TAR : BARK[0]),
+  // Star crystal: dark broken rock where it came down, a lilac chip in it here and there.
+  (rim, f, g2) => (rim ? EARTH[0] : f > 0.985 ? LILAC[3] : g2 > 0.6 ? IRON[1] : IRON[2]),
 ];
 export const patchOf = (d: number, rim: boolean, f: number, g2: number, x: number, y: number, jy: number): string =>
   PATCHES[d - 1]?.(rim, f, g2, x, y, jy) ?? EARTH[0];

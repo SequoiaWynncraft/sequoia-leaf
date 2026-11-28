@@ -89,6 +89,7 @@ import { balance } from "@sequoia-leaf/kit/purse.ts";
 import { joinVisit, type LiveRoom } from "@sequoia-leaf/kit/realtime.ts";
 
 import { beyondReach } from "./figure/reach.ts";
+import { beginCounts, commanded, counting, keepCounts, noteGrowers } from "./grown.ts";
 import { S } from "./state.ts";
 import { askDue, leafOf, type Link, type LinkEvent, type Room, type RoomEvent, roomStep, step } from "./sync.ts";
 import { ZOOM } from "./zoom.ts";
@@ -346,12 +347,15 @@ function followTo(f: Follow, w: Yard, to: number): boolean {
       if (c.tick > to) return true;
       if (c.tick < w.tick) return late(f, w.tick - c.tick);
       f.upTo = batch.rev;
+      // Run on to it a tick at a time where there are growers, so their counts miss none (`runOn`).
+      runOn(w, c.tick);
       if ("refused" in play(w, c)) return unlike(f);
+      commanded(w);
     }
     const { after } = batch;
     if (after.tick > to) return true;
     if (after.tick < w.tick) return late(f, w.tick - after.tick);
-    stepTo(w, after.tick);
+    runOn(w, after.tick);
     f.told.shift();
     f.counts.batches++;
     if (check(w) !== after.check || !hear(w, after.hung)) return unlike(f);
@@ -399,6 +403,7 @@ function take(): boolean {
   drain(yard);
   shown = Math.max(shown, yard.tick);
   keepLast(S.world, yard);
+  keepCounts(S.world, yard);
   S.world = yard;
   // A press waiting for a second was for the yard it was shown on (`pressKey`).
   unask();
@@ -519,6 +524,7 @@ export function doNow(act: Act): Did {
   const command: Command = { ...act, tick: S.world.tick, id };
   const done = play(S.world, command, balance().coins);
   if ("refused" in done) return done;
+  commanded(S.world);
   // A review page's own yard (`S.alone`) sends nothing: what is done is all there is.
   if (link.is !== "inStep") return done;
   const sending = writeCommand(command);
@@ -536,6 +542,23 @@ export function doNow(act: Act): Did {
 
 /** Pays the till into the ledger, and puts away the letter about a time away. */
 export const collect = (): Did => doNow({ do: "collect" });
+
+/**
+ * Runs the copy on to `tick`; where it has growers, a tick at a time, each noted for the minute the
+ * page counts of them (`grown.ts`).
+ */
+function runOn(w: Yard, tick: number): void {
+  if (!counting(w)) {
+    stepTo(w, tick);
+    return;
+  }
+  beginCounts(w);
+  for (let was = -1; w.tick < tick && w.tick !== was;) {
+    was = w.tick;
+    stepTo(w, w.tick + 1);
+    if (w.tick !== was) noteGrowers(w);
+  }
+}
 
 /**
  * A moment of the page's clock (`now`, in milliseconds, as `performance.now` counts them): Leaf's
@@ -560,7 +583,7 @@ export function runYard(now: number): News[] {
     giveWay();
     return [];
   }
-  stepTo(w, tick);
+  runOn(w, tick);
   shown = w.tick;
   // A yard standing still (its owner away eight hours) holds Leaf's clock with it from the frame it
   // stops in, as Leaf does, until they act.

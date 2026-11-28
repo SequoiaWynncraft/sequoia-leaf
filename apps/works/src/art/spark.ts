@@ -1,15 +1,18 @@
 /**
  * The Works' pictures of the Spark era (tiers 5 and 6, SPEC-2 section 7): brick, copper, tarred timber
- * and a cold cream light. The depot gone over in them, and the copper drum it wears.
+ * and a cold cream light. The depot gone over in them, and the copper drum it wears; and the depot as
+ * each era from Spark on draws it (`depotOf`, the Star era's from `star.ts`).
  */
-import type { Yard } from "@sequoia-leaf/factory";
+import { openOf, type Yard } from "@sequoia-leaf/factory";
+import { lessMotion } from "@sequoia-leaf/kit/dom.ts";
 import { BARK, CREAM, INK } from "@sequoia-leaf/kit/palette.ts";
 import { ell, outlined, R } from "@sequoia-leaf/kit/pix.ts";
 import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
-import { isSpark } from "../era.ts";
-import type { Machines } from "./machines.ts";
+import { isSpark, isStar } from "../era.ts";
+import { DEPOT, type Machines } from "./machines.ts";
 import { CLAY, DARK, IRON, type Sprite } from "./pal.ts";
+import { MAST, mastLight, RING, starDepot, starRing } from "./star.ts";
 
 /** Cream light, where every light before tier 5 was gold: the Spark era's lit glass, warm and pale. */
 const SPARK_GLASS = ["#8a7c6c", "#d8cfb4", "#ece3c8"] as const;
@@ -83,15 +86,57 @@ function copied(s: Sprite): Sprite {
   return { c, ax: s.ax, ay: s.ay };
 }
 
-/** The Spark era's depot and drum, made once for each set of the yard's pictures. */
-const made = new WeakMap<Machines, { depot: Sprite; fly: readonly HTMLCanvasElement[] }>();
+/**
+ * The depot as an era draws it: its picture, the frames of the wheel it wears while it gives more
+ * (`fly`), and where they go on it, where it is not by its door (`flyAt`, the frame's corner in the
+ * picture); and for the Star era, the light that blinks on the beat and where it is (`beat`).
+ */
+export interface EraDepot {
+  readonly depot: Sprite;
+  readonly fly: readonly HTMLCanvasElement[];
+  readonly flyAt?: { readonly x: number; readonly y: number };
+  readonly beat?: { readonly c: HTMLCanvasElement; readonly x: number; readonly y: number };
+}
 
-/** The depot as a yard's era draws it (SPEC-2 section 7), and the wheel it wears: from tier 5, Spark's brick and copper. */
-export function depotOf(m: Machines, y: Yard): { depot: Sprite; fly: readonly HTMLCanvasElement[] } {
+/** Each era's depot past Timber and Brass, made once for each set of the yard's pictures. */
+const made = new WeakMap<Machines, { spark: EraDepot; star: EraDepot }>();
+
+/** What the depot gives at first: above it, it wears its flywheel. */
+const DEPOT_FIRST = openOf([]).depot;
+/** The beat, in ticks of the yard's clock (SPEC-2's tier 8: every 20 seconds), and how long the Star depot's mast light shows on it. */
+const BEAT = 200;
+const BLINK = 10;
+
+/**
+ * What the depot wears over its picture this frame, each a picture and its corner on it: its
+ * flywheel while it gives more than at first, turning (in the Star era the ring under its dome,
+ * slowly); and the Star era's mast light on the beat, steady with less motion asked for.
+ */
+export function depotWears(d: EraDepot, y: Yard, t: number): (readonly [HTMLCanvasElement, number, number])[] {
+  const out: (readonly [HTMLCanvasElement, number, number])[] = [];
+  const fly = y.open.depot > DEPOT_FIRST ? d.fly[Math.floor(t * (d.flyAt ? 2 : 8)) % 4] : undefined;
+  const at = d.flyAt ?? { x: DEPOT.fly.x - 6, y: DEPOT.fly.y - 6 };
+  if (fly) out.push([fly, at.x, at.y]);
+  if (d.beat && (lessMotion() || y.tick % BEAT < BLINK)) out.push([d.beat.c, d.beat.x, d.beat.y]);
+  return out;
+}
+
+/** The depot as a yard's era draws it (SPEC-2 section 7), and the wheel it wears: from tier 5, Spark's brick and copper; from tier 7, Star's dome. */
+export function depotOf(m: Machines, y: Yard): EraDepot {
   if (!isSpark(y)) return { depot: m.depot, fly: m.fly };
-  const had = made.get(m);
-  if (had) return had;
-  const now = { depot: sparkDepot(copied(m.depot)), fly: [0, 1, 2, 3].map(sparkFly) };
-  made.set(m, now);
-  return now;
+  const had =
+    made.get(m) ??
+    made
+      .set(m, {
+        spark: { depot: sparkDepot(copied(m.depot)), fly: [0, 1, 2, 3].map(sparkFly) },
+        star: {
+          depot: starDepot(copied(m.depot)),
+          fly: [0, 1, 2, 3].map(starRing),
+          flyAt: RING,
+          beat: { c: mastLight(), x: MAST.x, y: MAST.y },
+        },
+      })
+      .get(m);
+  if (!had) return { depot: m.depot, fly: m.fly };
+  return isStar(y) ? had.star : had.spark;
 }

@@ -30,7 +30,6 @@ import {
   litAt,
   litOf,
   NONE,
-  openOf,
   PACE,
   REACH,
   REACHES,
@@ -53,7 +52,7 @@ import { type Box, glint, type Ground } from "./art/ground.ts";
 import type { Art } from "./art/index.ts";
 import { DEPOT as DEPOT_ART, lookOf } from "./art/machines.ts";
 import type { Sprite } from "./art/pal.ts";
-import { depotOf } from "./art/spark.ts";
+import { depotOf, depotWears } from "./art/spark.ts";
 import { aimBox, boxIn, drawnFrom, heldIn, markCovers, pointersOn } from "./big.ts";
 import { drawPlan, drawPlanMarks } from "./far.ts";
 import { Floor, handsNow } from "./floor.ts";
@@ -84,7 +83,6 @@ export interface Moment {
 /** How far across its tile a thing moves in a tick on a belt, tunnel, splitter, joiner or sorter of each grade. */
 const ALONG = PACE.map((pace) => pace / 8);
 /** The power the depot gives at first: a depot that gives more wears its flywheel. */
-const DEPOT_FIRST = openOf([]).depot;
 
 /** The milliseconds a frame's parts have taken, counted only while somebody is looking (`on`): `bench`, or the meter. */
 export const spent: { on: boolean; at: number; ms: Record<string, number> } = { on: false, at: 0, ms: {} };
@@ -1007,7 +1005,8 @@ function standingLayer(f: Frame): void {
   // The depot, with whatever it wears.
   const { dx, dfoot } = depotAt(f);
   const dz = dfoot + cy - 1;
-  const { depot: ds, fly: flies } = depotOf(art.m, w);
+  const era = depotOf(art.m, w);
+  const ds = era.depot;
   const dl = dx - ds.ax;
   const dt = dfoot - ds.ay;
   if (dl < W && dl + ds.c.width > 0 && dt < H && dfoot > -8) {
@@ -1023,9 +1022,8 @@ function standingLayer(f: Frame): void {
           dz + 0.1,
         );
     }
-    // A depot that gives more than at first wears its flywheel.
-    const fly = w.open.depot > DEPOT_FIRST ? flies[Math.floor(S.t * 8) % 4] : undefined;
-    if (fly) put(fly, dl + DEPOT_ART.fly.x - 6, dt + DEPOT_ART.fly.y - 6, dz + 0.1);
+    // What it wears as it is now: its flywheel while it gives more than at first, its mast light on the beat.
+    for (const [pic, x, z] of depotWears(era, w, S.t)) put(pic, dl + x, dt + z, dz + 0.1);
   }
   eachTrunk(art, cx, cy, W, H, stand);
   for (let n = 0; n + 2 < L.fences.length; n += 3) {
