@@ -1,18 +1,19 @@
 /**
- * The plate over a figure, kept slim so a crowded board reads at a glance: one bar, its stars as
- * pips at the bar's left end, what it holds under the bar. The same while planning and in a fight.
+ * The plate over a figure, kept slim so a crowded board reads at a glance: one bar, its stars
+ * centred on top of it, what it holds under the bar. The same while planning and in a fight.
  *
  * - **The bar**: health 2 rows in the colour of its side, a tick every 250 (every 1,000 past 1,250),
  *   a shield after the health, mana 1 row under it, and one dark row under them so they read on any
  *   ground, with no box round them. It is 14 wide (a boss's 26), so two neighbours' bars never touch.
- * - **Pips**: none for one star (the default), two silver for two, three gold for three. A pip is 2
- *   by 2 with an ink edge, the next 1 pixel along, so three are 8 wide (10 with their edge). A summon
+ * - **Stars**: as many as its level, one bronze, two silver, three gold, centred on the bar, their
+ *   ink edge on its top. A star is 3 by 3, four points and a glint in the middle, its ink edge
+ *   shared with the next, so three are 11 wide (13 with their edge) and fit over the bar. A summon
  *   has none.
  * - **What it holds**: each item's own picture in a small box with an ink edge, up to three in a row
  *   sharing their edges, as wide as a hex at most (`held.ts`), the bar's dark row their top edge.
  *
- * On the bench, the pips and what it holds and no bar, as nothing there has health to show; the pips
- * then sit centred over what it holds. A figure fallen or hidden has no plate (its drawer does not
+ * On the bench, the stars and what it holds and no bar, as nothing there has health to show; the
+ * stars then sit centred over what it holds. A figure fallen or hidden has no plate (its drawer does not
  * ask for one). Its foot is on the row over the figure's head, so it covers the feet of the figure
  * behind rather than the face of the one in front. What rises over a head (numbers, signs) starts
  * above it (`aboveHead`).
@@ -39,27 +40,32 @@ export interface Plate {
   readonly items: readonly RackItem[];
   /** A boss: the bar wider. */
   readonly big: boolean;
-  /** On the bench: its pips and what it holds, no bar. */
+  /** On the bench: its stars and what it holds, no bar. */
   readonly resting?: boolean;
   /** Its Huddle group's one shield, as a share of the group's health together. */
   readonly pool?: number;
   /** A friend has just given it mana: the mana bright. */
   readonly gift?: boolean;
-  /** Its pips popping as three became one: bright, and this far up. */
+  /** Its stars popping as three became one: bright, and this far up. */
   readonly pop?: { readonly up: number };
 }
 
 /** How wide a bar is, and a boss's. */
 export const BAR_W = 14;
 export const BIG_BAR_W = 26;
-/** A pip, how far one is from the next, and how tall a row of them is with its edge. */
-const PIP = 2;
-const PIP_STEP = PIP + 1;
-const PIPS_H = PIP + 2;
-/** A pip's light, body and shade: two stars silver, three gold, all bright as they pop. */
-const SILVER = [CREAM, STONE[3], STONE[2]] as const;
-const GILT = [GOLD[2], GOLD[1], GOLD[0]] as const;
-const BRIGHT = ["#ffffff", CREAM, CREAM] as const;
+/** A star, its points round a middle: `.X.` over `XXX` over `.X.`. */
+const STAR = 3;
+/** How far one star is from the next (their ink edge between), and how tall a row of them is with its edge. */
+const STAR_STEP = STAR + 1;
+const STARS_H = STAR + 2;
+/** A star's glint and body: one bronze, two silver, three gold, all bright as they pop. */
+const BRONZE = [GOLD[0], "#a3662a"] as const;
+const SILVER = [CREAM, STONE[3]] as const;
+const GILT = [CREAM, GOLD[2]] as const;
+const BRIGHT = ["#ffffff", CREAM] as const;
+/** A star's glint and body for its level, bright as it pops. */
+export const starColours = (stars: number, bright = false): readonly [glint: string, body: string] =>
+  bright ? BRIGHT : stars >= 3 ? GILT : stars === 2 ? SILVER : BRONZE;
 /** The empty part of a health bar, and of a mana bar. */
 const SPENT = "#3d2050";
 const DRAINED = "#211228";
@@ -73,8 +79,11 @@ const BIG_TICK = 1000;
 const MANY = 1250;
 const CLOSEST = 2.5;
 
-/** How wide a row of pips is with its edge: none for one star or none. */
-export const pipsWide = (stars: number): number => (stars > 1 ? PIP_STEP * Math.min(stars, 3) + 1 : 0);
+/** How many stars a level shows: none for a summon's 0, three at most. */
+const shown = (stars: number): number => clamp(Math.floor(stars), 0, 3);
+
+/** How wide a row of stars is with its edge: none for a summon. */
+export const starsWide = (stars: number): number => (shown(stars) > 0 ? STAR_STEP * shown(stars) + 1 : 0);
 
 /** How tall a bar is: 2 rows of health, 1 of mana if it has any, and the dark row under them. */
 export const barTall = (manaFull: number): number => (manaFull > 0 ? 4 : 3);
@@ -88,13 +97,13 @@ export interface PlateAt {
   readonly h: number;
   /** What it holds, each picture's place. */
   readonly held: readonly HeldAt[];
-  /** The top left of the pips' edge, if it shows any. */
-  readonly pips: { readonly x: number; readonly y: number } | null;
-  /** The top of the whole plate, pips and all. */
+  /** The top left of the stars' edge, if it shows any. */
+  readonly stars: { readonly x: number; readonly y: number } | null;
+  /** The top of the whole plate, stars and all. */
   readonly peak: number;
 }
 
-/** A plate's parts, laid out from its foot up: what it holds, the bar over that, the pips over the bar's left end (on the bench, centred over what it holds). */
+/** A plate's parts, laid out from its foot up: what it holds, the bar over that, the stars centred on the bar (on the bench, over what it holds). */
 export function plateAt(p: Plate, cx: number, foot: number): PlateAt {
   const x = Math.round(cx);
   const held = heldRow(p.items, x, Math.round(foot) - HELD_BOX);
@@ -104,10 +113,11 @@ export function plateAt(p: Plate, cx: number, foot: number): PlateAt {
   const w = p.big ? BIG_BAR_W : BAR_W;
   const left = x - Math.floor(w / 2);
   const top = bottom - h;
-  const wide = pipsWide(p.stars);
-  // Over the bar, the pips' colour flush with its left end; with no bar, centred.
-  const pips = wide === 0 ? null : { x: h > 0 ? left - 1 : x - Math.floor(wide / 2), y: top - PIPS_H };
-  return { left, top, w, h, held, pips, peak: pips ? pips.y : top };
+  const wide = starsWide(p.stars);
+  // Centred on the bar, their ink edge's foot on its top row's; with no bar, centred on the figure.
+  const stars =
+    wide === 0 ? null : { x: h > 0 ? left + Math.floor((w - wide) / 2) : x - Math.floor(wide / 2), y: top - STARS_H };
+  return { left, top, w, h, held, stars, peak: stars ? stars.y : top };
 }
 
 /**
@@ -166,20 +176,38 @@ export function healthOf(
   return { hp, shield: Math.max(0, shield), whole };
 }
 
-/** A row of pips with the top left of its edge at a point: silver for two stars, gold for three, bright as they pop. */
-export function drawPips(g: Ctx, stars: number, x: number, y: number, bright = false): void {
-  const w = pipsWide(stars);
-  if (w === 0) return;
-  const [light, body, shade] = bright ? BRIGHT : stars >= 3 ? GILT : SILVER;
-  // The edge, its corners cut.
-  R(g, x + 1, y, w - 2, PIPS_H, INK);
-  R(g, x, y + 1, w, PIP, INK);
-  for (let i = 0; i < Math.min(stars, 3); i++) {
-    const px = x + 1 + i * PIP_STEP;
-    R(g, px, y + 1, PIP, PIP, body);
-    R(g, px, y + 1, 1, 1, light);
-    R(g, px + 1, y + 2, 1, 1, shade);
+/** One flat box of a picture: where, how big and what colour. */
+export interface Box {
+  readonly x: number;
+  readonly y: number;
+  readonly w: number;
+  readonly h: number;
+  readonly c: string;
+}
+
+/** A row of stars with the top left of its edge at a point, as boxes drawn in order: one bronze, two silver, three gold, bright as they pop. */
+export function starBoxes(stars: number, x: number, y: number, bright = false): Box[] {
+  const w = starsWide(stars);
+  if (w === 0) return [];
+  const [glint, body] = starColours(stars, bright);
+  // The ink edge: along the middle row the whole way, and round each star's points.
+  const out: Box[] = [{ x, y: y + 2, w, h: 1, c: INK }];
+  for (let i = 0; i < shown(stars); i++) {
+    const sx = x + 1 + i * STAR_STEP;
+    out.push(
+      { x: sx, y: y + 1, w: STAR, h: STAR, c: INK },
+      { x: sx + 1, y, w: 1, h: STARS_H, c: INK },
+      { x: sx, y: y + 2, w: STAR, h: 1, c: body },
+      { x: sx + 1, y: y + 1, w: 1, h: STAR, c: body },
+      { x: sx + 1, y: y + 2, w: 1, h: 1, c: glint },
+    );
   }
+  return out;
+}
+
+/** Draws a row of stars with the top left of its edge at a point (`starBoxes`). */
+export function drawStars(g: Ctx, stars: number, x: number, y: number, bright = false): void {
+  for (const b of starBoxes(stars, x, y, bright)) R(g, b.x, b.y, b.w, b.h, b.c);
 }
 
 /** The bar: health with its shield and ticks, a Huddle group's shield along its foot, the mana under them, the dark row under all. */
@@ -216,5 +244,5 @@ export function drawPlate(g: Ctx, cx: number, foot: number, p: Plate): void {
   const at = plateAt(p, cx, foot);
   drawHeld(g, at.held, 0, 0);
   if (at.h > 0) drawBar(g, at, p);
-  if (at.pips) drawPips(g, p.stars, at.pips.x, at.pips.y - (p.pop?.up ?? 0), p.pop !== undefined);
+  if (at.stars) drawStars(g, p.stars, at.stars.x, at.stars.y - (p.pop?.up ?? 0), p.pop !== undefined);
 }
