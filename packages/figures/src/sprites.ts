@@ -590,13 +590,24 @@ export function drawStanding(
 // ---------- stars ----------
 
 const STAR_ROWS = ["..y..", "yyYyy", ".yYy.", ".y.y."];
-let star: HTMLCanvasElement | null = null;
-let starBright: HTMLCanvasElement | null = null;
-/** One to three stars in a row, centred on `x` with their feet at `y`. */
-export function drawStars(g: Ctx, stars: number, x: number, y: number, bright = false): void {
-  star ??= outlined(bitmap(STAR_ROWS, { y: GOLD[1], Y: GOLD[2] }), INK);
-  starBright ??= outlined(bitmap(STAR_ROWS, { y: GOLD[2], Y: "#ffffff" }), INK);
-  const pic = bright ? starBright : star;
+/** A star's two tones: its body and the light down its middle. */
+export type StarTones = readonly [body: string, light: string];
+const STAR_TONES: StarTones = [GOLD[1], GOLD[2]];
+const STAR_BRIGHT: StarTones = [GOLD[2], "#ffffff"];
+/** The star picture in each pair of tones asked for. */
+const STARS = new Map<string, HTMLCanvasElement>();
+function starIn([body, light]: StarTones): HTMLCanvasElement {
+  const key = `${body} ${light}`;
+  let pic = STARS.get(key);
+  if (!pic) {
+    pic = outlined(bitmap(STAR_ROWS, { y: body, Y: light }), INK);
+    STARS.set(key, pic);
+  }
+  return pic;
+}
+/** One to three stars in a row, centred on `x` with their feet at `y`: gold, or in `tones`, and all bright as they pop. */
+export function drawStars(g: Ctx, stars: number, x: number, y: number, bright = false, tones = STAR_TONES): void {
+  const pic = starIn(bright ? STAR_BRIGHT : tones);
   const step = pic.width - 1;
   const left = Math.round(x - (step * stars + 1) / 2);
   for (let i = 0; i < stars; i++) g.drawImage(pic, left + i * step, Math.round(y) - pic.height);

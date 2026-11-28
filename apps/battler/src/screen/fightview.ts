@@ -1,13 +1,5 @@
 import { moveAt } from "@sequoia-leaf/figures/move.ts";
-import {
-  type BaseLook,
-  beatAt,
-  drawStanding,
-  drawStars,
-  framesOf,
-  hoverAt,
-  isPersonId,
-} from "@sequoia-leaf/figures/sprites.ts";
+import { type BaseLook, beatAt, drawStanding, framesOf, hoverAt } from "@sequoia-leaf/figures/sprites.ts";
 import type { Swing } from "@sequoia-leaf/figures/tools.ts";
 /**
  * The fight, played on the table from the rules' own steps (`playback.ts`), with the lead-in the
@@ -20,7 +12,7 @@ import type { Swing } from "@sequoia-leaf/figures/tools.ts";
  * step there is a short run-in: the two halves of the board come together, then traits switch on,
  * late crabs turn up and Sneaks leap, one after another.
  */
-import { CREAM, EARTH, GOLD, GREEN, INK, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
+import { CREAM, EARTH, GOLD, INK, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { R } from "@sequoia-leaf/kit/pix.ts";
 import { clamp, type Ctx } from "@sequoia-leaf/kit/util.ts";
 import { type Catalog, type FightEvent, type FightSetup, HZ, type Unit } from "@sequoia-leaf/raid";
@@ -37,12 +29,13 @@ import { drawCanopy, hanging } from "./canopy.ts";
 import { begin, show, stepShown } from "./fightshow.ts";
 import { burst, pace } from "./fx.ts";
 import { cellXY, HEX_H, HEX_W, type Pt } from "./geometry.ts";
-import { drawHeld, type HeldAt, heldAt, heldRow, heldTop } from "./held.ts";
+import { type HeldAt, heldAt } from "./held.ts";
 import type { Speed } from "./keep.ts";
 import { DIM, shineOf } from "./light.ts";
 import { leadOf, LOOKS } from "./looks.ts";
 import { drawShot } from "./marks.ts";
 import { type Actor, actorFor, poseOf } from "./motion.ts";
+import { aboveHead, drawPlate, type Plate, plateAt, plated, shapeOf } from "./plate.ts";
 import { advance, openPlayback, playOut } from "./playback.ts";
 import { drawShells, inShell } from "./shell.ts";
 import { OWN } from "./sides.ts";
@@ -297,27 +290,20 @@ function pooledShare(a: Actor): number {
   return whole > 0 ? clamp(pool.left / whole, 0, 1) : 0;
 }
 
-/**
- * Health under a figure's feet, with its shield over it and its mana beneath, which ticks bright as
- * a friend gives it mana; and its group's one shield (Huddle) as a pale-blue band, the same on each.
- */
-function drawBars(g: Ctx, a: Actor, x: number, y: number, c: number, pool: number): void {
+/** A figure's plate in the fight: its health as shown (it runs down), its shield, its mana, bright as a friend gives it some. */
+export function plateOf(a: Actor, c: number): Plate {
   const u = a.unit;
-  const w = isBossId(u.kind) ? 26 : 14;
-  const left = x - w / 2;
-  const top = y + 3;
-  R(g, left - 1, top - 1, w + 2, u.manaFull > 0 ? 5 : 4, INK);
-  R(g, left, top, w, 2, "#3d2050");
-  const hp = Math.round(clamp(a.hpShown / u.maxHp, 0, 1) * w);
-  R(g, left, top, hp, 2, u.side === FV.ours ? GREEN[4] : "#e67967");
-  R(g, left, top, hp, 1, u.side === FV.ours ? "#c9ef9a" : "#f4a08c");
-  if (u.shield > 0) R(g, left, top, Math.max(1, Math.round(clamp(u.shield / u.maxHp, 0, 1) * w)), 1, CREAM);
-  if (pool > 0) R(g, left, top + 1, Math.max(1, Math.round(pool * w)), 1, WATER[3]);
-  if (u.manaFull > 0) {
-    R(g, left, top + 3, w, 1, "#211228");
-    R(g, left, top + 3, Math.round(clamp(u.mana / u.manaFull, 0, 1) * w), 1, WATER[3]);
-    if (c - a.giftAt < GIFT) R(g, left, top + 3, Math.round(clamp(u.mana / u.manaFull, 0, 1) * w), 1, CREAM);
-  }
+  return {
+    ...shapeOf(u),
+    ours: u.side === FV.ours,
+    hp: a.hpShown,
+    maxHp: u.maxHp,
+    shield: u.shield,
+    mana: u.mana,
+    big: isBossId(u.kind),
+    pool: pooledShare(a),
+    gift: c - a.giftAt < GIFT,
+  };
 }
 
 /** Steps a mana bar shows bright after a friend gives it mana. */
@@ -398,19 +384,15 @@ function standing(g: Ctx, cat: Catalog, a: Actor, c: number, tick: number): Stan
         ...drumNow(a, c),
         ...(act ? { act } : { bend: { sx: p.sx, sy: p.sy, lean: left ? -p.lean : p.lean, turn: p.turn } }),
       });
-      // What it holds follows it about, under its health bar, and falls with it.
-      if (u.alive && !down) drawHeld(g, heldRow(u.items, x - V.bx, heldTop(y - V.by, true)), V.bx, V.by);
       g.globalAlpha = 1;
     },
     top: () => {
-      if (down || !u.alive || hidden || sunk) return;
+      if (!plated(u, tick, { down, sunk, waiting: waitsForBubble(u.id) })) return;
       // Over the figure's head as it is drawn now: casting, some rear up taller than they stand.
       const f = framesOf(u.kind, false, a.form);
       const tall = (p.cast ? Math.max(f.tall, f.castTall) : f.tall) + Math.max(0, p.sy);
       drawStatus(g, a, x, y - hover, tall, tick);
-      // A grooter called is a person, on a summon's base, with no stars.
-      if (u.stars > 1 && !(u.summoned && isPersonId(u.kind))) drawStars(g, u.stars, x, y - 3 - hover - tall);
-      drawBars(g, a, x, y, c, pooledShare(a));
+      drawPlate(g, x, y - 3 - hover - tall, plateOf(a, c));
     },
   };
 }
@@ -464,7 +446,7 @@ export function drawFightAir(g: Ctx): void {
     g.drawImage(
       p.pic,
       Math.round(V.bx + a.x - p.pic.width / 2),
-      Math.round(V.by + a.y - framesOf(a.unit.kind).tall - 14 - rise),
+      Math.round(V.by + a.y - framesOf(a.unit.kind).tall - aboveHead(plateOf(a, c)) - p.pic.height - rise),
     );
   }
   g.globalAlpha = 1;
@@ -484,7 +466,8 @@ export function fightHeldUnder(x: number, y: number): HeldAt | null {
     const u = a?.unit;
     if (!a || !u?.alive || clockNow() < a.bornAt || u.hiddenUntil > f.tick) continue;
     const back = u.side === FV.ours ? 0 : Math.round(V.gap);
-    const hit = heldAt(heldRow(u.items, a.x, heldTop(a.y - back, true)), x, y);
+    const foot = a.y - back - 3 - hoverAt(u.kind, V.t, a.phase, a.form) - framesOf(u.kind, false, a.form).tall;
+    const hit = heldAt(plateAt(plateOf(a, clockNow()), a.x, foot).held, x, y);
     if (hit) return hit;
   }
   return null;
