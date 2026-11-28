@@ -4,7 +4,7 @@
  * reach, on the guild's land and on one grown by two rings (7 plots a side). A card's Upgrade is the
  * grade command, so a piece far out of reach is raised from its card, for what a build over it costs.
  */
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { at, build, create, goal, LAND, type Land, MILL, priceAt, reopen, type Yard } from "@sequoia-leaf/factory";
 import { SEVEN } from "@sequoia-leaf/factory/test/ring.ts";
@@ -12,11 +12,16 @@ import { SEVEN } from "@sequoia-leaf/factory/test/ring.ts";
 import { opened, until, useFakeLeaf } from "../../test/fake-leaf.ts";
 import { S } from "../state.ts";
 import { raiseAt } from "../tools.ts";
-import { beyondReach, OUT_OF_REACH, reachBox, reaches } from "./reach.ts";
+import { beyondReach, OUT_OF_REACH, reachBox, reaches, reachRule } from "./reach.ts";
 import { leave, placeYou } from "./you.ts";
 
 useFakeLeaf();
-afterEach(() => leave());
+// Reach is off for now (`reach.ts`); these test the rule, so they switch it on.
+beforeEach(() => (reachRule.on = true));
+afterEach(() => {
+  reachRule.on = false;
+  leave();
+});
 
 const REACHES = ["longreach", "longerreach"] as const;
 /** A yard at tier 5 on a land, owning every plot of it, with so many of the reach research known: 0, 1 or 2. */

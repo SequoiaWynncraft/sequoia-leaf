@@ -140,6 +140,12 @@
     ]
   },
   {
+    "id": "works-reach-off",
+    "at": "TBD",
+    "title": "The Works: build anywhere",
+    "lines": ["Reach is off for now. You can build anywhere on your land, wherever you're standing."]
+  },
+  {
     "id": "works-fold-lessons",
     "at": "2026-11-28T10:07Z",
     "title": "The Works on big screens, and hints",
