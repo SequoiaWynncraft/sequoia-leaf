@@ -169,11 +169,45 @@ export function updateFx(dt: number): void {
   }
 }
 
-/** Every spark, word and ring is gone: another place is about to be shown. */
+/** Every spark, word and ring is gone, and every launch shown: another place is about to be shown. */
 export function clearFx(): void {
   bits.length = 0;
   floaters.length = 0;
   rings.length = 0;
+  launches.clear();
+}
+
+/**
+ * Launches the frame shows (tier 8), by a pad's own tile: the yard's tick it launched at, as the page
+ * counted it (`pads.ts`), and the moment of the screen's clock its rocket was first drawn rising.
+ */
+const launches = new Map<number, { tick: number; at: number | null }>();
+
+/** The pad on its own tile `i` launched at the yard's tick `tick`. */
+export function launched(i: number, tick: number): void {
+  launches.set(i, { tick, at: null });
+}
+
+/**
+ * How long ago, in seconds of the screen's clock `t`, the rocket of the pad on its own tile `i` began
+ * to rise, counted from the first time this is asked after its launch; null while none rises, once
+ * `last` seconds have gone, or for a launch already more than `last` seconds of the yard's clock old
+ * (`tick` is the yard's now) when first asked.
+ */
+export function risenFor(i: number, tick: number, t: number, last: number): number | null {
+  const l = launches.get(i);
+  if (!l) return null;
+  if (l.at === null) {
+    if (tick - l.tick > last * 10) {
+      launches.delete(i);
+      return null;
+    }
+    l.at = t;
+  }
+  const since = t - l.at;
+  if (since <= last) return since;
+  launches.delete(i);
+  return null;
 }
 
 /** Smoke from a chimney: a few soft grey puffs that rise, drift and thin. */

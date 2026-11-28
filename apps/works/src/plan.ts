@@ -113,6 +113,15 @@ const HUE: Readonly<Record<ItemName, string>> = {
   lattice: "#8fb5ad",
   star: "#9f8fd0",
   dish: "#d4d0de",
+  cell: "#7f8a8c",
+  charged1: "#93a79b",
+  charged2: "#b3c6b8",
+  charged3: "#cfe0d2",
+  hull: "#c3c1cc",
+  fuel: "#b56f5a",
+  testrocket: "#cfcbd6",
+  rocket: "#e3dfe9",
+  heavyrocket: "#d8d2e2",
 };
 const HUES = ALL_ITEMS.map((n) => HUE[itemName(n)]);
 

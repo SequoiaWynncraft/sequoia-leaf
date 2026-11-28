@@ -93,6 +93,7 @@ import type {
 import { openTools } from "./dock.ts";
 import { givenIn } from "./goal.ts";
 import type { ClearingPrint, GroundPrint, PlotPrint } from "./land.ts";
+import { launchPrint } from "./launch.ts";
 import { flowOf, numbersOf, saysNumbers } from "./numbers.ts";
 import { orderRef } from "./refs.ts";
 import type { WaysPrint } from "./splitter.ts";
@@ -239,6 +240,7 @@ function standingPrint(i: number, k: Kind): StandingPrint {
     ways: sets(k, "way") ? waysPrint(i) : null,
     mix: mixAt(k, r),
     counted: countedAt(w, i),
+    launch: launchPrint(w, i),
     visiting: S.visiting !== null,
   };
 }

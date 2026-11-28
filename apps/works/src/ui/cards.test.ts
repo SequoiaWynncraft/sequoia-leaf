@@ -191,11 +191,9 @@ describe("a card", () => {
   });
 
   test("is drawn by modules that reach no yard: none imports anything of the page's that holds one", async () => {
-    // What draws a card (`cards.ts`, the land's in `land.ts`, where a thing comes from in `made.ts`, a sorter's parts in `sorter.ts` and a splitter's in `splitter.ts`), the lists of a goal on it (`goal.ts`) and the names cards go by (`refs.ts`).
+    // What draws a card (`cards.ts`, the land's in `land.ts`, where a thing comes from in `made.ts`, a sorter's parts in `sorter.ts`, a splitter's in `splitter.ts` and a perk's in `perks.ts`), the lists of a goal on it (`goal.ts`) and the names cards go by (`refs.ts`).
     const drawing: Record<string, string[]> = {
       "./cards.ts": [
-        "../art/machines.ts",
-        "../art/nature.ts",
         "../kinds/index.ts",
         "../sound.ts",
         "./flow.ts",
@@ -203,9 +201,11 @@ describe("a card", () => {
         "./land.ts",
         "./made.ts",
         "./parts.ts",
+        "./perks.ts",
         "./refs.ts",
         "./splitter.ts",
       ],
+      "./perks.ts": ["../art/machines.ts", "../art/nature.ts", "./parts.ts"],
       "./flow.ts": ["./parts.ts", "./refs.ts"],
       "./goal.ts": ["./parts.ts", "./refs.ts"],
       "./land.ts": ["./refs.ts"],
