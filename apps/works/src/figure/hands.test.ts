@@ -7,7 +7,7 @@
  * or coral, and the line over the dock) is what the press then does. The select tool and blueprints
  * work anywhere on the land.
  */
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import {
   BELT,
@@ -50,7 +50,7 @@ import {
 import { setWayIn } from "../tunnel.ts";
 import { handPrint } from "../ui/dock.ts";
 import { doNow } from "../yard.ts";
-import { beyondReach, OUT_OF_REACH, reachBox, reaches } from "./reach.ts";
+import { beyondReach, OUT_OF_REACH, reachBox, reaches, reachRule } from "./reach.ts";
 import { leave, placeYou, walkTo, you } from "./you.ts";
 
 // The camera's module draws onto canvases that are made as it loads (`scene.ts`): a document is there
@@ -61,7 +61,10 @@ const { following, holdView, inset, pan, setCamera, setZoom, zoom } = await impo
 const { fingerTap, initInput, letGo, stepInput } = await import("../input.ts");
 
 useFakeLeaf();
+// Reach is off for now (`reach.ts`); these test the rule, so they switch it on.
+beforeEach(() => (reachRule.on = true));
 afterEach(() => {
+  reachRule.on = false;
   toolHooks.said = () => {};
   leave();
   noKeysHeld();

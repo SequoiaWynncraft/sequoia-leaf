@@ -4,8 +4,8 @@
     "at": "2027-01-05T00:00Z",
     "title": "Up The Tree",
     "lines": [
-      "Up The Tree is open until 19 January: Leetanns is its top prize, and of the pulls that give the rarity of Unc, Ace, Bhlue, Flop or Vi, half give one of them and half another figure of that rarity.",
-      "In The Little Raid, Canopy is a new origin whose figures start the fight up the tree, where nothing reaches them, and drop to their seats with a shield and mana."
+      "Up The Tree is open until 19 January. Its top prize is Leetanns. Unc, Ace, Bhlue, Flop and Vi are featured. Half the pulls of their rarity give one of them.",
+      "In The Little Raid, Canopy is a new origin. Canopy figures start the fight up the tree, where nothing can reach them. Then they drop to their seats with a shield and mana."
     ],
     "more": [
       {
@@ -46,7 +46,7 @@
     "at": "2026-12-22T00:00Z",
     "title": "Penguin Month",
     "lines": [
-      "Penguin Month is open until 5 January: Yule is its top prize, and of the pulls that give the rarity of Flurry, Pomp, Larp, Jet or Dibs, half give one of them and half another figure of that rarity.",
+      "Penguin Month is open until 5 January. Its top prize is Yule. Flurry, Pomp, Larp, Jet and Dibs are featured. Half the pulls of their rarity give one of them.",
       "In The Little Raid, Huddle is a new origin: Huddle figures that start the fight touching share one shield. The Carving Knife is a new component that turns up after a boss."
     ],
     "more": [
@@ -93,8 +93,8 @@
     "at": "2026-12-08T00:00Z",
     "title": "Groot Night",
     "lines": [
-      "Groot Night is open until 22 December: the Commodore is its top prize, and of the pulls that give the rarity of Crab #8, Clutch, Crab #31, Munch, Peep or Seqwawa, half give one of them and half another figure of that rarity.",
-      "In The Little Raid, Grooter is a new origin whose hits take armour and ward off what they hit, and Chorus is a new class that gives the party mana every second."
+      "Groot Night is open until 22 December. Its top prize is the Commodore. Crab #8, Clutch, Crab #31, Munch, Peep and Seqwawa are featured. Half the pulls of their rarity give one of them.",
+      "In The Little Raid, Grooter is a new origin. Its hits take armour and ward from what they hit. Chorus is a new class. It gives the party mana every second."
     ],
     "more": [
       {
@@ -140,12 +140,18 @@
     ]
   },
   {
+    "id": "works-reach-off",
+    "at": "2026-11-28T10:58Z",
+    "title": "The Works: build anywhere",
+    "lines": ["Reach is off for now. You can build anywhere on your land, wherever you're standing."]
+  },
+  {
     "id": "works-fold-lessons",
     "at": "2026-11-28T10:07Z",
     "title": "The Works on big screens, and hints",
     "lines": [
-      "On a tablet or a folding phone opened, a card you open with a tap now stands beside the yard at its own size instead of across the whole screen, and the screen has the same layout as on a computer.",
-      "A hint about a machine now stays on that machine while it still fits, and a yard past the tier a hint is about no longer gets it on a new device."
+      "On tablets and unfolded phones, The Works now uses the computer layout. Cards open next to the yard instead of covering the screen.",
+      "Hints no longer jump from machine to machine. Past the early tiers? You won't see beginner hints again on a new phone or browser."
     ]
   },
   {
