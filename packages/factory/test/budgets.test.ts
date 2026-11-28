@@ -99,11 +99,22 @@ describe("the generated yard", () => {
 /** What a function makes, as the allocation guard names it: the function and the kind, without the text it was found in. */
 const kindOf = (m: string): string => m.split(": ").slice(0, 2).join(": ");
 
+/**
+ * What a yard of about 6,000 pieces may hold: every array it reaches but its land, as the page and
+ * Leaf hold it after building it (its side tables grown as they were built, not as read back).
+ * 440 KB since tier 5: each holder's row keeps a count of each of 40 things, not 30 (28 KB at this
+ * yard's 1,395 rows), and two parts of its own, a mix's place and work past a half-tick (3 KB).
+ */
+const HELD_MOST = 440 * 1024;
+
 describe("memory", () => {
-  test("a yard of about 6,000 pieces holds under 400 KB: every array it reaches but its land", () => {
-    const y = running();
-    expect(F.bytesHeld(y)).toBeLessThan(400 * 1024);
-    console.log(`held, at ${pieces(y)} pieces: ${kb(F.bytesHeld(y))}`);
+  test("a yard of about 6,000 pieces, as built, holds under 440 KB: every array it reaches but its land", () => {
+    const y = remade(land.w, land.h);
+    saveBlueprints(y);
+    expect(F.bytesHeld(y)).toBeLessThan(HELD_MOST);
+    console.log(
+      `held, at ${pieces(y)} pieces, as built: ${kb(F.bytesHeld(y))}; read back: ${kb(F.bytesHeld(running()))}`,
+    );
     // The letter's tally of what came in while its owner was away is held too, when there is one.
     const held = F.bytesHeld(y);
     y.away = { seconds: 600, coins: 0, made: F.counts() };
