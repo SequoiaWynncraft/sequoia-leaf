@@ -21,6 +21,7 @@ import {
   BELT,
   BENCH,
   blueprintCode,
+  BLUEPRINTS_MOST,
   check,
   clockOf,
   counts,
@@ -1824,7 +1825,10 @@ describe("a blueprint code in the Works", () => {
       { id: "p-1", refused: "cannot_paste_blueprint" },
       { id: "p-2", notes: [] },
     ]);
-    expect((await yardShown()).blueprints).toEqual([kept ?? null, null, null, null]);
+    // Kept in the first of the places every yard has room for: as many as the tables give, the rest empty.
+    expect((await yardShown()).blueprints).toEqual(
+      Array.from({ length: BLUEPRINTS_MOST }, (_, k) => (k === 0 ? (kept ?? null) : null)),
+    );
   });
 });
 
