@@ -121,36 +121,39 @@ picture file.
 
 ## The modules (`src/`)
 
-| File          | What it holds                                                                                       |
-| ------------- | --------------------------------------------------------------------------------------------------- |
-| `palette.ts`  | The colour ramps                                                                                    |
-| `pix.ts`      | Pixel-art tools: rectangles, pictures typed as rows of letters, outlines, ellipses                  |
-| `util.ts`     | Canvases, numbers, repeatable noise                                                                 |
-| `text.ts`     | Words on a canvas in the font                                                                       |
-| `signs.ts`    | A speech bubble and a key prompt drawn on a canvas, and breaking words into lines                   |
-| `scope.ts`    | What a page, a panel or a press holds of the browser, let go of together (below)                    |
-| `pace.ts`     | A game's frames: each the screen shows while the member is at the page, 20 a second while not       |
-| `press.ts`    | A long press with a finger: resting on a thing asks what it is; cards and tips ask with it          |
-| `tip.ts`      | Tips: `tip(el, title, text)`, a name and a line shown by the deck as every card is                  |
-| `card.ts`     | Cards: how anything in any game says what it is (below); `face.ts` draws one, `place.ts` places it  |
-| `dialog.ts`   | What opens over the page (a panel, a pinned card, a notice): `dialog(node, title, close)` (below)   |
-| `mark.ts`     | The mark of the town's own: a name in leaf green after the acorn, on a page or a canvas             |
-| `skin.ts`     | A walking figure and a face from a block-game skin sheet, or from a made-up look                    |
-| `tones.ts`    | A picture's own strong colours, each as the palette's pair of its hue                               |
-| `sound.ts`    | Small sounds made from tones and hiss; `sfx` is the shared set, one mute for all                    |
-| `dom.ts`      | `el`, `icon`, `amount`, `when` (draws a part again only when it changes), `say` and a few more      |
-| `purse.ts`    | Leaf and Coins, shared by every page of the game: both Leaf's, only shown                           |
-| `pursebar.ts` | The purse as a page shows it, its numbers rolling; things that fly across it; a closed Leaf button  |
-| `shell.ts`    | How a game that is a place in the town and the town speak to each other                             |
-| `postcard.ts` | What a game leaves for the town to read about it while nobody is in it                              |
-| `net.ts`      | Everything asked of the world outside the page: the server, storage, the address                    |
-| `live.ts`     | Where the game is being played, who the member is, and the cards for when it is shut or let go of   |
-| `play.ts`     | A game Leaf owns: its state from Leaf, commands to it, holding off, a waiting look while it answers |
-| `keep.ts`     | Keeping view settings in the browser, or in the tab only                                            |
-| `presence.ts` | Telling the server where in the game the member is, and hearing who else is about                   |
-| `realtime.ts` | Being in a live room on Leaf: who is there, and where each is to be drawn now (`joinLive`)          |
-| `emotes.ts`   | The emotes others see (wave, cheer, laugh, heart): their pictures, for the page and a canvas        |
-| `standin.ts`  | A stand-in server, storage and live connection (`FakeSocket`) for tests; no page loads it           |
+| File            | What it holds                                                                                       |
+| --------------- | --------------------------------------------------------------------------------------------------- |
+| `palette.ts`    | The colour ramps                                                                                    |
+| `pix.ts`        | Pixel-art tools: rectangles, pictures typed as rows of letters, outlines, ellipses; a `Pen`         |
+| `painter.ts`    | Pixel pictures drawn by the graphics card (WebGL2): boxes in batches, sheets, layers, a lost card   |
+| `atlas.ts`      | Where each small picture lies on the one texture the painter draws them from                        |
+| `util.ts`       | Canvases, numbers, repeatable noise                                                                 |
+| `text.ts`       | Words on a canvas in the font                                                                       |
+| `signs.ts`      | A speech bubble and a key prompt drawn on a canvas, and breaking words into lines                   |
+| `scope.ts`      | What a page, a panel or a press holds of the browser, let go of together (below)                    |
+| `pace.ts`       | A game's frames: each the screen shows while the member is at the page, 20 a second while not       |
+| `press.ts`      | A long press with a finger: resting on a thing asks what it is; cards and tips ask with it          |
+| `tip.ts`        | Tips: `tip(el, title, text)`, a name and a line shown by the deck as every card is                  |
+| `card.ts`       | Cards: how anything in any game says what it is (below); `face.ts` draws one, `place.ts` places it  |
+| `dialog.ts`     | What opens over the page (a panel, a pinned card, a notice): `dialog(node, title, close)` (below)   |
+| `mark.ts`       | The mark of the town's own: a name in leaf green after the acorn, on a page or a canvas             |
+| `skin.ts`       | A walking figure and a face from a block-game skin sheet, or from a made-up look                    |
+| `tones.ts`      | A picture's own strong colours, each as the palette's pair of its hue                               |
+| `sound.ts`      | Small sounds made from tones and hiss; `sfx` is the shared set, one mute for all                    |
+| `dom.ts`        | `el`, `icon`, `amount`, `when` (draws a part again only when it changes), `say` and a few more      |
+| `purse.ts`      | Leaf and Coins, shared by every page of the game: both Leaf's, only shown                           |
+| `pursebar.ts`   | The purse as a page shows it, its numbers rolling; things that fly across it; a closed Leaf button  |
+| `shell.ts`      | How a game that is a place in the town and the town speak to each other                             |
+| `postcard.ts`   | What a game leaves for the town to read about it while nobody is in it                              |
+| `net.ts`        | Everything asked of the world outside the page: the server, storage, the address                    |
+| `live.ts`       | Where the game is being played, who the member is, and the cards for when it is shut or let go of   |
+| `play.ts`       | A game Leaf owns: its state from Leaf, commands to it, holding off, a waiting look while it answers |
+| `keep.ts`       | Keeping view settings in the browser, or in the tab only                                            |
+| `presence.ts`   | Telling the server where in the game the member is, and hearing who else is about                   |
+| `realtime.ts`   | Being in a live room on Leaf: who is there, and where each is to be drawn now (`joinLive`)          |
+| `emotes.ts`     | The emotes others see (wave, cheer, laugh, heart): their pictures, for the page and a canvas        |
+| `standin.ts`    | A stand-in server, storage and live connection (`FakeSocket`) for tests; no page loads it           |
+| `standin-gl.ts` | A stand-in graphics card and canvases for tests: it writes down what it is asked; no page loads it  |
 
 With a mouse, Chromium makes no click when what a press began on is replaced before the release, so
 nothing is drawn again under a held mouse button: `when` waits for its next call after the button
