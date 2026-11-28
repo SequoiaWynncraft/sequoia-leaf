@@ -10,6 +10,7 @@
 import { at, carries, isItem, NONE, pieceOf, piecesAt, redwoodAt, tilesOf } from "@sequoia-leaf/factory";
 import { canvasCard, close, moveCard, pick, refresh, register, shown, watch } from "@sequoia-leaf/kit/card.ts";
 import { keepText, keptText } from "@sequoia-leaf/kit/keep.ts";
+import { sheetsWhere } from "@sequoia-leaf/kit/measure.ts";
 import { scope } from "@sequoia-leaf/kit/scope.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 
@@ -25,6 +26,7 @@ import { cardOf, type Hands } from "./cards.ts";
 import { togglePanel } from "./panels.ts";
 import { printOf } from "./prints.ts";
 import { itemRef, plotRef, tileRef } from "./refs.ts";
+import { SMALL } from "./screens.ts";
 import { showView } from "./views.ts";
 
 export { itemRef, machineRef, nodeRef, orderRef, plotRef, tileRef } from "./refs.ts";
@@ -101,6 +103,7 @@ const HANDS: Hands = {
 
 /** Says what every kind of thing in the yard is: each card drawn from its print. */
 export function initCard(art: Art): void {
+  sheetsWhere(SMALL);
   for (const kind of ["item", "machine", "tile", "plot", "node", "order", "tool", "perk", "tier", "gift"]) {
     register(kind, (id) => {
       const p = printOf(`${kind}:${id}`);

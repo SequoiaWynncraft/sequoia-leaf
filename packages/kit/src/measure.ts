@@ -1,8 +1,21 @@
 /**
- * What the cards read of the page as they are placed: a length a game sets for them, and whether a
- * card's head has room for its name.
+ * What the cards read of the page as they are placed: a length a game sets for them, whether the
+ * screen is one where a finger's card is a sheet, and whether a card's head has room for its name.
  */
 import { el } from "./dom.ts";
+
+/**
+ * Where a card asked for with a finger is a sheet along the bottom: a media query, every screen
+ * unless the game says otherwise (`sheetsWhere`). Elsewhere it stands beside its thing at its own
+ * width, as a card pinned with the mouse does.
+ */
+const sheets = { where: "all" };
+/** Has a card asked for with a finger be a sheet only on screens that match `query`. */
+export const sheetsWhere = (query: string): void => {
+  sheets.where = query;
+};
+/** Whether this screen is one where a finger's card is a sheet. */
+export const sheetScreen = (): boolean => window.matchMedia(sheets.where).matches;
 
 /** A probe for each length a game sets for the cards: never seen, and as tall as the length. */
 const probes = new Map<string, HTMLElement>();

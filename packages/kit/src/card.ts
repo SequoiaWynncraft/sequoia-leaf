@@ -38,7 +38,7 @@ import {
   saidOf,
   thingOf,
 } from "./face.ts";
-import { fitHead, length } from "./measure.ts";
+import { fitHead, length, sheetScreen } from "./measure.ts";
 import { beside, type Box, clear, sheet, type Side } from "./place.ts";
 import { longPress } from "./press.ts";
 import { type Release, scope } from "./scope.ts";
@@ -491,7 +491,7 @@ function peekAt(target: HTMLElement, ref: Ref): void {
 /** How an open card is drawn. */
 const faceOf = (o: Open): Face => ({
   pinned: o.pinned,
-  sheet: o.pinned && o.via === "touch",
+  sheet: o.pinned && o.via === "touch" && sheetScreen(),
   glance: o.glance ?? false,
   back: o.stack.length > 1,
   card: o.stack.at(-1) ?? "",

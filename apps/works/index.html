@@ -457,7 +457,7 @@
         opacity: 0.7;
       }
       /* On a phone, in a panel, a row is tall enough for a finger. */
-      @media (max-width: 760px), (orientation: portrait) {
+      @media (max-width: 659px) {
         #panel .gl-row {
           min-height: calc(var(--u) * 20);
         }
@@ -1293,13 +1293,13 @@
         gap: calc(var(--u) * 2);
       }
 
-      @media (max-width: 1100px), (orientation: portrait) {
+      @media (max-width: 1100px) {
         #feed {
           bottom: calc(var(--bottom) + var(--dockh, 0px) + var(--handh, 0px) + var(--u) * 4);
           width: min(calc(var(--u) * 150), calc(100vw - var(--edge) * 2));
         }
       }
-      @media (max-width: 760px), (orientation: portrait) {
+      @media (max-width: 659px) {
         /* Two even rows once the tools no longer fit in one. */
         #dock {
           max-width: calc(var(--per) * (var(--slot) + var(--u)) + var(--u) * 11);
@@ -1375,7 +1375,7 @@
        * leaves room for; and the line over the tools takes no room while it has nothing to say, but for
        * its buttons.
        */
-      @media (max-width: 760px), (max-height: 500px) {
+      @media (max-width: 659px), (max-height: 500px) {
         #dock {
           --slot: calc(var(--u) * 21);
           max-width: calc(100vw - var(--edge) * 2);
@@ -1500,7 +1500,7 @@
        * bar. The top bar is then the purse alone, and the power with the order folded, each row as wide
        * as the screen, whatever the purse holds. The column stops above the line over the tools.
        */
-      @media (max-width: 760px) and (min-height: 501px) {
+      @media (max-width: 659px) and (min-height: 501px) {
         #side {
           --at: calc(var(--toph, calc(var(--top) + var(--u) * 24)) + var(--u) * 3);
           position: fixed;
