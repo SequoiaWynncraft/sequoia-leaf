@@ -64,6 +64,8 @@ export interface Actor {
   giftAt: number;
   hpShown: number;
   phase: number;
+  /** Where its plate was last drawn (its middle and foot, from the board's corner), so what it holds is pointed at where it is seen; null when none was. */
+  plate: { readonly x: number; readonly foot: number } | null;
 }
 
 export function actorFor(unit: Unit, at: Pt, bornAt: number): Actor {
@@ -95,6 +97,7 @@ export function actorFor(unit: Unit, at: Pt, bornAt: number): Actor {
     giftAt: -99,
     hpShown: unit.hp,
     phase: (unit.id * 0.37) % 1,
+    plate: null,
   };
 }
 

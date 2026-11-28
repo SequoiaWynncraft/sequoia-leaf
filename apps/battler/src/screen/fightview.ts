@@ -219,8 +219,8 @@ export function fightBump(): Pt {
   return { x: 0, y: Math.floor(d) % 2 === 0 ? k : -Math.ceil(k / 2) };
 }
 
-/** What is on, or wrong with, a figure, drawn round it. */
-function drawStatus(g: Ctx, a: Actor, x: number, y: number, tall: number, tick: number): void {
+/** What is on, or wrong with, a figure, drawn round it; what shows over its head goes over its plate, whose top is `peak`. */
+function drawStatus(g: Ctx, a: Actor, x: number, y: number, tall: number, tick: number, peak: number): void {
   const u = a.unit;
   const c = clockNow();
   /** Just clear of its sides. */
@@ -250,7 +250,7 @@ function drawStatus(g: Ctx, a: Actor, x: number, y: number, tall: number, tick: 
     for (let i = 0; i < 3; i++) {
       const ang = c * 0.35 + (i * Math.PI * 2) / 3;
       const sx = x + Math.round(Math.cos(ang) * 6);
-      const sy = y - tall - 4 + Math.round(Math.sin(ang) * 2);
+      const sy = peak - 4 + Math.round(Math.sin(ang) * 2);
       R(g, sx - 1, sy, 3, 1, GOLD[2]);
       R(g, sx, sy - 1, 1, 3, GOLD[2]);
     }
@@ -261,8 +261,8 @@ function drawStatus(g: Ctx, a: Actor, x: number, y: number, tall: number, tick: 
     R(g, x + half - 3, y + 1 + ((d + 1) % 3), 1, 2, WATER[2]);
   }
   if (u.tauntUntil > tick) {
-    R(g, x - 1, y - tall - 10, 2, 4, "#e67967");
-    R(g, x - 1, y - tall - 5, 2, 1, "#e67967");
+    R(g, x - 1, peak - 8, 2, 4, "#e67967");
+    R(g, x - 1, peak - 3, 2, 1, "#e67967");
   }
   if (u.hasteUntil > tick) {
     const d = Math.floor(c * 0.9) % 3;
@@ -387,12 +387,18 @@ function standing(g: Ctx, cat: Catalog, a: Actor, c: number, tick: number): Stan
       g.globalAlpha = 1;
     },
     top: () => {
-      if (!plated(u, tick, { down, sunk, waiting: waitsForBubble(u.id) })) return;
+      if (!plated(u, tick, { down, sunk, waiting: waitsForBubble(u.id) })) {
+        a.plate = null;
+        return;
+      }
       // Over the figure's head as it is drawn now: casting, some rear up taller than they stand.
       const f = framesOf(u.kind, false, a.form);
       const tall = (p.cast ? Math.max(f.tall, f.castTall) : f.tall) + Math.max(0, p.sy);
-      drawStatus(g, a, x, y - hover, tall, tick);
-      drawPlate(g, x, y - 3 - hover - tall, plateOf(a, c));
+      const foot = y - 3 - hover - tall;
+      const plate = plateOf(a, c);
+      drawStatus(g, a, x, y - hover, tall, tick, plateAt(plate, x, foot).peak);
+      drawPlate(g, x, foot, plate);
+      a.plate = { x: x - V.bx, foot: foot - V.by };
     },
   };
 }
@@ -464,10 +470,9 @@ export function fightHeldUnder(x: number, y: number): HeldAt | null {
   if (!f) return null;
   for (const a of FV.actors) {
     const u = a?.unit;
-    if (!a || !u?.alive || clockNow() < a.bornAt || u.hiddenUntil > f.tick) continue;
-    const back = u.side === FV.ours ? 0 : Math.round(V.gap);
-    const foot = a.y - back - 3 - hoverAt(u.kind, V.t, a.phase, a.form) - framesOf(u.kind, false, a.form).tall;
-    const hit = heldAt(plateAt(plateOf(a, clockNow()), a.x, foot).held, x, y);
+    // Where its plate was drawn, so a figure casting taller, leaping or hopping is pointed at where it is seen.
+    if (!a?.plate || !u?.alive || clockNow() < a.bornAt || u.hiddenUntil > f.tick) continue;
+    const hit = heldAt(plateAt(plateOf(a, clockNow()), a.plate.x, a.plate.foot).held, x, y);
     if (hit) return hit;
   }
   return null;
