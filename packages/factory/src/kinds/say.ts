@@ -177,7 +177,8 @@ function lineEnd(k: Kit, y: Yard, t: number, next: number[]): number {
   if (!k.carries(kind)) return fullAndShut(k, y, t) || k.inTrouble(y, t) ? ENDS : MOVES;
   const held = y.item[t] ?? k.NONE;
   if (!k.isItem(held) || !crossedAll(k, y, t)) return MOVES;
-  if (stuckAs(k, y, t, held) !== as("waiting")) return ENDS;
+  // In trouble as its own status says, which knows a tunnel's way-in mouth hands on under the ground.
+  if (k.inTrouble(y, t)) return ENDS;
   for (let c = 0; c < Math.max(1, k.waysAt(y, t)); c++) if (k.sendsNow(y, t, c, held)) next.push(t, c);
   return ON;
 }

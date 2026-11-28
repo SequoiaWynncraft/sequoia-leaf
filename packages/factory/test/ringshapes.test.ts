@@ -11,7 +11,7 @@ import * as F from "../src/index.ts";
 import { bare, drain, fill, PLANK, ring, sending } from "./ringyard.ts";
 import { must } from "./yards.ts";
 
-/** A grower's state and whether it is in trouble, after `ticks` ticks. */
+/** A grower's state and whether it is in trouble, after `ticks` ticks: with none, as the yard was built, before anything moves. */
 function after(y: F.Yard, g: number, ticks = 600): [string | undefined, boolean | undefined] {
   while (y.tick < ticks) F.step(y);
   const s = F.status(y, g);
@@ -115,7 +115,7 @@ describe("a grower whose line runs into a full ring", () => {
     must(y, { do: "build", kind: "crate", x: 10, y: 2, dir: 0 });
     const { g, belt } = fed(y);
     fill(y, [...tiles.filter((i) => i !== F.at(y, 10, 2)), ...belt]);
-    expect(after(y, g, 1)).toEqual(["waiting", false]);
+    expect(after(y, g, 0)).toEqual(["waiting", false]);
   });
 });
 
@@ -128,7 +128,7 @@ describe("a grower whose line runs through a tunnel", () => {
     must(y, { do: "build", kind: "belt", x: 9, y: 5, dir: 0 });
     must(y, { do: "build", kind: "crate", x: 10, y: 5, dir: 0 });
     fill(y, [F.at(y, 5, 5), mouth, F.at(y, 8, 5), F.at(y, 9, 5)]);
-    expect(after(y, g, 1)).toEqual(["waiting", false]);
+    expect(after(y, g, 0)).toEqual(["waiting", false]);
   });
 
   test("into a full ring with no way off: the grower is stopped", () => {
