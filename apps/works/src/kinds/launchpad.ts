@@ -31,10 +31,13 @@ import {
   launchpadOf,
   launchRocket,
   launchTrail,
+  litPip,
   PAD,
+  PIP_AT,
   PIPS,
   ROCKET_FOOT,
   TALL,
+  TRAIL_PIECE,
 } from "../art/launchpad.ts";
 import { LILAC } from "../art/pal.ts";
 import { risenFor } from "../fx.ts";
@@ -149,13 +152,13 @@ export const launchpad: KindPage = {
     const pad = at.real ? padAt(y, at.i) : null;
     const { stage, lit } = lookOf(pad);
     const test = (pad?.rocket.id ?? "test") === "test";
-    at.put(
-      launchpadOf(outOf(at.d), test, stage, lit, pad?.ready === true),
-      at.x - PAD,
-      at.top - PAD - TALL,
-      at.z,
-      at.a,
-    );
+    at.put(launchpadOf(outOf(at.d), test, stage, pad?.ready === true), at.x - PAD, at.top - PAD - TALL, at.z, at.a);
+    // Its lit pips over the slab's band, the first `lit` of them.
+    const pip = litPip();
+    for (let p = 0; p < lit; p++) {
+      const [px = 0, py = 0] = PIP_AT[p] ?? [];
+      at.put(pip, at.x + px, at.top + py, at.z + 0.001, at.a);
+    }
     // A launch: its rocket rises off the top of the screen, faster and faster, and its pale trail fades.
     const since = at.real && !lessMotion() ? risenFor(at.i, y.tick, at.t, SHOWN) : null;
     if (since !== null) {
@@ -163,8 +166,11 @@ export const launchpad: KindPage = {
       const foot = at.top + ROCKET_FOOT.y;
       const rise = Math.round(30 * since + 220 * since * since);
       const gone = foot - rise < -at.seenY - 80;
-      const trail = launchTrail(Math.min(rise, foot + at.seenY + 80));
-      at.put(trail, fx - 1, foot - trail.height, at.z + 0.02, Math.max(0, 1 - since / SHOWN));
+      // The trail, in pieces from the pad up to the rocket or the top of the screen, fainter toward the pad and fading.
+      const pieces = Math.ceil(Math.min(rise, foot + at.seenY + 80) / TRAIL_PIECE);
+      const fade = Math.max(0, 1 - since / SHOWN);
+      for (let k = 0; k < pieces; k++)
+        at.put(launchTrail(), fx - 1, foot - (k + 1) * TRAIL_PIECE, at.z + 0.02, fade * (0.25 + (0.45 * k) / pieces));
       const up = launchRocket(test);
       if (!gone) at.put(up, fx - up.width / 2, foot - rise - up.height + 6, at.z + 0.03, at.a);
     }

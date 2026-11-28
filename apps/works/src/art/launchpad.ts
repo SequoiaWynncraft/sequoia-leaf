@@ -8,7 +8,9 @@
  * and for a rocket a cream light at its tip. A short spout on the middle of its front is its way out.
  *
  * At a launch the rocket rises (`launchRocket`) and leaves a pale trail (`launchTrail`) that fades over
- * 3 seconds. No glow wider than 2 pixels, nothing bright.
+ * 3 seconds. No glow wider than 2 pixels, nothing bright. Every picture is made once and never painted
+ * on again, as the painter keeps it on its atlas: what changes (the lit pips, the trail's length) is
+ * drawn as small pictures over it.
  */
 import { CREAM, INK } from "@sequoia-leaf/kit/palette.ts";
 import { R } from "@sequoia-leaf/kit/pix.ts";
@@ -31,8 +33,8 @@ const SHELL = ["#c4bfcc", "#8f899b"] as const;
 /** The pips round its edge. */
 export const PIPS = 20;
 
-/** Where each of its 20 pips sits round the edge of its slab's top, from its box's corner: 6 along each long side, 4 down each end. */
-const PIP_AT: readonly (readonly [number, number])[] = [
+/** Where each of its 20 pips sits round the edge of its slab's top, from its box's corner: 6 along each top and bottom, 4 down each side. */
+export const PIP_AT: readonly (readonly [number, number])[] = [
   ...Array.from({ length: 6 }, (_, k): [number, number] => [12 + k * 11, 6]),
   ...Array.from({ length: 4 }, (_, k): [number, number] => [BOX - 6, 17 + k * 13]),
   ...Array.from({ length: 6 }, (_, k): [number, number] => [BOX - 13 - k * 11, BOX - 8]),
@@ -56,12 +58,25 @@ function slab(g: Ctx, x: number, y: number): void {
   }
 }
 
-/** The band of pips round its edge, the first `lit` of them lit. */
-function pips(g: Ctx, x: number, y: number, lit: number): void {
-  PIP_AT.forEach(([px, py], p) => {
+/** The band of pips round its edge, every one unlit: those lit are drawn over it (`PIP_AT`, `litPip`). */
+function pips(g: Ctx, x: number, y: number): void {
+  for (const [px, py] of PIP_AT) {
     R(g, x + px - 1, y + py - 1, 3, 3, SLAB[0]);
-    R(g, x + px, y + py, 1, 1, p < lit ? CELL[2] : IRON[2]);
-  });
+    R(g, x + px, y + py, 1, 1, IRON[2]);
+  }
+}
+
+/** The small pictures drawn over a pad, each made the first time it is asked for: a lit pip, and a piece of trail. */
+const small = new Map<"pip" | "trail", HTMLCanvasElement>();
+
+/** A lit pip, pale green-cream, one pixel: drawn over the slab at each of `PIP_AT` that is lit, so the slab's picture does not change with them. */
+export function litPip(): HTMLCanvasElement {
+  const had = small.get("pip");
+  if (had) return had;
+  const { c, g } = makeCanvas(1, 1);
+  R(g, 0, 0, 1, 1, CELL[2]);
+  small.set("pip", c);
+  return c;
 }
 
 /** The spout of its way out, on its box's tile (`ox`, `oy`) toward `way`, at the box's edge. */
@@ -113,21 +128,15 @@ function rocket(g: Ctx, rx: number, foot: number, h: number, stage: number, tip:
   if (tip) R(g, rx - 1, foot - h - w / 2 - 1, 1, 2, CREAM);
 }
 
-/** The pad, its box at (PAD, PAD + TALL): its way out on tile (`ox`, `oy`) toward `way`; its rocket tall `h` and built to `stage`; `lit` pips lit; its light `on`. */
-function picture(
-  out: readonly [number, number, number],
-  h: number,
-  stage: number,
-  lit: number,
-  on: boolean,
-): HTMLCanvasElement {
+/** The pad, its box at (PAD, PAD + TALL): its way out on tile (`ox`, `oy`) toward `way`; its rocket tall `h` and built to `stage`; its light `on`. */
+function picture(out: readonly [number, number, number], h: number, stage: number, on: boolean): HTMLCanvasElement {
   const [ox, oy, way] = out;
   const { c, g } = makeCanvas(BOX + PAD * 2, BOX + PAD * 2 + TALL);
   const x = PAD;
   const y = PAD + TALL;
   if (way === 3) spout(g, x, y, ox, oy, way);
   slab(g, x, y);
-  pips(g, x, y, lit);
+  pips(g, x, y);
   // Its gantry at its back: beside the rocket opposite its way out, or behind it.
   const [gx, gy] = way === 0 ? [CX - 22, CY + 6] : way === 2 ? [CX + 17, CY + 6] : [CX - 22, CY + 6];
   gantry(g, x + gx, y + gy, on);
@@ -157,20 +166,18 @@ export function launchpadIcon(): HTMLCanvasElement {
 /** How tall each rocket stands on the pad: a test rocket short. */
 export const rocketTall = (test: boolean): number => (test ? 22 : 34);
 
-/** Each picture, made once: by way out, rocket, stage, pips lit and light. */
+/** Each picture, made once and never painted on again (the painter keeps it): by way out, rocket, stage and light. */
 const pictures = new Map<string, HTMLCanvasElement>();
 export function launchpadOf(
   out: readonly [number, number, number],
   test: boolean,
   stage: number,
-  lit: number,
   on: boolean,
 ): HTMLCanvasElement {
-  const key = `${out.join(":")}:${test ? 1 : 0}:${stage}:${lit}:${on ? 1 : 0}`;
+  const key = `${out.join(":")}:${test ? 1 : 0}:${stage}:${on ? 1 : 0}`;
   const had = pictures.get(key);
   if (had) return had;
-  const h = rocketTall(test);
-  const made = picture(out, h, stage, lit, on);
+  const made = picture(out, rocketTall(test), stage, on);
   pictures.set(key, made);
   return made;
 }
@@ -192,17 +199,14 @@ export function launchRocket(test: boolean): HTMLCanvasElement {
   return c;
 }
 
-/** The pale trail a rocket leaves, `long` pixels: two pixels wide, fading toward its foot. */
-const trails = new Map<number, HTMLCanvasElement>();
-export function launchTrail(long: number): HTMLCanvasElement {
-  const n = Math.max(1, Math.round(long / 8) * 8);
-  const had = trails.get(n);
+/** How long one piece of a rocket's pale trail is: a trail is drawn as so many, each fainter toward the pad. */
+export const TRAIL_PIECE = 16;
+/** A piece of the pale trail a rocket leaves: two pixels wide, one picture for every trail, never painted on again. */
+export function launchTrail(): HTMLCanvasElement {
+  const had = small.get("trail");
   if (had) return had;
-  const { c, g } = makeCanvas(2, n);
-  for (let k = 0; k < n; k++) {
-    g.globalAlpha = 0.25 + 0.45 * (1 - k / n);
-    R(g, 0, k, 2, 1, SHELL[0]);
-  }
-  trails.set(n, c);
+  const { c, g } = makeCanvas(2, TRAIL_PIECE);
+  R(g, 0, 0, 2, TRAIL_PIECE, SHELL[0]);
+  small.set("trail", c);
   return c;
 }
