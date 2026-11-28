@@ -113,3 +113,8 @@ export { clearsAt, countSmog, setLevel, shareAt, smogPace, standingOn, stepOf } 
 export { clearsLine, madeOn, redwoodClears, smogLine, smogRate, smogTrouble } from "./smogwords.ts";
 export { SMOG } from "./content/smog.ts";
 export { MIXES } from "./content/mixes.ts";
+export { CHARGE } from "./content/charge.ts";
+export { CLOGGED, LAUNCH_KINDS, type LaunchKind, LETS_OUT_EVERY, ROCKETS, TRACK_IDS } from "./content/rockets.ts";
+export { CHARGED, FIRST_ROCKET, LAUNCHED, type Rocket, ROCKETS_N, rocketSet } from "./launch.ts";
+export { anyLaunches, type Launches, noLaunches } from "./launches.ts";
+export { beat, beats, toBeat } from "./beat.ts";

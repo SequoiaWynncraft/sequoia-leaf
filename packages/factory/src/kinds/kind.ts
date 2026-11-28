@@ -47,8 +47,11 @@ export interface Words {
 
 /** The commands that set something on a piece, by what each sets: each kind takes those it has (`Hooks.set`). */
 export interface Setters {
-  /** The one thing a machine makes, or none (`recipe`). Says why not, or nothing. */
-  readonly recipe?: (k: Kit, y: Yard, i: number, out: Item | null) => string | null;
+  /**
+   * The one thing a machine makes, or none (`recipe`); for a launch pad, its rocket, by what it counts
+   * as, with `was`, what the card showed it set to. Says why not, or nothing.
+   */
+  readonly recipe?: (k: Kit, y: Yard, i: number, out: Item | null, was?: Item) => string | null;
   /** The one thing a sorter sends to its side, or none (`sort`). */
   readonly sort?: (k: Kit, y: Yard, i: number, n: Item | null) => void;
   /** The side a sorter sends it: its right, or its left (`side`). */
@@ -85,6 +88,8 @@ export interface Hooks {
   readonly room?: (k: Kit, y: Yard, i: number, n: number, side: number, wire: Wire) => boolean;
   /** Takes the thing `n` in from its side `side`, `over` eighths past the edge of the tile it came from. */
   readonly give?: (k: Kit, y: Yard, i: number, n: number, side: number, over: number, wire: Wire) => void;
+  /** Why it never takes the thing `n`, as a sentence, where it says more than that it does not (a launch pad: only charged cells). */
+  readonly refuses?: (k: Kit, y: Yard, i: number, n: number) => string | null;
   /** Whether it lets things in by turns: a thing it refuses does not wait (`tick.ts`). */
   readonly turns?: (k: Kit, y: Yard, i: number) => boolean;
   /** Its step in handing on, once a tick unless it waits: a piece without one hands nothing on. */

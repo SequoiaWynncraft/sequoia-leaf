@@ -17,6 +17,7 @@ import { RECIPES } from "./content/recipes.ts";
 import { RESEARCH } from "./content/research.ts";
 import type { KindDef, KindInfo } from "./kinds/kind.ts";
 import { KIND_DEFS, type KindName } from "./kinds/list.ts";
+import { PLANNED } from "./launch.ts";
 
 export type { KindInfo, KindName };
 /** The kinds' names, in kind order: a kind is its number here (`kinds/list.ts`). */
@@ -355,7 +356,7 @@ const MIXED: readonly (Recipe | null)[] = ALL_ITEMS.map((n) => {
 });
 /**
  * Every recipe that makes each thing: the one it is the thing of first, then those that make it beside
- * their own, then what grows it (`GROWN`), then a mix's share of it; but the mix's share first where
+ * their own, then what grows it (`GROWN`), what charges or launches it (`PLANNED`), then a mix's share of it; but the mix's share first where
  * every recipe of its own only turns other things of that mix into it (a cracker's creosote, from a
  * still's pitch), so that the mix is what makes it and the recipe what makes more of it.
  */
@@ -365,6 +366,7 @@ const MAKING: readonly (readonly Recipe[])[] = ALL_ITEMS.map((n) => {
     ...RECIPES_N.filter((r) => r.out === n),
     ...RECIPES_N.filter((r) => r.also === n),
     ...(grown ? [grown] : []),
+    ...(PLANNED[n] ?? []),
   ];
   const [mixed, m] = [MIXED[n], MIX_GIVING[n]];
   if (!mixed || !m) return own;

@@ -10,6 +10,9 @@
  * tarmac, sleepers and varnish, each made of one of them. Tier 7 adds star crystal, which lies in the
  * ground of the outer ring and comes out of it slowly (`gather`), and is grown (`content/grow.ts`);
  * crystal feed, what growing it costs; and lattices, the Star folio and dishes, what it is for.
+ * Tier 8 adds cells, and the three charged cells, which do not keep: a charger charges a cell to 3
+ * bars, and on every beat each charged cell loses 1 (`content/charge.ts`); hull sections and rocket
+ * fuel; and the three rockets, which a launch pad launches and nothing carries (`content/rockets.ts`).
  * Nothing here fells a living tree: wood is deadfall, picked up off the forest floor.
  *
  * A new thing goes at the end of the list: a thing riding a belt is kept by its place in it.
@@ -66,6 +69,15 @@ export const ITEMS = [
   "lattice",
   "star",
   "dish",
+  "cell",
+  "charged1",
+  "charged2",
+  "charged3",
+  "hull",
+  "fuel",
+  "testrocket",
+  "rocket",
+  "heavyrocket",
 ] as const;
 export type ItemName = (typeof ITEMS)[number];
 
@@ -84,7 +96,9 @@ export interface ItemInfo {
   readonly folio?: true;
   /** The town does not buy it: the depot and cart stops do not take it, the board never asks for it, and it is worth nothing. */
   readonly unsold?: true;
-  /** The work in one, in ticks, where the tables cannot work it out: a thing a mix gives (`mixes.ts`), star crystal. */
+  /** The board never asks for it: the rockets, which only a launch pad makes and nothing carries. */
+  readonly noAsk?: true;
+  /** The work in one, in ticks, where the tables cannot work it out: a thing a mix gives (`mixes.ts`), star crystal, the charged cells, the rockets. */
   readonly work?: number;
   /** Ticks a gatherer at grade 1 takes over one, for a thing from the ground: `TICKS.gather` if not said. */
   readonly gather?: number;
@@ -143,4 +157,34 @@ export const ITEM: Record<ItemName, ItemInfo> = {
   lattice: { name: "Lattice", many: "lattices", step: 3, worth: 5 },
   star: { name: "Star folio", many: "Star folios", step: 4, worth: 12, folio: true },
   dish: { name: "Dish", many: "dishes", step: 5, worth: 54 },
+  cell: { name: "Cell", many: "cells", step: 3, worth: 4.2 },
+  charged1: {
+    name: "Charged cell, 1 bar",
+    many: "charged cells with 1 bar",
+    step: 4,
+    worth: 0,
+    unsold: true,
+    work: 293,
+  },
+  charged2: {
+    name: "Charged cell, 2 bars",
+    many: "charged cells with 2 bars",
+    step: 4,
+    worth: 0,
+    unsold: true,
+    work: 293,
+  },
+  charged3: {
+    name: "Charged cell, 3 bars",
+    many: "charged cells with 3 bars",
+    step: 4,
+    worth: 0,
+    unsold: true,
+    work: 293,
+  },
+  hull: { name: "Hull section", many: "hull sections", step: 3, worth: 4.4 },
+  fuel: { name: "Rocket fuel", many: "rocket fuel", step: 2, worth: 2 },
+  testrocket: { name: "Test rocket", many: "test rockets", step: 5, worth: 2400, noAsk: true, work: 59060 },
+  rocket: { name: "Rocket", many: "rockets", step: 5, worth: 30000, noAsk: true, work: 739400 },
+  heavyrocket: { name: "Heavy rocket", many: "heavy rockets", step: 5, worth: 70000, noAsk: true, work: 1724500 },
 };

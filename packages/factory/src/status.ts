@@ -8,6 +8,7 @@ import { BURNS, type Fuel } from "./burns.ts";
  */
 import { alight, fuelNow } from "./kinds/burner.ts";
 import { type Growth, growth } from "./kinds/grower.ts";
+import { type PadReading, padReading, secondsTo } from "./kinds/launchpad.ts";
 import { RULES } from "./kinds/list.ts";
 import { holding as holdingOf, type MachineRate, rateOf, type State, STATES, TROUBLE } from "./kinds/say.ts";
 import { litAt } from "./power.ts";
@@ -18,12 +19,19 @@ import { type Counts, holderOf, type Yard } from "./yard.ts";
 
 export { type MachineRate, type State, STATES, TROUBLE } from "./kinds/say.ts";
 export type { Growth } from "./kinds/grower.ts";
+export type { PadReading } from "./kinds/launchpad.ts";
+export { secondsTo };
 
 /**
  * What the grower on a tile holds and is doing (`kinds/grower.ts`): the one reading its status, its
  * picture, its lamps and its card take. Nothing for a tile with no grower.
  */
 export const growthAt = (y: Yard, i: number): Growth => growth(KIT, y, pieceOf(y, i));
+/**
+ * What the launch pad on a tile holds and is doing (`kinds/launchpad.ts`): the one reading its words,
+ * its picture and its card take. Nothing for a tile with no pad.
+ */
+export const padAt = (y: Yard, i: number): PadReading | null => padReading(KIT, y, pieceOf(y, i));
 
 export interface Status {
   readonly state: State;

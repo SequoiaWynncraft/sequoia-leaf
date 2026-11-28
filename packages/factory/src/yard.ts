@@ -8,6 +8,7 @@
  * The yard keeps no purse: what it earns gathers in `till` until a command pays it in.
  */
 import type { Land } from "./land.ts";
+import { type Launches, noLaunches } from "./launches.ts";
 import { FACING, layOver, pieceOf } from "./sizes.ts";
 import {
   BLUEPRINTS_MOST,
@@ -286,6 +287,8 @@ export interface Yard {
   readonly felled: Uint8Array;
   /** The pieces to hand that are not standing, by kind. */
   readonly spare: Uint8Array;
+  /** Its launches by kind, ever and spent, and its levels of endless research (`launches.ts`): fifteen numbers. */
+  readonly launches: Launches;
   blueprints: (Print | null)[];
   /**
    * The goals done, in the order they were done; the node in hand, or -1; the nodes waiting after it,
@@ -405,6 +408,7 @@ export function emptyYard(land: Land, tier = 0): Yard {
     },
     felled: new Uint8Array(land.trees.length),
     spare: Uint8Array.from(STARTING),
+    launches: noLaunches(),
     blueprints: Array.from({ length: BLUEPRINTS_MOST }, () => null),
     done,
     hand: -1,
@@ -500,29 +504,30 @@ export const holderOf = (y: Yard, i: number): number => (holds(y.kind[i] ?? NONE
 export const tunnelOf = (y: Yard, i: number): number =>
   SPANS[y.kind[i] ?? NONE] === 1 && (y.span[i] ?? 0) > 0 ? (y.row[i] ?? -1) : -1;
 
+/** The holders' parts of one number a row, as `holderRow` grows the table and `dropRow` moves the last row: all but `stock`. */
+const ROW_PARTS = [
+  "tile",
+  "out",
+  "also",
+  "more",
+  "making",
+  "last",
+  "work",
+  "mix",
+  "quarter",
+  "idle",
+  "open",
+  "fuel",
+  "kinds",
+  "count",
+] as const;
+
 /** A new row in a side table for the piece on a tile, the table grown if it is full. */
 export function holderRow(y: Yard, tile: number): number {
   let h = y.holders;
   if (h.size === h.tile.length) {
     const bigger = holders(grown(h.size));
-    for (const key of [
-      "tile",
-      "out",
-      "also",
-      "more",
-      "making",
-      "last",
-      "work",
-      "mix",
-      "quarter",
-      "idle",
-      "open",
-      "fuel",
-      "kinds",
-      "count",
-      "stock",
-    ] as const)
-      bigger[key].set(h[key]);
+    for (const key of [...ROW_PARTS, "stock"] as const) bigger[key].set(h[key]);
     bigger.size = h.size;
     y.holders = h = bigger;
   }
@@ -571,23 +576,7 @@ export function dropRow(y: Yard, tile: number): void {
     const h = y.holders;
     const last = --h.size;
     if (r !== last) {
-      for (const key of [
-        "tile",
-        "out",
-        "also",
-        "more",
-        "making",
-        "last",
-        "work",
-        "mix",
-        "quarter",
-        "idle",
-        "open",
-        "fuel",
-        "kinds",
-        "count",
-      ] as const)
-        h[key][r] = h[key][last] ?? 0;
+      for (const key of ROW_PARTS) h[key][r] = h[key][last] ?? 0;
       h.stock.copyWithin(r * ITEM_COUNT, last * ITEM_COUNT, (last + 1) * ITEM_COUNT);
       y.row[h.tile[r] ?? 0] = r;
     }

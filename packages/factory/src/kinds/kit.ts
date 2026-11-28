@@ -1,3 +1,4 @@
+import type * as Beat from "../beat.ts";
 /**
  * The kit: everything of the rules a kind's hooks are given, and so everything a kind can read or do
  * to a yard (`kinds/kind.ts` says why a kind is handed it rather than importing it). It is made once,
@@ -6,6 +7,7 @@
  */
 import type * as Burning from "../burns.ts";
 import type * as Land from "../land.ts";
+import type * as Launch from "../launch.ts";
 import type * as Orders from "../orders.ts";
 import type * as Planner from "../planner.ts";
 import type * as Power from "../power.ts";
@@ -67,6 +69,12 @@ export interface Kit {
   readonly MINUTE: typeof Planner.MINUTE;
   readonly carried: typeof Planner.carried;
   readonly BURNS: typeof Burning.BURNS;
+  /** What a charger does, and what the beat does to each thing (`launch.ts`). */
+  readonly CHARGED: typeof Launch.CHARGED;
+  readonly rocketSet: typeof Launch.rocketSet;
+  readonly FIRST_ROCKET: typeof Launch.FIRST_ROCKET;
+  /** Ticks to the yard's next beat, from its tick alone (`beat.ts`). */
+  readonly toBeat: typeof Beat.toBeat;
   readonly whole: (v: unknown, most: number) => number | null;
 
   // The yard's reads and writes.
@@ -121,11 +129,14 @@ export interface Kit {
   readonly passWay: typeof Wire.passWay;
   readonly sendOut: typeof Wire.sendOut;
   readonly sendPort: typeof Wire.sendPort;
+  readonly sendHeld: typeof Wire.sendHeld;
   readonly portTo: typeof Wire.portTo;
   readonly outsOf: typeof Wire.outsOf;
   readonly sendsThing: typeof Wire.sendsThing;
   readonly takesAt: typeof Wire.takesAt;
   readonly refused: typeof Wire.refused;
+  /** Why the piece on a tile never takes a thing, where its kind says more than that it does not (`Hooks.refuses`). */
+  readonly refusing: typeof Wire.refusing;
   readonly roomBeside: typeof Wire.roomBeside;
   readonly wireOf: typeof Wire.wireOf;
 

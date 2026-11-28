@@ -106,12 +106,13 @@ const kindOf = (m: string): string => m.split(": ").slice(0, 2).join(": ");
  * yard's 1,395 rows), and two parts of its own, a mix's place and work past a half-tick (3 KB). 460 KB
  * since tier 6: 47 things, not 40 (14 bytes more a row: 20 KB at 1,395 rows). 480 KB since tier 7: 52
  * things, not 47 (10 bytes more a row: 13.6 KB at 1,395 rows), and a tunnel's row under the ground is
- * 32 tiles long, not 20 (24 bytes more a row: 11.1 KB at its 473 rows).
+ * 32 tiles long, not 20 (24 bytes more a row: 11.1 KB at its 473 rows). 500 KB since tier 8: 61
+ * things, not 52 (18 bytes more a row: 24.5 KB at 1,395 rows), and the yard's 15 launch numbers (60 bytes).
  */
-const HELD_MOST = 480 * 1024;
+const HELD_MOST = 500 * 1024;
 
 describe("memory", () => {
-  test("a yard of about 6,000 pieces, as built, holds under 480 KB: every array it reaches but its land", () => {
+  test("a yard of about 6,000 pieces, as built, holds under 500 KB: every array it reaches but its land", () => {
     const y = remade(land.w, land.h);
     saveBlueprints(y);
     expect(F.bytesHeld(y)).toBeLessThan(HELD_MOST);
@@ -126,7 +127,8 @@ describe("memory", () => {
   }, 60_000);
 
   // 1.5 MB since tier 5: every holder keeps a count of each of 40 things, not 30, on the land of seven plots by seven.
-  test("at worst, a yard of nothing but crates, as many as the guild's land holds with every plot of it owned, holds under 1.5 MB", () => {
+  // 1.75 MB since tier 8: 61 things, not 52 (18 bytes more a row: 186 KB at the 10,598 rows its 8,546 crates have grown to).
+  test("at worst, a yard of nothing but crates, as many as the guild's land holds with every plot of it owned, holds under 1.75 MB", () => {
     const y = F.create({ tier: 4, seed: 1 });
     const guild = y.land;
     for (const p of guild.plots) if (!y.plots.includes(p.plot)) y.plots.push(p.plot);
@@ -140,7 +142,7 @@ describe("memory", () => {
     F.rewire(y);
     expect(y.kind.filter((k) => k === F.CRATE).length).toBe(room);
     expect(room).toBeGreaterThan(8000);
-    expect(F.bytesHeld(y)).toBeLessThan(1.5 * 1024 * 1024);
+    expect(F.bytesHeld(y)).toBeLessThan(1.75 * 1024 * 1024);
     console.log(`held, ${room} crates: ${kb(F.bytesHeld(y))}`);
   }, 60_000);
 });

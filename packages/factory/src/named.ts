@@ -4,8 +4,9 @@
  * number; the kinds of its pieces; its plots, those it cleared and the one it is clearing; and the most tiles any of its tunnels passes under. Its
  * pieces, its blueprints and plans of the whole yard, and what Undo would put back all count.
  *
- * One rule reads it: a yard naming anything this Leaf does not know, a tunnel longer than this
- * Leaf's longest, or a bit in a piece or an Undo entry that no reader here knows, is a newer Leaf's (`knownHere`, which `decode` and `keptLater` ask), never read with
+ * One rule reads it: a yard naming anything this Leaf does not know (a launch's kind or a track among
+ * them, `launches.ts`), a tunnel longer than this Leaf's longest, or a bit in a piece or an Undo entry
+ * that no reader here knows, is a newer Leaf's (`knownHere`, which `decode` and `keptLater` ask), never read with
  * that thing let go or its Coins paid back. And one writes it: a yard naming nothing past what the
  * last Leaf of version 10 knew (`knownAt10`) is kept so that Leaf reads it. Writing asks it before
  * every save, so it asks it cheaply (`pastTen`): of the yard itself, only what these tables have past
@@ -23,6 +24,7 @@ import type { KeptPiece } from "./cells.ts";
 import { PLOT_IDS } from "./content/plots.ts";
 import { historyNamed } from "./history.ts";
 import { KNOWN_AT_10 } from "./known10.ts";
+import { anyLaunches, launchNames } from "./launches.ts";
 import type { KeptBlueprint } from "./prints.ts";
 import {
   ALL_ITEMS,
@@ -54,6 +56,8 @@ export interface KeptNames {
   readonly newer: boolean;
   /** Whether it keeps smog on any plot (`smog.ts`), or a piece's work past a whole half-tick that smog left (`Holders.quarter`), which no Leaf of version 10 knew. */
   readonly smog: boolean;
+  /** What it keeps of its launches (`launches.ts`): whether any, which no Leaf of version 10 knew, and whether this Leaf knows every part and name of them. */
+  readonly launches: { readonly any: boolean; readonly known: boolean };
 }
 
 type Rec = Record<string, unknown>;
@@ -119,7 +123,7 @@ export function keptNames(
   items.delete(NONE);
   const slowed = pieces !== NEWER && pieces.some((p) => p.quarter !== undefined);
   const smog = slowed || (isRec(raw.smog) && Object.keys(raw.smog).length > 0);
-  return { goals, things, items, kinds, plots, span, newer, smog };
+  return { goals, things, items, kinds, plots, span, newer, smog, launches: launchNames(raw.launches) };
 }
 
 const every = <T>(set: ReadonlySet<T>, ok: (v: T) => boolean): boolean => [...set].every(ok);
@@ -127,6 +131,7 @@ const every = <T>(set: ReadonlySet<T>, ok: (v: T) => boolean): boolean => [...se
 /** Whether this Leaf knows everything a kept yard names, and runs tunnels as long as its longest. */
 export const knownHere = (n: KeptNames): boolean =>
   !n.newer &&
+  n.launches.known &&
   every(n.goals, (id) => goalNamed(id) !== null) &&
   every(n.things, (name) => itemNamed(name) !== null) &&
   every(n.items, isItem) &&
@@ -151,7 +156,8 @@ export const knownAt10 = (n: KeptNames): boolean =>
   every(n.kinds, (k) => isKind(k) && KNOWN_AT_10.kinds[k] === kindName(k)) &&
   every(n.plots, (id) => AT_10.plots.has(id)) &&
   n.span <= KNOWN_AT_10.span &&
-  !n.smog;
+  !n.smog &&
+  !n.launches.any;
 
 /** How many kinds the last Leaf of version 10 had: a kind numbered past them is a later one's. */
 const KINDS_AT_10 = KNOWN_AT_10.kinds.length;
@@ -195,6 +201,7 @@ function kindPast(y: Yard): boolean {
 export function pastTen(y: Yard): boolean {
   if (y.smog.level.some((v) => v > 0) || y.smog.made.some((v) => v > 0)) return true;
   if (y.holders.quarter.subarray(0, y.holders.size).some((v) => v > 0)) return true;
+  if (anyLaunches(y.launches)) return true;
   const goals = [...y.done, ...y.line, ...y.queue, y.hand];
   if (goals.some((g) => LATER_GOAL[g] === 1) || y.got.some((got, g) => got && LATER_GOAL[g] === 1)) return true;
   const most = KNOWN_AT_10.span;

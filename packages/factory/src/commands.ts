@@ -45,6 +45,7 @@ import {
   researchOf,
   TILES,
   whole,
+  withWas,
 } from "./fields.ts";
 import { after, before, isId, undo } from "./history.ts";
 import { RULES } from "./kinds/list.ts";
@@ -104,7 +105,8 @@ interface Carries {
   turn: At & { readonly dir: Dir };
   /** `onto`: the stroke this adds to, by its first command's id: the newest entry (`history.ts`). */
   paint: At & { readonly tint: number; readonly onto?: string };
-  recipe: At & { readonly item: Item | null };
+  /** `was`: for a launch pad, the rocket its card showed it set to, by what it counts as (`kinds/launchpad.ts`). */
+  recipe: At & { readonly item: Item | null; readonly was?: Item };
   sort: At & { readonly item: Item | null };
   side: At & { readonly right: boolean };
   tipOut: At & { readonly item: Item | null };
@@ -361,9 +363,9 @@ export const COMMANDS: { readonly [D in Name]: Spec<D> } = {
   },
   recipe: {
     refused: "cannot_set_recipe",
-    read: itemAt("recipe"),
-    write: writeItem,
-    act: (y, a, _coins, no) => doneUnless(setRecipe(y, a.x, a.y, a.item), no),
+    read: (v, f) => withWas(itemAt("recipe")(v, f), v),
+    write: (a) => ({ ...writeItem(a), ...(a.was === undefined ? {} : { was: itemName(a.was) }) }),
+    act: (y, a, _coins, no) => doneUnless(setRecipe(y, a.x, a.y, a.item, a.was), no),
   },
   sort: {
     refused: "not_a_sorter",

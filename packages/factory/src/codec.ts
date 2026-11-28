@@ -33,6 +33,7 @@ import { NODES } from "./content/nodes.ts";
 import { historyOf, stampOf } from "./history.ts";
 import { FIRST_LAND, holdsFirst, type KeptLand, keptLandOf, keptOn, piecesOn, tileOn } from "./keptland.ts";
 import { LAND, type Land, plotPrice } from "./land.ts";
+import { keptLaunches, launchesOnto } from "./launches.ts";
 import { type KeptNames, keptNames, knownAt10, knownHere, pastTen, WIDER } from "./named.ts";
 import { counting, fillBoard, giveGoal, ORDER_WAITS, queue, study } from "./orders.ts";
 import { keptOf, packPieces, type Piece, placed, unpackWays } from "./pieces.ts";
@@ -176,9 +177,12 @@ function keptPastTen(y: Yard, rec: Rec, pieces: readonly KeptPiece[]): boolean {
   // A yard that has begun a clearing keeps the count of them, which that Leaf would let go.
   if (y.begun > 0) return true;
   if (!WIDER) return pastTen(y);
-  const prints: unknown[] = Array.isArray(rec.blueprints) ? rec.blueprints : [];
-  return !knownAt10(keptNames(rec, pieces, prints.map(keptBlueprint), y.land.w * y.land.h));
+  return !knownAt10(keptNames(rec, pieces, keptPrints(rec), y.land.w * y.land.h));
 }
+
+/** A kept record's blueprints, each as kept (`keptBlueprint`). */
+const keptPrints = (raw: Rec): KeptBlueprint[] =>
+  (Array.isArray(raw.blueprints) ? raw.blueprints : []).map(keptBlueprint);
 
 /** A yard as kept, but for its version. */
 function record(y: Yard, keep: Keep, pieces: readonly KeptPiece[]): Rec {
@@ -198,6 +202,7 @@ function record(y: Yard, keep: Keep, pieces: readonly KeptPiece[]): Rec {
     ...(y.felled.includes(1) ? { felled: felledTiles(y) } : {}),
     ...keptClearing(y),
     ...keptSmog(y),
+    ...keptLaunches(y.launches),
     done: y.done.map(goalId),
     hand: y.hand === -1 ? null : goalId(y.hand),
     ...(y.queue.length > 0 ? { queue: y.queue.map(goalId) } : {}),
@@ -229,8 +234,7 @@ export function namesOf(raw: unknown, land: Land = LAND): KeptNames | null {
   const on = keptOn(raw, land);
   const bytes = fromBase64(raw.cells);
   const pieces = on && bytes ? unpackCells(bytes, on.w * on.h) : null;
-  const prints: unknown[] = Array.isArray(raw.blueprints) ? raw.blueprints : [];
-  return on && pieces ? keptNames(raw, pieces, prints.map(keptBlueprint), on.w * on.h) : null;
+  return on && pieces ? keptNames(raw, pieces, keptPrints(raw), on.w * on.h) : null;
 }
 
 /**
@@ -454,8 +458,7 @@ export function decode(text: string | null | undefined, land: Land = LAND): Yard
   // Pieces with a part this Leaf does not know are a newer Leaf's (`NEWER`): not read, as bytes that are not pieces.
   const pieces = on && bytes ? unpackCells(bytes, on.w * on.h) : null;
   if (!on || !Array.isArray(pieces)) return null;
-  const prints: unknown[] = Array.isArray(raw.blueprints) ? raw.blueprints : [];
-  const kept = prints.map(keptBlueprint);
+  const kept = keptPrints(raw);
   // Anything this Leaf does not know, anywhere: a newer Leaf's yard (`keptLater`), not read with it let go.
   if (!knownHere(keptNames(raw, pieces, kept, on.w * on.h))) return null;
   return vouch(raw, piecesOn(on, land, pieces), kept, land, on);
@@ -705,6 +708,7 @@ export function vouch(
   y.seen = last === null || had === null ? here(y) : { tick: last, till: had, depot: untally(seen.depot, 1e12) };
   // What Undo would undo, as kept: none for a yard kept before it had any, or under other rules or another land.
   y.history = historyOf(raw.history, raw.stamp, land);
+  launchesOnto(y.launches, raw.launches);
   y.news = [];
   return y;
 }

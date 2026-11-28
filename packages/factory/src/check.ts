@@ -4,7 +4,7 @@
  * clock, the power put by, the till and its counter, the goals (those done, in order, the node in
  * hand and those in line after it, the line of research, and what each goal not done has been
  * given) and the board (each order's wants, what came in, its pay, its words and when it began to
- * count), the plots owned, cleared and being cleared (with what it has been given), and the redwoods felled, the depot's books (what awards and the standing are read from), what was seen at the
+ * count), the plots owned, cleared and being cleared (with what it has been given), and the redwoods felled, the launches and levels (`launches.ts`), the depot's books (what awards and the standing are read from), what was seen at the
  * owner's last command, the pieces to hand, the blueprints, what Undo would undo (each entry's bytes:
  * its id is worked out from them), and every part of every piece, tile by
  * tile, numbered by the tables. Every tile it mixes in (a piece's, a redwood felled, a piece of a plan
@@ -25,6 +25,7 @@
 import { spanByte } from "./bytes.ts";
 import { fromCorner, tileFromCorner } from "./keptland.ts";
 import type { Land } from "./land.ts";
+import { mixLaunches } from "./launches.ts";
 import { counting } from "./orders.ts";
 import { waysOn } from "./pieces.ts";
 import { BLUEPRINTS_BEFORE, ITEM_COUNT, NODE_COUNT, NONE, SPAN_MOST } from "./tables.ts";
@@ -258,6 +259,7 @@ export function check(y: Yard): number {
   mixTally(mix, y.seen.depot);
   mixLand(y, mix);
   mixSmog(y, mix);
+  mixLaunches(y.launches, mix);
   mixSpare(y.spare, mix);
   mixKept(y, mix);
   mixTally(mix, y.depot);

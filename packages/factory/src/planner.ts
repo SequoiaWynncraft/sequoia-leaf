@@ -5,6 +5,7 @@
  * held up; nothing that moves the yard reads it.
  */
 import { TICKS } from "./content/machines.ts";
+import { CHARGED, LAUNCHED } from "./launch.ts";
 import {
   ALL_ITEMS,
   GATHERING,
@@ -140,10 +141,13 @@ export interface Branch {
   readonly from: readonly Branch[];
 }
 
-/** The whole tree of machines and gatherers that makes `perMinute` of a thing, every piece at `grade`. */
+/**
+ * The whole tree of machines and gatherers that makes `perMinute` of a thing, every piece at `grade`.
+ * What is made at once, at no work (a launch), takes one of its maker however fast it is fed.
+ */
 export function tree(n: Item, perMinute: number, grade = 1): Branch {
   const { kind, recipe } = makerOf(n);
-  const count = perMinute / makes(kind, grade, recipe);
+  const count = recipe?.work === 0 ? Math.min(1, perMinute) : perMinute / makes(kind, grade, recipe);
   const from = !recipe ? [] : recipe.from.map((part, p) => tree(part, perMinute * (recipe.need[p] ?? 0), grade));
   return { item: n, kind, count, perMinute, from };
 }
@@ -159,4 +163,19 @@ export function bill(b: Branch): { item: Item; kind: Kind; count: number }[] {
   };
   b.from.forEach(add);
   return out;
+}
+
+/**
+ * The grade III line-hours of `count` of a thing (SPEC-2 0.6): each at what one grade III machine of its
+ * maker makes of it a minute. A rocket, which a launch pad launches at once, counts as its parts, its
+ * charged cells as the cells they are charged from: 1.78 line-hours a rocket.
+ */
+export function lineHours(n: Item, count: number): number {
+  const rocket = LAUNCHED[n];
+  if (!rocket) {
+    const { kind, recipe } = makerOf(n);
+    return count / makes(kind, 3, recipe) / 60;
+  }
+  const cells = lineHours(CHARGED.plain, rocket.cells * count);
+  return rocket.parts.reduce((sum, p) => sum + lineHours(p.item, p.need * count), cells);
 }

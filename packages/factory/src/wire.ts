@@ -1,11 +1,3 @@
-import { BURNS } from "./burns.ts";
-import { BUFFER } from "./content/machines.ts";
-import { alight } from "./kinds/burner.ts";
-import { keep } from "./kinds/holder.ts";
-import type { Kit } from "./kinds/kit.ts";
-import { anything, empty, lay } from "./kinds/line.ts";
-import { RULES, TAKES_TURNS } from "./kinds/list.ts";
-import { room as makerRoom, wants as makerWants } from "./kinds/maker.ts";
 /**
  * The yard's plumbing: who hands to whom, and in what order, and the one rule by which a piece hands
  * a thing to another. Who hands to whom depends only on what stands where, so it is worked out once
@@ -17,7 +9,17 @@ import { room as makerRoom, wants as makerWants } from "./kinds/maker.ts";
  * The kinds play with the kit made here (`KIT`): everything of the rules they may use, handed to
  * each of their hooks, since a kind's module imports nothing of the rules (`kinds/kind.ts`).
  */
+import { toBeat } from "./beat.ts";
+import { BURNS } from "./burns.ts";
+import { BUFFER } from "./content/machines.ts";
+import { alight } from "./kinds/burner.ts";
+import { keep } from "./kinds/holder.ts";
+import type { Kit } from "./kinds/kit.ts";
+import { anything, empty, lay } from "./kinds/line.ts";
+import { RULES, TAKES_TURNS } from "./kinds/list.ts";
+import { room as makerRoom, wants as makerWants } from "./kinds/maker.ts";
 import { besideWater, toward } from "./land.ts";
+import { CHARGED, FIRST_ROCKET, rocketSet } from "./launch.ts";
 import { deliver, giveGoal } from "./orders.ts";
 import {
   carried,
@@ -365,6 +367,29 @@ export function sendPort(y: Yard, i: number, r: number, port: number, wire: Wire
   return true;
 }
 
+/**
+ * A piece of more than one tile (its own tile `i`, its row `r`) hands one of a thing it holds, `n`, not
+ * one it finished, by its way out `port` to the tile ahead of that way: a launch pad's plain cells.
+ * Says whether it did. One refused does not wait: it tries again on its next turn.
+ */
+export function sendHeld(y: Yard, i: number, r: number, port: number, n: number, wire: Wire): boolean {
+  const o = outsOf(y, i)[port];
+  if (!o || held(y.holders, r, n) === 0) return false;
+  const to = toward(y.land, i + o.dx + o.dy * y.land.w, o.way);
+  const side = (o.way + 2) & 3;
+  if (!accepts(y, to, n, side, wire)) return false;
+  handTo(y, to, n, side, 0, wire);
+  take(y.holders, r, n);
+  roomRound(y, i, wire.waiting);
+  return true;
+}
+
+/** Why the piece on a tile never takes the thing `n`, as its kind says it, or null where it says nothing more than that it does not. */
+export function refusing(y: Yard, to: number, n: number): string | null {
+  const r = to < 0 ? undefined : rulesAt(y, to);
+  return r ? r.refuses(KIT, y, pieceOf(y, to), n) : null;
+}
+
 // ---------- the plumbing, worked out ----------
 
 /** The yard's plumbing as it stands, worked out first if a change left it unknown. */
@@ -550,6 +575,10 @@ export const KIT: Kit = {
   MINUTE,
   carried,
   BURNS,
+  CHARGED,
+  rocketSet,
+  FIRST_ROCKET,
+  toBeat,
   whole,
   // The yard's reads and writes.
   holderOf,
@@ -597,11 +626,13 @@ export const KIT: Kit = {
   passWay,
   sendOut,
   sendPort,
+  sendHeld,
   portTo,
   outsOf,
   sendsThing,
   takesAt,
   refused,
+  refusing,
   roomBeside: roomAt,
   wireOf,
   // What reaches the depot and the research; power.
