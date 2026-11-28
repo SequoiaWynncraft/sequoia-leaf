@@ -120,29 +120,25 @@ function halves(g: Ctx, x: number, y: number): void {
   }
 }
 
-/** A wet print, drying: a darker smear on the wood with a glint of water. */
+/** A wet print, drying: a smear of water on the wood (a stain: one tone, no edge). */
 function print(g: Ctx, x: number, y: number, k: number): void {
   g.globalAlpha = 0.6 * (1 - k);
-  R(g, x - 5, y - 1, 10, 3, INK);
-  R(g, x - 3, y - 2, 6, 1, INK);
-  R(g, x - 1, y, 2, 1, WATER[3]);
+  R(g, x - 5, y - 1, 10, 3, WATER[2]);
+  R(g, x - 3, y - 2, 6, 1, WATER[2]);
   g.globalAlpha = 1;
 }
 
-/** A wet ring on a hex round a figure's base, drying: dark wood, a glint of water on it. */
+/** A wet ring on a hex round a figure's base, drying: a one-pixel line of water (a stain: one tone, no edge). */
 function wetRing(g: Ctx, x: number, y: number, k: number): void {
-  g.globalAlpha = 0.55 * (1 - k);
-  R(g, x - 8, y - 4, 16, 1, INK);
-  R(g, x - 8, y + 3, 16, 1, INK);
-  R(g, x - 11, y - 3, 3, 1, INK);
-  R(g, x + 8, y - 3, 3, 1, INK);
-  R(g, x - 11, y + 2, 3, 1, INK);
-  R(g, x + 8, y + 2, 3, 1, INK);
-  R(g, x - 12, y - 2, 1, 4, INK);
-  R(g, x + 11, y - 2, 1, 4, INK);
-  g.globalAlpha = 1 - k;
-  R(g, x - 12, y, 1, 1, WATER[3]);
-  R(g, x + 9, y - 3, 1, 1, WATER[3]);
+  g.globalAlpha = 0.8 * (1 - k);
+  R(g, x - 8, y - 4, 16, 1, WATER[2]);
+  R(g, x - 8, y + 3, 16, 1, WATER[2]);
+  R(g, x - 11, y - 3, 3, 1, WATER[2]);
+  R(g, x + 8, y - 3, 3, 1, WATER[2]);
+  R(g, x - 11, y + 2, 3, 1, WATER[2]);
+  R(g, x + 8, y + 2, 3, 1, WATER[2]);
+  R(g, x - 12, y - 2, 1, 4, WATER[2]);
+  R(g, x + 11, y - 2, 1, 4, WATER[2]);
   g.globalAlpha = 1;
 }
 

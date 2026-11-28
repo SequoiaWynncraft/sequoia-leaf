@@ -6,51 +6,52 @@
  * planning, the room's (`roomOf`). Nothing is drawn under no rule.
  */
 import { BARK, EARTH, GREEN, INK } from "@sequoia-leaf/kit/palette.ts";
-import { R } from "@sequoia-leaf/kit/pix.ts";
+import { outlined, R } from "@sequoia-leaf/kit/pix.ts";
 import { type Ctx, makeCanvas } from "@sequoia-leaf/kit/util.ts";
 import { closedCells, type FightRules, roomOf, type RuleId, rulesOf, type RunView } from "@sequoia-leaf/raid";
 import { seatCell } from "@sequoia-leaf/raid/hex.ts";
 
-import { hexMark } from "./art/table.ts";
+import { BOARD, hexSign } from "./art/board.ts";
 import { shownCell } from "./board.ts";
 import { fightOn } from "./fightview.ts";
 import { cellXY, HEX_H, HEX_W } from "./geometry.ts";
 import { V } from "./stage.ts";
 import { S } from "./state.ts";
 
-/** The marks, made once: a stump, a hex grown over, a bare hex. */
-const MARKS: { stump?: HTMLCanvasElement; shut?: HTMLCanvasElement; bare?: HTMLCanvasElement } = {};
+/** The marks, made once: a stump on its hex, a hex grown over. */
+const MARKS: { stump?: HTMLCanvasElement; shut?: HTMLCanvasElement } = {};
 
-/** A stump on its hex: the cut top with its rings, the bark below it, on moss. */
-function stumpMark(): HTMLCanvasElement {
+/** A hex closed: its face and lip the wood round the board, its grooves kept. */
+const bare = (): HTMLCanvasElement => hexSign(BOARD.wood, BOARD.wood);
+
+/** A thing that closes a hex, on the hex's wood: `thing` drawn with an ink edge, its top left at `x`, `y`. */
+function closedBy(thing: HTMLCanvasElement, x: number, y: number): HTMLCanvasElement {
   const { c, g } = makeCanvas(HEX_W, HEX_H);
-  g.drawImage(hexMark(GREEN[0], INK), 0, 0);
-  R(g, 5, 10, 10, 4, BARK[1]);
-  R(g, 5, 10, 1, 4, BARK[0]);
-  R(g, 14, 10, 1, 4, BARK[0]);
-  R(g, 6, 14, 8, 1, BARK[0]);
-  R(g, 6, 6, 8, 1, EARTH[2]);
-  R(g, 5, 7, 10, 3, EARTH[2]);
-  R(g, 6, 10, 8, 1, EARTH[1]);
-  R(g, 7, 7, 6, 1, EARTH[1]);
-  R(g, 8, 8, 4, 1, EARTH[1]);
-  R(g, 9, 8, 2, 1, EARTH[0]);
+  g.drawImage(bare(), 0, 0);
+  g.drawImage(outlined(thing, INK), x, y);
   return c;
 }
-/** A hex grown over: moss, a few blades in it. */
+/** A stump on its hex, 12 by 10: the cut top with its heart, the bark below it. */
+function stumpMark(): HTMLCanvasElement {
+  const { c, g } = makeCanvas(12, 10);
+  R(g, 1, 4, 10, 5, BARK[1]);
+  R(g, 1, 4, 1, 5, BARK[0]);
+  R(g, 0, 8, 12, 1, BARK[1]);
+  R(g, 1, 0, 10, 4, EARTH[2]);
+  R(g, 2, 1, 8, 2, EARTH[1]);
+  R(g, 4, 1, 4, 1, EARTH[0]);
+  return closedBy(c, 3, 2);
+}
+/** A hex grown over: a cushion of moss 14 by 7. */
 function shutMark(): HTMLCanvasElement {
-  const { c, g } = makeCanvas(HEX_W, HEX_H);
-  g.drawImage(hexMark(GREEN[0], INK), 0, 0);
-  for (const [x, y] of [
-    [6, 8],
-    [11, 6],
-    [13, 11],
-    [8, 13],
-  ] as const) {
-    R(g, x, y, 1, 2, GREEN[2]);
-    R(g, x + 1, y - 1, 1, 2, GREEN[1]);
-  }
-  return c;
+  const { c, g } = makeCanvas(14, 7);
+  R(g, 1, 3, 12, 4, GREEN[1]);
+  R(g, 0, 5, 14, 2, GREEN[1]);
+  R(g, 2, 2, 4, 1, GREEN[2]);
+  R(g, 8, 1, 3, 2, GREEN[2]);
+  R(g, 4, 4, 5, 1, GREEN[2]);
+  R(g, 9, 1, 1, 1, GREEN[3]);
+  return closedBy(c, 2, 6);
 }
 
 /** Draws a mark on a fight cell, the far half `gap` pixels further away. */
@@ -71,13 +72,11 @@ export function ruleShown(run: RunView): { named: readonly RuleId[]; rules: Figh
   return room.named.length > 0 ? room : null;
 }
 
-/** How a hex closed all fight long looks: a stump under Stumps, grown over under Narrow Table, else bare. */
+/** How a hex closed all fight long looks: a stump under Stumps, grown over under Narrow Table, else bare wood. */
 function closedMark(named: readonly RuleId[]): HTMLCanvasElement {
-  MARKS.stump ??= stumpMark();
-  MARKS.shut ??= shutMark();
-  return named.includes("stumps") ? MARKS.stump : named.includes("narrow") ? MARKS.shut : bareMark();
+  if (named.includes("stumps")) return (MARKS.stump ??= stumpMark());
+  return named.includes("narrow") ? (MARKS.shut ??= shutMark()) : bare();
 }
-const bareMark = (): HTMLCanvasElement => (MARKS.bare ??= hexMark("#1a0f1e66", "#1a0f1e99"));
 
 /** The hexes the rules shown close, drawn over the board and under everyone on it: in a fight those closed all fight long, while planning those closed only for sitting down too. */
 export function drawClosed(g: Ctx, run: RunView): void {
@@ -86,6 +85,5 @@ export function drawClosed(g: Ctx, run: RunView): void {
   const mark = closedMark(shown.named);
   for (const cell of closedCells(shown.rules)) put(g, mark, fightOn() ? shownCell(cell) : cell);
   if (fightOn()) return;
-  const bare = bareMark();
-  for (const seat of shown.rules.closedToSit) for (const side of [0, 1] as const) put(g, bare, seatCell(side, seat));
+  for (const seat of shown.rules.closedToSit) for (const side of [0, 1] as const) put(g, bare(), seatCell(side, seat));
 }

@@ -1,22 +1,24 @@
 /**
  * What abilities leave on the table in a fight, and how figures move for them, beside
- * `fightview.ts`: a zone tints the hexes it holds for as long as it lasts (slime green, a puddle
- * blue, dust pale, ice pale blue), under the figures, and snow is outlined first, then settles
- * white under flakes that keep falling; a row Pomp plays to is lit end to end while its fanfare
- * lasts; a telegraph outlines the hexes it will land on and fills until it does; a pulled figure is jerked across as a knocked-back one is; a figure channelling
+ * `fightview.ts`: a zone tints the hexes it holds for as long as it lasts, under the figures, with
+ * one line round the whole of it and small marks of its own on each hex, so that zones are told apart
+ * without their colour (slime's blobs, a puddle's ripples, dust's specks, ice's glints, snow's
+ * drifts); snow is outlined first, then settles under flakes that keep falling; a row Pomp plays to
+ * is lit end to end while its fanfare lasts; a telegraph rims the hexes it will land on and fills
+ * until it does; a pulled figure is jerked across as a knocked-back one is; a figure channelling
  * holds its cast pose until its last pulse, or until it is stunned.
  *
  * `showMark` is shown every event of the fight first and takes the ones that are its own;
  * `drawFightMarks` draws under the figures, every frame.
  */
 import type { Move } from "@sequoia-leaf/figures/move.ts";
-import { CREAM, GOLD, GREEN, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
+import { CORAL, CREAM, GOLD, GREEN, PAPER, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
 import { R } from "@sequoia-leaf/kit/pix.ts";
 import { clamp, type Ctx } from "@sequoia-leaf/kit/util.ts";
 import type { Fight, FightEvent, Unit, ZoneKind } from "@sequoia-leaf/raid";
 import { cellAt, CELLS, COLS } from "@sequoia-leaf/raid/hex.ts";
 
-import { hexMark } from "./art/table.ts";
+import { dusk, hexSign, lineRound } from "./art/board.ts";
 import { shownCell } from "./board.ts";
 import { burst } from "./fx.ts";
 import { cellXY, HEX_H, HEX_W, type Pt } from "./geometry.ts";
@@ -70,47 +72,118 @@ const M: {
   lit: [],
 };
 
-const ZONE: Readonly<Record<ZoneKind, readonly [fill: string, rim: string]>> = {
-  slime: [GREEN[3], GREEN[4]],
-  puddle: [WATER[2], WATER[3]],
-  dust: ["#cdb6d8", CREAM],
-  ice: [WATER[2], WATER[3]],
-  snow: [CREAM, WATER[3]],
+/** A zone's tint (and how strong), the line round it, and its marks on each hex, measured from the hex's middle. */
+interface ZoneLook {
+  readonly tint: string;
+  readonly alpha: number;
+  readonly line: string;
+  readonly marks: (g: Ctx, x: number, y: number) => void;
+}
+/** A row of single pixels: `n` of them from `x`, `y`, each `dx`, `dy` on from the last. */
+function dots(g: Ctx, x: number, y: number, n: number, dx: number, dy: number, col: string): void {
+  for (let i = 0; i < n; i++) R(g, x + i * dx, y + i * dy, 1, 1, col);
+}
+const ZONE: Readonly<Record<ZoneKind, ZoneLook>> = {
+  slime: {
+    tint: GREEN[3],
+    alpha: 0.36,
+    line: GREEN[4],
+    marks: (g, x, y) => {
+      R(g, x - 5, y - 2, 2, 1, GREEN[4]);
+      R(g, x + 2, y + 2, 3, 1, GREEN[4]);
+      R(g, x + 4, y - 4, 1, 1, GREEN[4]);
+    },
+  },
+  puddle: {
+    tint: WATER[2],
+    alpha: 0.36,
+    line: WATER[3],
+    marks: (g, x, y) => {
+      R(g, x - 5, y - 1, 4, 1, WATER[3]);
+      R(g, x + 1, y + 3, 3, 1, WATER[3]);
+    },
+  },
+  dust: {
+    tint: PAPER[1],
+    alpha: 0.22,
+    line: dusk(PAPER[1], 0.2),
+    marks: (g, x, y) => {
+      for (const [dx, dy] of DUST) R(g, x + dx, y + dy, 1, 1, PAPER[1]);
+    },
+  },
+  ice: {
+    tint: WATER[3],
+    alpha: 0.3,
+    line: WATER[3],
+    marks: (g, x, y) => {
+      dots(g, x - 5, y + 1, 4, 1, -1, CREAM);
+      dots(g, x + 1, y + 4, 3, 1, -1, CREAM);
+    },
+  },
+  snow: {
+    tint: CREAM,
+    alpha: 0.14,
+    line: dusk(CREAM, 0.3),
+    marks: (g, x, y) => {
+      // A drift along the hex's lower edges, and three flakes lying.
+      for (let i = 0; i < 4; i++) {
+        R(g, x - 8 + i * 2, y + 4 + i, 2, 1, PAPER[2]);
+        R(g, x + 6 - i * 2, y + 4 + i, 2, 1, PAPER[2]);
+      }
+      for (const [dx, dy] of [
+        [-3, -3],
+        [3, -1],
+        [-1, 2],
+      ] as const)
+        R(g, x + dx, y + dy, 1, 1, CREAM);
+    },
+  },
 };
-/** Steps snow is only outlined before it begins to settle, and steps it takes to settle white. */
+/** Where dust's five specks lie on a hex. */
+const DUST = [
+  [-5, -2],
+  [0, -5],
+  [4, 0],
+  [-2, 3],
+  [5, 4],
+] as const;
+/** Steps snow is only outlined before it begins to settle, and steps it takes to settle. */
 const OUTLINED = 6;
 const SETTLES = 16;
-/** Steps a fanfare's row stays lit (its 4 seconds), and how many flakes fall on a hex of snow at once. */
+/** Steps a fanfare's row stays lit (its 4 seconds), and the most flakes falling over all the snow at once. */
 const LIT = 80;
-const FLAKES = 4;
-const MARK = "#e67967";
-const CLEAR = "rgba(0,0,0,0)";
+const FLAKES = 12;
 
-const hexes = new Map<string, HTMLCanvasElement>();
-function hexOf(fill: string, rim: string): HTMLCanvasElement {
-  const key = `${fill} ${rim}`;
-  let pic = hexes.get(key);
-  if (!pic) {
-    pic = hexMark(fill, rim);
-    hexes.set(key, pic);
-  }
-  return pic;
-}
 function drawHex(g: Ctx, pic: HTMLCanvasElement, cell: number, alpha: number): void {
   const at = cellXY(shownCell(cell));
   g.globalAlpha = alpha;
   g.drawImage(pic, V.bx + at.x - HEX_W / 2, V.by + at.y - HEX_H / 2);
 }
 
-/** Flakes falling onto a hex of snow, each a pixel, drifting as they fall, by the clock alone. */
-function flakes(g: Ctx, cell: number, c: number): void {
-  const at = cellXY(shownCell(cell));
+/** The line round each zone, a picture the board's size, by its kind and hexes: a zone changes only when it spreads or dries. */
+const LINES = new Map<string, HTMLCanvasElement>();
+function lineFor(kind: ZoneKind, shown: readonly number[]): HTMLCanvasElement {
+  const key = `${kind} ${shown.join(",")}`;
+  let line = LINES.get(key);
+  if (!line) {
+    line = lineRound(shown, ZONE[kind].line);
+    if (LINES.size > 32) LINES.clear();
+    LINES.set(key, line);
+  }
+  return line;
+}
+
+/** Flakes falling onto the snow, each a pixel, drifting as they fall, by the clock alone: never more than `FLAKES` at once. */
+function flakes(g: Ctx, cells: readonly number[], c: number): void {
   g.globalAlpha = 1;
-  for (let i = 0; i < FLAKES; i++) {
-    const k = (((c * 0.05 + i / FLAKES + cell * 0.37) % 1) + 1) % 1;
+  const n = Math.min(FLAKES, cells.length * 2);
+  for (let i = 0; i < n; i++) {
+    const cell = cells[(i * 7) % cells.length] ?? 0;
+    const at = cellXY(shownCell(cell));
+    const k = (((c * 0.05 + i / n + cell * 0.37) % 1) + 1) % 1;
     const x = Math.round(V.bx + at.x + ((cell * 5 + i * 7) % 13) - 6 + Math.sin(c * 0.15 + i) * 1.5);
     const y = Math.round(V.by + at.y - 20 + k * 22);
-    R(g, x, y, 1, 1, i % 2 === 0 ? CREAM : WATER[3]);
+    R(g, x, y, 1, 1, CREAM);
   }
 }
 
@@ -190,29 +263,52 @@ export function drawFightMarks(g: Ctx): void {
     const k = clamp(Math.min((c - l.t0) / 3, (l.t0 + LIT - c) / 10), 0, 1);
     for (const p of l.at) {
       g.globalAlpha = 0.3 * k;
-      g.drawImage(hexOf(GOLD[1], GOLD[1]), V.bx + p.x - HEX_W / 2, V.by + p.y - HEX_H / 2);
+      g.drawImage(hexSign(GOLD[1], GOLD[1]), V.bx + p.x - HEX_W / 2, V.by + p.y - HEX_H / 2);
       g.globalAlpha = k;
-      g.drawImage(hexOf(CLEAR, GOLD[2]), V.bx + p.x - HEX_W / 2, V.by + p.y - HEX_H / 2);
+      g.drawImage(hexSign(null, GOLD[2]), V.bx + p.x - HEX_W / 2, V.by + p.y - HEX_H / 2);
     }
   }
-  f.zones.forEach((z, cell) => {
-    if (!z) return;
-    const pulse = 0.42 + 0.08 * Math.sin(c * 0.25 + cell);
-    if (z.kind === "ice") drawHex(g, hexOf(CLEAR, CREAM), cell, 0.8);
-    if (z.kind !== "snow") return drawHex(g, hexOf(...ZONE[z.kind]), cell, z.kind === "ice" ? pulse + 0.15 : pulse);
-    // Snow: the hex outlined first, then settling white, with flakes still coming down on it.
-    const age = c - (M.since.get(cell) ?? c);
-    drawHex(g, hexOf(CLEAR, WATER[3]), cell, 1);
-    if (age > OUTLINED) drawHex(g, hexOf(...ZONE.snow), cell, 0.8 * clamp((age - OUTLINED) / SETTLES, 0, 1));
-    flakes(g, cell, c);
-  });
+  drawZones(g, f, c);
   M.telegraphs = M.telegraphs.filter((m) => m.fight === f && c < m.t0 + m.dur);
   for (const m of M.telegraphs) {
     const k = clamp((c - m.t0) / m.dur, 0, 1);
     for (const cell of m.cells) {
-      drawHex(g, hexOf(MARK, MARK), cell, 0.15 + k * 0.5);
-      drawHex(g, hexOf(CLEAR, MARK), cell, 1);
+      drawHex(g, hexSign(CORAL, CORAL), cell, 0.15 + k * 0.35);
+      drawHex(g, hexSign(null, CORAL), cell, 1);
     }
   }
   g.globalAlpha = 1;
+}
+
+/**
+ * The zones on the board, kind by kind: the tint over each of their hexes, the line round the whole
+ * of each kind, its marks on every hex. Snow is only its line at first; each hex's tint and marks
+ * settle in after.
+ */
+function drawZones(g: Ctx, f: Fight, c: number): void {
+  const by = new Map<ZoneKind, number[]>();
+  f.zones.forEach((z, cell) => {
+    if (z) by.set(z.kind, [...(by.get(z.kind) ?? []), cell]);
+  });
+  for (const [kind, cells] of by) {
+    const look = ZONE[kind];
+    const tint = hexSign(look.tint, look.tint);
+    for (const cell of cells) {
+      const k = kind === "snow" ? clamp((c - (M.since.get(cell) ?? c) - OUTLINED) / SETTLES, 0, 1) : 1;
+      drawHex(g, tint, cell, look.alpha * k);
+      const at = cellXY(shownCell(cell));
+      g.globalAlpha = k;
+      look.marks(g, V.bx + at.x, V.by + at.y);
+    }
+    g.globalAlpha = 1;
+    g.drawImage(
+      lineFor(
+        kind,
+        cells.map(shownCell).toSorted((a, b) => a - b),
+      ),
+      V.bx,
+      V.by,
+    );
+    if (kind === "snow") flakes(g, cells, c);
+  }
 }

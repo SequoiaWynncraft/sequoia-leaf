@@ -5,7 +5,7 @@ import { beatAt, drawFigure, drawStanding, drawStars, framesOf, hoverAt } from "
  * figures waiting on the far half, the party's own on the near half and the bench, and (while one
  * is on) the fight.
  */
-import { CREAM, GOLD, INK, SKY, WATER } from "@sequoia-leaf/kit/palette.ts";
+import { CREAM, GOLD, INK, SKY } from "@sequoia-leaf/kit/palette.ts";
 import { R } from "@sequoia-leaf/kit/pix.ts";
 import { write } from "@sequoia-leaf/kit/text.ts";
 import { clamp, type Ctx } from "@sequoia-leaf/kit/util.ts";
@@ -15,9 +15,10 @@ import { regularOf, ROOMS } from "@sequoia-leaf/raid/content/rooms.ts";
 import { HOME_ROWS, seatCell } from "@sequoia-leaf/raid/hex.ts";
 
 import { drawAimsUnder } from "./aimed.ts";
+import { drawShadow, hexSign, SIGN } from "./art/board.ts";
 import { itemPic, levelPic } from "./art/icons.ts";
 import { drawLife } from "./art/place.ts";
-import { hexMark, lampsOf, rimTop, stumpOf, warmGlow } from "./art/table.ts";
+import { lampsOf, rimTop, stumpOf, warmGlow } from "./art/table.ts";
 import { drawBubblesUnder } from "./bubble.ts";
 import { drawCallsUnder } from "./call.ts";
 import { drawClosed } from "./closed.ts";
@@ -38,7 +39,7 @@ import { facing } from "./screen.ts";
 import { drawShellsUnder } from "./shell.ts";
 import { snd } from "./sounds.ts";
 import { drawSeals } from "./spells.ts";
-import { boardHalves, place, type Standing, V } from "./stage.ts";
+import { drawBoard, place, type Standing, V } from "./stage.ts";
 import { catalogFor, S } from "./state.ts";
 import { drawWoodwork } from "./woodwork.ts";
 import { drawZone } from "./zone.ts";
@@ -53,10 +54,6 @@ export const standAlso = (fn: (g: Ctx) => Standing[]): void => void alsoStanding
 const pawnFades: (() => number)[] = [];
 export const fadePawns = (fn: () => number): void => void pawnFades.push(fn);
 const pawnFade = (p: Pawn): number => (p.move ? 1 : pawnFades.reduce((k, fade) => k * fade(), 1));
-
-let litMark: HTMLCanvasElement | null = null;
-let aimMark: HTMLCanvasElement | null = null;
-let swapMark: HTMLCanvasElement | null = null;
 
 // ---------- who is waiting on the far half ----------
 
@@ -147,7 +144,7 @@ function pawnStanding(g: Ctx, p: Pawn, ox: number, oy: number): Standing {
       if (lift > 1.5) {
         g.fillStyle = "rgba(26,15,30,0.3)";
         g.fillRect(Math.round(ox + p.x) - 6, Math.round(oy + p.y) - 1, 12, 2);
-      }
+      } else if (spot?.on === "board") drawShadow(g, ox + p.x, oy + p.y);
       const alpha = p.alpha * (shine.dim ? DIM : 1) * pawnFade(p);
       if (alpha < 1) g.globalAlpha = alpha;
       drawStanding(g, catalogFor(S.run), p.kind, x, y, S.looks.bases, {
@@ -204,6 +201,7 @@ function foeStanding(
     x: at.x,
     y: at.y + FOOT - come.away,
     draw: () => {
+      if (come.away < 1 && come.lift + shine.hop < 1.5) drawShadow(g, x, V.by + at.y + FOOT, big);
       if (shine.dim) g.globalAlpha = DIM;
       drawStanding(g, catalogFor(S.run), kind, x, y, "plain", {
         hover,
@@ -220,10 +218,12 @@ function foeStanding(
   };
 }
 
+/**
+ * What the board shows for a figure in the hand: the zone it belongs in as one band, a rim on each
+ * seat it may go to (gold in its zone), a blue rim on a figure it would change places with, the seat
+ * it is over filled and ringed in cream. Only the band's line breathes.
+ */
 function drawMarks(g: Ctx): void {
-  litMark ??= hexMark(GOLD[1], GOLD[0]);
-  aimMark ??= hexMark("#ffffff", GOLD[1]);
-  swapMark ??= hexMark(WATER[3], WATER[2]);
   const pulse = 0.5 + 0.14 * Math.sin(V.t * 5);
   const marks = handMarks();
   const put = (mark: HTMLCanvasElement, seat: number, alpha: number): void => {
@@ -231,11 +231,16 @@ function drawMarks(g: Ctx): void {
     g.globalAlpha = alpha;
     g.drawImage(mark, V.bx + at.x - HEX_W / 2, V.by + at.y - HEX_H / 2);
   };
-  for (const seat of marks.seats) put(litMark, seat, pulse);
-  for (const seat of marks.swaps) put(swapMark, seat, pulse * 0.8);
-  drawZone(g, marks.zone, V.bx, V.by);
+  drawZone(g, marks.zone, V.bx, V.by, V.t);
+  const zone = new Set(marks.zone);
+  for (const seat of marks.seats)
+    put(hexSign(null, zone.has(seat) ? SIGN.zone : SIGN.free), seat, zone.has(seat) ? 0.55 : 0.85);
+  for (const seat of marks.swaps) put(hexSign(null, SIGN.swap), seat, 0.75);
   const t = marks.target;
-  if (t?.on === "board" && (marks.seats.includes(t.at) || marks.swaps.includes(t.at))) put(aimMark, t.at, 0.9);
+  if (t?.on === "board" && (marks.seats.includes(t.at) || marks.swaps.includes(t.at))) {
+    put(hexSign(SIGN.aimFill, SIGN.aimFill), t.at, 0.45);
+    put(hexSign(null, SIGN.aim), t.at, 1);
+  }
   g.globalAlpha = 1;
   // Hollows of the bench a held figure may go to.
   for (const slot of marks.slots) {
@@ -390,9 +395,7 @@ export function drawScene(g: Ctx): void {
 
 function drawTable(g: Ctx): void {
   const marks = handMarks();
-  const { far, near } = boardHalves();
-  g.drawImage(far, V.bx - 1, V.by - Math.round(V.gap) - 1);
-  g.drawImage(near, V.bx - 1, V.by + HOME_ROWS * ROW - 1);
+  drawBoard(g, fightOn());
   drawLamps(g);
   drawLife(g, place(), V.t, S.looks.place);
   const run = S.run;
