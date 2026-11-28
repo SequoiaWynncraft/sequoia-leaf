@@ -63,7 +63,7 @@ import {
   unstudy,
 } from "./orders.ts";
 import { blueprintAt, clear, copyOf, deleteBlueprint, move, type Piece, saveBlueprint, stand } from "./pieces.ts";
-import { type Raise, upgradeAs } from "./raised.ts";
+import { type Raise, raiseWire, upgradeAs } from "./raised.ts";
 import { REASON } from "./reasons.ts";
 import { type Leg, legPiece } from "./route.ts";
 import {
@@ -94,8 +94,11 @@ interface Carries {
   copy: At & { readonly tiles: readonly number[]; readonly turns: Dir };
   remove: At;
   clear: { readonly tiles: readonly number[] };
-  /** With `grade`, raised to it, not the highest; for one tile (a card's Upgrade) with no tool. */
-  upgrade: { readonly tiles: readonly number[]; readonly raise?: Raise };
+  /**
+   * With `grade`, raised to it, not the highest; for one tile (a card's Upgrade) with no tool. At the
+   * price the player was shown for the whole of it: refused if it is not the price now.
+   */
+  upgrade: { readonly tiles: readonly number[]; readonly raise?: Raise; readonly price: number };
   saveBlueprint: { readonly slot: number; readonly tiles: readonly number[] };
   /** Every piece in the yard, as a plan of the whole yard (`whole.ts`). */
   saveYard: { readonly slot: number };
@@ -314,9 +317,11 @@ export const COMMANDS: { readonly [D in Name]: Spec<D> } = {
   upgrade: {
     refused: "cannot_upgrade",
     lock: (a) => (a.raise && a.tiles.length === 1 ? null : { use: "upgrade" }),
-    read: (_v, f) => f.tiles && f.raise && { do: "upgrade", tiles: f.tiles, ...f.raise },
-    write: ({ tiles, raise: r }) => ({ tiles, ...(r && { grade: r.grade, kind: kindName(r.kind), from: r.from }) }),
-    act: (y, a, coins, no) => spent(y, upgradeAs(y, a.tiles, coins, a.raise), REASON.upgrade, no),
+    // An Upgrade with no price (from a page before prices were sent) does not read, and is refused, as a fell's.
+    read: (_v, f) =>
+      f.tiles && f.raise && f.price !== null ? { do: "upgrade", tiles: f.tiles, ...f.raise, price: f.price } : null,
+    write: ({ tiles, raise, price }) => ({ tiles, ...raiseWire(raise), price }),
+    act: (y, a, coins, no) => spent(y, upgradeAs(y, a.tiles, a.price, coins, a.raise), REASON.upgrade, no),
   },
   saveBlueprint: {
     refused: "cannot_save_blueprint",
@@ -417,9 +422,9 @@ export const COMMANDS: { readonly [D in Name]: Spec<D> } = {
   },
   buyPlot: {
     refused: "plot_not_for_sale",
-    read: (v) => {
+    read: (v, f) => {
       const p = plotNamed(v.plot);
-      return p === null || !whole(v.price, Number.MAX_SAFE_INTEGER) ? null : { do: "buyPlot", plot: p, price: v.price };
+      return p === null || f.price === null ? null : { do: "buyPlot", plot: p, price: f.price };
     },
     write: (a) => ({ plot: plotName(a.plot), price: a.price }),
     act: (y, a, coins, no) => {
@@ -455,8 +460,7 @@ export const COMMANDS: { readonly [D in Name]: Spec<D> } = {
     refused: "cannot_fell",
     lock: needs({ fell: true }),
     // A fell with no price (from a page before prices were sent) does not read, and is refused.
-    read: (v, f) =>
-      f.spot && whole(v.price, Number.MAX_SAFE_INTEGER) ? { do: "fell", ...f.spot, price: v.price } : null,
+    read: (_v, f) => (f.spot && f.price !== null ? { do: "fell", ...f.spot, price: f.price } : null),
     write: (a) => ({ ...spot(a), price: a.price }),
     act: (y, a, coins, no) => spent(y, fell(y, a.x, a.y, a.price, coins), REASON.fell, no),
   },

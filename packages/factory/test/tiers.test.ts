@@ -10,7 +10,7 @@ import { describe, expect, test } from "bun:test";
 
 import * as F from "../src/index.ts";
 import { fill, idOf, learn, needsFirst, paidFor } from "./goals.ts";
-import { give, must } from "./yards.ts";
+import { give, must, upgrading } from "./yards.ts";
 
 const id = (y: F.Yard): string | null => (y.hand === -1 ? null : (F.GOALS[y.hand]?.id ?? null));
 const idsOf = (gs: readonly F.Goal[]): string[] => gs.map(idOf);
@@ -321,7 +321,7 @@ describe("tools", () => {
     must(y, { do: "stand", pieces: [belt] });
     const z = without(4, "chain", "drawing");
     must(z, { do: "build", kind: "belt", x: cx + 2, y: cy - 3, dir: 0 });
-    expect(give(z, { do: "upgrade", tiles: [F.at(z, cx + 2, cy - 3)] })).toMatchObject({
+    expect(give(z, upgrading(z, [F.at(z, cx + 2, cy - 3)]))).toMatchObject({
       refused: F.LOCKED,
       why: "Select is not unlocked yet",
     });

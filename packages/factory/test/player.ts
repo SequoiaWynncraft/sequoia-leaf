@@ -185,8 +185,11 @@ export class Player {
       }
       case 9:
         return { do: "clear", tiles: this.box() };
-      case 10:
-        return { do: "upgrade", tiles: this.box() };
+      case 10: {
+        // At the price the yard asks now, as the page sends it.
+        const tiles = this.box();
+        return { do: "upgrade", tiles, price: F.upgradePrice(y, tiles) };
+      }
       case 11:
         return { do: "paint", tint: this.int(8), ...at };
       case 12: {

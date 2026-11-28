@@ -160,7 +160,7 @@ function everyField(y: F.Yard): void {
     if (y.kind[F.at(y, x, z)] === F.NONE) F.build(y, F.BELT, x, z, 0, Infinity);
   }
   const belts = F.within(y, ...xyOf(y, -3, -3), ...xyOf(y, -1, -3));
-  sent(y, { do: "upgrade", tiles: belts });
+  sent(y, { do: "upgrade", tiles: belts, price: F.upgradePrice(y, belts) });
   // South of the depot, a piece with each thing a blueprint keeps of one: a belt painted and raised,
   // a splitter with a way shut, a bench told to make, a crate shut, a tunnel under two tiles.
   stood(y, "belt", -2, 4, { grade: 2 });
@@ -261,7 +261,7 @@ function fullV13(): F.Yard {
   const y = fullV12();
   opened(y, ["starfolio", "gatherer4", "lines4"]);
   const belts = F.within(y, ...xyOf(y, -3, -3), ...xyOf(y, -1, -3));
-  sent(y, { do: "upgrade", tiles: belts });
+  sent(y, { do: "upgrade", tiles: belts, price: F.upgradePrice(y, belts) });
   sent(y, { do: "saveBlueprint", slot: 0, tiles: belts });
   const [x, z] = xyOf(y, -3, -3);
   sent(y, { do: "remove", x, y: z });

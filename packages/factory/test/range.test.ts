@@ -12,7 +12,7 @@ import { REASON } from "../src/reasons.ts";
 import { beforeReach, learn } from "./goals.ts";
 import { bareLand } from "./land.ts";
 import { tunnel } from "./tier5.ts";
-import { give, saved, SAVES, staged, STAGES } from "./yards.ts";
+import { give, saved, SAVES, staged, STAGES, upgrading } from "./yards.ts";
 
 const LONG = F.goal("longreach");
 const LONGER = F.goal("longerreach");
@@ -128,7 +128,7 @@ describe("a card's Upgrade: the grade command for one piece, one grade up", () =
       for (const p of pieces) {
         const i = F.at(by.build, p.x, p.y);
         const built = spent(by.build, { do: "build", ...p, dir: by.build.dir[i], grade });
-        const graded = spent(by.grade, { do: "upgrade", tiles: [i], grade, kind: p.kind, from: grade - 1 });
+        const graded = spent(by.grade, upgrading(by.grade, [i], { grade, kind: p.kind, from: grade - 1 }));
         expect([p.kind, grade, graded]).toEqual([p.kind, grade, built]);
         expect(typeof built).toBe("number");
         expect(sum(by.grade)).toBe(sum(by.build));
@@ -139,7 +139,7 @@ describe("a card's Upgrade: the grade command for one piece, one grade up", () =
         expect(undone.build).toBe(-Number(built));
         expect(sum(by.grade)).toBe(sum(by.build));
         spent(by.build, { do: "build", ...p, dir: by.build.dir[i], grade });
-        spent(by.grade, { do: "upgrade", tiles: [i], grade, kind: p.kind, from: grade - 1 });
+        spent(by.grade, upgrading(by.grade, [i], { grade, kind: p.kind, from: grade - 1 }));
       }
     // Taken away at grade 3, each gives back the same.
     for (const { x, y } of pieces)
@@ -153,7 +153,7 @@ describe("a card's Upgrade: the grade command for one piece, one grade up", () =
     const i = F.at(by.grade, 1, 7);
     const raise = { grade: 2, kind: "tunnel", from: 1 };
     expect([by.grade.span[i], F.price(F.TUNNEL, 1, 12), F.price(F.TUNNEL, 2, 12)]).toEqual([12, 26, 78]);
-    expect(spent(by.grade, { do: "upgrade", tiles: [i], ...raise })).toBe(52);
+    expect(spent(by.grade, upgrading(by.grade, [i], raise))).toBe(52);
     expect(spent(by.build, { do: "build", kind: "tunnel", x: 1, y: 7, dir: 0, grade: 2 })).toBe(52);
     expect(sum(by.grade)).toBe(sum(by.build));
     // Raised from its far mouth, the card's tile there, it is the same tunnel.
@@ -161,7 +161,7 @@ describe("a card's Upgrade: the grade command for one piece, one grade up", () =
     const back = (y: F.Yard): number | string => spent(y, { do: "undo", entry: y.history.at(-1)?.id ?? "" });
     expect([back(by.grade), back(by.build)]).toEqual([-52, -52]);
     spent(by.build, { do: "build", kind: "tunnel", x: 1, y: 7, dir: 0, grade: 2 });
-    spent(by.grade, { do: "upgrade", tiles: [F.at(by.grade, 14, 7)], ...raise });
+    spent(by.grade, upgrading(by.grade, [F.at(by.grade, 14, 7)], raise));
     expect(sum(by.grade)).toBe(sum(by.build));
     expect([spent(by.grade, { do: "remove", x: 1, y: 7 }), spent(by.build, { do: "remove", x: 1, y: 7 })]).toEqual([
       -78, -78,
@@ -177,17 +177,18 @@ describe("a card's Upgrade: the grade command for one piece, one grade up", () =
     const one = F.at(y, belt.x, belt.y);
     const belt2 = { grade: 2, kind: "belt", from: 1 };
     expect(F.highest(y.open, F.BELT)).toBe(2);
-    expect(give(y, { do: "upgrade", tiles: [one, F.at(y, splitter.x, splitter.y)], ...belt2 })).toMatchObject({
+    expect(give(y, upgrading(y, [one, F.at(y, splitter.x, splitter.y)], belt2))).toMatchObject({
       refused: F.LOCKED,
     });
-    expect(give(y, { do: "upgrade", tiles: [one] })).toMatchObject({ refused: F.LOCKED });
-    expect(give(y, { do: "upgrade", tiles: [one], ...belt2, grade: 3 })).toMatchObject({
+    expect(give(y, upgrading(y, [one]))).toMatchObject({ refused: F.LOCKED });
+    expect(give(y, upgrading(y, [one], { ...belt2, grade: 3 }))).toMatchObject({
       why: "Nothing here can be raised",
     });
-    expect(typeof spent(y, { do: "upgrade", tiles: [one], ...belt2 })).toBe("number");
+    const seen = upgrading(y, [one], belt2);
+    expect(typeof spent(y, seen)).toBe("number");
     expect(y.grade[one]).toBe(2);
     // Asked again as the card saw it before, it is no longer that piece.
-    expect(give(y, { do: "upgrade", tiles: [one], ...belt2 })).toMatchObject({
+    expect(give(y, seen)).toMatchObject({
       why: "It has changed since: it is now at grade II.",
     });
   });
@@ -198,7 +199,7 @@ describe("a card's Upgrade: the grade command for one piece, one grade up", () =
     const at = F.at(y, 1, 1);
     // The belt's card quotes its grade II: 2 Coins.
     expect(F.priceAt(y, F.BELT, 1, 1, 2)).toBe(2);
-    const raise = { do: "upgrade", tiles: [at], grade: 2, kind: "belt", from: 1 };
+    const raise = upgrading(y, [at], { grade: 2, kind: "belt", from: 1 });
     // Another tab's two commands land first, in the same batch as the Raise.
     const batch = [{ do: "remove", x: 1, y: 1 }, { do: "build", kind: "study", x: 1, y: 1, dir: 0 }, raise];
     const did = batch.map((c) => give(y, c));
@@ -216,16 +217,21 @@ describe("a card's Upgrade: the grade command for one piece, one grade up", () =
     expect(give(y, raise)).toMatchObject({ why: "It has changed since: nothing stands there now." });
   });
 
-  test("on the wire: the grade only when it is said, so an area's Upgrade is sent as it always was", () => {
-    const area: F.Act = { do: "upgrade", tiles: [4, 5] };
-    const one: F.Act = { do: "upgrade", tiles: [4], raise: { kind: F.BELT, from: 1, grade: 2 } };
-    expect(F.writeAct(area)).toEqual({ do: "upgrade", tiles: [4, 5] });
-    expect(F.writeAct(one)).toEqual({ do: "upgrade", tiles: [4], grade: 2, kind: "belt", from: 1 });
+  test("on the wire: the grade only when it is said, and every Upgrade with the price the player was shown", () => {
+    const area: F.Act = { do: "upgrade", tiles: [4, 5], price: 6 };
+    const one: F.Act = { do: "upgrade", tiles: [4], raise: { kind: F.BELT, from: 1, grade: 2 }, price: 2 };
+    expect(F.writeAct(area)).toEqual({ do: "upgrade", tiles: [4, 5], price: 6 });
+    expect(F.writeAct(one)).toEqual({ do: "upgrade", tiles: [4], grade: 2, kind: "belt", from: 1, price: 2 });
     expect(F.readCommand({ tick: 0, ...F.writeAct(one) })).toMatchObject(one);
-    expect(F.readCommand({ tick: 0, do: "upgrade", tiles: [4], grade: 0, kind: "belt", from: 1 })).toBeNull();
+    expect(F.readCommand({ tick: 0, do: "upgrade", tiles: [4], grade: 0, kind: "belt", from: 1, price: 2 })).toBeNull();
+    // With no price, or one that is not a whole number of Coins, none reads.
+    for (const price of [undefined, -1, 1.5, "2"]) {
+      expect(F.readCommand({ tick: 0, do: "upgrade", tiles: [4, 5], price })).toBeNull();
+      expect(F.readCommand({ tick: 0, do: "upgrade", tiles: [4], grade: 2, kind: "belt", from: 1, price })).toBeNull();
+    }
     // A grade with no kind or grade it was seen at does not read.
-    expect(F.readCommand({ tick: 0, do: "upgrade", tiles: [4], grade: 2 })).toBeNull();
-    expect(F.readCommand({ tick: 0, do: "upgrade", tiles: [4], grade: 2, kind: "belt" })).toBeNull();
+    expect(F.readCommand({ tick: 0, do: "upgrade", tiles: [4], grade: 2, price: 2 })).toBeNull();
+    expect(F.readCommand({ tick: 0, do: "upgrade", tiles: [4], grade: 2, kind: "belt", price: 2 })).toBeNull();
   });
 });
 

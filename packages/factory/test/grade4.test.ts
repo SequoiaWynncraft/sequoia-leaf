@@ -9,7 +9,7 @@ import { describe, expect, test } from "bun:test";
 
 import * as F from "../src/index.ts";
 import { bare4, CRYSTAL_AT } from "./grade4.ts";
-import { flatOut, give, must } from "./yards.ts";
+import { flatOut, give, must, upgrading } from "./yards.ts";
 
 const CRYSTAL = F.item("crystal");
 
@@ -125,18 +125,20 @@ describe("Upgrade", () => {
     expect([F.price(F.BELT, 4) / F.price(F.BELT, 1), F.price(F.GATHERER, 4) / F.price(F.GATHERER, 1)]).toEqual([
       40, 20,
     ]);
-    expect(F.upgradePrice(y, line)).toBe(5 * belt + splitter);
+    const lineUp = upgrading(y, line);
+    expect(lineUp.price).toBe(5 * belt + splitter);
     // A Coin short is refused, with nothing changed; the price itself raises every piece to 4.
-    expect(spent(y, { do: "upgrade", tiles: line }, 5 * belt + splitter - 1)).toBe("Not enough Coins: 1 short");
+    expect(spent(y, lineUp, 5 * belt + splitter - 1)).toBe("Not enough Coins: 1 short");
     expect(line.map((i) => y.grade[i])).toEqual([3, 3, 3, 3, 3, 3]);
-    expect(spent(y, { do: "upgrade", tiles: line }, 5 * belt + splitter)).toBe(5 * belt + splitter);
+    expect(spent(y, lineUp, 5 * belt + splitter)).toBe(5 * belt + splitter);
     expect(line.map((i) => y.grade[i])).toEqual([4, 4, 4, 4, 4, 4]);
-    const gatherer = [F.at(y, ...CRYSTAL_AT)];
-    expect(spent(y, { do: "upgrade", tiles: gatherer })).toBe(F.price(F.GATHERER, 4) - F.price(F.GATHERER, 3));
+    const gatherer = F.price(F.GATHERER, 4) - F.price(F.GATHERER, 3);
+    expect(spent(y, upgrading(y, [F.at(y, ...CRYSTAL_AT)]))).toBe(gatherer);
     expect(y.grade[F.at(y, ...CRYSTAL_AT)]).toBe(4);
-    // Undo takes it back to grade 3, and gives the Coins back.
-    const did = give(y, { do: "undo", entry: y.history.at(-1)?.id ?? "" });
-    expect("refused" in did ? did.why : y.grade[F.at(y, ...CRYSTAL_AT)]).toBe(3);
+    // Undo takes each back to grade 3, newest first, and gives back exactly what each cost.
+    const undo = (): number | string => spent(y, { do: "undo", entry: y.history.at(-1)?.id ?? "" });
+    expect([undo(), y.grade[F.at(y, ...CRYSTAL_AT)]]).toEqual([-gatherer, 3]);
+    expect([undo(), line.map((i) => y.grade[i])]).toEqual([-(5 * belt + splitter), [3, 3, 3, 3, 3, 3]]);
   });
 
   test("without the research, raises to grade 3 at most, and a grade 4 piece is refused by name", () => {
@@ -152,7 +154,7 @@ describe("a grade 4 piece in hand", () => {
     const y = bare4();
     must(y, { do: "build", kind: "belt", x: 3, y: 8, dir: 0, grade: 3 });
     const tiles = [F.at(y, 3, 8)];
-    const raise = { do: "upgrade", tiles, grade: 4, kind: "belt", from: 3 };
+    const raise = upgrading(y, tiles, { grade: 4, kind: "belt", from: 3 });
     expect(spent(y, raise)).toBe(F.price(F.BELT, 4) - F.price(F.BELT, 3));
     expect(y.grade[F.at(y, 3, 8)]).toBe(4);
     expect(typeof spent(y, raise)).toBe("string");
@@ -196,28 +198,45 @@ describe("a grade 4 piece in hand", () => {
 });
 
 describe("a yard with grade 4 pieces", () => {
-  test("kept mid-run as version 13 and read back goes on as the one kept, tick for tick", () => {
+  test("kept as version 13 while things are on its belts and under its tunnel, read back, ticks as the one kept, tick for tick", () => {
     const y = bare4();
     const [x, z] = CRYSTAL_AT;
     must(y, { do: "build", kind: "gatherer", x, y: z, dir: 0, grade: 4 });
     must(y, { do: "build", kind: "belt", x: x + 1, y: z, dir: 0, grade: 4 });
     must(y, { do: "build", kind: "splitter", x: x + 2, y: z, dir: 0, grade: 4 });
+    // A line from a crate kept full to the depot: belts, a tunnel under 3 tiles and belts again, of
+    // grade 4 but the last stretch of grade 2, which holds the line to its pace, so that things wait
+    // and stand part-way across their tiles (at grade 4 a thing crosses a tile in one tick).
     must(y, { do: "build", kind: "crate", x: 1, y: 4, dir: 0 });
-    for (let k = 2; k <= 34; k++) must(y, { do: "build", kind: "belt", x: k, y: 4, dir: 0, grade: 4 });
-    for (let k = 0; k < 40; k++) F.put(y.holders, F.holderOf(y, F.at(y, 1, 4)), F.item("plank"));
+    must(y, F.writeAct({ do: "lay", legs: [{ tunnel: true, x: 10, y: 4, dir: 0, span: 3, grade: 4 }] }));
+    for (let k = 2; k <= 34; k++)
+      if (k < 10 || k > 14) must(y, { do: "build", kind: "belt", x: k, y: 4, dir: 0, grade: k > 24 ? 2 : 4 });
+    const crate = F.holderOf(y, F.at(y, 1, 4));
+    for (let k = 0; k < y.open.crate; k++) F.put(y.holders, crate, F.item("plank"));
     for (let k = 0; k < 457; k++) F.step(y);
+    // Kept mid-run: things on the belts, part-way across their tiles, one under the ground, the crate not empty.
+    const on = [...Array(33).keys()].map((k) => F.at(y, k + 2, 4)).filter((i) => y.item[i] !== F.NONE);
+    expect(on.length).toBeGreaterThan(10);
+    expect(on.some((i) => (y.prog[i] ?? 0) > 0 && (y.prog[i] ?? 0) < 8)).toBe(true);
+    const t = F.tunnelOf(y, F.at(y, 10, 4)) * F.SPAN_MOST;
+    expect([...y.tunnels.under.subarray(t, t + 3)].some((n) => n !== F.NONE)).toBe(true);
+    expect(F.held(y.holders, crate, F.item("plank"))).toBeGreaterThan(0);
     const text = F.encode(y);
     const back = F.decode(text, y.land);
     if (!back) throw new Error("the yard does not read back");
     expect([JSON.parse(text).v, F.check(back)]).toEqual([F.FOURTH, F.check(y)]);
-    for (let k = 0; k < 1800; k++) {
+    // The two copies' checks, compared after every tick: the first that differs, or none.
+    let differs = -1;
+    for (let k = 1; k <= 1800 && differs < 0; k++) {
       F.step(y);
       F.step(back);
+      if (F.check(back) !== F.check(y)) differs = k;
     }
-    expect([F.check(back), back.depot[CRYSTAL], back.depot[F.item("plank")]]).toEqual([
-      F.check(y),
+    expect([differs, back.depot[CRYSTAL], back.depot[F.item("plank")]]).toEqual([
+      -1,
       y.depot[CRYSTAL],
       y.depot[F.item("plank")],
     ]);
+    expect(y.depot[F.item("plank")]).toBeGreaterThan(0);
   });
 });

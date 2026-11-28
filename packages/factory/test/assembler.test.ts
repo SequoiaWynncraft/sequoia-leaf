@@ -418,7 +418,12 @@ describe("the assembler", () => {
     // Raised from its card, from a corner: the grade command for its one piece, at the difference.
     const raised = act(
       y,
-      { do: "upgrade", tiles: [tile(y, 19, 9)], raise: { kind: ASSEMBLER, from: 1, grade: 2 } },
+      {
+        do: "upgrade",
+        tiles: [tile(y, 19, 9)],
+        raise: { kind: ASSEMBLER, from: 1, grade: 2 },
+        price: F.upgradePrice(y, [tile(y, 19, 9)], 2),
+      },
       Infinity,
       "r1",
     );

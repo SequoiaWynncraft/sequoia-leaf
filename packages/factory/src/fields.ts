@@ -82,7 +82,7 @@ export function withWas<A extends object>(
   return was === null ? null : { ...a, was };
 }
 
-/** The fields many commands share, read once off the wire: a tile, a thing (or null for none), tiles, and a blueprint's place. */
+/** The fields many commands share, read once off the wire: a tile, a thing (or null for none), tiles, a blueprint's place, and a price shown. */
 export interface Fields {
   readonly spot: At | null;
   readonly item: Item | null | undefined;
@@ -90,6 +90,8 @@ export interface Fields {
   readonly slot: number | null;
   /** One piece raised from its card (`raised.ts`): as said, nothing when no grade is said, or null for one that does not read. */
   readonly raise: { readonly raise?: Raise } | null;
+  /** The price the player was shown, in whole Coins, or null for none. */
+  readonly price: number | null;
 }
 export function fieldsOf(v: Record<string, unknown>): Fields {
   return {
@@ -101,6 +103,7 @@ export function fieldsOf(v: Record<string, unknown>): Fields {
         : null,
     slot: whole(v.slot, BLUEPRINTS_MOST - 1) ? v.slot : null,
     raise: v.grade === undefined ? {} : raiseOf(v),
+    price: whole(v.price, Number.MAX_SAFE_INTEGER) ? v.price : null,
   };
 }
 /** The grade raised to, and the kind and grade the piece was seen at, all said, or null. */

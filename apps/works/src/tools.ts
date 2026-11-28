@@ -305,8 +305,9 @@ export function raiseAt(tx: number, ty: number): boolean {
   if (!isKind(k) || FIXED[k] === 1) return false;
   const grade = (w.grade[i] ?? 0) + 1;
   const cost = priceAt(w, k, x, y, grade);
-  // It names the piece as the card saw it: if something else stands there by the time Leaf has it, it is refused.
-  const did = doNow({ do: "upgrade", tiles: [i], raise: { kind: k, from: grade - 1, grade } });
+  // It names the piece as the card saw it, and its price: if something else stands there, or the price
+  // is another, by the time Leaf has it, it is refused.
+  const did = doNow({ do: "upgrade", tiles: [i], raise: { kind: k, from: grade - 1, grade }, price: cost });
   if (refused(did)) return false;
   lifted(x, y, cost);
   toolHooks.changed();
@@ -914,7 +915,7 @@ export function upgradeCost(all = false): number {
 /**
  * Raises every piece marked (with `all`, every piece in the yard) to the highest grade the yard may
  * build of its kind, all of them or none, for the whole price. Says whether it did; the rules'
- * reason is said when it could not. Leaf is sent the tiles of the pieces it raises.
+ * reason is said when it could not. Leaf is sent the tiles of the pieces it raises, and that price.
  */
 export function upgradeMark(all = false): boolean {
   const w = S.world;
@@ -922,7 +923,7 @@ export function upgradeMark(all = false): boolean {
   if (!m) return false;
   const was = m.pieces.filter((p) => isGraded(p.kind) && gradeOf(p.kind, p.grade) < highest(w.open, p.kind));
   const cost = upgradePrice(w, m.tiles);
-  const did = doNow({ do: "upgrade", tiles: tilesOf(w, was) });
+  const did = doNow({ do: "upgrade", tiles: tilesOf(w, was), price: cost });
   if (refused(did)) return false;
   for (const p of was.slice(0, 160)) sparkle(p.x * TILE + 8, p.y * TILE + 6, 2, 5);
   if (cost > 0) float(((m.x0 + m.x1 + 1) / 2) * TILE, m.y0 * TILE, `-${cost}`, GOLD[0], 1.2);

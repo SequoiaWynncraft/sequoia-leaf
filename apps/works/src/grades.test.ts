@@ -398,6 +398,8 @@ describe("many pieces at once", () => {
     expect(upgradeCost()).toBe(0);
     await inStep(fake, 1);
     expect(sent(fake)).toEqual(["upgrade"]);
+    // At the price the button showed.
+    expect(fake.leaf.commands[0]).toMatchObject({ do: "upgrade", price: cost });
     coinsAre(0);
     expect(undo()).toBe(true);
     expect(grades([-6, -5, -4, -3, -2], -5)).toEqual([1, 1, 1, 1, 0]);
@@ -414,7 +416,7 @@ describe("many pieces at once", () => {
     expect(upgradeMark()).toBe(false);
     expect(said.length).toBe(1);
     expect(grades([-6], -5)).toEqual([1]);
-    expect(doNow(act({ do: "upgrade", tiles: [at(S.world, ...xy(-6, -5))] }))).toHaveProperty("refused");
+    expect(doNow(act({ do: "upgrade", tiles: [at(S.world, ...xy(-6, -5))], price: 2 }))).toHaveProperty("refused");
   });
 
   test("with Select in hand and nothing marked, Upgrade all raises everything in the yard that can be raised, for the whole price or not at all; undo puts every grade back", async () => {
@@ -447,6 +449,7 @@ describe("many pieces at once", () => {
     expect(handPrint().upgrade).toBeNull();
     await inStep(fake, 1);
     expect(sent(fake)).toEqual(["upgrade"]);
+    expect(fake.leaf.commands[0]).toMatchObject({ do: "upgrade", price: cost });
     coinsAre(0);
     expect(undo()).toBe(true);
     expect([...grades([-6, -5, -4, -3, -2], -5), ...grades([-6], -2)]).toEqual([1, 1, 1, 1, 0, 1]);

@@ -25,6 +25,13 @@ export interface Script {
 
 const send = (c: Rec | ((y: F.Yard) => Rec)): Step => ({ send: c });
 const wait = (ticks: number): Step => ({ wait: ticks });
+/** Upgrade on some tiles at the price the yard asks for them when it is sent, as the page sends it. */
+const upgrade =
+  (tiles: (y: F.Yard) => number[]) =>
+  (y: F.Yard): Rec => {
+    const on = tiles(y);
+    return { do: "upgrade", tiles: on, price: F.upgradePrice(y, on) };
+  };
 /** A tile from the depot, as the commands that take tiles name it. */
 const tileOf = (y: F.Yard, dx: number, dy: number): number => F.at(y, ...xy(dx, dy));
 /** The run of belt the router finds from a tile to another, as the page lays it. */
@@ -86,7 +93,7 @@ export const SCRIPTS: readonly Script[] = [
       send({ do: "remove", ...near(4, 2) }),
       send({ do: "undo", entry: "c10" }),
       send({ do: "undo", entry: "c10" }),
-      send((y) => ({ do: "upgrade", tiles: [tileOf(y, 3, 2), tileOf(y, 2, 2)] })),
+      send(upgrade((y) => [tileOf(y, 3, 2), tileOf(y, 2, 2)])),
       send({ do: "turn", ...near(-6, 3), dir: 1 }),
       send({ do: "paint", ...near(3, 2), tint: 2 }),
       wait(3000),
@@ -143,7 +150,7 @@ export const SCRIPTS: readonly Script[] = [
     yard: () => staged("gate"),
     steps: [
       send((y) => ({ do: "saveBlueprint", slot: 0, tiles: F.within(y, ...xy(-3, -3), ...xy(-1, -3)) })),
-      send((y) => ({ do: "upgrade", tiles: F.within(y, ...xy(-3, -3), ...xy(-1, -3)) })),
+      send(upgrade((y) => F.within(y, ...xy(-3, -3), ...xy(-1, -3)))),
       send({ do: "placeBlueprint", slot: 0, turns: 0, ...near(-3, -5) }),
       send((y) => ({ do: "saveBlueprint", slot: 1, tiles: F.within(y, ...xy(-3, -5), ...xy(-1, -5)) })),
       send({ do: "take", node: "flags" }),
@@ -188,7 +195,7 @@ export const SCRIPTS: readonly Script[] = [
     steps: [
       wait(6000),
       send({ do: "collect" }),
-      send((y) => ({ do: "upgrade", tiles: F.within(y, ...xy(1, 2), ...xy(4, 2)) })),
+      send(upgrade((y) => F.within(y, ...xy(1, 2), ...xy(4, 2)))),
       wait(6000),
       send({ do: "collect" }),
     ],

@@ -39,6 +39,14 @@ export function give(y: F.Yard, c: Rec): ReturnType<typeof F.play> {
   if (!read) throw new Error(`${JSON.stringify(c)} does not read`);
   return F.play(y, read);
 }
+/**
+ * An Upgrade as the page sends it: the tiles, and a card's Raise as the wire has it (`grade`, `kind`,
+ * `from`), at the price the yard asks for it now.
+ */
+export function upgrading(y: F.Yard, tiles: readonly number[], raise?: Rec): Rec {
+  const to = typeof raise?.grade === "number" ? raise.grade : undefined;
+  return { do: "upgrade", tiles, ...raise, price: F.upgradePrice(y, tiles, to) };
+}
 /** The command to buy a plot, by its name, at what it costs the yard now, as the page sends it (nothing for no such plot). */
 export function buying(y: F.Yard, plot: string): Rec {
   const p = F.plotNamed(plot);
