@@ -25,26 +25,31 @@ beforeAll(() => {
 });
 afterAll(() => away.take());
 
-/** A floor on the stand-in card, with every box its ground is asked to paint written down. */
+/** A floor on the stand-in card, with every box its ground is asked to paint written down, and a clock that moves only as painting does: `takes` milliseconds a chunk painted before a frame. */
 interface Watched {
   readonly floor: Floor;
   readonly p: Painter;
   readonly gr: Ground;
   readonly painted: Box[];
 }
-function watched(land: Land): Watched {
+function watched(land: Land, takes = 0): Watched {
   const real = makeGround(land);
   const painted: Box[] = [];
+  const clock = { at: 0 };
   const gr: Ground = {
     ...real,
-    paint: (g, b, owned) => (painted.push(b), real.paint(g, b, owned)),
+    paint: (g, b, owned) => {
+      painted.push(b);
+      clock.at += takes;
+      real.paint(g, b, owned);
+    },
     painting: (g, b, owned) => (painted.push(b), real.painting(g, b, owned)),
   };
   const c = document.createElement("canvas");
   c.width = 400;
   c.height = 300;
   const p = must(Painter.open(c, scope()), "painter");
-  return { floor: new Floor(gr, p), p, gr, painted };
+  return { floor: new Floor(gr, p, () => clock.at), p, gr, painted };
 }
 
 /** Whose the land is: `cleared` the plots cleared, none being cleared unless `clearing`. */
@@ -63,7 +68,7 @@ function frame(w: Watched, view: Box, h: Hands): { painted: number; drawn: SentB
 
 /** Paints ahead, as frames with time to spare would, until nothing is left. */
 function settle(w: Watched, h: Hands): void {
-  for (let k = 0; k < 400 && w.floor.waiting > 0; k++) w.floor.paintAhead(h, { x: 0, y: 0 }, performance.now() + 50);
+  for (let k = 0; k < 400 && w.floor.waiting > 0; k++) w.floor.paintAhead(h, { x: 0, y: 0 }, 50);
 }
 
 /** How many pixels some boxes cover, together. */
@@ -102,6 +107,25 @@ describe("the floor on the screen", () => {
     expect(area(moved.drawn)).toBe(far.w * far.h);
   });
 
+  test("no frame waits more than 50 ms for its ground: what it could not paint is laid in flat colours, and the frames after paint it", () => {
+    // Each chunk takes 20 ms: three fit before 50 ms have gone.
+    const w = watched(LAND, 20);
+    const view: Box = { x: 512, y: 384, w: 512, h: 384 };
+    const first = frame(w, view, hands(ALL));
+    expect(first.painted).toBe(3);
+    // The view is 4 chunks by 4: the sheet laid whole, and over the 13 not painted a box a tile, 48 each, and one for the forest under them.
+    const flat = first.drawn.filter((b) => b.sw === 1 && b.sh === 1);
+    expect(flat.length).toBe(13 * 49);
+    expect(area(flat.filter((b) => b.w === 16))).toBe(13 * CHUNK.w * CHUNK.h);
+    // The nearest the middle of the view were painted first.
+    const mid = { x: view.x + view.w / 2, y: view.y + view.h / 2 };
+    for (const b of w.painted) expect(Math.hypot(b.x + b.w / 2 - mid.x, b.y + b.h / 2 - mid.y)).toBeLessThan(CHUNK.w);
+    // Five more frames and it is whole: nothing flat is laid, and nothing more painted.
+    for (let k = 0; k < 5; k++) frame(w, view, hands(ALL));
+    const whole = frame(w, view, hands(ALL));
+    expect([whole.painted, whole.drawn.length]).toEqual([0, 1]);
+  });
+
   test("the land is painted ahead and kept whole: once it is, a view anywhere paints nothing", () => {
     const w = watched(LAND);
     frame(w, viewAt(56, 42), hands(ALL));
@@ -118,7 +142,7 @@ describe("the floor on the screen", () => {
       expect(frame(w, viewAt(tx, ty), hands(ALL)).painted).toBe(0);
     // And painting ahead looks for nothing more.
     w.painted.length = 0;
-    w.floor.paintAhead(hands(ALL), { x: 0, y: 0 }, performance.now() + 50);
+    w.floor.paintAhead(hands(ALL), { x: 0, y: 0 }, 50);
     expect(w.painted.length).toBe(0);
   });
 
@@ -126,7 +150,7 @@ describe("the floor on the screen", () => {
     const w = watched(LAND);
     const mid = { x: 20 * TILE, y: 60 * TILE };
     w.painted.length = 0;
-    w.floor.paintAhead(hands(ALL), mid, performance.now() + 50);
+    w.floor.paintAhead(hands(ALL), mid, 50);
     const first = must(w.painted[0], "a chunk painted");
     expect(Math.hypot(first.x + first.w / 2 - mid.x, first.y + first.h / 2 - mid.y)).toBeLessThan(CHUNK.w);
   });

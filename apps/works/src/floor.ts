@@ -2,10 +2,12 @@
  * The floor on the screen: the ground (`art/ground.ts`) kept whole on the graphics card, painted a
  * chunk at a time and never given back.
  *
- * No frame shows ground that is not painted. Whatever the view needs and lacks is painted before the
- * frame is drawn: the page's first view, a view that has outrun the painting, a plot that changed
- * hands. Everything else is painted ahead of need, nearest the view first, a small step at a time in
- * the time frames have left, at the plan's zoom too; so a few seconds after the page opens the whole
+ * What the view needs and lacks is painted before the frame is drawn, nearest its middle first: the
+ * page's first view, a view that has outrun the painting, a plot that changed hands. No frame waits
+ * for more than `SHOWN_MS` of it, though: a view that needs more (the furthest zoom on a page just
+ * opened) shows the map's flat colours where it is not painted yet, and the frames after it go on.
+ * Everything else is painted ahead of need, nearest the view first, a small step at a time in the
+ * time frames have left, at the plan's zoom too; so a few seconds after the page opens the whole
  * land is painted, and from then on no frame paints anything but a plot bought.
  *
  * What a chunk shows depends only on which of the plots under it the yard has cleared. While a plot's
@@ -15,16 +17,22 @@
 
 import type { Land, Plot } from "@sequoia-leaf/factory";
 import type { Painter, Sheet } from "@sequoia-leaf/kit/painter.ts";
+import { WATER } from "@sequoia-leaf/kit/palette.ts";
 import { makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
 import { TILE } from "./art/belts.ts";
 import type { Box, Ground } from "./art/ground.ts";
+import { DEEP } from "./art/pal.ts";
 import type { Sign } from "./layout.ts";
 
 /** A chunk of the ground: a whole number of tiles each way, and a plot (sixteen tiles by twelve) is two chunks by two. */
 export const CHUNK = { w: 128, h: 96 } as const;
 /** Painting ahead takes what is left of a frame until this many milliseconds after the frame began. */
 const BUDGET = 6;
+/** The longest a frame waits for the ground its view lacks, in milliseconds: past it, the chunk being painted is the last. */
+const SHOWN_MS = 50;
+/** The flat colours of ground not painted yet: grass on land the yard has cleared, the forest's floor, the stream, and the forest round the map. */
+const ROUGH = { cleared: "#3d6b3a", wild: DEEP[2], water: WATER[0], margin: DEEP[1] } as const;
 /** Frames in a row with no time left after which a step is painted anyway, so the land is painted where every frame is long. */
 const STARVED = 8;
 /** The longest side of one of the ground's sheets, where the card allows as much. */
@@ -95,10 +103,14 @@ export class Floor {
   #settled: string | null = null;
   /** Whose the land was at the last frame, for `waiting`. */
   #hands: Hands | null = null;
+  /** The clock, in milliseconds. */
+  readonly #clock: () => number;
 
-  constructor(gr: Ground, p: Painter) {
+  /** `clock` is the time in milliseconds: the page's own, unless a test gives one. */
+  constructor(gr: Ground, p: Painter, clock: () => number = () => performance.now()) {
     this.#gr = gr;
     this.#p = p;
+    this.#clock = clock;
     this.#c0 = Math.floor(gr.x / CHUNK.w);
     this.#r0 = Math.floor(gr.y / CHUNK.h);
     this.#cols = Math.floor((gr.x + gr.w - 1) / CHUNK.w) - this.#c0 + 1;
@@ -208,22 +220,38 @@ export class Floor {
     };
   }
 
-  /**
-   * Lays the floor under a view of the yard (its corner the picture's): the yard's own floor on each
-   * plot `hands.cleared` says, the forest's elsewhere. Whatever of it is not painted for what it must
-   * show is painted first; so are the chunks of a plot being cleared, as they will be.
-   */
-  lay(view: Box, hands: Hands): void {
-    const { cleared, clearing } = hands;
-    this.#hands = hands;
-    if (clearing.length > 0) this.#paintNext(hands);
+  /** The chunks of a view that are not painted for what they must show, with what that is, nearest the view's middle first. */
+  #lacking(view: Box, cleared: Cleared): { n: number; key: string }[] {
     const s = this.#span(view);
+    const out: { n: number; key: string; far: number }[] = [];
     for (let row = s.r0; row <= s.r1; row++)
       for (let col = s.c0; col <= s.c1; col++) {
         const n = row * this.#cols + col;
         const key = this.#keyOf(n, cleared);
-        if (this.#painted[n] !== key) this.#bring(n, cleared, key);
+        if (this.#painted[n] === key) continue;
+        const b = this.#boxOf(n);
+        out.push({ n, key, far: Math.hypot(b.x + b.w / 2 - view.x - view.w / 2, b.y + b.h / 2 - view.y - view.h / 2) });
       }
+    return out.toSorted((a, b) => a.far - b.far);
+  }
+
+  /**
+   * Lays the floor under a view of the yard (its corner the picture's): the yard's own floor on each
+   * plot `hands.cleared` says, the forest's elsewhere. Whatever of it is not painted for what it must
+   * show is painted first, for as long as a frame may wait (`SHOWN_MS`), and the rest is laid in the
+   * map's flat colours; the chunks of a plot being cleared, as they will be, are painted first of all.
+   */
+  lay(view: Box, hands: Hands): void {
+    const { cleared, clearing } = hands;
+    this.#hands = hands;
+    const began = this.#clock();
+    if (clearing.length > 0) this.#paintNext(hands);
+    const lacking = this.#lacking(view, cleared);
+    const rough = lacking.filter((c, k) => {
+      if (k > 0 && this.#clock() - began >= SHOWN_MS) return true;
+      this.#bring(c.n, cleared, c.key);
+      return false;
+    });
     if (clearing.length === 0 && this.#next.size > 0) {
       // The clearing is done: what was painted for it becomes the ground, out of view too.
       for (const [n, next] of this.#next)
@@ -239,6 +267,25 @@ export class Floor {
       const y1 = Math.min(view.y + view.h, py + page.sheet.h);
       if (x1 > x0 && y1 > y0) this.#p.from(page.sheet, x0 - px, y0 - py, x1 - x0, y1 - y0, x0 - view.x, y0 - view.y);
     }
+    for (const c of rough) this.#layRough(c.n, view, cleared);
+  }
+
+  /** A chunk not painted yet, in the map's flat colours: the forest round the map, and on the map a colour a tile. */
+  #layRough(n: number, view: Box, cleared: Cleared): void {
+    const gr = this.#gr;
+    const { land } = gr;
+    const b = this.#boxOf(n);
+    const x0 = Math.max(b.x, gr.x);
+    const y0 = Math.max(b.y, gr.y);
+    const x1 = Math.min(b.x + b.w, gr.x + gr.w);
+    const y1 = Math.min(b.y + b.h, gr.y + gr.h);
+    this.#p.rect(x0 - view.x, y0 - view.y, x1 - x0, y1 - y0, ROUGH.margin);
+    for (let ty = Math.max(0, b.y / TILE); ty < Math.min(land.h, (b.y + b.h) / TILE); ty++)
+      for (let tx = Math.max(0, b.x / TILE); tx < Math.min(land.w, (b.x + b.w) / TILE); tx++) {
+        const i = ty * land.w + tx;
+        const colour = land.water[i] === 1 ? ROUGH.water : cleared(land.plot[i] ?? -1) ? ROUGH.cleared : ROUGH.wild;
+        this.#p.rect(tx * TILE - view.x, ty * TILE - view.y, TILE, TILE, colour);
+      }
   }
 
   /** Paints the chunks under the plots being cleared as they will be once cleared, each once, at once. */
@@ -294,10 +341,10 @@ export class Floor {
     const whose = this.#handsKey(hands.cleared);
     if (this.#settled === whose && !this.#busy) return;
     const until = began + BUDGET;
-    const late = performance.now() >= until;
+    const late = this.#clock() >= until;
     if (late && ++this.#starved < STARVED) return;
     this.#starved = 0;
-    for (let first = late; first || performance.now() < until; first = false) {
+    for (let first = late; first || this.#clock() < until; first = false) {
       if (this.#busy && this.#keyOf(this.#busy.n, hands.cleared) !== this.#busy.key) {
         this.#busy.steps.return();
         this.#busy = null;
