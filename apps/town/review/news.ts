@@ -13,14 +13,13 @@
  * that reads statuses is enough (`GH_TOKEN=$(gh auth token)`).
  *
  * The record began with the first commit whose workflow asks to write statuses: the poster before it
- * posted every note merged earlier. The commit that added a note is the first to add its id, to its
- * file (`apps/town/notes/<id>.json`) or, for a note older than the files, to the one file of notes
- * there was before them, so a note moved into its own file keeps its record.
+ * posted every note merged earlier. The commit that added each note is `added.ts`'s to say; a note
+ * due that no commit is known to have added stops the run before anything is posted, as it could
+ * be neither marked nor known to be taken.
  */
 import { deliver, everyPage, messageOf, type Note, NOTES, toPost } from "../src/notes.ts";
+import { addedBy, unrecorded } from "./added.ts";
 
-/** Where notes are added: each in its own file, and before that, all in one. */
-const WHERE = ["apps/town/notes", "apps/town/src/notes.json"];
 const WORKFLOW = ".github/workflows/news.yml";
 /** What the workflow says once the poster keeps a record. */
 const RECORDS = "statuses: write";
@@ -42,26 +41,6 @@ function recordSince(): number {
   const first = git("log", "--reverse", "--format=%ct", `-S${RECORDS}`, "--", WORKFLOW).split("\n")[0] ?? "";
   if (first === "") throw new Error("news.ts: no commit of the workflow keeps a record. Is the history fetched?");
   return Number(first) * 1000;
-}
-
-interface Added {
-  readonly sha: string;
-  readonly at: number;
-}
-/** The commit that added each note to the file, and when: from one pass over the file's history. */
-function addedBy(): ReadonlyMap<string, Added> {
-  const out = new Map<string, Added>();
-  let commit: Added | null = null;
-  for (const line of git("log", "--reverse", "--format=commit %H %ct", "-p", "--", ...WHERE).split("\n")) {
-    const head = /^commit ([0-9a-f]{40}) (\d+)$/.exec(line);
-    if (head) {
-      commit = { sha: head[1] ?? "", at: Number(head[2]) * 1000 };
-      continue;
-    }
-    const id = /^\+\s*"id": "([^"]+)"/.exec(line)?.[1];
-    if (id !== undefined && commit && !out.has(id)) out.set(id, commit);
-  }
-  return out;
 }
 
 const API = `https://api.github.com/repos/${env("GITHUB_REPOSITORY")}`;
@@ -94,13 +73,19 @@ async function marked(sha: string): Promise<ReadonlySet<string>> {
   );
 }
 
-const added = addedBy();
+const added = addedBy(process.cwd());
 const due = toPost(NOTES, {
   now: Date.now(),
   since: recordSince(),
   merged: (id) => added.get(id)?.at ?? Number.NEGATIVE_INFINITY,
   taken: () => false,
 });
+const dueIds = due.map((n) => n.id);
+const lost = unrecorded(dueIds, added);
+if (lost.length > 0) {
+  for (const id of lost) console.log(`::error::No commit is known to have added the note ${id}: nothing is posted.`);
+  process.exit(1);
+}
 const shas = [...new Set(due.flatMap((n) => added.get(n.id)?.sha ?? []))];
 const taken = new Set<string>();
 for (const set of await Promise.all(shas.map(marked))) for (const context of set) taken.add(context);

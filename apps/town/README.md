@@ -13,6 +13,9 @@ bun run build    # dist/
 bun test         # the arrival letter, the town's own, what goes by Leaf's clock on the town's ground, the guild live, strings of lights tied at both ends, the town live, what a touch means
 ```
 
+The patch notes in `notes/` are read once as the page is built: restart `bun run dev` after adding
+or editing a note.
+
 The town always plays on Leaf: on a developer's machine that is `apps/api/test/play.ts` (the
 repository's README, and "Looking at it from outside" below). Anywhere without Leaf the kit's card
 says so.

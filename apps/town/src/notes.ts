@@ -61,11 +61,7 @@ export const noteAt = (n: Pick<Note, "at">): number => Date.parse(n.at);
 const newestFirst = (a: Note, b: Note): number => noteAt(b) - noteAt(a) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 
 /** Every note, newest first, out or waiting for its moment. */
-export const NOTES: readonly Note[] = ((): readonly Note[] => {
-  const { back, listed } = notesListed();
-  if (back !== null) throw new Error(back);
-  return listed.map(readFile).toSorted(newestFirst);
-})();
+export const NOTES: readonly Note[] = notesListed().map(readFile).toSorted(newestFirst);
 /**
  * The notes out at a moment of Leaf's clock (`leafNow`), newest first. A note whose `at` is still
  * to come waits for it: one merged ahead of a release (a banner's) shows only as it opens.

@@ -52,7 +52,7 @@ jobs:
           set -euo pipefail
           now=$(date +%s000)
           due=$(jq -s --argjson now "$now" '
-            map(.at | sub("Z$"; ":00Z") | fromdateiso8601 * 1000
+            map(.at | (if test("T") then sub("Z$"; ":00Z") else . + "T00:00:00Z" end) | fromdateiso8601 * 1000
               | select(. <= $now and . > $now - 604800000)) | length' apps/town/notes/*.json)
           printf 'due=%s\n' "$due" | tee -a "$GITHUB_OUTPUT"
       # When each note was added, and when the record began, are in the history.

@@ -6,15 +6,17 @@
  * tokens is hashed; a run found in two files of different workspaces is copied between them. (Nothing generated is TypeScript: the frames the kit
  * draws are CSS.)
  *
- * The copies there are now are held to the base branch's (`ratchet.ts`): for each pair of files,
- * how many runs they share, which may only go down as the copies go. A new pair, or more shared
- * between a pair, fails.
+ * The copies there are now are held to `baseline/clones.json` (`ratchet.ts`): for each pair of
+ * files, the first of them the group and the other the key, how many runs they share, which may only
+ * go down as the copies go. A new pair, or more shared between a pair, fails. A pair is across files,
+ * so it is held to a baseline, not to the base branch's tree: two changes that each copy half could
+ * make a pair together.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { root } from "./graph.ts";
-import { count, type Counts, hold, type Rekey } from "./ratchet.ts";
+import { count, type Counts, holdToBaseline, type Rekey } from "./ratchet.ts";
 
 /** How many tokens a copied run has at least. */
 export const RUN = 70;
@@ -61,13 +63,8 @@ export function code(text: string): string[] {
   return out;
 }
 
-/**
- * Every tracked file still on disk at `at`, from there: one deleted or renamed but not yet staged
- * is gone. The base's tree (`ratchet.ts`) is a folder of git's files, `node_modules` aside.
- */
-function tracked(at: string): string[] {
-  if (at !== root)
-    return [...new Bun.Glob("**").scanSync({ cwd: at })].filter((f) => !f.split("/").includes("node_modules"));
+/** Every tracked file still on disk, from the root: one deleted or renamed but not yet staged is gone. */
+function tracked(): string[] {
   const out = Bun.spawnSync(["git", "ls-files", "-z"], { cwd: root, stdout: "pipe" });
   return out.stdout
     .toString()
@@ -78,7 +75,7 @@ function tracked(at: string): string[] {
 /** The workspace a file is in: `apps/town`, `packages/kit`. */
 const home = (f: string): string => f.split("/").slice(0, 2).join("/");
 
-/** For each pair of files in different workspaces, how many runs of `RUN` tokens they share. */
+/** For each pair of files in different workspaces, how many runs of `RUN` tokens they share: by the first of the two, then the other. */
 export function shared(sources: ReadonlyMap<string, string>): Counts {
   const ids = new Map<string, number>();
   const runs = new Map<string, Set<bigint>>();
@@ -102,25 +99,30 @@ export function shared(sources: ReadonlyMap<string, string>): Counts {
   const out: Counts = {};
   for (const [run, files] of where) {
     if (files.every((f) => home(f) === firstHome.get(run))) continue;
-    for (const [i, a] of files.entries())
-      for (const b of files.slice(i + 1)) if (home(a) !== home(b)) count(out, "copied", [a, b].toSorted().join(" "));
+    for (const [i, a] of files.entries()) for (const b of files.slice(i + 1)) if (home(a) !== home(b)) pair(out, a, b);
   }
   return out;
 }
 
-/** For each pair of files in different workspaces at `at`, how many runs they share. */
-function copiedIn(at: string): Counts {
-  const files = tracked(at).filter((f) => /^(apps|packages)\/.*\.ts$/.test(f));
-  return shared(new Map(files.map((f) => [f, readFileSync(join(at, f), "utf8")])));
-}
+/** The two files of a pair, in order: the first the group, the other the key. */
+const ordered = (a: string, b: string): readonly [string, string] => (a < b ? [a, b] : [b, a]);
+/** Adds one to a pair's count. */
+const pair = (out: Counts, a: string, b: string): void => count(out, ...ordered(a, b));
 
-/** A pair with moved files' new paths, in order again. */
-const rekey: Rekey = (_group, key, moved) => key.split(" ").map(moved).toSorted().join(" ");
+/**
+ * A pair with moved files' new paths, in order again. A baseline from before a pair was its two
+ * files has one group, `copied`, and the pair as one key: main's, until this form lands there.
+ */
+export const rekey: Rekey = (a, b, moved) => {
+  if (a !== "copied") return ordered(moved(a), moved(b));
+  const [first = "", other = ""] = b.split(" ");
+  return ordered(moved(first), moved(other));
+};
 
 if (import.meta.main) {
-  const found = copiedIn(root);
-  if (!(await hold("clones", found, copiedIn, rekey))) process.exit(1);
-  console.log(
-    `Clones: nothing new copied between workspaces; ${Object.keys(found.copied ?? {}).length} pairs held to the base branch's.`,
-  );
+  const files = tracked().filter((f) => /^(apps|packages)\/.*\.ts$/.test(f));
+  const found = shared(new Map(files.map((f) => [f, readFileSync(join(root, f), "utf8")])));
+  if (!holdToBaseline("clones", found, "bun run clones", rekey)) process.exit(1);
+  const pairs = Object.values(found).reduce((sum, keys) => sum + Object.keys(keys).length, 0);
+  console.log(`Clones: nothing new copied between workspaces; ${pairs} pairs held to the baseline.`);
 }

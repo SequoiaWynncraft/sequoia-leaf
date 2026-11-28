@@ -19,16 +19,19 @@ export interface Listed {
 }
 
 /**
- * Every note's file, by name (`listed`); and, with the one file of notes back, what to do about it
- * (`back`), which `notes.ts` stops on. A macro that throws only says it could not, so it says.
+ * Every note's file, by name. With the one file of notes back, every build of the town and every
+ * test of its notes stops, saying how to move them: Bun says of a macro that throws only that it
+ * could not use what it gave, so the macro says why first.
  */
-export function notesListed(): { back: string | null; listed: Listed[] } {
-  const back = existsSync(BEFORE)
-    ? "apps/town/src/notes.json is back. Move your note into apps/town/notes/<id>.json: `bun apps/town/review/notes-move.ts` does it."
-    : null;
-  const listed = readdirSync(FOLDER)
+export function notesListed(): Listed[] {
+  if (existsSync(BEFORE)) {
+    const why =
+      "apps/town/src/notes.json is back. Move your note into apps/town/notes/<id>.json: `bun apps/town/review/notes-move.ts` does it.";
+    console.error(why);
+    throw new Error(why);
+  }
+  return readdirSync(FOLDER)
     .filter((f) => f.endsWith(".json"))
     .toSorted()
     .map((f) => ({ file: f.slice(0, -".json".length), note: JSON.parse(readFileSync(join(FOLDER, f), "utf8")) }));
-  return { back, listed };
 }

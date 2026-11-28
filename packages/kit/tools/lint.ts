@@ -11,7 +11,7 @@
 import { copyFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { count, type Counts, hold } from "./ratchet.ts";
+import { count, type Counts, holdToBase } from "./ratchet.ts";
 
 const root = join(import.meta.dir, "..", "..", "..");
 
@@ -77,7 +77,12 @@ if (import.meta.main) {
     console.error(`${d.filename}:${at?.line ?? 0}:${at?.column ?? 0}  ${d.code}  ${d.message}`);
     if (d.help) console.error(`  ${d.help}`);
   }
-  const kept = await hold("lint", held, (at) => lint(at).held);
+  const kept = await holdToBase(
+    "lint",
+    held,
+    (at) => lint(at).held,
+    (rule, file, moved) => [rule, moved(file)],
+  );
   if (other.length > 0 || !kept) process.exit(1);
   console.log(`Lint: nothing new, in ${hits} hits held to the base branch's.`);
 }
