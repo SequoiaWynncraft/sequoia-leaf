@@ -28,11 +28,13 @@ import { burst, drawFlyers, drawFxOver, drawFxUnder, wordsFx } from "./fx.ts";
 import { BOARD_H, cellXY, GAP, HEX_H, HEX_W, ROW, seatXY, slotXY } from "./geometry.ts";
 import type { Marks } from "./gesture.ts";
 import { handMarks } from "./hand.ts";
-import { drawHeld, type HeldAt, heldAt, heldRow, heldTop } from "./held.ts";
+import { type HeldAt, heldAt } from "./held.ts";
 import { DIM, shineOf } from "./light.ts";
 import { drawLitter } from "./litter.ts";
 import { arrivalOf, handing, watchersOf } from "./logic.ts";
 import { aloft, FOOT, type Pawn, pawns, spotOfPawn } from "./pawns.ts";
+import { drawPlate, plateAt } from "./plate.ts";
+import { heldOver, planPlate } from "./plates.ts";
 import { drawRisings } from "./rising.ts";
 import { drawRoots } from "./roots.ts";
 import { facing } from "./screen.ts";
@@ -154,28 +156,44 @@ function pawnStanding(g: Ctx, p: Pawn, ox: number, oy: number): Standing {
         flash: pop >= 0 && pop < 0.09,
         lit: shine.lit,
       });
-      drawHeld(g, heldRow(items, p.x + sway, heldTop(p.y - lift, false)), ox, oy);
       // Its level, at the left of its base.
       const level = S.run ? levelOf(S.run, p.kind) : 0;
       if (level > 0) g.drawImage(levelPic(level), Math.round(x) - 10, Math.round(y) - 6);
       g.globalAlpha = 1;
     },
     top: () => {
-      if (p.alpha < 0.6) return;
+      if (p.alpha < 0.6 || !S.run) return;
+      // Its plate, its stars popping onto it as three become one.
       const grew = pop >= 0 && pop < 0.7;
-      const starsAt = y - 3 - hover - f.tall - (grew ? Math.round(Math.sin((pop / 0.7) * Math.PI) * 3) : 0);
-      drawStars(g, p.stars, x, starsAt, grew);
-      // A component in the hand: what it would make with the one this figure holds, faint, over its head.
+      const plate = planPlate(S.run, { ...p, items }, 0, spot?.on === "board" ? spot.at : null);
+      const foot = y - 3 - hover - f.tall;
+      const up = grew ? { pop: { up: Math.round(Math.sin((pop / 0.7) * Math.PI) * 3) } } : {};
+      drawPlate(g, x, foot, { ...plate, ...up });
+      // Tapped and waiting to be told where to go: an arrow bobbing over its plate.
+      if (handMarks().picked === p.id && !fightOn()) drawPicked(g, x, plateAt(plate, x, foot).peak);
+      // A component in the hand: what it would make with the one this figure holds, faint, over its plate.
       const forging = handMarks().forging;
       const would = forging && piece ? handing(catalogFor(S.run), piece, forging) : null;
       if (would?.can && would.forged) {
         const pic = itemPic(would.forged);
+        const over = plateAt(plate, x, foot).peak;
         g.globalAlpha = 0.55 + 0.15 * Math.sin(V.t * 4 + p.phase * 6);
-        g.drawImage(pic, Math.round(x - pic.width / 2), Math.round(starsAt - 6 - pic.height + Math.sin(V.t * 3) * 1.5));
+        g.drawImage(pic, Math.round(x - pic.width / 2), Math.round(over - 1 - pic.height + Math.sin(V.t * 3) * 1.5));
         g.globalAlpha = 1;
       }
     },
   };
+}
+
+/** The arrow over a figure tapped and waiting to be told where to go, 2 rows clear of `peak`, the top of its plate. */
+function drawPicked(g: Ctx, cx: number, peak: number): void {
+  const x = Math.round(cx);
+  const y = Math.round(peak) - 6 + Math.round(Math.sin(V.t * 6));
+  R(g, x - 2, y, 5, 2, INK);
+  R(g, x - 1, y + 2, 3, 1, INK);
+  R(g, x, y + 3, 1, 1, INK);
+  R(g, x - 1, y, 3, 2, GOLD[2]);
+  R(g, x, y + 2, 1, 1, GOLD[2]);
 }
 
 /** One of the far party's figures, waiting on its hex while the member plans. */
@@ -209,11 +227,11 @@ function foeStanding(
         left: true,
         lit: shine.lit,
       });
-      drawHeld(g, heldRow(items, at.x, heldTop(at.y + FOOT - come.away - come.lift - shine.hop, false)), V.bx, V.by);
       g.globalAlpha = 1;
     },
     top: () => {
-      if (stars > 1) drawStars(g, stars, x, y - 3 - hover - f.tall);
+      if (!S.run) return;
+      drawPlate(g, x, y - 3 - hover - f.tall, { ...planPlate(S.run, { kind, stars, items }, 1, seat), big });
     },
   };
 }
@@ -441,19 +459,6 @@ function drawTable(g: Ctx): void {
   list.push(...alsoStanding.flatMap((also) => also(g)));
   list.sort((a, b) => a.y - b.y || a.x - b.x);
   for (const s of list) s.draw();
-  // A ring under the figure that has been tapped and is waiting to be told where to go.
-  const picked = pawns.get(marks.picked);
-  if (picked && !fighting) {
-    const bob = Math.round(Math.sin(V.t * 6));
-    const f = framesOf(picked.kind);
-    const x = Math.round(V.bx + picked.x);
-    const y = Math.round(V.by + picked.y) - f.tall - 12 + bob;
-    R(g, x - 2, y, 5, 2, INK);
-    R(g, x - 1, y + 2, 3, 1, INK);
-    R(g, x, y + 3, 1, 1, INK);
-    R(g, x - 1, y, 3, 2, GOLD[2]);
-    R(g, x, y + 2, 1, 1, GOLD[2]);
-  }
   for (const s of list) s.top();
   if (!fighting) drawItemMarks(g, marks);
   if (fighting) drawFightAir(g);
@@ -574,12 +579,12 @@ export function heldUnder(run: RunView, x: number, y: number): HeldAt | null {
     const spot = spotOfPawn(p);
     if (!spot || p.id === handMarks().held) continue;
     const piece = pieceAt(run, spot);
-    const hit = piece ? heldAt(heldRow(piece.items, p.x, heldTop(p.y, false)), x, y) : null;
+    const hit = piece ? heldAt(heldOver(p.kind, piece.items, p.x, p.y, p.phase), x, y) : null;
     if (hit) return hit;
   }
   for (const foe of run.foe.figures) {
     const at = cellXY(seatCell(1, foe.seat), V.gap);
-    const hit = heldAt(heldRow(foe.items, at.x, heldTop(at.y + FOOT, false)), x, y);
+    const hit = heldAt(heldOver(foe.kind, foe.items, at.x, at.y + FOOT, (foe.seat * 0.23) % 1), x, y);
     if (hit) return hit;
   }
   return null;

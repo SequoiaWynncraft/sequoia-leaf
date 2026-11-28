@@ -1,0 +1,22 @@
+{
+  "id": "raid-plate",
+  "at": "2026-11-28T11:23Z",
+  "title": "A plate over every figure",
+  "lines": [
+    "Every figure in The Little Raid now has one plate over its head: health, mana, stars and items.",
+    "Stars are bronze, silver or gold. Health and items no longer sit under a figure's feet."
+  ],
+  "more": [
+    {
+      "head": "Also",
+      "points": [
+        "While you plan, a plate shows the health and mana a figure starts the fight with.",
+        "Ticks on the health bar mark every 250 health. Past 1,250, they mark every 1,000.",
+        "A shield shows in grey after the health.",
+        "On the bench, a figure shows only its stars and items.",
+        "Summoned figures have no stars.",
+        "Damage numbers now start above the plate."
+      ]
+    }
+  ]
+}

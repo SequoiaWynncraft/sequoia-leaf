@@ -325,6 +325,29 @@ export function startNumbers(era: Era, party: Party, seat: number, against: Part
   };
 }
 
+/** What a figure's plate shows before a fight: its health (full), any shield it starts with, the mana it starts with and what fills it. */
+export interface StartPlate {
+  readonly hp: number;
+  readonly shield: number;
+  readonly mana: number;
+  readonly manaFull: number;
+}
+/**
+ * Every fielded figure's plate as the next fight between two parties would start them, by side and
+ * seat (`"0:12"`): asked of the fight itself, as `startNumbers` is, so the plate shows what happens.
+ */
+export function startPlates(era: Era, ours: Party, theirs: Party): ReadonlyMap<string, StartPlate> {
+  const fight = openFight({ seed: 1, era, sides: [ours, theirs] });
+  return new Map(
+    fight.units
+      .filter((u) => !u.summoned)
+      .map((u) => [
+        `${u.side}:${u.seat}`,
+        { hp: Math.round(u.maxHp), shield: u.shield, mana: u.mana, manaFull: u.manaFull },
+      ]),
+  );
+}
+
 /** The numbers of one of the member's own figures: on the board with the party's traits, on the bench with only what it holds. */
 export function pieceNumbers(run: RunView, spot: Spot): Numbers | null {
   if (spot.on === "board") return startNumbers(run.era, partyOf(run), spot.at);

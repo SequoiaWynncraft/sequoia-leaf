@@ -34,6 +34,7 @@ import { ownOf } from "./livery.ts";
 import { ATTACK_SHOT, type Look, LOOKS, puffOf, shotLook, VOICES } from "./looks.ts";
 import { arcOf, type At, CARD_DRAWN, MARKS, puff, type Shot } from "./marks.ts";
 import { type Actor, TUMBLE } from "./motion.ts";
+import { aboveHead, shapeOf } from "./plate.ts";
 import type { Cue, Lead } from "./playback.ts";
 import { fallsToRise, isRising, risesUp, stepRisings } from "./rising.ts";
 import { reachOut, rootsUp, stepRoots } from "./roots.ts";
@@ -59,6 +60,8 @@ const tallOf = (a: Actor): number => framesOf(a.unit.kind, false, a.form).tall;
 /** Where somebody stands and how tall, for what lands on them; nobody, for nobody. */
 const standsAt = (a: Actor | undefined): (Pt & { tall: number }) | null =>
   a ? { x: a.x, y: a.y, tall: tallOf(a) } : null;
+/** Where what rises over somebody's head starts: the row over its plate. */
+const headOf = (a: Actor): number => a.y - tallOf(a) - aboveHead(shapeOf(a.unit));
 const chestOf = (a: Actor): Pt => ({ x: a.x, y: a.y - Math.round(tallOf(a) / 2) });
 
 /** How many of an ability's hits have landed this step, by whose it is: two or more is weight. */
@@ -248,7 +251,7 @@ const ON: On = {
     a.hard = false;
     a.hx = a.left ? 4 : -4;
     a.hy = 0;
-    say(a.x, a.y - tallOf(a) - 2, "dodge", WATER[3], { ttl: 0.6 });
+    say(a.x, headOf(a), "dodge", WATER[3], { ttl: 0.6 });
     burst(a.x, a.y - 8, 4, [WATER[3], CREAM], { speed: 20, ttl: 0.3, grav: 0 });
     snd.slip();
   },
@@ -259,7 +262,7 @@ const ON: On = {
     const quiet = ev.source === "regrow";
     motes(a.x, a.y - 6, quiet ? 2 : 7, [GREEN[4], "#c9ef9a", CREAM]);
     if (quiet) return;
-    say(a.x, a.y - tallOf(a) - 2, `+${ev.amount}`, "#c9ef9a", { ttl: 0.7 });
+    say(a.x, headOf(a), `+${ev.amount}`, "#c9ef9a", { ttl: 0.7 });
     snd.heal();
   },
   shield: (ev, at) => {
@@ -272,7 +275,7 @@ const ON: On = {
   boost: (ev) => {
     const a = actor(ev.id);
     if (!a) return;
-    say(a.x, a.y - tallOf(a) - 2, `+${ev.amount} attack`, "#f4a08c", { ttl: 0.9 });
+    say(a.x, headOf(a), `+${ev.amount} attack`, "#f4a08c", { ttl: 0.9 });
     burst(a.x, a.y - 10, 5, ["#f4a08c", GOLD[2]], { speed: 20, grav: -40, ttl: 0.5, toward: UP, spread: 0.7 });
   },
   fall: (ev, at) => {
@@ -370,7 +373,7 @@ function rise(ev: Events["rise"], at: number): void {
   a.rising = false;
   a.hopAt = at;
   if (ev.why === "seqwawa") return rootsUp(ev, at);
-  say(a.x, a.y - tallOf(a) - 6, "Second Wind!", GOLD[2], { ttl: 1.4 });
+  say(a.x, headOf(a) - 4, "Second Wind!", GOLD[2], { ttl: 1.4 });
   motes(a.x, a.y - 6, 10, [GOLD[2], CREAM]);
   snd.rise();
 }
@@ -405,7 +408,7 @@ function struck(a: Actor, ev: Events["hit"], at: number): void {
   burst(a.x, a.y - 11, ev.hard ? 9 : 4, [col, CREAM], { speed: ev.hard ? 46 : 30, ttl: 0.3 });
   say(
     a.x + (Math.random() - 0.5) * 8,
-    a.y - tallOf(a) - 2,
+    headOf(a),
     ev.hard ? `${ev.amount}!` : String(ev.amount),
     ev.hard ? GOLD[2] : col,
     {
@@ -433,7 +436,7 @@ function cast(cat: Catalog, ev: Events["cast"], at: number): void {
   if (look?.lands !== "call")
     for (const cell of ev.cells) FV.flashes.push({ cell, t0: at + distance(a.unit.cell, cell) * 1.5, col });
   // Its name, small, so that it never covers what it does.
-  if (ev.name) say(a.x, a.y - framesOf(ev.kind).tall - 8, ev.name, col, { small: true, ttl: 0.8, rise: 6 });
+  if (ev.name) say(a.x, headOf(a) - 6, ev.name, col, { small: true, ttl: 0.8, rise: 6 });
   if (look?.lands) hold(cat, ev, look, a, t, at);
   else if (look) goesOff(cat, ev, look);
   if (ev.tool === "scythe") reaped(a);
@@ -489,7 +492,7 @@ function status(ev: Events["status"], at: number): void {
   if (ev.status === "stun") snd.stun();
   else if (ev.status === "burn") burst(a.x, a.y - 4, 6, ["#e67967", GOLD[1]], { speed: 20, grav: -30, ttl: 0.4 });
   else if (ev.status === "slow") burst(a.x, a.y - 2, 5, [WATER[2], WATER[3]], { speed: 14, ttl: 0.5 });
-  else if (ev.status === "taunt") say(a.x, a.y - tallOf(a) - 2, "!", "#e67967", { big: true, ttl: 0.6 });
+  else if (ev.status === "taunt") say(a.x, headOf(a), "!", "#e67967", { big: true, ttl: 0.6 });
   else if (ev.status === "hidden") hides(a, at);
   else if (ev.status === "haste")
     burst(a.x, a.y - 6, 6, [CREAM, GOLD[2]], { speed: 26, grav: -50, ttl: 0.4, toward: UP, spread: 0.6 });
@@ -507,15 +510,9 @@ function trait(cat: Catalog, ev: Events["trait"], at: number): void {
   const first = actor(ev.ids[0] ?? -1);
   if (first) {
     FV.signs.push({ pic: traitPic(ev.trait), id: first.unit.id, t0: at });
-    say(
-      first.x,
-      first.y - tallOf(first) - 14,
-      `${traitIn(cat, ev.trait).name}${ev.step > 1 ? ` ${ev.step}` : ""}`,
-      col,
-      {
-        ttl: 1,
-      },
-    );
+    say(first.x, headOf(first) - 12, `${traitIn(cat, ev.trait).name}${ev.step > 1 ? ` ${ev.step}` : ""}`, col, {
+      ttl: 1,
+    });
   }
   if (ev.side === FV.ours) {
     FV.woke?.(ev.trait);
