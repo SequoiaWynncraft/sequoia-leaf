@@ -38,4 +38,3 @@ export function fitHead(card: HTMLElement): boolean {
   if (cramped() && head.querySelector(".k-info-back")) head.classList.add("tighter");
   return true;
 }
-

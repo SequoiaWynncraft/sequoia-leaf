@@ -23,7 +23,7 @@
  * The rules of that (`Deck`) touch no page and are tested; the rest draws them (`face.ts`).
  */
 import { givingBack, layer } from "./dialog.ts";
-import { el, pressedTwice, unheld } from "./dom.ts";
+import { pressedTwice, unheld } from "./dom.ts";
 import {
   type Action,
   actionSpend,
@@ -38,6 +38,7 @@ import {
   saidOf,
   thingOf,
 } from "./face.ts";
+import { fitHead, length } from "./measure.ts";
 import { beside, type Box, clear, sheet, type Side } from "./place.ts";
 import { longPress } from "./press.ts";
 import { type Release, scope } from "./scope.ts";
@@ -377,25 +378,6 @@ const spotOf = (at: Spot | object): Spot | null => {
   return isSpot(at) ? at : null;
 };
 
-/** A probe for each length a game sets for the cards: never seen, and as tall as the length. */
-const probes = new Map<string, HTMLElement>();
-
-/**
- * A length a game sets for the cards (`--sheet-floor`), in CSS pixels as the browser works it out:
- * the height of a probe that is that tall, so a `calc()`, a `var()` or an `env()` in it counts as it
- * does in the sheet's own rule. Its words are never read as a number. 0 where it is not set.
- */
-function length(name: string): number {
-  const had = probes.get(name);
-  const probe = had?.isConnected ? had : el("div", "k-probe", { "aria-hidden": "true" });
-  if (probe !== had) {
-    probe.style.height = `var(${name}, 0px)`;
-    document.body.append(probe);
-    probes.set(name, probe);
-  }
-  return probe.getBoundingClientRect().height;
-}
-
 /** The window, the game's bar along its bottom that a sheet stands on, and where what hangs from its top ends: read as each card is placed. */
 const room = (): { w: number; h: number; floor: number; ceiling: number } => ({
   w: window.innerWidth,
@@ -572,6 +554,8 @@ const view: View = {
     const scrolled = swapIn(was, card, sameShown(prev, o));
     page.node = card;
     placeCard(card, o, howPlaced(prev, o));
+    // Placed, its head has the width it is shown at: where its name has no room, it is placed again.
+    if (fitHead(card)) placeCard(card, o, "keep");
     // The same card, as high as it is to be: scrolled where it was, so what was under a finger is still under it.
     if (scrolled !== null) card.scrollTop = scrolled;
     if (!o.pinned) {

@@ -749,6 +749,28 @@ button.k-slot:hover {
   flex: none;
   align-self: flex-start;
 }
+/*
+ * A head with no room for its name's longest word (`fitHead`): its picture goes first; then a way back
+ * moves to a row of its own above the rest, and the close button stays on the card.
+ */
+.k-info-head.tight > .k-info-pic {
+  display: none;
+}
+.k-info-head.tighter {
+  flex-wrap: wrap;
+  row-gap: calc(var(--u) * 2);
+}
+.k-info-head.tighter > * {
+  order: 2;
+}
+.k-info-head.tighter > .k-info-back {
+  order: 0;
+}
+.k-info-head.tighter::after {
+  content: "";
+  order: 1;
+  flex-basis: 100%;
+}
 /* The close button's room on a card that is not pinned (card.ts): it is there, and not seen. */
 .k-info-x.unseen {
   visibility: hidden;

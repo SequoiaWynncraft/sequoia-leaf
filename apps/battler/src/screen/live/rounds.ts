@@ -126,3 +126,13 @@ export function stageClock(view: SittingView, now: number): StageClock | null {
 /** Whether a stage began between two views of a table: a new stage, or the same in another room. */
 export const stageBegan = (view: SittingView, was: SittingView): boolean =>
   view.stage.at !== "open" && view.stage.at !== "over" && (view.stage.at !== was.stage.at || view.room !== was.room);
+
+/**
+ * What a round's card says of it: its name, and its number. A fight's name holds a player's, one word
+ * they chose, so it may break anywhere (`member`, as a card's title of a member's name does).
+ */
+export const roundTitle = (round: Round): { name: string; member?: true; tag: string } => ({
+  name: round.name,
+  ...(round.kind === "spar" ? { member: true } : {}),
+  tag: round.at.startsWith("Round") ? round.at : `Round ${round.at}`,
+});

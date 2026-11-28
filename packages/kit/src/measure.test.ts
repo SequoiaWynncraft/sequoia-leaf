@@ -7,7 +7,12 @@ import { describe, expect, test } from "bun:test";
 import { fitHead } from "./measure.ts";
 
 /** A card whose head is `need` wide as laid out, `room` wide to lay it out in, less what each class takes out of it. */
-function cardOf(need: number, room: number, back: boolean, saves: Readonly<Record<string, number>>): HTMLElement {
+function cardOf(
+  need: number,
+  room: number,
+  back: boolean,
+  saves: Readonly<Record<string, number>>,
+): [HTMLElement, Set<string>] {
   const classes = new Set<string>();
   const head = {
     get scrollWidth() {
@@ -17,26 +22,24 @@ function cardOf(need: number, room: number, back: boolean, saves: Readonly<Recor
     classList: { add: (c: string) => classes.add(c), contains: (c: string) => classes.has(c) },
     querySelector: (q: string) => (q === ".k-info-back" && back ? {} : null),
   };
-  return Object.assign(Object.create(null), {
+  const card: HTMLElement = Object.assign(Object.create(null), {
     querySelector: (q: string) => (q === ".k-info-head" ? head : null),
-    head,
-    classes,
   });
+  return [card, classes];
 }
-const classesOf = (card: HTMLElement): string[] => [...(Reflect.get(card, "classes") as Set<string>)];
 
 describe("a card's head", () => {
   test("with room is left as it is", () => {
-    const card = cardOf(300, 340, true, {});
-    expect([fitHead(card), classesOf(card)]).toEqual([false, []]);
+    const [card, classes] = cardOf(300, 340, true, {});
+    expect([fitHead(card), [...classes]]).toEqual([false, []]);
   });
   test("short of room drops its picture first; still short, its way back goes above; Close stays", () => {
-    const enough = cardOf(380, 340, true, { tight: 60 });
-    expect([fitHead(enough), classesOf(enough)]).toEqual([true, ["tight"]]);
-    const more = cardOf(420, 340, true, { tight: 60, tighter: 50 });
-    expect([fitHead(more), classesOf(more)]).toEqual([true, ["tight", "tighter"]]);
+    const [enough, a] = cardOf(380, 340, true, { tight: 60 });
+    expect([fitHead(enough), [...a]]).toEqual([true, ["tight"]]);
+    const [more, b] = cardOf(420, 340, true, { tight: 60, tighter: 50 });
+    expect([fitHead(more), [...b]]).toEqual([true, ["tight", "tighter"]]);
     // With no way back, the picture is all that can go.
-    const alone = cardOf(420, 340, false, { tight: 60 });
-    expect([fitHead(alone), classesOf(alone)]).toEqual([true, ["tight"]]);
+    const [alone, c] = cardOf(420, 340, false, { tight: 60 });
+    expect([fitHead(alone), [...c]]).toEqual([true, ["tight"]]);
   });
 });
