@@ -6,9 +6,10 @@
  * Every dirty machine of the tier's lines stands there: the folio lines for as long as the research
  * runs, and each node's lines for its minutes in turn, from the opening. Each makes what it adds for
  * each thing it finishes, at the share of its pace the plot's smog lets it. A mix's runs are those
- * for the most it must give of any one of its things for that goal; the rest of the mix leaves the
- * plot (sold, cracked or burned elsewhere). The plot is counted every 100 ticks by the rules' own
- * numbers (`SMOG`, `stepOf`, `shareAt`), with the redwoods that stand on it.
+ * for the most it must give of any one of its things for that goal, each thing's summed over every
+ * line that wants it; the rest of the mix leaves the plot (sold, cracked or burned elsewhere). The
+ * plot is counted every 100 ticks by the rules' own numbers (`SMOG`, `stepOf`, `shareAt`), with the
+ * redwoods that stand on it.
  */
 import * as F from "../src/index.ts";
 
@@ -23,15 +24,17 @@ export const SMOG_FROM: Readonly<
 /** What grade III lines making each thing at so many a minute make of smog a minute. */
 export function linesSmog(rates: readonly (readonly [F.Item, number])[]): number {
   let made = 0;
-  const runs = new Map<F.Kind, number>();
+  // The runs each of a mix's things asks for, summed over every branch that wants it.
+  const runs = new Map<F.Kind, Map<F.Item, number>>();
   const walk = (b: F.Branch): void => {
-    if (F.MIX_OF[b.kind]?.gives.includes(b.item))
-      runs.set(b.kind, Math.max(runs.get(b.kind) ?? 0, b.from[0]?.perMinute ?? 0));
-    else made += (F.SMOG_OF[b.kind] ?? 0) * b.perMinute;
+    if (F.MIX_OF[b.kind]?.gives.includes(b.item)) {
+      const by = runs.get(b.kind) ?? new Map<F.Item, number>();
+      runs.set(b.kind, by.set(b.item, (by.get(b.item) ?? 0) + (b.from[0]?.perMinute ?? 0)));
+    } else made += (F.SMOG_OF[b.kind] ?? 0) * b.perMinute;
     b.from.forEach(walk);
   };
   for (const [n, rate] of rates) if (rate > 0) walk(F.tree(n, rate, 3));
-  for (const [k, r] of runs) made += (F.SMOG_OF[k] ?? 0) * r;
+  for (const [k, by] of runs) made += (F.SMOG_OF[k] ?? 0) * Math.max(0, ...by.values());
   return made;
 }
 
