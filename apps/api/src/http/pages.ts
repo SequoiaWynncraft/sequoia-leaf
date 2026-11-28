@@ -4,20 +4,15 @@ import { HttpRouter, HttpServerError, HttpServerRequest, HttpServerResponse, Htt
 
 import { AppConfig } from "../config.ts";
 
-/** The policy of a page that may be framed by `ancestors` besides Leaf's own pages. */
-const policyFramedBy = (...ancestors: readonly string[]) =>
-  [
-    "default-src 'self'",
-    "img-src 'self' data: blob:",
-    "font-src 'self' data:",
-    "style-src 'self' 'unsafe-inline'",
-    "frame-src 'self'",
-    ["frame-ancestors 'self'", ...ancestors].join(" "),
-    "connect-src 'self'",
-    "base-uri 'self'",
-    "form-action 'self'",
-    "object-src 'none'",
-  ].join("; ");
+/** What every page may do, whoever frames it. */
+const OWN = [
+  "default-src 'self'",
+  "img-src 'self' data: blob:",
+  "font-src 'self' data:",
+  "style-src 'self' 'unsafe-inline'",
+  "frame-src 'self'",
+];
+const REST = ["connect-src 'self'", "base-uri 'self'", "form-action 'self'", "object-src 'none'"];
 
 /**
  * What the game's pages may do: load and frame only what Leaf serves, talk only
@@ -27,21 +22,17 @@ const policyFramedBy = (...ancestors: readonly string[]) =>
  * Leaf, a form may be sent only to Leaf, and no plugin content loads: none of
  * these falls back to `default-src`.
  */
-export const PAGE_POLICY = policyFramedBy();
+export const PAGE_POLICY = [...OWN, "frame-ancestors 'self'", ...REST].join("; ");
 
 /**
- * Discord's own apps, which frame the raid in a call: the desktop app and the browser's at
- * discord.com, and its two test builds. On a phone the raid is the whole of Discord's view, framed by
- * nothing.
+ * The raid's page in a Discord call: as every page, but with no rule on who frames it. Discord's
+ * phone apps frame an Activity from a page with no origin of its own (its SDK takes messages from
+ * the origin `null`), which no `frame-ancestors` list can name: with one, the phone shows a grey
+ * frame and the page never runs. Nothing is lost by it: a site that frames this page gets it signed
+ * out (Leaf's own cookie is not sent to another site's frame, and the frame's own cookie is kept
+ * per site), and only Discord's client can answer the sign-in it asks for.
  */
-export const DISCORD_FRAMES = ["https://discord.com", "https://ptb.discord.com", "https://canary.discord.com"];
-
-/**
- * The raid's page in a Discord call: as every page, but Discord's apps may frame it too. Inside the
- * frame `'self'` is Discord's proxy for Leaf (`<client id>.discordsays.com`), which every request
- * of the page goes through.
- */
-export const CALL_PAGE_POLICY = policyFramedBy(...DISCORD_FRAMES);
+export const CALL_PAGE_POLICY = [...OWN, ...REST].join("; ");
 
 /** The raid's page, which is all of Leaf a Discord call opens. */
 export const RAID_PAGE = "/play/battler/";
@@ -55,8 +46,8 @@ const launchedByDiscord = (query: URLSearchParams): boolean =>
 
 /**
  * The policy a page is served with, chosen by its address alone: the raid's page opened by Discord
- * gets `CALL_PAGE_POLICY`, every other page `PAGE_POLICY`. Neither names a site a request can
- * choose: the most any request can do is let Discord's apps frame the raid, which a call does.
+ * gets `CALL_PAGE_POLICY`, every other page `PAGE_POLICY`. The most a request can do is have the
+ * raid's page served framable, which is all a call needs and gives a framing site nothing.
  */
 export function policyOf(url: string): string {
   const at = new URL(url, "http://leaf.invalid");

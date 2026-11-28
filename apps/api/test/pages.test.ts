@@ -183,13 +183,9 @@ describe("the raid in a Discord call", () => {
   /** Discord's launch query, as its frame opens the raid. */
   const LAUNCH = "?instance_id=i-1-gc-2-3&location_id=gc-2-3&launch_id=1&frame_id=f-9&platform=desktop";
 
-  it("lets Discord's own apps frame the raid's page, besides Leaf's own pages, and nothing else", () => {
-    expect(CALL_PAGE_POLICY).toBe(
-      PAGE_POLICY.replace(
-        "frame-ancestors 'self'",
-        "frame-ancestors 'self' https://discord.com https://ptb.discord.com https://canary.discord.com",
-      ),
-    );
+  it("serves the raid's page in a call with no rule on who frames it, as Discord's phone apps frame it from no origin, and the rest as every page", () => {
+    expect(CALL_PAGE_POLICY).toBe(PAGE_POLICY.replace("frame-ancestors 'self'; ", ""));
+    expect(CALL_PAGE_POLICY).not.toContain("frame-ancestors");
   });
 
   it("sends Discord's launch of / to the raid's page, with its query as it came", async () => {
