@@ -9,6 +9,7 @@ import { belt } from "./belt.ts";
 import { bench } from "./bench.ts";
 import { boiler } from "./boiler.ts";
 import { breaker } from "./breaker.ts";
+import { charger } from "./charger.ts";
 import { cracker } from "./cracker.ts";
 import { crate } from "./crate.ts";
 import { depot } from "./depot.ts";
@@ -17,6 +18,7 @@ import { grower } from "./grower.ts";
 import { joiner } from "./joiner.ts";
 import { gradeKept, tintKept } from "./kept.ts";
 import type { Hooks, KindDef } from "./kind.ts";
+import { launchpad } from "./launchpad.ts";
 import { mill } from "./mill.ts";
 import { powerhouse } from "./powerhouse.ts";
 import { pylon } from "./pylon.ts";
@@ -52,6 +54,8 @@ export const KIND_DEFS = [
   cracker,
   powerhouse,
   grower,
+  charger,
+  launchpad,
 ] as const satisfies readonly KindDef[];
 export type KindName = (typeof KIND_DEFS)[number]["name"];
 
@@ -78,6 +82,7 @@ const LEFT_OUT: KindRules = {
   closed: none,
   sends: () => 7,
   wants: never,
+  refuses: nothing,
   room: never,
   give: idle,
   turns: never,

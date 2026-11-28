@@ -3,10 +3,12 @@
  *
  * Yards made by the scale study's generator with commands: about 6,000 pieces on 112 by 84, and
  * about 10,000 on 160 by 120. Each is run 3,000 ticks first, as a yard in play would be kept.
- * Times are medians, in milliseconds. Nothing is asserted here; the budgets are tests.
+ * Times are medians, in milliseconds, the beat's (tier 8's pass over every charged cell, once in 200
+ * ticks) beside the tick's. Nothing is asserted here; the budgets are tests.
  *
  * Then the work of catching a yard up, as Leaf does for one its owner left: each staged yard, the
- * generated yard of about 1,000 pieces, a ring of 40 belts with 4 growers on it (tier 7), and each
+ * generated yard of about 1,000 pieces, a ring of 40 belts with 4 growers on it (tier 7), a launch pad
+ * with 10 chargers and 4 belts of cells (tier 8), and each
  * save run on for eight hours of ticks, in
  * milliseconds of work for each hour of the yard's time, the best of three. And lines that never
  * wait: three of 41 belts each, from crates full of planks into the depot, in milliseconds for 1,500
@@ -19,6 +21,7 @@ import * as F from "./src/index.ts";
 import { generate } from "./test/gen.ts";
 import { ringOfGrowers } from "./test/growers.ts";
 import { bareLand, makeLand } from "./test/land.ts";
+import { padYard } from "./test/launchyard.ts";
 import { generated, must, saved, SAVES, staged, STAGES } from "./test/yards.ts";
 
 const now = (): number => Bun.nanoseconds() / 1e6;
@@ -60,6 +63,7 @@ function sizes(): void {
   const rows: string[][] = [];
   for (const { name, y } of [made("6000", 7, 7, 6000), made("10000", 10, 10, 10_000)]) {
     const packed = F.encode(y);
+    const wire = F.rewire(y);
     rows.push([
       name,
       String(pieces(y)),
@@ -67,6 +71,7 @@ function sizes(): void {
       fmt(median(() => F.decode(packed, y.land), 1500, 5)),
       fmt(median(() => F.encode(y))),
       fmt(median(() => F.check(y))),
+      fmt(median(() => F.beat(y, wire))),
       String(packed.length),
       String(F.bytesHeld(y)),
       fmt(heldBy(() => F.decode(packed, y.land)) / 100 / 1e6),
@@ -77,8 +82,10 @@ function sizes(): void {
       console.error(`eight hours (288,000 ticks) of the 6000 yard: ${fmt((now() - t) / 1000)} s`);
     }
   }
-  console.log("| yard | pieces | tick | decode | encode | check | kept, bytes | held, bytes | heap a yard, MB |");
-  console.log(`|${" ---: |".repeat(9)}`);
+  console.log(
+    "| yard | pieces | tick | decode | encode | check | beat, once in 200 ticks | kept, bytes | held, bytes | heap a yard, MB |",
+  );
+  console.log(`|${" ---: |".repeat(10)}`);
   for (const r of rows) console.log(`| ${r.join(" | ")} |`);
 }
 
@@ -104,6 +111,7 @@ function hours(): void {
     ...STAGES.map((s): [string, F.Yard] => [`staged ${s}`, staged(s)]),
     ["generated", generated().y],
     ["a ring of 40 belts with 4 growers", ringOfGrowers()],
+    ["a launch pad, 10 chargers and 4 belts of cells", padYard()],
     ...SAVES.map((s): [string, F.Yard] => [`save ${s}`, saved(s)]),
   ];
   console.log("| yard | pieces | ms an hour |");

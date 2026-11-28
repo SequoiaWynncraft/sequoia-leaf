@@ -184,6 +184,8 @@ export interface KindPage {
   readonly rows?: (p: MachinePrint) => Row[];
   /** What standing in the yard adds to its card. */
   readonly standing?: Standing;
+  /** Whether its standing card's own rows say what it holds, in place of the list every holder's card has (a launch pad's parts filling and cells by bars). */
+  readonly holdsOwn?: true;
   /** How many its card says it may hold (`Holds, of 8`), where it says. */
   readonly holdsUp?: (y: Yard) => number;
   /** Whether its card empties it whatever it is doing (a crate); else only while it is idle or full of a part. */

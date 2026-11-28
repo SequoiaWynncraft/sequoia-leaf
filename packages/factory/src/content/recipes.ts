@@ -69,4 +69,10 @@ export const RECIPES: readonly RecipeInfo[] = [
   { out: "lattice", from: { crystal: 2, wire: 1 }, by: "bench", ticks: 20 },
   { out: "star", from: { lattice: 1, coil: 1, varnish: 1 }, by: "workshop", ticks: 40 },
   { out: "dish", from: { lattice: 2, telegraph: 1, sleeper: 1 }, by: "workshop", ticks: 80 },
+  // Tier 8, the launch: a cell, which a charger charges (`charge.ts`); a hull section, of a breaker's
+  // copper and a still's pitch; rocket fuel, of its spirit and creosote. A rocket has no recipe: a
+  // launch pad launches it at once from its parts (`rockets.ts`).
+  { out: "cell", from: { crystal: 1, coil: 1 }, by: "bench", ticks: 20 },
+  { out: "hull", from: { copper: 2, pitch: 1, frame: 1 }, by: "workshop", ticks: 40 },
+  { out: "fuel", from: { spirit: 2, creosote: 1 }, by: "bench", ticks: 20 },
 ];

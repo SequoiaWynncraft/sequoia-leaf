@@ -167,7 +167,12 @@ describe("projects and commissions", () => {
     const last = Math.max(...F.GOALS.filter((g) => g.kind === "commission").map((g) => g.tier));
     const c = commissionOf(last);
     const y = F.create({ seed: 1, tier: last });
-    for (const g of needsFirst(c).filter((n) => n !== c)) learn(y, g);
+    // What it needs first: research learned, and a node (tier 8's test firing) taken and given what it wants.
+    for (const g of needsFirst(c).filter((n) => n !== c))
+      if (F.isNode(g)) {
+        must(y, { do: "take", node: idOf(g) });
+        fill(y);
+      } else learn(y, g);
     fill(y);
     expect([y.open.tier, y.hand]).toEqual([last + 1, -1]);
     F.deliver(y, F.ALL_ITEMS.find((n) => (F.GOALS[c]?.want[n] ?? 0) > 0) ?? F.item("plank"), 5);

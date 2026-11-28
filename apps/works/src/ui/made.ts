@@ -1,9 +1,11 @@
 /**
  * Where a thing comes from, on its card: the parts it is made from and every machine that makes it,
  * what a mix of it is broken or distilled from and by what (by which way out, where each sends one
- * thing), what it is grown from and in what, or the gatherer and the plots it lies in.
+ * thing), what it is grown from and in what, what a charged cell is charged from and becomes, what a
+ * rocket is launched with, or the gatherer and the plots it lies in.
  */
 import {
+  CHARGED,
   GATHERING,
   gathers,
   GROW_OF,
@@ -17,10 +19,11 @@ import {
   mixShare,
   outsAs,
   RECIPE,
+  ROCKET_OF,
   wayNames,
 } from "@sequoia-leaf/factory";
 import type { Entry, Row } from "@sequoia-leaf/kit/card.ts";
-import { perMinute } from "@sequoia-leaf/kit/say.ts";
+import { perMinute, whole } from "@sequoia-leaf/kit/say.ts";
 
 import type { ItemPrint } from "./cards.ts";
 import { itemRef, machineRef, plotRef } from "./refs.ts";
@@ -74,8 +77,35 @@ export function madeRows(p: ItemPrint): Row[] {
     return mix && recipe.from.every((part) => mix.gives.includes(part)) ? [...mixed, ...made] : [...made, ...mixed];
   }
   if (mix) return mixed;
-  if (!isRaw(k)) return [];
+  if (!isRaw(k)) return launchRows(p);
   return [...grownRows(p), ...gatheredRows(p)];
+}
+
+/**
+ * For a charged cell (tier 8): what a charger charges and in what, at grade 1, and what it becomes on
+ * each beat; for a rocket, what a launch pad launches it with. Each names its machine before it is
+ * researched. Nothing for any other thing.
+ */
+function launchRows(p: ItemPrint): Row[] {
+  const k = p.item;
+  const bar = CHARGED.bars.indexOf(k);
+  if (bar >= 0) {
+    const next = bar === 0 ? CHARGED.plain : (CHARGED.bars[bar - 1] ?? CHARGED.plain);
+    return [
+      { label: "Charged from", things: CHARGED.takes.map((n) => ({ ref: itemRef(n) })) },
+      { label: "In", things: p.makers.map((m) => ({ ref: machineRef(m), note: perMinute(makes(m, 1, null)) })) },
+      { label: `Every ${CHARGED.beat / 10} seconds it becomes`, things: [{ ref: itemRef(next) }] },
+    ];
+  }
+  const r = ROCKET_OF[k] ? makersOf(k)[0] : undefined;
+  if (!r) return [];
+  return [
+    {
+      label: "Launched with",
+      things: r.from.map((part, i) => ({ ref: itemRef(part), count: `×${whole(r.need[i] ?? 1)}` })),
+    },
+    { label: "From", things: p.makers.map((m) => ({ ref: machineRef(m) })) },
+  ];
 }
 
 /**

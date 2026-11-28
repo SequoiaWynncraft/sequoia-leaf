@@ -5,6 +5,7 @@
 import type { Wants } from "./items.ts";
 import type { Unlocks } from "./nodes.ts";
 import { TIER_7_RESEARCH } from "./tier7.ts";
+import { TIER_8_RESEARCH } from "./tier8.ts";
 
 /** How many pieces of research may be in the line: one studied, and the rest waiting. */
 export const LINE = 4;
@@ -426,4 +427,5 @@ export const RESEARCH: readonly ResearchInfo[] = [
   },
   // Tier 7, the signal (`tier7.ts`).
   ...TIER_7_RESEARCH,
+  ...TIER_8_RESEARCH,
 ];

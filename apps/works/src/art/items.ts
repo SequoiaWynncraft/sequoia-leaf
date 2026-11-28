@@ -112,6 +112,22 @@ export const ROWS: Readonly<Record<ItemName, readonly string[]>> = {
   star: ["XHHHHH.", "XHHwHHc", "XHwwwHc", "XHHwHHc", "XHwHwHc", "bCCCCOc", ".....O."],
   // A shallow pale dish on a short mast, tilted up to the left.
   dish: ["t......", "ct.....", "cct....", ".cctt..", "..ccSt.", "....i..", "...iIi."],
+  // A short capped tube, dark ends, a dull grey middle, three pips on its cap: none lit for a plain
+  // cell, then 1, 2 or 3 lit pale green-cream, 1 pixel each with 1 between; a full one pale inside.
+  cell: [".KKKKK.", "KiKiKiK", "J3333Ij", "J3333Ij", "J3333Ij", ".IIIII."],
+  charged1: [".KKKKK.", "K1KiKiK", "J3333Ij", "J3333Ij", "J3333Ij", ".IIIII."],
+  charged2: [".KKKKK.", "K1K1KiK", "J3333Ij", "J3333Ij", "J3333Ij", ".IIIII."],
+  charged3: [".KKKKK.", "K1K1K1K", "J3222Ij", "J3222Ij", "J3333Ij", ".IIIII."],
+  // A curved pale plate with a row of rivets.
+  hull: ["..4444.", ".44444.", "4j4j4j5", "4444455", ".55555."],
+  // A drum in dull red with a pale band.
+  fuel: [".6666.", "666667", "cccccC", "666667", "666677", ".7777."],
+  // A short pale rocket on three fins.
+  testrocket: ["...8...", "..888..", "..889..", "..889..", ".98899.", "9..9..9"],
+  // A pale rocket standing on three fins, a cream light at its tip.
+  rocket: ["...w...", "..888..", "..889..", "..889..", "..889..", "..889..", ".98899.", "9..9..9"],
+  // The rocket, wider, with two small ones strapped to its sides.
+  heavyrocket: ["....w....", "...888...", ".8.889.8.", "889889889", "889889889", "889889889", "989888989", "9..9.9..9"],
 };
 
 /** Each thing's picture with its dark edge, for a belt or a card. */

@@ -88,8 +88,8 @@ import { type Answered, openPlay, type Play, type Trouble } from "@sequoia-leaf/
 import { balance } from "@sequoia-leaf/kit/purse.ts";
 import { joinVisit, type LiveRoom } from "@sequoia-leaf/kit/realtime.ts";
 
+import { beginCounts, commanded, counting, keepCounts, noteTick } from "./counters.ts";
 import { beyondReach } from "./figure/reach.ts";
-import { beginCounts, commanded, counting, keepCounts, noteGrowers } from "./grown.ts";
 import { S } from "./state.ts";
 import { askDue, leafOf, type Link, type LinkEvent, type Room, type RoomEvent, roomStep, step } from "./sync.ts";
 import { ZOOM } from "./zoom.ts";
@@ -347,7 +347,7 @@ function followTo(f: Follow, w: Yard, to: number): boolean {
       if (c.tick > to) return true;
       if (c.tick < w.tick) return late(f, w.tick - c.tick);
       f.upTo = batch.rev;
-      // Run on to it a tick at a time where there are growers, so their counts miss none (`runOn`).
+      // Run on to it a tick at a time where there are growers or pads, so their counts miss none (`runOn`).
       runOn(w, c.tick);
       if ("refused" in play(w, c)) return unlike(f);
       commanded(w);
@@ -544,8 +544,8 @@ export function doNow(act: Act): Did {
 export const collect = (): Did => doNow({ do: "collect" });
 
 /**
- * Runs the copy on to `tick`; where it has growers, a tick at a time, each noted for the minute the
- * page counts of them (`grown.ts`).
+ * Runs the copy on to `tick`; where it has growers or launch pads, a tick at a time, each noted for
+ * what the page counts of them (`counters.ts`).
  */
 function runOn(w: Yard, tick: number): void {
   if (!counting(w)) {
@@ -556,7 +556,7 @@ function runOn(w: Yard, tick: number): void {
   for (let was = -1; w.tick < tick && w.tick !== was;) {
     was = w.tick;
     stepTo(w, w.tick + 1);
-    if (w.tick !== was) noteGrowers(w);
+    if (w.tick !== was) noteTick(w);
   }
 }
 

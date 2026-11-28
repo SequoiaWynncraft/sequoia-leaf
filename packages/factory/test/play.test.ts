@@ -19,9 +19,10 @@ type Rec = Record<string, unknown>;
 /**
  * How many commands random play gives a start: the yards with the most kinds open play longer, as with
  * 22 kinds to pick from 500 commands may build none of one, and 2,000 built no grower in the yard with
- * tier 7 done.
+ * tier 7 done. The yard with tier 8 done builds the charger and the launch pad, five tiles by five.
  */
-const commandsFor = (name: string): number => (name.includes("tier 7") ? 3000 : name.includes("tier 6") ? 2000 : 500);
+const commandsFor = (name: string): number =>
+  name.includes("tier 7") || name.includes("tier 8") ? 3000 : name.includes("tier 6") ? 2000 : 500;
 
 describe("random play", () => {
   const took = new Map<string, number>();
@@ -33,6 +34,7 @@ describe("random play", () => {
     ["a yard with tier 5's research done", () => F.create({ seed: 15, tier: 6 })],
     ["a yard with tier 6's research done", () => F.create({ seed: 16, tier: 7 })],
     ["a yard with tier 7's research done", () => F.create({ seed: 17, tier: 8 })],
+    ["a yard with tier 8's research done", () => F.create({ seed: 18, tier: 9 })],
     ["a delivering yard, its board filled", boardFilled],
     ["a yard clearing a plot, all it wants delivered", clearingFilled],
     ["a generated yard", () => F.decode(F.encode(generated().y), generated().y.land) ?? F.create()],

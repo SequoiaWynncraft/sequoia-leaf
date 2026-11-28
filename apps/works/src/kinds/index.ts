@@ -10,6 +10,7 @@ import { belt } from "./belt.ts";
 import { bench } from "./bench.ts";
 import { boiler } from "./boiler.ts";
 import { breaker } from "./breaker.ts";
+import { charger } from "./charger.ts";
 import { cracker } from "./cracker.ts";
 import { crate } from "./crate.ts";
 import { depot } from "./depot.ts";
@@ -17,6 +18,7 @@ import { gatherer } from "./gatherer.ts";
 import { grower } from "./grower.ts";
 import { joiner } from "./joiner.ts";
 import type { KindPage } from "./kind.ts";
+import { launchpad } from "./launchpad.ts";
 import { mill } from "./mill.ts";
 import { powerhouse } from "./powerhouse.ts";
 import { pylon } from "./pylon.ts";
@@ -52,6 +54,8 @@ export const PAGES: Readonly<Record<KindName, KindPage>> = {
   cracker,
   powerhouse,
   grower,
+  charger,
+  launchpad,
 };
 
 /** Each kind's page module, by the kind's number. */

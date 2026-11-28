@@ -30,9 +30,11 @@ import { keptOnto, type KeptPiece, keptPieces, packKept, unpackCells } from "./c
 import { clearRefusal, isStart } from "./clearing.ts";
 import { here } from "./clock.ts";
 import { NODES } from "./content/nodes.ts";
+import { tally, untally } from "./counted.ts";
 import { historyOf, stampOf } from "./history.ts";
 import { FIRST_LAND, holdsFirst, type KeptLand, keptLandOf, keptOn, piecesOn, tileOn } from "./keptland.ts";
 import { LAND, type Land, plotPrice } from "./land.ts";
+import { anyLaunches, keptLaunches, launchesOnto } from "./launches.ts";
 import { type KeptNames, keptNames, knownAt10, knownHere, pastTen, WIDER } from "./named.ts";
 import { counting, fillBoard, giveGoal, ORDER_WAITS, queue, study } from "./orders.ts";
 import { keptOf, packPieces, type Piece, placed, unpackWays } from "./pieces.ts";
@@ -53,7 +55,6 @@ import {
   isGoal,
   isKind,
   isNode,
-  itemName,
   itemNamed,
   kindNamed,
   LINED,
@@ -67,18 +68,7 @@ import {
   REGRADED,
   SPANS,
 } from "./tables.ts";
-import {
-  type Away,
-  type Counts,
-  counts,
-  emptyYard,
-  hold,
-  type Print,
-  reopen,
-  reserve,
-  type Standing,
-  type Yard,
-} from "./yard.ts";
+import { type Away, counts, emptyYard, hold, type Print, reopen, reserve, type Standing, type Yard } from "./yard.ts";
 
 /**
  * 11: a yard naming anything the last Leaf of version 10 did not know, anywhere in it (`knownAt10`:
@@ -87,6 +77,12 @@ import {
  * one of this version as a newer Leaf's, rather than read it with what it does not know let go.
  */
 export const VERSION = 11;
+/**
+ * 12: a yard keeping launches or levels (tier 8, `launches.ts`), a field no Leaf of version 11 keeps,
+ * which that Leaf leaves as a newer Leaf's; every other yard is kept as before. The newest this Leaf
+ * writes and reads.
+ */
+export const LAUNCHED = 12;
 /** 10: a kind past 15 kept anywhere. It still reads; nothing keeps a yard as it now. */
 const WIDE = 10;
 /** 9: the land a yard was kept on, so that its tiles stay where they are as the land grows. */
@@ -127,25 +123,7 @@ const whole = (v: unknown, most: number): number | null =>
   typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= most ? v : null;
 const words = (v: unknown): string | null => (typeof v === "string" && v.length <= 200 ? v : null);
 
-/** A count by name, as kept: only real things, only sensible counts, always in the same order. */
-export function tally(c: Counts): Record<string, number> {
-  const out: Record<string, number> = {};
-  for (const n of ALL_ITEMS) {
-    const v = c[n] ?? 0;
-    if (Number.isFinite(v) && v > 0) out[itemName(n)] = v;
-  }
-  return out;
-}
-/** A count by name read back. */
-export function untally(v: unknown, most: number): Counts {
-  const out = counts();
-  if (!isRec(v)) return out;
-  for (const n of ALL_ITEMS) {
-    const got = whole(v[itemName(n)], most);
-    if (got !== null && got > 0) out[n] = got;
-  }
-  return out;
-}
+export { tally, untally };
 
 // ---------- writing ----------
 
@@ -158,27 +136,31 @@ export interface Keep {
 
 /**
  * A yard as text: its numbers and orders as JSON, its pieces and blueprints packed; kept as version 9
- * while it names nothing the last Leaf of version 10 did not know (`knownAt10`), and as this version
- * once it does.
+ * while it names nothing the last Leaf of version 10 did not know (`knownAt10`), as version 11 once it
+ * does, and as version 12 once it keeps launches (`LAUNCHED`).
  */
 export function encode(y: Yard, keep: Keep = {}): string {
   const pieces = keptPieces(y);
   const rec = record(y, keep, pieces);
-  return JSON.stringify({ v: keptPastTen(y, rec, pieces) ? VERSION : PLACED, ...rec });
+  return JSON.stringify({ v: versionFor(y, rec, pieces), ...rec });
 }
 
 /**
- * Whether a yard, kept as `rec` with its `pieces`, keeps anything the last Leaf of version 10 did not
- * know: cheaply, of what these tables have past it (`pastTen`), or while they have a thing, kind or
- * plot past it, by the whole scan (`WIDER`).
+ * The version a yard, kept as `rec` with its `pieces`, is kept as: 12 keeping launches; 11 keeping
+ * anything the last Leaf of version 10 did not know, asked cheaply, of what these tables have past it
+ * (`pastTen`), or while they have a thing, kind or plot past it, by the whole scan (`WIDER`); else 9.
  */
-function keptPastTen(y: Yard, rec: Rec, pieces: readonly KeptPiece[]): boolean {
+function versionFor(y: Yard, rec: Rec, pieces: readonly KeptPiece[]): number {
+  if (anyLaunches(y.launches)) return LAUNCHED;
   // A yard that has begun a clearing keeps the count of them, which that Leaf would let go.
-  if (y.begun > 0) return true;
-  if (!WIDER) return pastTen(y);
-  const prints: unknown[] = Array.isArray(rec.blueprints) ? rec.blueprints : [];
-  return !knownAt10(keptNames(rec, pieces, prints.map(keptBlueprint), y.land.w * y.land.h));
+  if (y.begun > 0) return VERSION;
+  if (!WIDER) return pastTen(y) ? VERSION : PLACED;
+  return knownAt10(keptNames(rec, pieces, keptPrints(rec), y.land.w * y.land.h)) ? PLACED : VERSION;
 }
+
+/** A kept record's blueprints, each as kept (`keptBlueprint`). */
+const keptPrints = (raw: Rec): KeptBlueprint[] =>
+  (Array.isArray(raw.blueprints) ? raw.blueprints : []).map(keptBlueprint);
 
 /** A yard as kept, but for its version. */
 function record(y: Yard, keep: Keep, pieces: readonly KeptPiece[]): Rec {
@@ -198,6 +180,7 @@ function record(y: Yard, keep: Keep, pieces: readonly KeptPiece[]): Rec {
     ...(y.felled.includes(1) ? { felled: felledTiles(y) } : {}),
     ...keptClearing(y),
     ...keptSmog(y),
+    ...keptLaunches(y.launches),
     done: y.done.map(goalId),
     hand: y.hand === -1 ? null : goalId(y.hand),
     ...(y.queue.length > 0 ? { queue: y.queue.map(goalId) } : {}),
@@ -229,8 +212,7 @@ export function namesOf(raw: unknown, land: Land = LAND): KeptNames | null {
   const on = keptOn(raw, land);
   const bytes = fromBase64(raw.cells);
   const pieces = on && bytes ? unpackCells(bytes, on.w * on.h) : null;
-  const prints: unknown[] = Array.isArray(raw.blueprints) ? raw.blueprints : [];
-  return on && pieces ? keptNames(raw, pieces, prints.map(keptBlueprint), on.w * on.h) : null;
+  return on && pieces ? keptNames(raw, pieces, keptPrints(raw), on.w * on.h) : null;
 }
 
 /**
@@ -430,7 +412,7 @@ function firstPiece(v: unknown): KeptPiece | null {
 }
 
 /** The versions this one reads as its own. */
-const READS: ReadonlySet<unknown> = new Set([VERSION, WIDE, PLACED, UNPLACED, UNFELLED, UNGRADED]);
+const READS: ReadonlySet<unknown> = new Set([LAUNCHED, VERSION, WIDE, PLACED, UNPLACED, UNFELLED, UNGRADED]);
 
 /** Text as JSON, or nothing for text that is none. */
 function parsed(text: string): unknown {
@@ -454,8 +436,7 @@ export function decode(text: string | null | undefined, land: Land = LAND): Yard
   // Pieces with a part this Leaf does not know are a newer Leaf's (`NEWER`): not read, as bytes that are not pieces.
   const pieces = on && bytes ? unpackCells(bytes, on.w * on.h) : null;
   if (!on || !Array.isArray(pieces)) return null;
-  const prints: unknown[] = Array.isArray(raw.blueprints) ? raw.blueprints : [];
-  const kept = prints.map(keptBlueprint);
+  const kept = keptPrints(raw);
   // Anything this Leaf does not know, anywhere: a newer Leaf's yard (`keptLater`), not read with it let go.
   if (!knownHere(keptNames(raw, pieces, kept, on.w * on.h))) return null;
   return vouch(raw, piecesOn(on, land, pieces), kept, land, on);
@@ -705,6 +686,7 @@ export function vouch(
   y.seen = last === null || had === null ? here(y) : { tick: last, till: had, depot: untally(seen.depot, 1e12) };
   // What Undo would undo, as kept: none for a yard kept before it had any, or under other rules or another land.
   y.history = historyOf(raw.history, raw.stamp, land);
+  launchesOnto(y.launches, raw.launches);
   y.news = [];
   return y;
 }

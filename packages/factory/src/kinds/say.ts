@@ -164,10 +164,27 @@ function refusingSink(k: Kit, y: Yard, i: number, n: Item, also: boolean): strin
   return null;
 }
 
+/**
+ * Why what stands where a thing held ready would go refuses it, in its own words: a sink that does not
+ * take what the town does not buy (charged cells of every bars spoken of together), or a piece whose
+ * kind says more (a launch pad, which takes only charged cells); or nothing.
+ */
+function refusedBy(k: Kit, y: Yard, i: number, n: Item, also: boolean): string | null {
+  const sink = refusingSink(k, y, i, n, also);
+  if (sink !== null && k.CHARGED.bars.includes(n))
+    return `Charged cells have nowhere to go: ${sink} does not take them.`;
+  if (sink !== null) return `${k.ITEM_INFO[n]?.name ?? ""} has nowhere to go: ${sink} does not take it.`;
+  for (const { to } of sendings(k, y, i, n, also)) {
+    const why = k.wants(y, to, n) ? null : k.refusing(y, to, n);
+    if (why !== null) return why;
+  }
+  return null;
+}
+
 /** Why a thing held ready (with `also`, a by-product) has nowhere to go, in words: what stands ahead never takes it, or nothing does. */
 export function nowhere(k: Kit, y: Yard, i: number, n: Item, also = false): string {
-  const sink = refusingSink(k, y, i, n, also);
-  if (sink !== null) return `${k.ITEM_INFO[n]?.name ?? ""} has nowhere to go: ${sink} does not take it.`;
+  const refused = refusedBy(k, y, i, n, also);
+  if (refused !== null) return refused;
   if (sendings(k, y, i, n, also).some(({ to }) => fullAndShut(k, y, to)))
     return "The crate it points at is full and shut.";
   if (takenAhead(k, y, i, n, also) === "never") return `The piece it points at does not take ${many(k, n)}.`;

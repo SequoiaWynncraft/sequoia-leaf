@@ -24,6 +24,11 @@ export const IRON = ["#221d27", "#2e2a35", "#403b47", "#55505c", "#6c6672"] as c
  * pale end, and nothing of the Star era is pink, magenta or bright.
  */
 export const LILAC = ["#2c2836", "#3e3650", "#5e5276", "#8f82ad", "#b9a6d9"] as const;
+/**
+ * A cell's charge (tier 8), darkest first: the dull grey of a plain cell's tube, the pale middle of a
+ * full one, and a lit pip, pale green-cream, which is how a charged cell's bars are read on a belt.
+ */
+export const CELL = ["#7f8a8c", "#b3c6b8", "#dbe6cb"] as const;
 /** The muted teal a lattice is crossed with, the Star era's other small light (never both on one piece). */
 export const TEAL = "#8fb5ad";
 /** The dark inside of a doorway or a tunnel. */
@@ -89,6 +94,18 @@ export const PAL: Readonly<Record<string, string>> = {
   O: LILAC[3],
   P: LILAC[4],
   W: TEAL,
+  // A cell and its charge, for tier 8: the dull grey of its tube, a lit pip pale green-cream and the
+  // pale middle of a full one; a hull section's pale plate and its shade; rocket fuel's dull red and
+  // its shade; a rocket's pale shell and its shade.
+  "3": CELL[0],
+  "1": CELL[2],
+  "2": CELL[1],
+  "4": "#c3c1cc",
+  "5": "#8f8c9c",
+  "6": "#a8664f",
+  "7": "#6e3f33",
+  "8": "#c4bfcc",
+  "9": "#8f899b",
 };
 
 /** A picture with the dark edge every sprite has; `ax`, `ay` are counted before the edge is added. */

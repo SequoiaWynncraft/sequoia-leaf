@@ -1,5 +1,3 @@
-import { BURNS, type Burns } from "./burns.ts";
-import { SMOG } from "./content/smog.ts";
 /**
  * Moving the yard on by one tick. Ten ticks are a second.
  *
@@ -7,6 +5,8 @@ import { SMOG } from "./content/smog.ts";
  * against what is drawn. Work: things on belts move along their tile, and every piece that works does
  * its work (a gatherer gathers, a machine makes, a Study studies). Handing on: every tile hands on
  * what it has finished with, each after the tile it hands to (`wire.ts`), so a full belt moves as one.
+ * Then smog is counted every `SMOG.every` ticks, and on the beat, every 200 ticks in a yard that knows
+ * the charger, every charged cell loses a bar (`beat.ts`).
  * Each step of a piece is its kind's (`kinds/`): this runs down the plumbing's lists and asks each
  * piece's kind for its step, and names no kind.
  *
@@ -38,6 +38,9 @@ import { SMOG } from "./content/smog.ts";
  * stands, and makes no arrays, objects, closures or strings (but for the rare order filled). A kind's
  * step is looked up in a table by the kind's number, one call for each piece that has a step.
  */
+import { beat, beats } from "./beat.ts";
+import { BURNS, type Burns } from "./burns.ts";
+import { SMOG } from "./content/smog.ts";
 import { handOut } from "./kinds/holder.ts";
 import { carryOn } from "./kinds/line.ts";
 import { RULES } from "./kinds/list.ts";
@@ -67,6 +70,7 @@ export function step(y: Yard): void {
   if (works) working(y, wire);
   handOn(y, wire, waiting);
   if (y.tick % SMOG.every === 0) countSmog(y);
+  if (beats(y)) beat(y, wire);
 }
 
 /**

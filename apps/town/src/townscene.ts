@@ -62,6 +62,7 @@ import {
 } from "./players.ts";
 import { type TownHandles, townHandles } from "./review.ts";
 import { placeOf } from "./screen.ts";
+import { drawSkyLights } from "./skylight.ts";
 import type { Sprites } from "./sprites.ts";
 import type { Scene, Stage } from "./stage.ts";
 import { type Door, makeTouch } from "./touch.ts";
@@ -157,7 +158,7 @@ export function makeTown(sprites: Sprites, campArt: CampArt, stage: Stage): Town
     others: () => [...standing, ...worksTools()],
     people: () => [...G.folk, ...G.visitors, ...livePlayers(), player, cinfy],
     lights: allLights,
-    beyond: () => undefined,
+    beyond: drawSkyLights,
     under: drawWater,
     over: drawStrings,
     glows: drawGlows,

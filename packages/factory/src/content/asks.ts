@@ -235,4 +235,25 @@ export const ASKS: Partial<Record<ItemName, readonly Ask[]>> = {
     { from: "The scholars", line: "The scholars want to hear the sky. A dish hears a little of it." },
     { from: "The cats", line: "The cats have found that a dish is warm in the afternoon and exactly the right shape." },
   ],
+  cell: [
+    {
+      from: "The gate",
+      line: "The gate lamp runs on a cell now. Somebody has to carry it off to be charged. The lookouts take turns not doing it.",
+    },
+    {
+      from: "Fika",
+      line: "Fika has heard that a charged cell is warm. Fika would like a cell, and will see about the charging. Meow.",
+    },
+  ],
+  hull: [
+    { from: "The gnomes", line: "The gnomes are building something behind the workshop. It is pointing up." },
+    { from: "The crab pond", line: "The crabs want a hull section for the pond. They are calling it an island." },
+  ],
+  fuel: [
+    { from: "Pipwick", line: "Pipwick wants to see what rocket fuel does. From further away than last time." },
+    {
+      from: "The campfire",
+      line: "Somebody wants rocket fuel for the campfire. Somebody has been told no. Somebody is asking again.",
+    },
+  ],
 };

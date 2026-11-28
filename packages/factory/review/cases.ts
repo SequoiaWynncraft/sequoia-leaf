@@ -6,8 +6,9 @@
  *
  * - `yard-v9-full`, `yard-v11-full`: a yard of each version the writer writes now, with every
  *   optional field set: the away letter, Undo's entries, a queue, a node given things, orders, plain
- *   blueprints and a plan of the whole yard; and in version 11, redwoods felled, a plot cleared,
- *   another being cleared, part filled, and smog;
+ *   blueprints and a plan of the whole yard; in version 11, redwoods felled, a plot cleared, another
+ *   being cleared, part filled, and smog; and in version 12, launches and levels too, and the first
+ *   launch done (its postcard names the light in the town's sky);
  * - `yard-v11-part-<part>`: a yard of one piece, on the guild's land, with one part of its bytes set
  *   to a value that is not its kind's new one (`PARTS`); its bytes from the piece's own on are pinned
  *   as `cells` (`bytesOf`), which is the layout itself: the part's bit, where its payload goes and how
@@ -27,12 +28,16 @@ import { boardFilled } from "../test/player.ts";
 import { bought, buying, fillHand, must, staged } from "../test/yards.ts";
 import { material } from "./state.ts";
 
-/** For each shape, the versions the Works' writers write now. The standing, the postcard and the logs keep none of their own: their 1 stands for one. */
+/**
+ * For each shape, the versions the Works' writers write now. The standing, the postcard and the logs
+ * keep none of their own: their 1 stands for one, and the postcard's 2 for one with lights in the
+ * town's sky (`sky`, from tier 8).
+ */
 export const VERSIONS: Readonly<Record<string, readonly number[]>> = {
-  yard: [F.PLACED, F.VERSION],
+  yard: [F.PLACED, F.VERSION, F.LAUNCHED],
   cells: [F.VERSION],
   standing: [1],
-  postcard: [1],
+  postcard: [1, 2],
   [LOGGED.worksPlot]: [1],
   [LOGGED.worksOrder]: [1],
   [LOGGED.worksStory]: [1],
@@ -49,6 +54,9 @@ const MAPS = new Set([
   "clearing.want",
   "clearing.filled",
   "smog",
+  "launches.ever",
+  "launches.spent",
+  "launches.levels",
 ]);
 export const seenNow = (): Seen => new Seen({ yard: MAPS });
 
@@ -108,7 +116,8 @@ export function watch(seen: Seen, y: F.Yard, kept?: string, read: unknown = mate
   const standing = F.FACTORY.standing?.(y);
   seen.saw("standing", 1, standing, also({ text: JSON.stringify(standing), read: standing }));
   const postcard = F.FACTORY.postcard?.(y);
-  seen.saw("postcard", 1, postcard, also({ text: JSON.stringify(postcard), read: postcard }));
+  const card = postcard?.sky ? 2 : 1;
+  seen.saw("postcard", card, postcard, also({ text: JSON.stringify(postcard), read: postcard }));
 }
 // ---------- every field of a yard of each version ----------
 
@@ -224,6 +233,20 @@ function fullV11(): F.Yard {
     y.smog.made[p] = 7;
   }
   everyField(y);
+  return y;
+}
+/**
+ * A yard kept as version 12: version 11's, with tier 8's launch numbers in each of their three parts
+ * (launches of two kinds, one spent, a level of a track), and the first launch done, whose light in
+ * the town's sky its postcard names.
+ */
+function fullV12(): F.Yard {
+  const y = fullV11();
+  y.launches.ever[0] = 2;
+  y.launches.ever[3] = 1;
+  y.launches.spent[0] = 1;
+  y.launches.levels[4] = 1;
+  opened(y, ["launch"]);
   return y;
 }
 
@@ -366,6 +389,7 @@ export function bytesOf(text: string): { hex: string; bits: number } {
 export function cases(seen: Seen): void {
   watch(seen, fullV9(), "full");
   watch(seen, fullV11(), "full");
+  watch(seen, fullV12(), "full");
   for (const part of PART_CASES) {
     const { y, read } = partYard(part);
     watch(seen, y, `part-${part.name}`, read);

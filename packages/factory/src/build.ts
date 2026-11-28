@@ -297,11 +297,12 @@ function setter<S extends keyof Setters>(
 
 /**
  * Tells a machine to make one thing only, or with nothing to make whatever arrives. What it holds
- * beyond what it keeps for that (`keeps`, `holdsMost`) is tipped out. Says why it could not, or nothing.
+ * beyond what it keeps for that (`keeps`, `holdsMost`) is tipped out. A launch pad is told its rocket,
+ * with `was`, the rocket its card showed (`kinds/launchpad.ts`). Says why it could not, or nothing.
  */
-export function setRecipe(y: Yard, x: number, z: number, out: Item | null): string | null {
+export function setRecipe(y: Yard, x: number, z: number, out: Item | null, was?: Item): string | null {
   const s = setter(y, x, z, "recipe");
-  return s ? s.set(KIT, y, s.i, out) : "That cannot make it";
+  return s ? s.set(KIT, y, s.i, out, was) : "That cannot make it";
 }
 
 /** Sets the one thing a sorter sends to its side, or with nothing makes it a belt. Says whether there was a sorter. */

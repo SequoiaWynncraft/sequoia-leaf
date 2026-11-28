@@ -2,7 +2,7 @@
  * A yard saved and read back plays on as the yard it was kept from (`codec.ts`): whatever the tick
  * keeps for itself (the plumbing, which tiles wait) is worked out again from what is kept, and changes
  * nothing. Yards of every shape, with rings and without: staged yards, the generated one, tier 7's ring
- * of growers, rings built at random with crates, splitters, sorters, joiners and tunnels, and Sol's ring
+ * of growers, tier 8's launch yard (charged cells crossing beats, kept between them), rings built at random with crates, splitters, sorters, joiners and tunnels, and Sol's ring
  * of a splitter taking things in by a side and a shut crate off it. Each is run to a tick picked at
  * random, kept and read back, and both run on, one check each tick, for 2,000 ticks; then again from
  * another tick. Any engine the yards hand on by must keep this.
@@ -12,6 +12,7 @@ import { expect, test } from "bun:test";
 import * as F from "../src/index.ts";
 import { beforeReach } from "./goals.ts";
 import { ringOfGrowers } from "./growers.ts";
+import { launchYard } from "./launchyard.ts";
 import { rng } from "./random.ts";
 import { randomRing } from "./randomring.ts";
 import { bare } from "./ringyard.ts";
@@ -94,6 +95,7 @@ const SHAPES: readonly [string, () => F.Yard][] = [
   ["staged large", () => staged("large")],
   ["generated", () => beforeReach(generated().y)],
   ["tier 7's ring of growers", ringOfGrowers],
+  ["tier 8's launch yard, charged cells crossing beats", launchYard],
   ["Sol's ring", solsRing],
   ...Array.from({ length: 12 }, (_, k): [string, () => F.Yard] => [`random ring ${k + 1}`, () => randomRing(k + 1).y]),
 ];

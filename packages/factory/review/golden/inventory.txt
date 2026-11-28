@@ -36,3 +36,5 @@ yard 11 stored/yard-v11-part-quarter.json
 works_plot 1 stored/works_plot-v1-meadow.json
 works_order 1 stored/works_order-v1-handed.json
 works_story 1 stored/works_story-v1-first.json
+yard 12 stored/yard-v12-full.json
+postcard 2 stored/postcard-v2-full.json

@@ -69,6 +69,19 @@ export function listOf<T>(v: unknown, most: number, read: (v: unknown) => T | nu
   return pieces.length === v.length ? pieces : null;
 }
 
+/**
+ * A command read with what a launch pad's card showed it set to, by what its rocket counts as (`was`,
+ * on the recipe command), where it says: null for a `was` that names no thing, or no command.
+ */
+export function withWas<A extends object>(
+  a: A | null,
+  v: Record<string, unknown>,
+): (A & { readonly was?: Item }) | null {
+  if (a === null || v.was === undefined) return a;
+  const was = itemNamed(v.was);
+  return was === null ? null : { ...a, was };
+}
+
 /** The fields many commands share, read once off the wire: a tile, a thing (or null for none), tiles, and a blueprint's place. */
 export interface Fields {
   readonly spot: At | null;

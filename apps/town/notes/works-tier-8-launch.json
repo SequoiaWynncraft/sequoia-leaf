@@ -1,0 +1,19 @@
+{
+  "id": "works-tier-8-launch",
+  "at": "2026-11-28T15:03Z",
+  "title": "The Works: tier 8, The launch",
+  "lines": [
+    "Tier 8 is open. A charger charges a cell to 3 bars. Every 20 seconds, every charged cell loses a bar.",
+    "A launch pad launches when it holds its rocket's parts and 1,000 charged cells at once. Your first launch puts a light in the town's sky."
+  ],
+  "more": [
+    {
+      "head": "New",
+      "points": [
+        "A cell with no bars left is a plain cell again. The launch pad does not take it.",
+        "A test rocket needs 100 charged cells at once.",
+        "Cells, hull sections and rocket fuel."
+      ]
+    }
+  ]
+}
