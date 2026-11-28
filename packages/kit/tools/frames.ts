@@ -128,14 +128,18 @@ const SHADE = "#0b071080";
 type Ramp = readonly [lo: string, mid: string, hi: string];
 
 const BRASS: Ramp = ["#8a5a22", "#c9923c", "#f6cf7a"];
-/** The five tiers: stone, jade, sapphire, amethyst, gold. Each is its band, its jewel, and how large the jewel is. */
+/** The five tiers' metals: stone, jade, sapphire, amethyst, gold. */
 const TIERS = [
-  [["#565267", "#8d899f", "#cfcbdc"], ["#6f6b80", "#a9a5ba", "#e6e3ef"], 1],
-  [["#2c7a3a", "#4dbb58", "#a4f585"], ["#1f8f4a", "#58e07a", "#d2ffc0"], 2],
-  [["#2859a6", "#3d97ee", "#93d6ff"], ["#1c6fd6", "#52b6ff", "#d6f1ff"], 3],
-  [["#7a2ba3", "#b957e6", "#eaa6ff"], ["#a12fd6", "#dc7bff", "#fbe0ff"], 3],
-  [["#a9641a", "#f2ab2e", "#ffe27c"], ["#e0457a", "#ff8fb0", "#ffe3ec"], 3],
-] as const satisfies readonly (readonly [band: Ramp, gem: Ramp, size: number])[];
+  ["#565267", "#8d899f", "#cfcbdc"],
+  ["#2c7a3a", "#4dbb58", "#a4f585"],
+  ["#2859a6", "#3d97ee", "#93d6ff"],
+  ["#7a2ba3", "#b957e6", "#eaa6ff"],
+  ["#a9641a", "#f2ab2e", "#ffe27c"],
+] as const satisfies readonly Ramp[];
+/** The jewels on the crests over the third, fourth and fifth tiers. */
+const SAPPHIRE: Ramp = ["#1c6fd6", "#52b6ff", "#d6f1ff"];
+const AMETHYST: Ramp = ["#a12fd6", "#dc7bff", "#fbe0ff"];
+const ROSE: Ramp = ["#e0457a", "#ff8fb0", "#ffe3ec"];
 
 interface Frame {
   readonly band: Ramp;
@@ -200,9 +204,17 @@ function frame({ band: [lo, mid, hi], thick, cut, corner, gem, fill, drop = 0 }:
 
 /** The brass frame: a sign or a tip that is picked out wears it in place of its own. */
 const brass = (): Grid => frame({ band: BRASS, thick: 4, cut: 2, corner: 5, gem: [BRASS, 1], fill: FIELD, drop: 2 });
-/** A tier's frame: the jewel on each corner grows with the tier. It is drawn over what it holds. */
-const tier = ([band, gem, size]: (typeof TIERS)[number]): Grid =>
-  frame({ band, thick: 5, cut: 3, corner: 9, gem: [gem, size] });
+/**
+ * A tier's frame, every tier built alike and only its colours its own: an ink outline, a flat band of
+ * the tier's metal, one lighter line inside it, and the outline's corner cut by a pixel. Five pixels
+ * thick, or three (`thin`) for a small thing; it is drawn over what it holds and nothing lies on it.
+ */
+const tier = ([, mid, hi]: Ramp, thin: boolean): Grid => {
+  const band: Ring = [mid, mid];
+  const rings: Ring[] = [INKED, ...Array.from({ length: thin ? 1 : 3 }, () => band), [hi, hi]];
+  const n = rings.length * 2 + 1;
+  return ringed(n, n, rings, null, 1);
+};
 
 /** The jewel that stands on top of a frame of the third or fourth tier. */
 const crest = ([glo, gmid, ghi]: Ramp): Grid =>
@@ -824,10 +836,11 @@ const frames: Readonly<Record<string, Grid>> = {
   knot: knot(),
   nail: nail(),
   elbow: elbow(),
-  ...Object.fromEntries(TIERS.map((t, i) => [`tier-${i + 1}`, tier(t)])),
-  "crest-3": crest(TIERS[2][1]),
-  "crest-4": crest(TIERS[3][1]),
-  "crest-5": crown(TIERS[4][0], TIERS[4][1]),
+  ...Object.fromEntries(TIERS.map((t, i) => [`tier-${i + 1}`, tier(t, false)])),
+  ...Object.fromEntries(TIERS.map((t, i) => [`tier-${i + 1}-thin`, tier(t, true)])),
+  "crest-3": crest(SAPPHIRE),
+  "crest-4": crest(AMETHYST),
+  "crest-5": crown(TIERS[4], ROSE),
   card: card(),
   "card-lit": cardLit(),
   "card-chosen": cardChosen(),

@@ -15,7 +15,7 @@ import { CORAL, GOLD, GREEN, INK, SKY } from "@sequoia-leaf/kit/palette.ts";
 import { bitmap, flipped, outlined, rgb } from "@sequoia-leaf/kit/pix.ts";
 import { bake as walking, type Body, NOBODY, paintSkin } from "@sequoia-leaf/kit/skin.ts";
 import { type Ctx, makeCanvas, must } from "@sequoia-leaf/kit/util.ts";
-import { type Catalog, everyShared } from "@sequoia-leaf/raid/content/catalog.ts";
+import type { Catalog } from "@sequoia-leaf/raid/content/catalog.ts";
 import {
   figureIn,
   GROOTER_IDS,
@@ -508,8 +508,6 @@ export function portrait(kind: UnitKind, o: Shown = {}): HTMLCanvasElement {
   drawFigure(g, kind, f.ax, f.tall + 1, o);
   return c;
 }
-/** How tall the tallest portrait of a figure a member can own is, for a place that shows any of them. */
-export const portraitRoom = (): number => Math.max(...everyShared().map((kind) => framesOf(kind).room + 2));
 
 // ---------- bases ----------
 

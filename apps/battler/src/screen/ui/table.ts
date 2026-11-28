@@ -1,4 +1,4 @@
-import { nameOf, portrait, portraitRoom } from "@sequoia-leaf/figures/sprites.ts";
+import { nameOf, portrait } from "@sequoia-leaf/figures/sprites.ts";
 /**
  * The interface round the table, built from the kit's pieces: the purse and the track along the
  * top, the traits the party has, the rack of items, and the stall along the bottom with the acorns,
@@ -14,6 +14,7 @@ import {
   catalogOf,
   ECONOMY,
   fielded,
+  type FigureId,
   figureIn,
   MAX_LEVEL,
   picksOf,
@@ -279,19 +280,23 @@ function renderTraits(run: RunView): void {
   paintLight();
 }
 
-/** What watches the stall's width, to fit its names again. */
-let stallWatcher: ResizeObserver | null = null;
+/** A place on the stall with nothing in it: a hollow the size of a card. */
+const emptySlot = (): HTMLElement => el("div", "k-slot offer gone");
 
-/** Where an offer's picture goes: as tall as the tallest figure's, on every card and empty slot alike. */
-const artRoom = (): string => `height: calc(var(--u) * ${portraitRoom()} * var(--fs))`;
-/** A slot of the stall with nothing in it, built as an offer is, so that it is just as tall. */
-const emptySlot = (): HTMLElement =>
-  el("div", "k-slot offer gone", {}, el("div", "art", { style: artRoom() }), el("div", "name"), el("div", "foot"));
+/** A figure's traits on its card, one to a line: the sign, and its name where the card has room (raid.css). */
+const traitLines = (run: RunView, kind: FigureId): HTMLElement =>
+  el(
+    "div",
+    "traits",
+    {},
+    ...traitsOf(catalogOf(run), kind).map((t) =>
+      el("span", "tr", {}, pic(traitIcon(t)), el("span", "tn", { text: traitIn(catalogOf(run), t).name })),
+    ),
+  );
 
 /**
- * The stall: cards of one height whatever they hold (raid.css), an offer bought leaving a slot built
- * as a card is, so that the panel under the table never changes size and the table above it never
- * moves.
+ * The stall: cards of one size whatever they hold (raid.css), an offer bought leaving a hollow of the
+ * same size, so that the panel under the table never changes size and the table above it never moves.
  */
 function renderStall(run: RunView): void {
   const stall = byId("stall");
@@ -300,9 +305,6 @@ function renderStall(run: RunView): void {
   const cat = catalogOf(run);
   if (key === stallKey) return;
   stallKey = key;
-  // A stall made narrower (the window shrank) asks again which names fit, on the next frame.
-  if (!stallWatcher && typeof ResizeObserver === "function")
-    (stallWatcher = new ResizeObserver(() => requestAnimationFrame(() => fitNames(stall)))).observe(stall);
   stall.replaceChildren();
   stall.style.setProperty("--n", String(run.stall.length));
   run.stall.forEach((kind, i) => {
@@ -314,29 +316,30 @@ function renderStall(run: RunView): void {
     const price = priceOf(run, i);
     const have = twins(run, kind);
     const owned = pieces(run).some((p) => p.kind === kind);
+    const level = runTag(run, kind);
+    level?.classList.add("tab");
     const card = el(
       "button",
-      `k-card offer t${spec.tier}${canBuy(run, i) ? "" : " cant"}${have >= 2 ? " lit" : ""}`,
+      `offer k-tier-${spec.tier}${canBuy(run, i) ? "" : " cant"}${have >= 2 ? " lit" : ""}`,
       { type: "button", "data-offer": i, "aria-label": `${nameOf(cat, kind)}, ${acornsSaid(price)}` },
-      el("div", "art", { style: artRoom() }, figPic(portrait(kind))),
-      el("div", "name", { text: nameOf(cat, kind) }),
       el(
         "div",
-        "foot",
+        "art",
         {},
-        el("span", `k-cur${price < spec.tier ? " cut" : ""}`, {}, icon("acorn"), String(price)),
-        el("span", "signs", {}, ...traitsOf(cat, kind).map((t) => pic(traitIcon(t)))),
+        figPic(portrait(kind)),
+        traitLines(run, kind),
+        owned
+          ? el("span", `have${have >= 2 ? " ready" : ""}`, { text: have >= 2 ? "3!" : have === 1 ? "2" : "+" })
+          : null,
+        level,
+        el("span", `k-cur tab cost${price < spec.tier ? " cut" : ""}`, {}, icon("acorn"), String(price)),
       ),
-      owned
-        ? el("span", `have${have >= 2 ? " ready" : ""}`, { text: have >= 2 ? "3!" : have === 1 ? "2" : "+" })
-        : null,
-      runTag(run, kind),
+      el("div", "foot", {}, el("span", "name", { text: nameOf(cat, kind) })),
     );
     // Tapping an offer buys it; a finger kept on it asks what it is.
     link(card, figureRef(kind), { acts: true });
     stall.append(card);
   });
-  fitNames(stall);
   paintLight();
 }
 
@@ -546,16 +549,4 @@ export function stepTable(): void {
 export function wakeChip(trait: string): void {
   const chip = document.querySelector<HTMLElement>(`#traits [data-trait="${trait}"]`);
   if (chip) replay(chip, "woke");
-}
-
-/**
- * A name too long for its card in the usual size (a word wider than the card, or more than two
- * lines) is set in the small style, card by card: the room for a name is the same either way
- * (raid.css), so no name changes the size of its card or of any other.
- */
-function fitNames(stall: HTMLElement): void {
-  for (const name of stall.querySelectorAll<HTMLElement>(".offer .name")) {
-    name.classList.remove("small");
-    name.classList.toggle("small", name.scrollWidth > name.clientWidth || name.scrollHeight > name.clientHeight);
-  }
 }
