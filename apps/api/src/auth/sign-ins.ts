@@ -45,6 +45,8 @@ export interface SignedIn {
   readonly name: string;
   /** Whether Sequoia's Discord gave the account a member's role when it signed in; null when not known. */
   readonly member: boolean | null;
+  /** Whether it signed in inside a Discord call (Discord's frame), not on the website. */
+  readonly inCall: boolean;
 }
 
 const Row = Schema.Struct({
@@ -52,6 +54,7 @@ const Row = Schema.Struct({
   discord: DiscordId,
   name: Schema.String,
   member: Schema.NullOr(Schema.BooleanFromBit),
+  inCall: Schema.BooleanFromBit,
 });
 
 const hashOf = (token: string) => createHash("sha256").update(token).digest("hex");
@@ -83,7 +86,7 @@ export class SignIns extends Context.Service<
         Request: Schema.Struct({ hash: Schema.String, now: Schema.Int }),
         Result: Row,
         execute: ({ hash, now }) => sql`
-          SELECT player_id AS playerId, discord_id AS discord, name, member FROM sign_ins
+          SELECT player_id AS playerId, discord_id AS discord, name, member, in_call AS inCall FROM sign_ins
           WHERE token_hash = ${hash} AND expires_at > ${now}
         `,
       });
@@ -100,9 +103,9 @@ export class SignIns extends Context.Service<
             const token = Buffer.from(yield* random.randomBytes(32)).toString("base64url");
             const member = signedIn.member === null ? null : signedIn.member ? 1 : 0;
             yield* sql`
-              INSERT INTO sign_ins (token_hash, player_id, discord_id, name, member, created_at, expires_at)
+              INSERT INTO sign_ins (token_hash, player_id, discord_id, name, member, in_call, created_at, expires_at)
               VALUES (${hashOf(token)}, ${signedIn.playerId}, ${signedIn.discord}, ${signedIn.name}, ${member},
-                      ${now}, ${now + SIGN_IN_MS})
+                      ${signedIn.inCall ? 1 : 0}, ${now}, ${now + SIGN_IN_MS})
             `;
             yield* sql`DELETE FROM sign_ins WHERE expires_at <= ${now}`;
             return token;

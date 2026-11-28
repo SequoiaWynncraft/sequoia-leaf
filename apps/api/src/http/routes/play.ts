@@ -1,12 +1,10 @@
 import { parsePlayerId } from "@sequoia-leaf/core";
 import { Clock, Effect, Option, Schema } from "effect";
-import { HttpServerRequest } from "effect/http";
 import { HttpApiBuilder } from "effect/http-api";
 
 import { Visits } from "../../activity/visits.ts";
 import { CurrentIdentity, LeafApi } from "../../api/api.ts";
 import { BadOrigin, Invalid, Missing, SlowDown } from "../../api/errors.ts";
-import { AppConfig, fromCall } from "../../config.ts";
 import { PlayerNames } from "../../game/names.ts";
 import type { Played } from "../../play/games.ts";
 import { type Opening, Play, type Shown } from "../../play/service.ts";
@@ -36,14 +34,13 @@ const isDraw = Schema.is(Schema.Struct({ do: Schema.Literal("pull") }));
 
 /**
  * The game a batch of `commands` is for, as the route names it; refused, all of it undone, when it
- * holds a draw and comes from Leaf in a Discord call (`fromCall`): the pulls are on the website.
+ * holds a draw and its session was signed in inside a Discord call, wherever the request comes from:
+ * the pulls are on the website.
  */
 const playedFrom = (name: string, commands: readonly unknown[]) =>
   Effect.gen(function* () {
     const played = yield* playedGame(name);
-    if (played.id !== "pulls" || !commands.some(isDraw)) return played;
-    const request = yield* HttpServerRequest.HttpServerRequest;
-    if (!fromCall(yield* AppConfig, request.headers["origin"])) return played;
+    if (played.id !== "pulls" || !commands.some(isDraw) || !(yield* CurrentIdentity).inCall) return played;
     return yield* new BadOrigin({ code: "bad_origin", message: "Pulls are made on Leaf's website" });
   });
 

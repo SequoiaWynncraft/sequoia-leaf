@@ -143,7 +143,7 @@ const cameBack = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   const playerId = yield* sql.withTransaction(discordPlayer(proof.discord_id, proof.username, now)).pipe(Effect.orDie);
   const token = yield* (yield* SignIns).begin(
-    { playerId, discord: proof.discord_id, name: proof.username, member: proof.sequoia_member },
+    { playerId, discord: proof.discord_id, name: proof.username, member: proof.sequoia_member, inCall: false },
     now,
   );
   return back(to, [forgetNonce, [session, token, SIGN_IN_MS / 1000]], secure);

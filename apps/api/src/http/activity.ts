@@ -145,7 +145,7 @@ const signIn = Effect.gen(function* () {
   const signIns = yield* SignIns;
   // Whether Sequoia's Discord calls them a member is the backend's to say; Leaf keeps what it said last.
   const member = yield* signIns.memberOf(id);
-  const token = yield* signIns.begin({ playerId, discord: id, name: username, member }, now);
+  const token = yield* signIns.begin({ playerId, discord: id, name: username, member, inCall: true }, now);
   const { name, options } = frameCookie(settings.publicOrigin);
   const answered = HttpServerResponse.jsonUnsafe(
     { access_token: traded.token },

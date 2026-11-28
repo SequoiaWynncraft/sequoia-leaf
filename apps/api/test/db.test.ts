@@ -47,18 +47,22 @@ function onFile<A, E>(path: string, program: Effect.Effect<A, E, SqlClient.SqlCl
 }
 
 /** Runs SQL against the database file at `path`. */
-/** Undoes migration 50: no call's sitting kept. */
-const beforeSittingCalls = (sql: SqlClient.SqlClient) => sql`DROP TABLE raid_sitting_calls`;
+/** Undoes migration 51: no session kept as one signed in inside a call. */
+const beforeCallSignIns = (sql: SqlClient.SqlClient) => sql`ALTER TABLE sign_ins DROP COLUMN in_call`;
 
-/** Undoes migrations 50 and 49: no call's sitting kept, and nobody a banner calls. */
+/** Undoes migrations 51 and 50: no session kept as a call's, and no call's sitting kept. */
+const beforeSittingCalls = (sql: SqlClient.SqlClient) =>
+  Effect.andThen(beforeCallSignIns(sql), sql`DROP TABLE raid_sitting_calls`);
+
+/** Undoes migrations 51 to 49: no session kept as a call's, no call's sitting kept, and nobody a banner calls. */
 const beforeBannerCalled = (sql: SqlClient.SqlClient) =>
   Effect.andThen(beforeSittingCalls(sql), sql`DROP TABLE banner_called`);
 
-/** Undoes migrations 50 to 48: no call's sitting, nobody a banner calls, and no fight's setup kept. */
+/** Undoes migrations 51 to 48: no call's sitting, nobody a banner calls, and no fight's setup kept. */
 const beforeFightSetups = (sql: SqlClient.SqlClient) =>
   Effect.andThen(beforeBannerCalled(sql), sql`ALTER TABLE raid_fights DROP COLUMN setup`);
 
-/** Undoes migrations 50 to 47: no call's sitting, nobody a banner calls, no fight's setup, nor its course, pool or era kept beside its way. */
+/** Undoes migrations 51 to 47: no call's sitting, nobody a banner calls, no fight's setup, nor its course, pool or era kept beside its way. */
 const beforeFightsWay = (sql: SqlClient.SqlClient) =>
   Effect.andThen(
     beforeFightSetups(sql),
@@ -69,7 +73,7 @@ const beforeFightsWay = (sql: SqlClient.SqlClient) =>
     ]),
   );
 
-/** Undoes migrations 50 to 46: none of the raid's sittings kept, nor whose a call's is. */
+/** Undoes migrations 51 to 46: none of the raid's sittings kept, nor whose a call's is. */
 const beforeRaidSittings = (sql: SqlClient.SqlClient) =>
   Effect.andThen(
     beforeFightsWay(sql),
@@ -312,6 +316,7 @@ describe("the database", () => {
       { migration_id: 48, name: "raid_fights_setup" },
       { migration_id: 49, name: "banner_called" },
       { migration_id: 50, name: "raid_sitting_calls" },
+      { migration_id: 51, name: "sign_ins_in_call" },
     ]);
     // Each feed has its own lease and cursor, not started yet.
     expect(await query(path, (sql) => sql`SELECT name, started_at, cursor FROM sync_state ORDER BY name`)).toEqual([
@@ -388,7 +393,7 @@ describe("the database", () => {
 
     expect(account.balance).toBe(110);
     expect(await query(path, (sql) => sql`SELECT max(migration_id) AS latest FROM effect_sql_migrations`)).toEqual([
-      { latest: 50 },
+      { latest: 51 },
     ]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM announcements`)).toEqual([{ n: 0 }]);
     expect(await query(path, (sql) => sql`SELECT count(*) AS n FROM saves`)).toEqual([{ n: 0 }]);
