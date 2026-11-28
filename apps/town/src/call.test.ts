@@ -15,10 +15,12 @@ describe("the town in Discord's small picture of a call", () => {
   });
 });
 
+/** A pull button, as the Grove draws one. */
+const pull = (n: 1 | 10): HTMLElement => el("button", "k-btn grove-pull", { text: `Pull ${n}` });
+
 describe("the Grove in a Discord call", () => {
   const page = { done: (): void => undefined };
   afterEach(() => page.done());
-  const pull = (n: 1 | 10): HTMLElement => el("button", "k-btn grove-pull", { text: `Pull ${n}` });
 
   test("says in one line that the pulls are on Leaf's website, and offers none", () => {
     page.done = aPage().done;
@@ -26,7 +28,7 @@ describe("the Grove in a Discord call", () => {
     const row = pullsRow("Next free pull: Thursday 09:00", null, false, pull, true);
 
     expect(row.map((e) => e.className)).toEqual(["k-read k-over grove-elsewhere"]);
-    expect(row.flatMap((e) => [...e.querySelectorAll(".grove-pull")])).toEqual([]);
+    expect(row.flatMap((e) => Array.from(e.querySelectorAll(".grove-pull")))).toEqual([]);
   });
 
   test("links Leaf's website by its name, to be opened outside Discord", () => {

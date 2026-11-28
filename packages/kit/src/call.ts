@@ -21,7 +21,7 @@ import { pageCard, start, type Where } from "./live.ts";
 import { ask, isRecord, outside } from "./net.ts";
 import { watchPage } from "./report.ts";
 import { type Scope, scope } from "./scope.ts";
-import { inTown } from "./shell.ts";
+import { inTown, tell } from "./shell.ts";
 
 /** How long Discord has to greet the page before the page says it is not in a call. */
 const GREETED_WITHIN = 15_000;
@@ -116,12 +116,17 @@ export async function openLeaf(page: Page): Promise<Where | null> {
 export const leafSite = (): string | null => held.site;
 
 /**
- * Opens an address in the player's browser, outside Discord (Discord asks them first). Says whether
- * Discord did: not on a page Discord did not sign the player in on, and not without its answer.
+ * Opens an address in the player's browser, outside Discord (Discord asks them first). A game in the
+ * town's frame asks the town, which Discord frames. Says whether Discord did (or the town was asked):
+ * not on a page Discord did not sign the player in on, and not without its answer.
  */
 export async function openOutside(url: string): Promise<boolean> {
   const discord = held.discord;
-  if (discord === null) return false;
+  if (discord === null) {
+    const asked = inTown();
+    if (asked) tell({ town: "open", url });
+    return asked;
+  }
   const answer = await within(ANSWERED_WITHIN, discord.commands.openExternalLink({ url }));
   // Discord's clients from before December 2024 do not say (`opened: null`): it went to them.
   return answer !== null && answer.opened !== false;

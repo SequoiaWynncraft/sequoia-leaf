@@ -84,6 +84,35 @@ const failed = HttpServerResponse.jsonUnsafe(
 /** The town's page, where Leaf opens on the website and in a Discord call alike. */
 const TOWN_PAGE = "/play/town/";
 
+/** The words of Discord's launch query, by name: the log of a launch names which came, never what they said. */
+const LAUNCH_WORDS = ["frame_id", "instance_id", "platform", "guild_id", "channel_id", "location_id", "launch_id"];
+
+/**
+ * The log line for Discord opening `/` (`call_entry`): whether it was a whole launch, which of its
+ * words came, and the platform (`desktop` or `mobile`, else `other`). A phone's launch that goes no
+ * further shows how far it got from this and the lines after it (`call_page`, `call_sign_in`,
+ * `call_seat`). Nothing is logged for a `/` with none of Discord's words.
+ */
+const logEntry = (query: URLSearchParams) => {
+  const came = LAUNCH_WORDS.filter((word) => query.has(word));
+  if (came.length === 0) return Effect.void;
+  const platform = query.get("platform");
+  return Effect.logInfo("call_entry").pipe(
+    Effect.annotateLogs({
+      launched: launchedByDiscord(query),
+      words: came.join(","),
+      platform: platform === "desktop" || platform === "mobile" ? platform : platform === null ? "none" : "other",
+    }),
+  );
+};
+
+/** The log line for a page of Leaf served as part of a launch (`call_page`): which page, and how it was answered. */
+const logPage = (url: string, status: number) => {
+  const { pathname, searchParams } = new URL(url, "http://leaf.invalid");
+  if (!launchedByDiscord(searchParams) || !pathname.startsWith(PAGES) || HASHED.test(pathname)) return Effect.void;
+  return Effect.logInfo("call_page").pipe(Effect.annotateLogs({ page: pathname, status }));
+};
+
 /**
  * `GET /`: the town; opened by Discord in a call, with Discord's query as it came (the page reads the
  * frame and the launch from it, and carries them on). Discord maps its proxy's `/` to Leaf's.
@@ -91,6 +120,7 @@ const TOWN_PAGE = "/play/town/";
 const entry = Effect.gen(function* () {
   const request = yield* HttpServerRequest.HttpServerRequest;
   const { search, searchParams } = new URL(request.url, "http://leaf.invalid");
+  yield* logEntry(searchParams);
   if (!launchedByDiscord(searchParams)) return HttpServerResponse.redirect(TOWN_PAGE, { status: 302 });
   return HttpServerResponse.redirect(`${TOWN_PAGE}${search}`, {
     status: 302,
@@ -113,6 +143,7 @@ const pagesFrom = (root: string) =>
               : Effect.logError("A page could not be served", error).pipe(Effect.as(failed)),
           ),
         );
+        yield* logPage(request.originalUrl, response.status);
         return HttpServerResponse.setHeaders(response, {
           "content-security-policy": policyOf(request.originalUrl),
           "cache-control": cacheControl(request.url, response.status),

@@ -20,6 +20,7 @@
  * tip that is up, which may name a key. A page builds its menu once, at the start (`settingsMenu`).
  */
 import { accountPage } from "./account.ts";
+import { openOutside } from "./call.ts";
 import { type Choices, choices } from "./choices.ts";
 import { dialog } from "./dialog.ts";
 import { el, icon } from "./dom.ts";
@@ -59,8 +60,6 @@ export interface MenuOf {
   readonly tabs?: readonly MenuTab[];
   /** Told as the menu opens (true) and is put away (false): the page lets go of held keys and takes no play while it is open. */
   readonly opened?: (open: boolean) => void;
-  /** How the page opens an address outside itself, where a plain link to a new tab will not (a Discord call). */
-  readonly openLink?: (url: string) => void;
 }
 
 /** The menu of a page. */
@@ -176,7 +175,8 @@ class SettingsMenu implements Menu {
       this.#tabs.el,
       this.#keys.line,
       this.#page,
-      legalLinks(of.openLink),
+      // In a Discord call a link opens no tab of its own: Discord opens it, outside the call.
+      legalLinks(inCall() ? (url) => void openOutside(url) : undefined),
     );
     this.#scrim.append(this.#panel);
     document.body.append(this.#scrim);

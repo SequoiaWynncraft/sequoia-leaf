@@ -8,12 +8,13 @@
  * back instead of an empty frame; one that says it late opens over the note.
  */
 
+import { openOutside } from "@sequoia-leaf/kit/call.ts";
 import { close as closeCard } from "@sequoia-leaf/kit/card.ts";
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import { withLaunch } from "@sequoia-leaf/kit/launch.ts";
 import { passPurse } from "@sequoia-leaf/kit/live.ts";
 import { fromLeaf } from "@sequoia-leaf/kit/purse.ts";
-import { fromGame, toGame } from "@sequoia-leaf/kit/shell.ts";
+import { fromGame, toGame, type ToTown } from "@sequoia-leaf/kit/shell.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
 import { must, type Pt } from "@sequoia-leaf/kit/util.ts";
 
@@ -58,6 +59,16 @@ function shutDoor(root: HTMLElement): void {
   root.hidden = true;
   root.classList.remove("dark");
   window.focus();
+}
+
+/**
+ * What a game says that is not about its door: Leaf's word on the purse, an address to open outside
+ * Discord (in a call), or a line for the feed.
+ */
+function heardInside(msg: Exclude<ToTown, { town: "ready" | "leave" }>, asks: Asks): void {
+  if (msg.town === "purse") fromLeaf(msg.purse);
+  else if (msg.town === "open") void openOutside(msg.url);
+  else asks.news(msg.text, msg.tone ?? "gold");
 }
 
 /** Begins going into a game. The frame starts loading at once, out of sight, while the view closes in. */
@@ -165,8 +176,7 @@ export function goIn(game: Game, asks: Asks): Visit {
     } else if (msg.town === "leave") {
       onTo = msg.camp;
       leave();
-    } else if (msg.town === "purse") fromLeaf(msg.purse);
-    else asks.news(msg.text, msg.tone ?? "gold");
+    } else heardInside(msg, asks);
   });
 
   // A page that is not there will never say it is ready: no need to stand at the door waiting.
