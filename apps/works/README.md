@@ -29,6 +29,7 @@ bun test                         # the screen's own questions, the yard on a sta
 | a kind of piece: picture, card, lamps, map  | `kinds/<kind>.ts` (one module a kind, listed in `kinds/index.ts`), `kinds/kind.ts` |
 | a piece of more than one tile on the page   | `big.ts` (its box, drawn once from its own tile; its ways out; its marks)          |
 | drawing a frame                             | `scene.ts` (`drawYard`, a layer at a time), `lamps.ts`, `layout.ts`, `art/*.ts`    |
+| the graphics card, the ground on it         | `@sequoia-leaf/kit/painter.ts` (boxes, the atlas, sheets, layers), `floor.ts`      |
 | the far steps and the map                   | `plan.ts`, `far.ts`, `zoom.ts`, `camera.ts`                                        |
 | cards                                       | `ui/card.ts`, `ui/refs.ts`, `ui/prints.ts` (what a card prints), `ui/cards.ts`     |
 | a goal anywhere, the tier's screen          | `ui/goal.ts`, `ui/standing.ts`, `ui/tier.ts`, `ui/research.ts`                     |
@@ -69,9 +70,15 @@ bun test                         # the screen's own questions, the yard on a sta
 - **Prices are judged in one place:** `doNow`, with the purse as it is at that moment.
 - **A part of the interface shows only what its print holds** (`shows`, in `ui/parts.ts`): cards,
   panels, the top bar and the line over the dock are drawn again exactly when their print differs.
-- **Each layer of a frame draws what can show, by how far it reaches:** pieces by their tiles with a
-  margin, lamps by their light (`lamps.ts`). Kept pictures are made again when the layout changes or
-  the browser took their memory back (`wipe`).
+- **The graphics card draws the yard (WebGL2), every frame whole.** The art is what the painters draw
+  on canvases, copied to the card's atlas the first time each picture is drawn, so a picture is not
+  painted on again once it has been drawn. Each layer of a frame draws what can show, by how far it
+  reaches: pieces by their tiles with a margin, lamps by their light (`lamps.ts`). A piece that
+  stands is listed (`put`) and drawn far to near; what is as near is drawn in the order listed.
+- **No frame shows ground that is not painted.** The ground is kept whole on the card (`floor.ts`):
+  what a view lacks is painted before the frame is drawn, and the rest ahead of need in the time
+  frames have left. When the card takes everything back (`webglcontextlost`) nothing is drawn until
+  it returns; then the painter makes its own things again and the ground is painted again (`wipe`).
 - **A lesson is taken only when it is learnt** (`stepLessons`), never because something hid it.
 - **A kind of piece is one module here and one in the rules** (`kinds/new-kind.test.ts` adds a
   throwaway one and fails if anything else must change). How a kind looks, lights and reads is asked
@@ -99,12 +106,14 @@ bun build tour.html --outdir <site>/works-tour      # then /play/works-tour/tour
   `drop`, `confirm`, `build`, `remove`, `plot`, `act` and `after` act as a member would; `hold` and
   `skip` move only the screen; `open`, `card`, `close`, `look` and `zoom` show things; `state()` sums
   the page up (the hand, the lessons, `differences`, `reads`, a visit's following); `bench(frames)`
-  times a frame by part.
+  times a frame by part; `shot()` draws a frame and gives the yard's picture as a PNG; `holds()`
+  says what the graphics card keeps for it, in bytes.
 - `review/bench.ts`: the page with a generated yard of its own (`?pieces=5500`), for timing a frame
   of a yard larger than the guild's land holds. It opens nothing from Leaf (`S.alone`).
 - `review/gallery.ts`: a yard with every graded piece at each grade, working and not.
 - `review/sheet-page.ts`: the art laid out with names (`?sheet=machines`, `items`, `grades`).
-- `?meter` on any page: frames a second, the longest frame, and milliseconds a frame by part.
+- `?meter` on any page: frames a second, the longest frame, and milliseconds a frame by part (the
+  layers are the page's own work on them; the card's is in `until free`).
 
 The second design is balanced with the rules' planner, not by playing the story through: `bun plan.ts`
 in `packages/factory`.

@@ -4,7 +4,7 @@
  * trunk and the shade at its foot, as the yard has it (`redwoodAt`).
  */
 import { at, redwoodAt, standingTree } from "@sequoia-leaf/factory";
-import type { Ctx } from "@sequoia-leaf/kit/util.ts";
+import type { Pen } from "@sequoia-leaf/kit/pix.ts";
 
 import { TILE } from "./art/belts.ts";
 import { type Art, SHADE } from "./art/index.ts";
@@ -63,14 +63,12 @@ export function eachTrunk(
 }
 
 /** Lays the shade at the foot of each redwood that shows, on the floor of a picture of `wide` by `high` at (`cx`, `cy`). */
-export function drawShades(g: Ctx, art: Art, cx: number, cy: number, wide: number, high: number): void {
+export function drawShades(g: Pen, art: Art, cx: number, cy: number, wide: number, high: number): void {
   for (const tr of art.trunks) {
     const shows = treeShows(tr.tree);
     const x = tr.x + SHADE.x - cx;
     const y = tr.y + SHADE.y - cy;
     if (shows <= 0 || x < -art.shade.width || x > wide || y < -art.shade.height || y > high) continue;
-    g.globalAlpha = shows;
-    g.drawImage(art.shade, x, y);
+    g.pic(art.shade, x, y, shows);
   }
-  g.globalAlpha = 1;
 }

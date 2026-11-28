@@ -13,9 +13,6 @@
   "apps/town/src/campground.ts": {
     "apps/works/src/art/ground.ts": 17
   },
-  "apps/town/src/draw.ts": {
-    "apps/works/src/scene.ts": 98
-  },
   "apps/town/src/folkart.ts": {
     "apps/works/src/art/machines.ts": 500
   },

@@ -4,7 +4,8 @@
  * many sat), Open a table and Sit down; once sat, the table's eight seats until it starts, with
  * Start for whoever opened it and Leave for anyone; once started, Carry on (and the strip along the
  * top, as a run in hand has); once over, how it ended. The member's record at the tables is the
- * card's board (`tablesBoard` in `modes.ts`).
+ * card's board (`tablesBoard` in `modes.ts`). In a Discord call the card is the call's table alone
+ * (`call/`): no list of tables, Join the table in place of Open a table, and Next table once it is over.
  */
 import { el, icon } from "@sequoia-leaf/kit/dom.ts";
 import type { Scope } from "@sequoia-leaf/kit/scope.ts";
@@ -12,9 +13,10 @@ import { CHAIRS } from "@sequoia-leaf/raid/sitting/sitting.ts";
 import type { SittingView } from "@sequoia-leaf/raid/sitting/view.ts";
 
 import { glyph } from "../art/icons.ts";
+import { LAUNCH } from "../call/launch.ts";
 import { snd } from "../sounds.ts";
 import { pic } from "../ui/cards.ts";
-import { command, followTables, leave, openTable, recordIfOld, sitAt, T } from "./listing.ts";
+import { atCallTable, command, followTables, joinCall, leave, openTable, recordIfOld, sitAt, T } from "./listing.ts";
 import { placeText } from "./reads.ts";
 import { enterTable } from "./seat.ts";
 import { liveView } from "./seated.ts";
@@ -82,12 +84,17 @@ function openList(): HTMLElement[] {
   ];
 }
 
-/** What the card holds: the open tables, the member's table before it starts, or how it stands. */
+/** In a call with no table: Leaf being asked for it, or no table yet (why is said under the button). */
+const callWaits = (): HTMLElement[] => [
+  el("p", "k-d", { text: T.asking ? "Finding this call's table." : "No table yet." }),
+];
+
+/** What the card holds: the open tables (or in a call, its table), the member's table before it starts, or how it stands. */
 export function tablesBody(redraw: () => void): HTMLElement[] {
   T.redraw = redraw;
   recordIfOld();
   const view = liveView();
-  if (!view) return [el("div", "k-col", { id: "live-tables" }, ...openList())];
+  if (!view) return [el("div", "k-col", { id: "live-tables" }, ...(LAUNCH ? callWaits() : openList()))];
   const mine = mineOf(view);
   if (view.stage.at === "open")
     return [el("div", "k-label", { id: "live-tables", text: "Your table" }), seatsOf(view.stage, view.by)];
@@ -135,33 +142,44 @@ function startedFoot(view: SittingView): HTMLElement[] {
   ].filter((b) => b !== null);
 }
 
+/**
+ * In a call: Join the table (or Next table, once one is over), when the page follows no table, or one
+ * that is not the call's (the call's would not have them); none at the call's own, or out of a call.
+ */
+function callButton(view: SittingView | null): HTMLElement | null {
+  const call = LAUNCH;
+  if (call === null || (view !== null && view.stage.at !== "over" && atCallTable())) return null;
+  const words = view?.stage.at === "over" ? "Next table" : "Join the table";
+  const id = view?.stage.at === "over" ? "live-next" : "live-join";
+  return button(id, words, () => joinCall(call.instance), "", pic(glyph("swords")));
+}
+
 /** The card's foot: its buttons, and the line under them. */
 export function tablesFoot(): HTMLElement {
   const view = liveView();
-  let buttons: HTMLElement[];
-  let line: string;
+  let buttons: (HTMLElement | null)[];
+  let line = "";
   if (!view) {
-    buttons = [button("live-open", "Open a table", openTable, "", pic(glyph("swords")))];
-    line = "";
+    buttons = [LAUNCH ? null : button("live-open", "Open a table", openTable, "", pic(glyph("swords")))];
   } else if (view.stage.at === "open") {
     const opener = view.by === T.me?.id;
     const empty = CHAIRS - view.stage.sat.length;
     buttons = [
       button("live-leave", "Leave", leave, "wood", icon("back")),
       opener ? button("live-start", "Start", () => command({ do: "start" }), "", pic(glyph("swords"))) : null,
-    ].filter((b) => b !== null);
+    ];
     const who = view.stage.sat.find((m) => m.id === view.by)?.name ?? "whoever opened it";
     line = opener
       ? `Start now, and regulars take the ${empty} empty seat${empty === 1 ? "" : "s"}.`
       : `Waiting for ${who} to start. A full table starts by itself.`;
   } else if (view.stage.at === "over") {
-    buttons = [button("live-end", "See how it ended", enterTable, "", pic(glyph("play")))];
-    line = "";
+    buttons = [button("live-end", "See how it ended", enterTable, LAUNCH ? "wood" : "", pic(glyph("play")))];
   } else {
     buttons = startedFoot(view);
     line = T.leaving ? "Leave? You go out, in the last place of those still in." : "";
   }
-  return el("div", "mode-foot", {}, el("div", "k-row", {}, ...buttons), el("p", "k-d", { text: T.why ?? line }));
+  const shown = [...buttons, callButton(view)].filter((b) => b !== null);
+  return el("div", "mode-foot", {}, el("div", "k-row", {}, ...shown), el("p", "k-d", { text: T.why ?? line }));
 }
 
 /** The strip along the top for the member's live table, started and not over, as a run in hand has one. */

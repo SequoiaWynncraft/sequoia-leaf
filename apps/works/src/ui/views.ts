@@ -25,6 +25,7 @@ import { pick, show, shown as cardShown, thing } from "@sequoia-leaf/kit/card.ts
 import { el, icon, unit } from "@sequoia-leaf/kit/dom.ts";
 import { keepText, keptText } from "@sequoia-leaf/kit/keep.ts";
 import { CREAM, INK } from "@sequoia-leaf/kit/palette.ts";
+import { penOn } from "@sequoia-leaf/kit/pix.ts";
 import { PER_MINUTE, perMinute, whole } from "@sequoia-leaf/kit/say.ts";
 import { scope } from "@sequoia-leaf/kit/scope.ts";
 import { sfx } from "@sequoia-leaf/kit/sound.ts";
@@ -36,7 +37,7 @@ import { TILE } from "../art/belts.ts";
 import type { Art } from "../art/index.ts";
 import { cellOf, flowRows, said, SHORT, yardFlows } from "../flows.ts";
 import { layout } from "../layout.ts";
-import { alarm, layPlan, makePlan, paintPlan, type Plan } from "../plan.ts";
+import { alarm, makePlan, overPlan, paintPlan, type Plan } from "../plan.ts";
 import { S, seenFrom } from "../state.ts";
 import { smoggy, troubled, troubleGroups } from "../trouble.ts";
 import { NOT_WALKING, type Walk, walkAt, type WalkEvent, walkStep } from "../walk.ts";
@@ -223,6 +224,7 @@ function mapView(_art: Art, host: HTMLElement): () => void {
   const plan = (mapPlan ??= makePlan(MAP));
   const c = el("canvas", "k-px map", { "aria-label": "Map of the yard" });
   const g = must(c.getContext("2d"), "2d context");
+  const pen = penOn(g);
   host.append(c);
 
   /** The map at a whole number of screen pixels to each of its own, as large as the sheet has room for. */
@@ -247,13 +249,13 @@ function mapView(_art: Art, host: HTMLElement): () => void {
     const { land } = y;
     const W = land.w;
     fit();
-    paintPlan(plan, y, layout(y));
     g.clearRect(0, 0, c.width, c.height);
-    layPlan(g, plan, y, 0, 0);
+    g.drawImage(paintPlan(plan, y, layout(y)), 0, 0);
+    overPlan(pen, plan, y, 0, 0);
     const wrong = troubled(y);
     for (let n = 0; n < wrong.count; n++) {
       const i = wrong.tiles[n] ?? 0;
-      alarm(g, MAP, i % W, Math.floor(i / W), 0, 0, S.t);
+      alarm(pen, MAP, i % W, Math.floor(i / W), 0, 0, S.t);
     }
     prices(g, y);
     // The part of the yard now on screen.
@@ -267,11 +269,10 @@ function mapView(_art: Art, host: HTMLElement): () => void {
         [1, INK],
         [0, CREAM],
       ] as const) {
-        g.fillStyle = col;
-        g.fillRect(x0 - grow, y0 - grow, x1 - x0 + grow * 2, 1);
-        g.fillRect(x0 - grow, y1 - 1 + grow, x1 - x0 + grow * 2, 1);
-        g.fillRect(x0 - grow, y0 - grow, 1, y1 - y0 + grow * 2);
-        g.fillRect(x1 - 1 + grow, y0 - grow, 1, y1 - y0 + grow * 2);
+        pen.rect(x0 - grow, y0 - grow, x1 - x0 + grow * 2, 1, col);
+        pen.rect(x0 - grow, y1 - 1 + grow, x1 - x0 + grow * 2, 1, col);
+        pen.rect(x0 - grow, y0 - grow, 1, y1 - y0 + grow * 2, col);
+        pen.rect(x1 - 1 + grow, y0 - grow, 1, y1 - y0 + grow * 2, col);
       }
   };
 

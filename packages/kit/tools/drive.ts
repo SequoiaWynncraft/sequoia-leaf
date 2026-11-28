@@ -25,7 +25,8 @@
  *   stops the run);
  * - `["media", "prefers-reduced-motion", "reduce"]` has the page see a media feature so (`""` for as
  *   the machine has it);
- * - `["shot", "name"]` saves a screenshot;
+ * - `["shot", "name"]` saves a screenshot (in the Works, of the yard's own picture alone where the
+ *   name starts `yard-`);
  * - `["audit"]` prints what keeps a player from reading or reaching the page as it is now
  *   (`audit.ts`), and `["audit", "name"]` saves that as `<out-dir>/<name>.txt` too.
  *
@@ -308,11 +309,15 @@ async function run(step: Step): Promise<void> {
     case "shot": {
       // A page that draws with WebGL hands over a finished frame itself; a screenshot taken from
       // outside can land in the middle of one and show half a scene.
-      // A name starting `ui-` asks for the whole page, interface and all, not only the world.
+      // A name starting `ui-` asks for the whole page, interface and all, not only the world. The
+      // Works' tours are of cards and panels over the yard, so there the whole page is the rule, and
+      // a name starting `yard-` asks for the yard's picture alone, a frame the page draws for it.
       const own = await send("Runtime.evaluate", {
         expression: step[1].startsWith("ui-")
           ? "null"
-          : "window.grove && window.grove.snap ? window.grove.snap() : null",
+          : step[1].startsWith("yard-")
+            ? "window.works && window.works.shot ? window.works.shot() : null"
+            : "window.grove && window.grove.snap ? window.grove.snap() : null",
         awaitPromise: true,
         returnByValue: true,
       });

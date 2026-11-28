@@ -10,8 +10,8 @@
  * that have shown nothing yet, and forgotten a minute after it was last seen: so a line is one
  * colour along its length, not a dot for each thing on it.
  *
- * A plan keeps what it drew, as one number for each tile, and paints again only the tiles whose
- * number has changed: when the rules change the yard (`y.rev`, as the layout is kept), and once for each
+ * A plan's picture is kept in ordinary memory, with what it drew as one number for each tile, and
+ * only the tiles whose number has changed are painted again: when the rules change the yard (`y.rev`, as the layout is kept), and once for each
  * second of the yard's clock for what the lines carry. It is used for the map (`ui/views.ts`), at
  * 3 pixels to a tile, and for the two steps the camera goes furthest out to (`far.ts`), at 8 and 4.
  */
@@ -37,6 +37,8 @@ import {
   type Yard,
 } from "@sequoia-leaf/factory";
 import { BARK, CREAM, GOLD, GREEN, INK, PAPER, SKY, STONE, WATER } from "@sequoia-leaf/kit/palette.ts";
+import type { Pen } from "@sequoia-leaf/kit/pix.ts";
+import { scope } from "@sequoia-leaf/kit/scope.ts";
 import { type Ctx, makeCanvas } from "@sequoia-leaf/kit/util.ts";
 
 import { armAt, PAINTS } from "./art/belts.ts";
@@ -304,8 +306,8 @@ export interface Plan {
   drawn: Uint32Array;
   turn: number;
   land: Land | null;
-  /** Nothing drawn can be trusted: the browser took the picture's memory back. */
-  lost: boolean;
+  /** Counts each time any tile was painted, for whoever keeps a copy of the picture. */
+  painted: number;
   /** The marks for a cart stop and a Study, drawn over the picture. */
   readonly stop: HTMLCanvasElement;
   readonly study: HTMLCanvasElement;
@@ -331,21 +333,26 @@ function mark(px: number, diamond: boolean, lit: string, shade: string): HTMLCan
   return c;
 }
 
+/** What a plan has drawn on a tile it has not painted: no tile's number is all ones, so it differs from whatever there is. */
+const UNPAINTED = 0xffffffff;
+
 /** A plan at so many pixels to a tile, with nothing drawn on it yet. */
 export function makePlan(px: number): Plan {
-  const made = makeCanvas(1, 1, true);
   const p: Plan = {
     px,
-    ...made,
+    ...makeCanvas(1, 1),
     drawn: new Uint32Array(0),
     turn: -1,
     land: null,
-    lost: true,
+    painted: 0,
     stop: mark(px, false, GOLD[2], GOLD[0]),
     study: mark(px, true, CREAM, SKY[4]),
   };
-  made.c.addEventListener("contextrestored", () => {
-    p.lost = true;
+  // A browser may empty the picture and give it back (a phone, the page put away): nothing drawn is
+  // on it then, and every tile is painted again as at first.
+  scope().on(p.c, "contextrestored", () => {
+    p.drawn.fill(UNPAINTED);
+    p.turn = -1;
   });
   return p;
 }
@@ -500,49 +507,51 @@ export function paintPlan(p: Plan, y: Yard, L: Layout): HTMLCanvasElement {
   const s = look(y);
   const { land } = y;
   const n = y.kind.length;
+  // A new picture's tiles all differ from what there is (`UNPAINTED`).
   if (p.land !== land || p.c.width !== land.w * p.px || p.c.height !== land.h * p.px) {
     p.land = land;
     p.c.width = land.w * p.px;
     p.c.height = land.h * p.px;
-    p.drawn = new Uint32Array(n);
-    p.lost = true;
+    p.drawn = new Uint32Array(n).fill(UNPAINTED);
+    p.turn = -1;
   }
-  if (p.turn === s.turn && !p.lost) return p.c;
+  if (p.turn === s.turn) return p.c;
   const depot = land.depot[1] * land.w + land.depot[0];
   const P = p.px;
+  let painted = false;
   for (let i = 0; i < n; i++) {
     const now = numberOf(s, y, L, i, depot);
-    if (now === p.drawn[i] && !p.lost) continue;
+    if (now === p.drawn[i]) continue;
     p.drawn[i] = now;
     tile(p.g, P, (i % land.w) * P, Math.floor(i / land.w) * P, now);
+    painted = true;
   }
+  if (painted) p.painted++;
   p.turn = s.turn;
-  p.lost = false;
   return p.c;
 }
 
 /**
- * Lays a plan on a picture with its corner at (`dx`, `dy`), and over it the marks large enough to
- * find: a square on each cart stop, a diamond on each Study. The plan must have been painted.
+ * What lies over a plan's picture laid with its corner at (`dx`, `dy`): the smog, a pale line round
+ * the depot, and the marks large enough to find, a square on each cart stop and a diamond on each
+ * Study. The plan must have been painted.
  */
-export function layPlan(g: Ctx, p: Plan, y: Yard, dx: number, dy: number): void {
-  g.drawImage(p.c, dx, dy);
+export function overPlan(g: Pen, p: Plan, y: Yard, dx: number, dy: number): void {
   hazeOnPlan(g, y, dx, dy, p.px);
   const W = y.land.w;
   // The depot: a pale line round its nine tiles.
   const [cx, cy] = y.land.depot;
   const size = p.px * 3 + 2;
-  g.fillStyle = CREAM;
-  g.fillRect(dx + (cx - 1) * p.px - 1, dy + (cy - 1) * p.px - 1, size, 1);
-  g.fillRect(dx + (cx - 1) * p.px - 1, dy + (cy + 2) * p.px, size, 1);
-  g.fillRect(dx + (cx - 1) * p.px - 1, dy + (cy - 1) * p.px - 1, 1, size);
-  g.fillRect(dx + (cx + 2) * p.px, dy + (cy - 1) * p.px - 1, 1, size);
+  g.rect(dx + (cx - 1) * p.px - 1, dy + (cy - 1) * p.px - 1, size, 1, CREAM);
+  g.rect(dx + (cx - 1) * p.px - 1, dy + (cy + 2) * p.px, size, 1, CREAM);
+  g.rect(dx + (cx - 1) * p.px - 1, dy + (cy - 1) * p.px - 1, 1, size, CREAM);
+  g.rect(dx + (cx + 2) * p.px, dy + (cy - 1) * p.px - 1, 1, size, CREAM);
   const s = seen;
   if (!s || s.spots.length === 0) return;
   for (const i of s.spots) {
     const pic = pageOf(y.kind[i] ?? NONE)?.spot === "study" ? p.study : p.stop;
     const half = (pic.width - p.px) / 2;
-    g.drawImage(pic, dx + (i % W) * p.px - Math.floor(half), dy + Math.floor(i / W) * p.px - Math.floor(half));
+    g.pic(pic, dx + (i % W) * p.px - Math.floor(half), dy + Math.floor(i / W) * p.px - Math.floor(half));
   }
 }
 
@@ -551,24 +560,22 @@ export function layPlan(g: Ctx, p: Plan, y: Yard, dx: number, dy: number): void 
  * dark edge, the piece still to be seen inside it, fading and coming back slowly with the screen's
  * clock (`t`, in seconds).
  */
-export function alarm(g: Ctx, px: number, tx: number, ty: number, dx: number, dy: number, t: number): void {
+export function alarm(g: Pen, px: number, tx: number, ty: number, dx: number, dy: number, t: number): void {
   const wide = px >= 8 ? 2 : 1;
   const x = dx + tx * px - wide;
   const y = dy + ty * px - wide;
   const size = px + wide * 2;
-  g.globalAlpha = 0.65 + 0.35 * Math.sin(t * 3);
+  const a = 0.65 + 0.35 * Math.sin(t * 3);
   for (const [grow, col] of [
     [1, INK],
     [0, ALARM],
   ] as const) {
     const w = wide + grow * 2;
-    g.fillStyle = col;
-    g.fillRect(x - grow, y - grow, size + grow * 2, w);
-    g.fillRect(x - grow, y + size - wide - grow, size + grow * 2, w);
-    g.fillRect(x - grow, y - grow, w, size + grow * 2);
-    g.fillRect(x + size - wide - grow, y - grow, w, size + grow * 2);
+    g.rect(x - grow, y - grow, size + grow * 2, w, col, a);
+    g.rect(x - grow, y + size - wide - grow, size + grow * 2, w, col, a);
+    g.rect(x - grow, y - grow, w, size + grow * 2, col, a);
+    g.rect(x + size - wide - grow, y - grow, w, size + grow * 2, col, a);
   }
-  g.globalAlpha = 1;
 }
 
 /** The colour a kind's block is on a plan, for showing one that is about to be built; a line's wood for what carries. */

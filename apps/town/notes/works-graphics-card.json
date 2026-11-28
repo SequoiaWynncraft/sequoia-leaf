@@ -1,0 +1,15 @@
+{
+  "id": "works-graphics-card",
+  "at": "2026-11-28T13:57Z",
+  "title": "The Works draws faster",
+  "lines": [
+    "The Works now draws the yard on your graphics card. It is smoother on slower phones and computers.",
+    "The ground no longer pops in while you move around."
+  ],
+  "more": [
+    {
+      "head": "Fixed",
+      "points": ["On Firefox, part of the ground no longer goes black for a moment while you move."]
+    }
+  ]
+}
