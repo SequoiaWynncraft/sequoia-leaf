@@ -54,7 +54,7 @@ declare global {
       go: () => void;
       opened: number | null;
       firstFloor: number | null;
-      /** How many patches of the floor are still to be painted, once the page has drawn its floor. */
+      /** How many chunks of the floor are still to be painted, once the page has drawn its floor. */
       waiting: () => number | null;
       /** Milliseconds for each of `n` colours of the floor under a foot, near the tile (`tx`, `ty`), as the dust asks for them. */
       dust: (tx: number, ty: number, n: number) => number[];

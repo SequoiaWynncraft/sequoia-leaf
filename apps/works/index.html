@@ -32,6 +32,15 @@
         image-rendering: pixelated;
         pointer-events: none;
       }
+      /* The one line the page shows where the browser cannot draw the yard. */
+      #nodraw {
+        position: fixed;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        max-width: calc(100vw - var(--edge) * 2);
+        text-align: center;
+      }
       /* The words over the yard, at the screen's own size. Every press on the yard lands here. */
       #words {
         position: fixed;

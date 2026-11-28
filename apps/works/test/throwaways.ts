@@ -464,7 +464,7 @@ const portArms = fedFromWest(6, 4, 3) && fedFromWest(6, 5, 1);
 S.view.z = 0.25;
 const rects = () => {
   const drawn = new Set();
-  const g = new Proxy({}, { get: (_t, k) => (k === "fillRect" ? (x, z, w, h) => drawn.add([x, z, w, h].join(",")) : () => {}), set: () => true });
+  const g = new Proxy({}, { get: (_t, k) => (k === "rect" ? (x, z, w, h) => drawn.add([x, z, w, h].join(",")) : () => {}), set: () => true });
   drawPlanMarks(g, y, 0, 0);
   return drawn;
 };
@@ -473,7 +473,8 @@ setTool("select");
 markStart(19, 9);
 markOver(21, 11);
 markEnd();
-const lit = [...rects()].filter((r) => !unmarked.has(r));
+// The boxes a tile wide that marking it adds: its tiles lit (the dashes round the mark are a pixel each).
+const lit = [...rects()].filter((r) => !unmarked.has(r) && r.endsWith(",4,4"));
 const farMark = lit.length === 9 && tiles.every((t) => lit.includes([(t % 34) * 4, Math.floor(t / 34) * 4, 4, 4].join(",")));
 console.log(
   JSON.stringify({

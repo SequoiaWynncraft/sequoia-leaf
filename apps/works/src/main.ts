@@ -37,7 +37,7 @@ import { arrive } from "./figure/you.ts";
 import { updateFx } from "./fx.ts";
 import { initInput, inputHooks, stepInput } from "./input.ts";
 import { stepClearing } from "./plots.ts";
-import { drawWords, drawYard, lap, picture, spent, wipe } from "./scene.ts";
+import { drawWords, drawYard, lap, openPicture, picture, spent, wipe } from "./scene.ts";
 import { murmur, yardSfx } from "./sound.ts";
 import { builds, S } from "./state.ts";
 import { NO_LESSONS, type Nudge, stepLessons } from "./teach.ts";
@@ -56,6 +56,8 @@ import { gate, keepScreen, leadAt, onRefused, openYard, runYard, screen } from "
 
 /** What the page says where no Leaf answers: the yard is the guild's server's. */
 const NEEDS_LEAF = "The Works needs the guild's server.";
+/** What the page says in the yard's place where the browser cannot draw it. */
+const NEEDS_WEBGL = "This browser cannot draw the yard. It needs WebGL 2.";
 
 function refreshAll(): void {
   // What is aimed is said over the dock: of the yard as it is.
@@ -187,6 +189,15 @@ async function opened(params: URLSearchParams): Promise<{ id: string; name: stri
   return me;
 }
 
+/** Says in the yard's place that the browser cannot draw it: the page does not open, or (its graphics card back and refusing to draw) draws no more. */
+function cannotDraw(): null {
+  const line = document.body.appendChild(document.createElement("p"));
+  line.id = "nodraw";
+  line.className = "k-plaque";
+  line.textContent = NEEDS_WEBGL;
+  return null;
+}
+
 async function boot(): Promise<Page | null> {
   await fontsReady();
   const params = new URLSearchParams(location.search);
@@ -197,7 +208,7 @@ async function boot(): Promise<Page | null> {
   const art = makeArt(S.world.land);
 
   // The yard's picture, shown small and enlarged by the page; over it, the words, which also take every press.
-  picture.id = "view";
+  if (!openPicture(scope(), cannotDraw)) return cannotDraw();
   document.body.prepend(picture);
   const canvas = must(document.querySelector<HTMLCanvasElement>("#words"), "canvas");
   const ctx = must(canvas.getContext("2d"), "2d context");
@@ -400,8 +411,8 @@ async function boot(): Promise<Page | null> {
     // In the town, the town says when the member's Leaf changes; opened on its own, the yard listens itself.
     keepLeaf();
   }
-  // A phone may empty the pictures the frame keeps while the page is put away: each says so itself
-  // (`contextrestored`), and only then is it drawn again, so coming back shows what was painted.
+  // A phone may take back what the graphics card keeps while the page is put away: the picture says
+  // so itself (`scene.ts`), and only then is the ground painted again.
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") keepSettings();
   });

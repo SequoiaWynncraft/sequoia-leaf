@@ -4,7 +4,8 @@
  * no lantern light: only the plan, a mark on each piece in trouble, and what is being pointed at or
  * is about to be built, so that building and Select work here as they do near.
  *
- * The plan is kept and one picture is laid for it, so a frame here costs the same however much
+ * The plan's picture is painted in ordinary memory (`plan.ts`) and copied to the graphics card
+ * whenever any of it was painted again, so a frame here is one picture and the marks, however much
  * stands in the yard.
  */
 
@@ -23,30 +24,36 @@ import {
   tilesOf,
   type Yard,
 } from "@sequoia-leaf/factory";
+import type { Painter, Sheet } from "@sequoia-leaf/kit/painter.ts";
 import { CORAL, CREAM, GOLD, INK } from "@sequoia-leaf/kit/palette.ts";
-import type { Ctx } from "@sequoia-leaf/kit/util.ts";
+import type { Pen } from "@sequoia-leaf/kit/pix.ts";
 
 import { PAINTS, TILE } from "./art/belts.ts";
 import { aimBox, markCovers, pieceBox } from "./big.ts";
 import { you } from "./figure/you.ts";
 import { heldBox, takenUp } from "./held.ts";
 import type { Layout } from "./layout.ts";
+import { dashes } from "./marks.ts";
 import { markedTiles, pinPulse } from "./pinned.ts";
-import { alarm, blockColour, layPlan, makePlan, paintPlan, type Plan } from "./plan.ts";
+import { alarm, blockColour, makePlan, overPlan, paintPlan, type Plan } from "./plan.ts";
 import { builds, type Group, S, seenFrom, standsOn, tileNudge, type Tool } from "./state.ts";
 import { troubled } from "./trouble.ts";
 
-/** A plan for each size a step is drawn at, made when first gone out to. */
+/** A plan for each size a step is drawn at, made when first gone out to; and its picture on the card, with which painting of the plan it shows. */
 const plans = new Map<number, Plan>();
+const shown = new Map<Plan, { sheet: Sheet; painted: number }>();
+/** Every plan's picture on the card is to be copied there again: the card took everything back. */
+export function wipePlans(): void {
+  for (const kept of shown.values()) kept.painted = -1;
+}
 
 /** A line a pixel wide just outside a box of the picture: it is being pointed at. `breathe` draws it a pixel further out half the time. */
-function box(g: Ctx, x: number, y: number, w: number, h: number, col: string, breathe = false, out = 0): void {
+function box(g: Pen, x: number, y: number, w: number, h: number, col: string, breathe = false, out = 0): void {
   const k = (breathe && Math.sin(S.t * 6) > 0 ? 2 : 1) + out;
-  g.fillStyle = col;
-  g.fillRect(x - k, y - k, w + k * 2, 1);
-  g.fillRect(x - k, y + h + k - 1, w + k * 2, 1);
-  g.fillRect(x - k, y - k, 1, h + k * 2);
-  g.fillRect(x + w + k - 1, y - k, 1, h + k * 2);
+  g.rect(x - k, y - k, w + k * 2, 1, col);
+  g.rect(x - k, y + h + k - 1, w + k * 2, 1, col);
+  g.rect(x - k, y - k, 1, h + k * 2, col);
+  g.rect(x + w + k - 1, y - k, 1, h + k * 2, col);
 }
 
 /** The tiles of the pieces in hand where they are aimed, worked out once for each place they are aimed at. */
@@ -70,15 +77,14 @@ function inHand(y: Yard, grp: Group): NonNullable<typeof held> {
  * plan of the whole yard, a coral box on each piece it would take up, as the spade marks what it
  * takes; and a box round all of it. `P` is a tile's size in the picture.
  */
-function handMarks(g: Ctx, y: Yard, grp: Group, dx: number, dy: number, P: number): void {
+function handMarks(g: Pen, y: Yard, grp: Group, dx: number, dy: number, P: number): void {
   const W = y.land.w;
   const X = (i: number): number => dx + (i % W) * P;
   const Y = (i: number): number => dy + Math.floor(i / W) * P;
   const hand = inHand(y, grp);
   for (let n = 0; n < hand.tiles.length; n++) {
     const i = hand.tiles[n] ?? 0;
-    g.fillStyle = grp.why[hand.of[n] ?? 0] === null ? GOLD[2] : CORAL;
-    g.fillRect(X(i), Y(i), P, P);
+    g.rect(X(i), Y(i), P, P, grp.why[hand.of[n] ?? 0] === null ? GOLD[2] : CORAL);
   }
   for (const i of takenUp(grp)) box(g, X(i), Y(i), P, P, CORAL);
   const b = heldBox(y, grp);
@@ -94,22 +100,31 @@ const wantsPower = (kind: Kind): boolean => (DRAW[kind] ?? 0) > 0 || (GIVES[kind
  * corner is in the view, in the yard's pixels (the camera says). Gives the corner of the land on the
  * picture, for the marks.
  */
-export function drawPlan(g: Ctx, y: Yard, L: Layout, cornerX: number, cornerY: number): readonly [number, number] {
+export function drawPlan(g: Painter, y: Yard, L: Layout, cornerX: number, cornerY: number): readonly [number, number] {
   const z = S.view.z;
   const P = Math.round(TILE * z);
   let plan = plans.get(P);
   if (!plan) plans.set(P, (plan = makePlan(P)));
   const dx = -Math.round((seenFrom(S.cam.x) + cornerX) * z);
   const dy = -Math.round((seenFrom(S.cam.y) + cornerY) * z);
-  g.clearRect(0, 0, g.canvas.width, g.canvas.height);
-  paintPlan(plan, y, L);
-  layPlan(g, plan, y, dx, dy);
+  const pic = paintPlan(plan, y, L);
+  let kept = shown.get(plan);
+  if (kept?.sheet.w !== pic.width || kept.sheet.h !== pic.height) {
+    if (kept) g.drop(kept.sheet);
+    shown.set(plan, (kept = { sheet: g.sheet(pic.width, pic.height), painted: -1 }));
+  }
+  if (kept.painted !== plan.painted) {
+    kept.painted = plan.painted;
+    kept.sheet.put(pic, 0, 0);
+  }
+  g.from(kept.sheet, 0, 0, pic.width, pic.height, dx, dy);
+  overPlan(g, plan, y, dx, dy);
   return [dx, dy];
 }
 
 /** The plan as the marks over it are drawn: where to draw, the yard, a tile's size, and where a tile is. */
 interface Over {
-  readonly g: Ctx;
+  readonly g: Pen;
   readonly y: Yard;
   readonly P: number;
   readonly X: (i: number) => number;
@@ -117,14 +132,12 @@ interface Over {
 }
 
 /** Where the member stands in their own yard, over the plan (`k` of its pixels to one of the yard's): a cream dot, edged dark. */
-function planYou(g: Ctx, dx: number, dy: number, k: number): void {
+function planYou(g: Pen, dx: number, dy: number, k: number): void {
   const c = you();
   if (!c) return;
   const [x, y] = [Math.round(dx + c.x * k), Math.round(dy + c.y * k)];
-  g.fillStyle = INK;
-  g.fillRect(x - 2, y - 2, 4, 4);
-  g.fillStyle = CREAM;
-  g.fillRect(x - 1, y - 1, 2, 2);
+  g.rect(x - 2, y - 2, 4, 4, INK);
+  g.rect(x - 1, y - 1, 2, 2, CREAM);
 }
 
 /** The box of the piece on a tile, over the plan: every tile it covers, or for the depot its nine; `out` pixels further out. */
@@ -165,7 +178,7 @@ function pointed(o: Over, tool: Tool): void {
  * Over the plan: a mark on each piece in trouble, and what is being pointed at or is about to be
  * built, as the picture near shows them, each as a box of its tiles.
  */
-export function drawPlanMarks(g: Ctx, y: Yard, dx: number, dy: number): void {
+export function drawPlanMarks(g: Pen, y: Yard, dx: number, dy: number): void {
   const z = S.view.z;
   const P = Math.round(TILE * z);
   const { land } = y;
@@ -183,12 +196,11 @@ export function drawPlanMarks(g: Ctx, y: Yard, dx: number, dy: number): void {
   if (builds(tool) && wantsPower(tool)) {
     // Where power reaches, edged in gold, while placing something that it matters to.
     const lit = litOf(y);
-    g.fillStyle = GOLD[1];
     for (let i = 0; i < lit.length; i++) {
       const here = lit[i] === 1;
       const x = i % W;
-      if (here !== (i >= W && lit[i - W] === 1)) g.fillRect(X(i), Y(i), P, 1);
-      if (here !== (x > 0 && lit[i - 1] === 1)) g.fillRect(X(i), Y(i), 1, P);
+      if (here !== (i >= W && lit[i - W] === 1)) g.rect(X(i), Y(i), P, 1, GOLD[1]);
+      if (here !== (x > 0 && lit[i - 1] === 1)) g.rect(X(i), Y(i), 1, P, GOLD[1]);
     }
   }
   pointed({ g, y, P, X, Y }, tool);
@@ -196,27 +208,23 @@ export function drawPlanMarks(g: Ctx, y: Yard, dx: number, dy: number): void {
     // The pieces marked, lit gold on their tiles; the area itself a line of dashes that march.
     const m = S.mark;
     const leaving = S.group?.as === "move";
-    g.fillStyle = leaving ? "rgba(26,15,30,0.55)" : "rgba(255,196,84,0.5)";
-    for (const i of markCovers(y, m.tiles).all) if (y.kind[i] !== NONE) g.fillRect(X(i), Y(i), P, P);
-    g.strokeStyle = CREAM;
-    g.lineWidth = 1;
-    g.setLineDash([3, 3]);
-    g.lineDashOffset = -Math.floor(S.t * 10);
-    g.strokeRect(dx + m.x0 * P - 1.5, dy + m.y0 * P - 1.5, (m.x1 - m.x0 + 1) * P + 3, (m.y1 - m.y0 + 1) * P + 3);
-    g.setLineDash([]);
+    const lit = leaving ? "rgba(26,15,30,0.55)" : "rgba(255,196,84,0.5)";
+    for (const i of markCovers(y, m.tiles).all) if (y.kind[i] !== NONE) g.rect(X(i), Y(i), P, P, lit);
+    const [wide, high] = [(m.x1 - m.x0 + 1) * P + 3, (m.y1 - m.y0 + 1) * P + 3];
+    dashes(g, dx + m.x0 * P - 2, dy + m.y0 * P - 2, wide, high, CREAM, Math.floor(S.t * 10));
   } else if (S.corner) box(g, dx + S.corner.x * P, dy + S.corner.y * P, P, P, GOLD[2], true);
   if (S.run) {
     // A run of belt, shown before it is laid: each tile of it, and a tunnel's far mouth.
     const bad = S.run.why !== null;
-    g.fillStyle = bad ? CORAL : GOLD[2];
+    const laid = bad ? CORAL : GOLD[2];
     for (const leg of S.run.legs) {
-      g.fillRect(dx + leg.x * P, dy + leg.y * P, P, P);
+      g.rect(dx + leg.x * P, dy + leg.y * P, P, P, laid);
       if (leg.tunnel && leg.span > 0) {
         const far = leg.span + 1;
-        g.fillRect(dx + (leg.x + DX[leg.dir] * far) * P, dy + (leg.y + DY[leg.dir] * far) * P, P, P);
+        g.rect(dx + (leg.x + DX[leg.dir] * far) * P, dy + (leg.y + DY[leg.dir] * far) * P, P, P, laid);
       }
     }
-    for (const turn of S.run.turns) g.fillRect(dx + turn.x * P, dy + turn.y * P, P, P);
+    for (const turn of S.run.turns) g.rect(dx + turn.x * P, dy + turn.y * P, P, P, laid);
     const last = S.run.legs.at(-1) ?? S.run.turns.at(-1);
     if (last) box(g, dx + last.x * P, dy + last.y * P, P, P, bad ? CORAL : CREAM, true);
   }
@@ -236,19 +244,19 @@ export function drawPlanMarks(g: Ctx, y: Yard, dx: number, dy: number): void {
       if (S.group) handMarks(g, y, S.group, dx, dy, P);
     } else if (!S.run) {
       // One piece about to be built: its block over every tile it would cover, and for a tunnel the mouth it would come up at.
-      g.fillStyle = bad ? CORAL : blockColour(tool);
+      const block = bad ? CORAL : blockColour(tool);
       const b = aimBox(y, tool, S.dir, on.x, on.y);
-      g.fillRect(dx + b.x * P, dy + b.y * P, b.w * P, b.h * P);
+      g.rect(dx + b.x * P, dy + b.y * P, b.w * P, b.h * P, block);
       const far = S.aim.far ?? -1;
-      if (far >= 0) g.fillRect(X(far), Y(far), P, P);
+      if (far >= 0) g.rect(X(far), Y(far), P, P, block);
       if (REACHES[tool] === 1) {
         // How far its light would reach.
         const r = ((REACH.pylon * y.open.reach) / 10_000) * P;
         const n = Math.max(12, Math.round(r * 3));
-        g.fillStyle = bad ? CORAL : GOLD[2];
         for (let k = 0; k < n; k += 2) {
           const a = (k / n) * Math.PI * 2;
-          g.fillRect(Math.round(x + P / 2 + Math.cos(a) * r), Math.round(top + P / 2 + Math.sin(a) * r), 1, 1);
+          const at = [Math.round(x + P / 2 + Math.cos(a) * r), Math.round(top + P / 2 + Math.sin(a) * r)] as const;
+          g.rect(at[0], at[1], 1, 1, bad ? CORAL : GOLD[2]);
         }
       }
       const col = bad ? CORAL : CREAM;
