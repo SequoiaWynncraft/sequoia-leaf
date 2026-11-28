@@ -10,14 +10,14 @@
  */
 import { describe, expect, test } from "bun:test";
 
-import { Builder, type Old, type Planned, type Source } from "../pace/builder.ts";
+import { Builder, type Old, type Planned, type Source, toBuy } from "../pace/builder.ts";
 import { measure } from "../pace/measure.ts";
 import { capacity, one, shortfall, size, type Unit } from "../pace/needs.ts";
 import { type Game, type Hands, Player, researchOrder, type Settings } from "../pace/player.ts";
 import { type Report, report, seeds, spread } from "../pace/table.ts";
 import * as F from "../src/index.ts";
 import { bareLand } from "./land.ts";
-import { must } from "./yards.ts";
+import { bought, clearedFor, must } from "./yards.ts";
 
 const ones = (): number => 1;
 const name = (u: { readonly item: F.Item; readonly kind: F.Kind; readonly count: number }): string =>
@@ -350,6 +350,27 @@ describe("old lines taken up to make room", () => {
 
 /** Numbers least first. */
 const up = (a: number, b: number): number => a - b;
+
+describe("the plots the player buys", () => {
+  test("are those the rules would sell it now: the outer rings' only once cleared, the cheapest first", () => {
+    const y = F.create({ seed: 3, tier: 5 });
+    for (let more = true; more;) {
+      const p = y.land.plots.find((q) => q.ring === 1 && F.plotState(y, q.plot).state === "for sale");
+      more = p !== undefined;
+      if (p) bought(y, F.plotName(p.plot));
+    }
+    // The second ring is for sale round the nine plots, and none of it is cleared: nothing to buy.
+    expect(y.land.plots.some((p) => F.plotState(y, p.plot).state === "for sale")).toBe(true);
+    expect(toBuy(y, [])).toEqual([]);
+    clearedFor(y, "workings");
+    clearedFor(y, "flats");
+    const cheap = [F.plot("workings"), F.plot("flats")].toSorted(
+      (a, b) => F.plotPrice(y, a) - F.plotPrice(y, b) || a - b,
+    );
+    expect(toBuy(y, [])).toEqual(cheap);
+    for (const p of toBuy(y, [])) expect(F.plotRefusal(y, p, F.plotPrice(y, p), Infinity)).toBeNull();
+  });
+});
 
 describe("the order of things", () => {
   test("research a node of an open tier needs comes first, then the rest of the player's list, each piece after what it needs", () => {

@@ -151,6 +151,25 @@ export function piecesStanding(y: F.Yard): number {
   return n;
 }
 
+/**
+ * The plots a yard may buy now that hold one of `raws` (any, with none named), the cheapest first: as
+ * the rules' own refusal says (`plotRefusal`, its Coins aside), so for sale and cleared where it must
+ * be.
+ */
+export function toBuy(y: F.Yard, raws: readonly F.Item[]): F.Plot[] {
+  const holds = (p: F.Plotted): boolean => {
+    if (raws.length === 0) return true;
+    const at = y.land.plots.indexOf(p);
+    for (let i = 0; i < y.land.deposit.length; i++)
+      if (y.land.plot[i] === at && raws.some((r) => r === y.land.deposit[i])) return true;
+    return false;
+  };
+  return y.land.plots
+    .filter((p) => F.plotRefusal(y, p.plot, F.plotPrice(y, p.plot), Infinity) === null && holds(p))
+    .map((p) => p.plot)
+    .toSorted((a, b) => F.plotPrice(y, a) - F.plotPrice(y, b) || a - b);
+}
+
 export class Builder {
   /** The copy everything is tried on. It is replaced whole when a step is taken back. */
   y: F.Yard;
@@ -1146,22 +1165,10 @@ export class Builder {
     return null;
   }
 
-  /** Buys the cheapest plot for sale that holds one of `raws` (any plot, with none named). Says whether it could. */
+  /** Buys the cheapest plot it may that holds one of `raws` (any plot, with none named), as `toBuy` gives them. Says whether it could. */
   private buyPlot(raws: readonly F.Item[]): boolean {
-    const y = this.y;
-    const holds = (p: F.Plotted): boolean => {
-      if (raws.length === 0) return true;
-      const at = y.land.plots.indexOf(p);
-      for (let i = 0; i < y.land.deposit.length; i++)
-        if (y.land.plot[i] === at && raws.some((r) => r === y.land.deposit[i])) return true;
-      return false;
-    };
-    const plot = y.land.plots
-      .filter((p) => F.plotState(y, p.plot).state === "for sale" && holds(p))
-      .toSorted((a, b) => F.plotPrice(y, a.plot) - F.plotPrice(y, b.plot) || a.plot - b.plot)[0];
-    return (
-      plot !== undefined && this.cmd({ do: "buyPlot", plot: F.plotName(plot.plot), price: F.plotPrice(y, plot.plot) })
-    );
+    const plot = toBuy(this.y, raws)[0];
+    return plot !== undefined && this.cmd({ do: "buyPlot", plot: F.plotName(plot), price: F.plotPrice(this.y, plot) });
   }
 
   // ---------- belts and power ----------
