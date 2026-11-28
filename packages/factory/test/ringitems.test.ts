@@ -10,6 +10,9 @@ import { expect, test } from "bun:test";
 import * as F from "../src/index.ts";
 import { randomRing } from "./randomring.ts";
 
+/** How many rings are built: among them some where a holder, tried after what hands to it, would hand on what it was just handed. */
+const SEEDS = 300;
+
 /** Where a thing is: the tile it is on or in, or under the ground, -1 less its row (`Tunnels.under`). */
 type Place = number;
 
@@ -68,7 +71,7 @@ function onFrom(y: F.Yard, p: Place): Place[] {
 
 test("on rings built at random, each thing, followed by itself, moves at most one way on a tick, and none is made or lost", () => {
   const seen: string[] = [];
-  for (let seed = 1; seed <= 40; seed++) {
+  for (let seed = 1; seed <= SEEDS; seed++) {
     const { y } = randomRing(seed);
     oneOfEach(y);
     let was = places(y);
@@ -88,5 +91,5 @@ test("on rings built at random, each thing, followed by itself, moves at most on
     }
     seen.push(`${seed}: ${twice} ${was.size === things} ${moved > 0}`);
   }
-  expect(seen).toEqual(Array.from({ length: 40 }, (_, k) => `${k + 1}: 0 true true`));
-});
+  expect(seen).toEqual(Array.from({ length: SEEDS }, (_, k) => `${k + 1}: 0 true true`));
+}, 30_000);
