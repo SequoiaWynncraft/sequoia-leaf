@@ -36,7 +36,7 @@ kit's card: "The table needs the guild's server."
   pose of their own to use an ability, and tip over.
 - **Planning.** A figure may be dragged (mouse or finger) from the stall to the bench or the board,
   about the board and bench, onto another to change places, and onto the stall to sell it; the
-  stall says what it would pay. With a Greg in the party, a figure carried from the bench finds the
+  cards say what it would pay, and the level and the acorns stay in view. With a Greg in the party, a figure carried from the bench finds the
   stall split in two: "Sell for +2" and beside it "Feed Greg +6%" (what that figure would add, said
   before it is let go; "Greg is full", and no target, at 40%). Let go there, it hops into Greg, he
   gulps and his number rises over him, and what it held flies to the rack (`ui/feedtarget.ts`); a
@@ -82,9 +82,18 @@ kit's card: "The table needs the guild's server."
   that into the trait that is lit.
 - **Three become one.** The two that go hop onto the one that stays, it flashes, its new star pops
   with a ring and a run of notes; three stars is a larger ring, more sparks and a bell.
-- **Acorns.** The purse shows the number and a row of piles, one for every ten held, lit as they
-  fill, with what they will pay next room. Experience is a bar under the level. Rustle (free once a
-  room), hold the stall, level up, set out.
+- **The stall** is laid out after the genre's: the level (its bar, how many are fielded, the odds),
+  Reroll (free once a room) and Buy XP stacked at the left, five cards, Hold over Set out at the
+  right, and the acorns on a plaque over the cards: the number, a row of piles, one for every ten
+  held, lit as they fill, and what they will pay next room. A phone has the cards along the top, the
+  level and Hold under them, then Reroll, Buy XP and Set out. A card wears the frame of its cost's
+  tier (the kit's `k-tier-N`), its figure's traits listed on the art, how many the party has, the
+  cost on a tab standing on the foot, and the name along the foot; every word sits 3 units inside the
+  frame on a backing of the foot's tone. Where five cards are too narrow for a name of eight letters
+  in the name face (a phone, a narrow window), they are small: a thin frame, the traits by their
+  signs (on a phone in one row along the top, the count at its right, so the figure stays clear),
+  the name in the small face. Every part has a fixed size, so nothing moves as what it says
+  changes; a name too long for its foot is cut short, and its card says it whole.
 - **Items.** Components, finished items and emblems sit on a rack. An emblem (what a charm boon
   gives) is drawn as its origin's sign; its card says its name, that its holder is of that origin
   too, and the origin as a chip, and a figure holding one has it among its chips and lights with it.
@@ -494,6 +503,17 @@ trait's card, items, a boon pick. `review/trait-hover.json` points at a trait's 
 moments a card used to go missing (a click on the chip, the stall changing size, the strip drawn
 again under the pointer, just after a drag, the first room with a nudge up) and prints whether the
 card is up after each.
+
+`review/stallfit.ts` is the stall's fit check (`review/fit.ts`, `window.fit`): at 1280x760 and
+390x844 it puts every figure of every era's catalogue on the stall, owned and not, its level shown
+and not, held and not, the members' figures under their own names and the longest a member can
+have, and fails on a word or a tab within the frame's inset or over another, a trait's name in any
+face but the small one, a sign larger than its line, a name cut short whose card does not say it, or
+a card off the pixel grid. Run it by hand (it needs Chromium) before a change to the stall's cards:
+
+```sh
+bun review/stallfit.ts <out-dir>          # or desktop, phone
+```
 
 `review/steady.ts` is the steadiness check, and fails on anything that moves by itself:
 

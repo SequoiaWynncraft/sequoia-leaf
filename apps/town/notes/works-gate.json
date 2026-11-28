@@ -1,0 +1,57 @@
+{
+  "id": "works-gate",
+  "at": "2026-11-23T17:52Z",
+  "title": "The Works: tier 4",
+  "lines": [
+    "After the lanterns comes tier 4, The gate, and Windfall Hollow, the Far Seam and the Millpond go up for sale.",
+    "Its flags let a splitter put one way first, and up to 3 projects can wait in line after the one in hand."
+  ],
+  "more": [
+    {
+      "head": "Tier 4 projects, in any order",
+      "points": [
+        "Flags for the splitters: 200 tools and 200 frames. A splitter can put one of its ways first.",
+        "A longer culvert: 300 bricks and 200 gears. A tunnel runs under up to 5 tiles.",
+        "A second cart: 120 engines and 200 frames, after the cart track. 2 cart stops.",
+        "Brass fittings for the belts: 150 lanterns and 300 gears. Grade III belts, tunnels and gatherers.",
+        "Shelves for the plan chest: 300 frames and 200 glass, after the plan chest. 4 blueprints of up to 1,000 pieces."
+      ]
+    },
+    {
+      "head": "The commission",
+      "points": [
+        "Raid kits for the gate: 300 raid kits and 150 engines. It pays 8,000 Coins, stacks raid kits by the town's gate and opens tier 5, where more is being built."
+      ]
+    },
+    {
+      "head": "Tier 4 research, in Brass folios",
+      "points": [
+        "Third-tier machines: 300. Grade III mills, benches and workshops.",
+        "A heavier flywheel: 200. The depot makes 60 power, up from 40.",
+        "A second night shift: 250. Your yard runs for 16 hours after you leave, up from 12.",
+        "A second desk: 200. Grade II Studies."
+      ]
+    },
+    {
+      "head": "A way put first",
+      "points": [
+        "With the flags, pressing a way on a splitter's card goes Open, First, Shut. Only one way is first.",
+        "Things go the first way while it can take them. Only what it cannot take is shared among the other open ways.",
+        "In the yard, a small flag marks the way that is first."
+      ]
+    },
+    {
+      "head": "Projects in a line",
+      "points": [
+        "On the tier's screen, Next puts a project in the line, up to 3, and Take out takes it out again.",
+        "When the project in hand is finished, the first in the line that can be taken goes into hand. Under the project in hand, Then says which comes next."
+      ]
+    },
+    {
+      "head": "Also",
+      "points": [
+        "Back after time away, the letter names the projects, commissions and research finished while you were gone."
+      ]
+    }
+  ]
+}

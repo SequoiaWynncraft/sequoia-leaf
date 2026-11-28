@@ -1,0 +1,13 @@
+{
+  "GET /v1/game/hello": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/hello"
+    },
+    "status": 200,
+    "body": {
+      "sign_in": "https://api.seqwawa.com/auth/web/start?return_to=",
+      "leaf_spending": true
+    }
+  }
+}

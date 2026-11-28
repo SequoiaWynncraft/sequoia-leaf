@@ -1,0 +1,16 @@
+{
+  "id": "works-steady-2",
+  "at": "2026-11-24T00:51Z",
+  "title": "The Works: more fixes",
+  "lines": ["A few more fixes in the Works."],
+  "more": [
+    {
+      "head": "Fixed",
+      "points": [
+        "Taking up a tool closes the card you had pinned, and taking away a piece closes its card.",
+        "Undo pressed straight after building waits for the guild's server, then undoes it.",
+        "While the view moves, no card comes up for what passes under the mouse, and a piece in hand stays under the mouse."
+      ]
+    }
+  ]
+}

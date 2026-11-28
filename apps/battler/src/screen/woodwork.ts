@@ -9,6 +9,7 @@ import { R } from "@sequoia-leaf/kit/pix.ts";
 import type { Ctx } from "@sequoia-leaf/kit/util.ts";
 import type { Fight, Suit } from "@sequoia-leaf/raid";
 
+import { BOARD } from "./art/board.ts";
 import { clockNow, fightNow } from "./board.ts";
 import type { Pt } from "./geometry.ts";
 import { V } from "./stage.ts";
@@ -57,16 +58,14 @@ export function ringOut(at: Pt): void {
 /** A card of Ace's stuck in a hex, its suit up, for two seconds. */
 export const stick = (at: Pt, suit: Suit): void => leave("card", at, 1, suit);
 
-/** A drum's ring in the wood, the `n`th out: darker grain in the board's slant. */
+/** A drum's ring in the wood, the `n`th out: in the board's slant, the tone of the stump's own rings. */
 function ring(g: Ctx, x: number, y: number, n: number): void {
   const r = 10 + n * 2;
   const steps = Math.max(12, r * 5);
-  g.globalAlpha = 0.7;
   for (let i = 0; i < steps; i++) {
     const t = (i / steps) * Math.PI * 2;
-    R(g, Math.round(x + Math.cos(t) * r), Math.round(y + Math.sin(t) * r * 0.5), 1, 1, n % 2 === 0 ? INK : BARK[0]);
+    R(g, Math.round(x + Math.cos(t) * r), Math.round(y + Math.sin(t) * r * 0.5), 1, 1, BOARD.ring);
   }
-  g.globalAlpha = 1;
 }
 
 /** The pip of each suit, two pixels square, on a card: hearts and diamonds coral, spades and clubs ink. */

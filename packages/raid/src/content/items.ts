@@ -15,7 +15,7 @@
 import type { Catalog } from "./catalog.ts";
 import { isFigureId, traitsOf, type UnitKind } from "./figures.ts";
 import { opened } from "./patch.ts";
-import { type TraitId, traitIn } from "./traits.ts";
+import { type TraitId, traitIn, withA } from "./traits.ts";
 
 /** The five plain components, and the Carving Knife (Penguin Month), which turns up only after a boss (`turnsUp`). */
 export const COMPONENT_IDS = ["thorn", "plume", "glowcap", "bark", "chestnut", "knife"] as const;
@@ -74,6 +74,7 @@ export const EMBLEM_IDS = [
   "woodenbuckler",
   "woodenspoon",
   "canopycharm",
+  "lhzcharm",
 ] as const;
 export type EmblemId = (typeof EMBLEM_IDS)[number];
 export type ItemId = ComponentId | FinishedId | EmblemId;
@@ -296,8 +297,7 @@ export function emblemTrait(cat: Catalog, id: EmblemId): TraitId {
 
 /** A trait's name with "a" or "an" before it: "a Crab", "an Ember". */
 function aTrait(cat: Catalog, trait: TraitId): string {
-  const { name } = traitIn(cat, trait);
-  return `${/^[AEIOU]/.test(name) ? "an" : "a"} ${name}`;
+  return withA(traitIn(cat, trait).name);
 }
 
 /** The traits a figure carries: its own, then the trait each item it holds grants. Nobody else carries any. */

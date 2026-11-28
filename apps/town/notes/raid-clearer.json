@@ -1,0 +1,25 @@
+{
+  "id": "raid-clearer",
+  "at": "2026-11-24T03:35Z",
+  "title": "The Little Raid: a clearer table",
+  "lines": ["The stall, the traits and the cards at the stump say more plainly what they do."],
+  "more": [
+    {
+      "head": "At the stall",
+      "points": [
+        "The level-up button is now Buy XP: it buys 4 XP, which is not always a level.",
+        "The level box shows the stall's odds at your level.",
+        "A trait that is not on yet looks dimmer than one that is."
+      ]
+    },
+    {
+      "head": "Also",
+      "points": [
+        "A pick has a Hide button, to look at the table before choosing.",
+        "On a phone every trait is in view at once, and the buttons are bigger.",
+        "A room's card says what it gives, won or lost, and a run that runs out of health says so.",
+        "The buttons at the table have names for screen readers, the keyboard reaches them, and Escape closes a page."
+      ]
+    }
+  ]
+}

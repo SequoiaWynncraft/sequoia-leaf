@@ -2,6 +2,7 @@ import { afterEach, describe, expect, jest, test } from "bun:test";
 
 import { rulesVersions } from "@sequoia-leaf/core/build/rules.ts";
 
+import { gameContract } from "../../../contracts/game.ts";
 import { isRecord } from "./net.ts";
 import {
   type Answer,
@@ -20,7 +21,7 @@ import { balance, forgetLedger } from "./purse.ts";
 import { type Reply, type Route, type Sent, type Standin, standin } from "./standin.ts";
 
 /** What Leaf's game routes really answer, from the contract its own tests write. */
-const GAME: unknown = await Bun.file(new URL("../../../contracts/leaf-game-v1.json", import.meta.url)).json();
+const GAME: unknown = gameContract();
 const contract = (name: string): unknown => {
   const exchange = isRecord(GAME) ? GAME[name] : null;
   return isRecord(exchange) ? exchange.body : null;

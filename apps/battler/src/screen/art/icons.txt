@@ -239,6 +239,18 @@ nnNnnnnNn
 ....rr...
 ....NN...
 
+# LHZ: an honorary badge, gold round blue, with a plate where its number would be.
+trait lhz
+y..yyy..y
+yyyiiiyyy
+yiiiiiiIy
+yiiwwwiIy
+yiiwwwiIy
+yiiiiiiIy
+.yiiiiIy.
+..yiiIy..
+...yyy...
+
 # Crafter: a pickaxe, its handle bound in gold.
 trait crafter
 ..tSSSt..

@@ -7,6 +7,7 @@ import { type Reply, type Route, type Standin, standin } from "@sequoia-leaf/kit
 import { TOWN, type Town, type TownCommand, type TownNote, visitView } from "@sequoia-leaf/town";
 import { COSY, freeSpot, type PetId } from "@sequoia-leaf/town/camp.ts";
 
+import { gameContract } from "../../../contracts/game.ts";
 import { GAMES, worksWaiting } from "./games.ts";
 import {
   ask,
@@ -46,7 +47,7 @@ const come = (kind: PetId) =>
   makePet(kind, { sit: [], walk: [], walkR: [], sleep: null, glad: null }, { x: 100, y: 100 });
 
 /** What Leaf sends a visitor of Alice's camp, as recorded from the real routes. */
-const GAME: unknown = await Bun.file(new URL("../../../contracts/leaf-game-v1.json", import.meta.url)).json();
+const GAME: unknown = gameContract();
 const aliceCamp = isRecord(GAME) ? GAME["GET /v1/game/play/{game}/of/{player}, a camp"] : undefined;
 
 let world: Standin | null = null;

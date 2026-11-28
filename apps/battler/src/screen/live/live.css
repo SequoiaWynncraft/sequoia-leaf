@@ -20,8 +20,9 @@ body[data-live] #setout {
 }
 body[data-live] #plan {
   grid-template-areas:
-    "rustle stall acorns levelup"
-    "hold stall level ready";
+    "level stall hold"
+    "rustle stall ready"
+    "levelup stall ready";
 }
 /* Ready takes Set out's place, and keeps it outside planning so that nothing moves. */
 #live-ready {
@@ -437,7 +438,7 @@ body[data-live] #live-say:not([hidden]) {
   body[data-live] #plan {
     grid-template-areas:
       "stall stall stall stall"
-      "acorns acorns level hold"
+      "level level level hold"
       "rustle levelup ready ready";
   }
   body[data-live] #live-ready {

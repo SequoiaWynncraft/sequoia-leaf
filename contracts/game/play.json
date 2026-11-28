@@ -1,0 +1,13 @@
+{
+  "GET /v1/game/play/{game}, not a game": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/play/chess"
+    },
+    "status": 404,
+    "body": {
+      "code": "no_such_game",
+      "message": "Leaf does not play that game"
+    }
+  }
+}

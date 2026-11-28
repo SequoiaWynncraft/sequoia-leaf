@@ -129,11 +129,20 @@ export const sieve: KindPage = {
 };
 `;
 
-/** The tracked files of the repository, the packages and the Works' page, copied to a new folder, with each workspace's links to the others as they are and the installed packages shared. */
+/** The tracked files of the repository, the packages, the Works' page and the game's contract its tests read, copied to a new folder, with each workspace's links to the others as they are and the installed packages shared. */
 function copy(): string {
   const to = mkdtempSync(join(tmpdir(), "works-kind-"));
   const listed = Bun.spawnSync(
-    ["git", "ls-files", "packages", "apps/works", "package.json", "tsconfig.base.json", "bunfig.toml"],
+    [
+      "git",
+      "ls-files",
+      "packages",
+      "apps/works",
+      "contracts/game.ts",
+      "package.json",
+      "tsconfig.base.json",
+      "bunfig.toml",
+    ],
     {
       cwd: root,
     },

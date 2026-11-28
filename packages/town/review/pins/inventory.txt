@@ -1,0 +1,8 @@
+town 1 stored/town-v1-new.json
+town_crab 1 stored/town_crab-v1-played.json
+town_bought 1 stored/town_bought-v1-played.json
+town_pet 1 stored/town_pet-v1-played.json
+town 1 stored/town-v1-caller.json
+town_greeted 1 stored/town_greeted-v1-played.json
+town 1 stored/town-v1-played.json
+standing 1 stored/standing-v1-played.json

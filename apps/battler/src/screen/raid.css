@@ -438,24 +438,37 @@ body.rack-open #rack .made .item {
   min-height: calc(var(--t-m) * 1.2 * 2 + var(--u) * 4);
   box-sizing: border-box;
 }
+/*
+ * The stall laid out after TFT's: the level, Reroll and Buy XP stacked on the left, five cards, Hold
+ * over Set out on the right, and the acorns on a plaque over the cards (`#acorns`). Every column and
+ * the cards' height are fixed, so nothing takes its size from what it holds: the table fitted above
+ * the panel never moves (`layout` in stage.ts), and the stall never slides as a button's words change.
+ */
+/* Its top margin is the plaque's room: the plaque is inside `#bottom`, and the table keeps clear of it. */
 #shop {
   position: relative;
+  margin-top: calc(var(--u) * 9);
 }
-/*
- * One size whatever it holds: each column as wide as its widest face ("Reroll Free x2", a purse of
- * 100) and the stall alone setting the height, so that the table fitted above it never moves
- * (`layout` in stage.ts) and the stall never slides as a button's words change.
- */
+/* Where the panel's frame is thin (`frames.css`), the plaque stands two units higher over its edge. */
+@media (max-height: 500px) {
+  #shop {
+    margin-top: calc(var(--u) * 11);
+  }
+}
 #plan {
+  /* How tall a card is: large ones are 84 units tall wherever they are (`.offer`). */
+  --card-h: calc(var(--u) * 84);
   display: grid;
-  grid-template-columns: calc(var(--u) * 96) minmax(0, 1fr) calc(var(--u) * 66) calc(var(--u) * 95);
+  grid-template-columns: calc(var(--u) * 96) minmax(0, 1fr) calc(var(--u) * 62);
+  grid-template-rows: minmax(0, 1fr) calc(var(--u) * 17) calc(var(--u) * 17);
   grid-template-areas:
-    "rustle stall acorns levelup"
-    "hold stall level setout";
+    "level stall hold"
+    "rustle stall setout"
+    "levelup stall setout";
   gap: calc(var(--u) * 2) calc(var(--u) * 3);
   padding: calc(var(--u) * 2);
 }
-#plan > :not(#stall) {
+#plan > :not(#stall, #acorns) {
   contain: size;
   overflow: hidden;
 }
@@ -470,122 +483,224 @@ body.rack-open #rack .made .item {
 }
 #setout {
   grid-area: setout;
-  min-width: calc(var(--u) * 62);
+}
+#rustle,
+#levelup {
+  justify-content: space-between;
+  padding-inline: calc(var(--u) * 5);
 }
 #plan > .k-btn {
   min-height: 0;
   height: auto;
 }
+/*
+ * Five cards of whole pixels, so every line of their frames falls on a pixel; what is over goes to the
+ * right. The stall is the cards' container: its width picks the cards' look (below), in ems of the
+ * name face, which every measure of a card follows at either unit.
+ */
 #stall {
+  --gap: calc(var(--u) * 2);
+  container: stall / inline-size;
   grid-area: stall;
   display: grid;
-  grid-template-columns: repeat(var(--n, 5), minmax(0, 1fr));
-  gap: calc(var(--u) * 2);
+  grid-template-columns: repeat(
+    var(--n, 5),
+    round(down, calc((100% - (var(--n, 5) - 1) * var(--gap)) / var(--n, 5)), 1px)
+  );
+  gap: var(--gap);
+  font: var(--f-name);
 }
+
+/*
+ * A card: its cost's frame (the kit's `k-tier-N`), the art with the figure's traits on it, how many
+ * the party has, the cost on a tab standing on the foot, and the name along the foot. Nothing touches
+ * the frame: every word and tab sits `--in` inside its inner edge, on a backing in the foot's tone so
+ * it reads over any picture. A name too long for the foot is cut short; its card says it whole.
+ *
+ * Two looks. Small, a phone's and a narrow window's: the thin frame, the traits by their signs, the
+ * name in the small face, the figure at the layout's size. Large, where five cards are wide enough for a name of eight letters in the
+ * name face: the full frame, each trait's sign and name, the name in the name face.
+ */
 .offer {
-  position: relative;
+  --in: calc(var(--u) * 3);
+  --foot: color-mix(in srgb, var(--k-tier) 34%, var(--k-deep));
+  display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: var(--u);
-  padding: calc(var(--u) * 3) calc(var(--u) * 2) calc(var(--u) * 2);
-  min-height: calc(var(--u) * 60);
-  text-align: center;
+  min-width: 0;
+  height: var(--card-h);
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
   touch-action: none;
 }
+#stall > .offer {
+  --k-fw: 3;
+  --k-f: var(--k-f-thin);
+}
+button.offer:hover {
+  filter: brightness(1.2);
+}
+body:is(.selling, .melting) button.offer:hover {
+  filter: none;
+}
+button.offer:active {
+  transform: translateY(var(--u));
+}
 .offer .art {
-  height: calc(var(--u) * 17 * var(--fs));
+  position: relative;
+  flex: 1;
+  min-height: 0;
   display: grid;
   place-items: end center;
-}
-.offer .art canvas {
-  align-self: end;
-}
-/* Two lines of the usual size, whatever the name: one too long for that is small (fitNames), in the same room. */
-.offer .name {
-  height: calc(var(--t-m) * 2);
-  line-height: 1;
-  display: grid;
-  place-items: center;
-  max-width: 100%;
+  padding-left: calc(var(--u) * 5);
   overflow: hidden;
 }
-.offer .name.small {
-  font: var(--f-small);
-  /* A member's name may be one long word: it goes onto the next line there. */
-  overflow-wrap: anywhere;
+.offer .art > canvas {
+  align-self: end;
 }
-/* The price over the trait signs, from the left, in a room of one height whether a figure has one trait or three. */
-.offer .foot {
+.offer .traits {
+  position: absolute;
+  z-index: 1;
+  left: var(--in);
+  top: var(--in);
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: var(--u);
-  width: 100%;
-  height: calc(var(--u) * 26);
-  margin-top: auto;
-  overflow: hidden;
 }
-.offer .signs {
+.offer .tr,
+.offer .have,
+.offer .tab {
+  background: var(--foot);
+  white-space: nowrap;
+}
+/* A trait's line is one height whatever its sign (they are 11 pixels at most), so the lines under it never move. */
+.offer .tr {
   display: flex;
-  gap: var(--u);
+  align-items: center;
+  box-sizing: border-box;
+  height: calc(var(--u) * 11);
+  gap: calc(var(--u) * 2);
+  font: var(--f-small);
+}
+/* Its sign from the line's top, so a sign a pixel shorter than another stands where it did. */
+.offer .tr > canvas {
+  align-self: flex-start;
+}
+.offer .tn {
+  display: none;
+  padding-right: var(--u);
+}
+.offer .have {
+  position: absolute;
+  z-index: 1;
+  top: var(--in);
+  right: var(--in);
+  padding: var(--u) calc(var(--u) * 2);
+  font: var(--f-small);
+  color: var(--k-dim);
+}
+.offer .have.ready {
+  color: var(--k-gold-lt);
+  animation: bob 0.6s steps(2) infinite;
+}
+/* A tab standing on the foot, of its tone: the cost at the right (its number alone, small), a figure's level at the left. */
+.offer .tab {
+  position: absolute;
+  z-index: 1;
+  bottom: 0;
+  display: inline-flex;
+  align-items: center;
+  padding: var(--u) calc(var(--u) * 2) 0;
+}
+.offer .cost {
+  right: var(--in);
+  gap: calc(var(--u) * 2);
+  font: var(--f-small);
+}
+.offer .cost > .k-i {
+  display: none;
+}
+.offer .lv {
+  left: var(--in);
+  font: var(--f-small);
 }
 .offer .cut {
   color: var(--k-leaf);
 }
-.offer::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  height: calc(var(--u) * 2);
-  background: var(--tier, #888788);
+.offer .foot {
+  flex: none;
+  box-sizing: border-box;
+  height: calc(var(--u) * 9);
+  padding: var(--u) var(--in) var(--in);
+  background: var(--foot);
 }
-.offer.t2 {
-  --tier: #62a658;
+.offer .name {
+  display: block;
+  font: var(--f-small);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.offer.t3 {
-  --tier: #4a86a6;
+@container stall (width >= 35.3em) {
+  #stall > .offer {
+    --k-fw: 5;
+    --k-f: var(--k-f-thick);
+    --fs: 2;
+    --card-h: calc(var(--u) * 84);
+  }
+  .offer .art {
+    padding-left: calc(var(--u) * 12);
+  }
+  .offer .tr {
+    height: calc(var(--u) * 13);
+    padding: var(--u);
+  }
+  .offer .tn {
+    display: inline;
+  }
+  .offer :is(.cost, .have) {
+    font: var(--f-name);
+  }
+  .offer .cost > .k-i {
+    display: inline-block;
+  }
+  .offer .foot {
+    height: calc(var(--u) * 14);
+  }
+  .offer .name {
+    font: var(--f-name);
+  }
 }
-.offer.t4 {
-  --tier: #b84d84;
+/* Every word on a card one line of its face tall, whichever face the look gives it (after them all: `font` sets the line too). */
+.offer :is(.tr, .have, .tab, .name) {
+  line-height: 1;
 }
-.offer.t5 {
-  --tier: #f5b95e;
+.offer.lit {
+  box-shadow: 0 0 0 var(--u) var(--k-gold-lt);
 }
 .offer.cant {
   filter: saturate(0.45) brightness(0.72);
 }
+/* An empty place: a hollow the size of a card. */
 .offer.gone {
+  height: var(--card-h);
   opacity: 0.35;
-}
-.offer.gone::before {
-  display: none;
-}
-.offer .have {
-  position: absolute;
-  top: calc(var(--u) * 3);
-  right: calc(var(--u) * 2);
-  font: var(--f-name);
-  color: var(--k-dim);
 }
 /* A figure's level: a small tag in Leaf's green, on the stall, a card, the almanac and a party's row. Never a star. */
 .lv {
   font: var(--f-small);
   white-space: nowrap;
 }
-.offer .lv,
 .tile .lv {
   position: absolute;
   top: calc(var(--u) * 3);
   left: calc(var(--u) * 2);
 }
-.offer .have.ready {
-  color: var(--k-gold-lt);
-  animation: bob 0.6s steps(2) infinite;
-}
-#acorns,
 #level {
+  grid-area: level;
   border: 0;
   color: inherit;
   display: flex;
@@ -593,17 +708,44 @@ body.rack-open #rack .made .item {
   align-items: center;
   justify-content: center;
   gap: var(--u);
-  /* As wide as the purse and the odds usually need, so the stall beside them keeps its width as they change. */
-  min-width: calc(var(--u) * 66);
+  min-width: 0;
   padding: var(--u) calc(var(--u) * 3);
   background: var(--k-deep);
   box-shadow: 0 0 0 var(--u) var(--k-ink);
 }
+/*
+ * The acorns on a plaque on the panel's top edge, over the middle of the stall (the left column is 34
+ * units wider than the right): the count, the piles, what the next room pays. One width whatever it
+ * says, so it never slides.
+ */
 #acorns {
-  grid-area: acorns;
+  position: absolute;
+  z-index: 2;
+  left: calc(50% + var(--u) * 17);
+  translate: -50% 0;
+  /* Its foot and its shadow (2 units) end where the cards begin, the panel's padding (2 units) under its edge. */
+  top: calc(var(--u) * -15);
+  box-sizing: border-box;
+  /* The count and the streak's room (52), the piles (28), what the next room pays (50), with their gaps and the frame. */
+  width: calc(var(--u) * 152);
+  height: calc(var(--u) * 15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 5);
+  padding: 0 calc(var(--u) * 2);
+  color: inherit;
+  background: none;
+  border: calc(var(--u) * 4) solid transparent;
+  border-image: var(--k-f-plaque) 5 5 7 fill / calc(var(--u) * 5) calc(var(--u) * 5) calc(var(--u) * 7) / 0 0
+    calc(var(--u) * 2) stretch;
+  white-space: nowrap;
 }
-#level {
-  grid-area: level;
+#acorns .k-cur.big {
+  font: var(--f-name);
+}
+#acorns .interest {
+  width: calc(var(--u) * 50);
 }
 /* The level, under it its bar with how far along it is beside it, then how many are fielded. */
 #level {
@@ -924,13 +1066,14 @@ body[data-picking="yes"] #plan {
   pointer-events: none;
 }
 /* While Leaf answers a rustle, a pick, setting out or the takings, the stall and its buttons do nothing, and look it after a moment. */
-body[data-busy="yes"] #plan > :not(#acorns, #level) {
+body[data-busy="yes"] #plan > :not(#acorns, #level, #sellhint) {
   opacity: 0.45;
   transition: opacity 0s 0.15s;
 }
+/* Over the stall's cards, in their place in the grid; letting go anywhere over the panel sells all the same (`hand.ts`). */
 #sellhint {
-  position: absolute;
-  inset: 0;
+  grid-area: stall;
+  z-index: 3;
   display: none;
   place-items: center;
   place-content: center;
@@ -1701,24 +1844,6 @@ body[data-rule] #says {
   flex: 1;
 }
 
-/* A stall too narrow for five large pictures and names shows both small, each inside its own card. */
-@media (max-width: 1180px) {
-  .offer {
-    --fs: 1;
-  }
-  .offer .name {
-    font: var(--f-small);
-    overflow-wrap: anywhere;
-  }
-}
-/* Narrower still, but not a phone (whose cards the pictures fit): a picture is cut at its card's edge and never lies over the next offer. */
-@media (min-width: 621px) and (max-width: 1180px) {
-  .offer .art {
-    width: 100%;
-    overflow: hidden;
-  }
-}
-
 /*
  * A window too narrow (not a phone) for the top bar with Last fight's words: its picture alone, its
  * words for a screen reader, so the bar has room for it and the health and the corner never slide.
@@ -1796,49 +1921,71 @@ body[data-rule] #says {
  */
 @media (max-aspect-ratio: 4/5), (max-width: 959px) {
   #plan {
+    /* A card: the row of trait signs, the figure clear under it, and the level's and the cost's tabs: 60 units. */
+    --card-h: calc(var(--u) * 60);
     grid-template-columns: 1fr 1fr 1fr calc(var(--u) * 20);
-    grid-template-rows: auto calc(var(--u) * 27) calc(var(--u) * 20);
+    grid-template-rows: auto calc(var(--u) * 20) calc(var(--u) * 20);
     grid-template-areas:
       "stall stall stall stall"
-      "acorns level level hold"
+      "level level level hold"
       "rustle levelup setout setout";
     gap: calc(var(--u) * 2);
     padding: var(--u);
   }
   #stall {
-    gap: var(--u);
+    --gap: var(--u);
   }
+  /* A small card here is a phone's: its figure one unit to a pixel. */
   .offer {
-    padding: calc(var(--u) * 3) var(--u) var(--u);
+    --fs: 1;
+    --half: calc(var(--u) / 2);
   }
-  /* Five to a row: a name is small here, where the usual size cannot fit. */
-  .offer .name {
-    font: var(--f-small);
-    height: calc(var(--t-s) * 2.4);
-    overflow-wrap: anywhere;
+  /*
+   * Its art kept clear: the trait signs in one row along its top, a CSS pixel to each of theirs (half
+   * the unit, so three and the count fit a phone's card), the count at the row's right, neither on a
+   * backing; the signs' own ink edge parts them from the picture.
+   */
+  @container stall (width < 35.3em) {
+    .offer .traits {
+      --u: var(--half);
+      flex-direction: row;
+    }
+    .offer :is(.tr, .have) {
+      padding: 0;
+      background: none;
+    }
   }
-  #acorns,
+  /* The plaque over the middle of the cards, which are the panel's whole width; without what the next room pays. */
+  #shop {
+    margin-top: calc(var(--u) * 12);
+  }
+  #acorns {
+    left: 50%;
+    top: calc(var(--u) * -16);
+    width: calc(var(--u) * 97);
+  }
+  #acorns .interest {
+    display: none;
+  }
   #level {
     display: flex;
     flex-direction: row;
     flex-wrap: wrap;
-    min-width: 0;
     gap: var(--u) calc(var(--u) * 3);
   }
   #level .k-bar {
     width: calc(var(--u) * 24);
   }
   #level .fielded,
-  #level .odds,
-  #acorns .interest {
+  #level .odds {
     display: none;
   }
   #plan > .k-btn {
     min-height: calc(var(--u) * 20);
     padding-inline: calc(var(--u) * 2);
   }
-  #setout {
-    min-width: 0;
+  #plan > :is(#rustle, #levelup) {
+    justify-content: center;
   }
   #plan .wide-only {
     display: none;
@@ -1847,7 +1994,7 @@ body[data-rule] #says {
   body[data-live] #shop > #plan {
     grid-template-areas:
       "stall stall stall stall"
-      "acorns level level hold"
+      "level level level hold"
       "rustle levelup levelup levelup";
   }
 }

@@ -1,0 +1,9 @@
+{
+  "id": "raid-fight-behaviour",
+  "at": "2026-11-26T20:45Z",
+  "title": "Ranged figures stay back",
+  "lines": [
+    "In The Little Raid, figures that reached 3 hexes now reach 4 (the Reed Heron 5), so from your back row they hit the enemy's front row without walking up. Each card says the row a figure reaches from; the Apothecary Gnome reaches 2, from the second row.",
+    "A figure no longer walks past an enemy it can hit, and one that has to walk stops on the hex furthest from other enemies. Ranged and Caster figures that reach 4 or 5 have 8% less health."
+  ]
+}

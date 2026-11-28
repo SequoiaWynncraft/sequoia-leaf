@@ -5,6 +5,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./page-errors.ts": "./src/page-errors.ts",
+    "./review/*": "./review/*",
     "./build/rules.ts": {
       "types": "./build/rules.d.ts",
       "default": "./build/rules.ts"

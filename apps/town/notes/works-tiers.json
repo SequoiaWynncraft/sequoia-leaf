@@ -1,0 +1,42 @@
+{
+  "id": "works-tiers",
+  "at": "2026-11-23T16:05Z",
+  "title": "The Works, in tiers",
+  "lines": [
+    "The Works is played in tiers now. Each has projects, done in any order, and a commission that opens the next; from tier 3, a Study turns folios into research.",
+    "Your yard from before is at tier 0, 1 or 2, with its pieces where they stood. What its tier cannot have yet was paid back in Coins."
+  ],
+  "more": [
+    {
+      "head": "Tiers",
+      "points": [
+        "Tier 0, The lesson, is 4 short goals. Then come The home yard, The stream and The Study.",
+        "A project or a commission is paid in goods from the depot. Each unlocks something, and its card says what.",
+        "A commission opens the next tier and leaves something in town."
+      ]
+    },
+    {
+      "head": "Grades",
+      "points": [
+        "Belts, tunnels, gatherers and machines can be built at grade II and III, which work faster. A piece is upgraded where it stands."
+      ]
+    },
+    {
+      "head": "Research",
+      "points": [
+        "Tier 2's commission builds the scholars' hall. After it, your yard can make Timber folios and build Studies.",
+        "A Study takes in folios and studies one piece of research at a time. Up to 3 more wait in line.",
+        "Studies keep studying while you are away, as long as your yard runs."
+      ]
+    },
+    {
+      "head": "Your yard from before",
+      "points": [
+        "It is at tier 2 if it had filled 10 or more of the 20 story orders, tier 1 from 4, and tier 0 below that.",
+        "Pieces stand where they stood if your tier has them. A project of your tier is done if it unlocks a piece you already had.",
+        "Pieces your tier does not have yet, and land it does not sell yet, were paid back in Coins. Your Coins and your place on Top yards are kept.",
+        "Windfall Hollow, the Far Seam and the Millpond are sold again from tier 4."
+      ]
+    }
+  ]
+}

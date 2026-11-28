@@ -1,0 +1,9 @@
+{
+  "id": "fire-seen",
+  "at": "2026-11-22T19:54Z",
+  "title": "The campfire is shared",
+  "lines": [
+    "At the campfire, Add a log and the emotes are now seen by everyone in town, not only on your own screen.",
+    "Holding Space no longer saves up hops: a key held down is one press."
+  ]
+}

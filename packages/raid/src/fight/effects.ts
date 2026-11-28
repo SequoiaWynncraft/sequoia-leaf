@@ -19,6 +19,7 @@ import {
   freeNear,
   gainMana,
   getUp,
+  giveMana,
   heal,
   hurt,
   later,
@@ -164,6 +165,14 @@ const TRAITS: Readonly<Record<TraitId, Hooks>> = {
   },
   // Up the tree as the fight opens, then down with a shield and mana (`upTheTree`).
   canopy: { seated: upTheTree },
+  // More mana at the start; at the second step, each one's cast feeds every other's, by the gift's cap.
+  lhz: {
+    on: each((u, v) => gainMana(u, v("mana"))),
+    casts: (f, u, { members, v }) => {
+      const gift = v("gift");
+      if (gift > 0) for (const to of members) if (to.id !== u.id && to.alive) giveMana(f, to, gift, u);
+    },
+  },
   gnome: {
     on: each((u, v) => {
       u.maxHp = Math.round(u.maxHp * (1 + v("health") / 100));

@@ -1,0 +1,15 @@
+{
+  "id": "keyboards",
+  "at": "2026-11-24T18:30Z",
+  "title": "Choose your keyboard",
+  "lines": [
+    "Choose your keyboard in Settings, under Keys: QWERTY, QWERTZ, AZERTY, Dvorak, Colemak, Colemak-DH or Workman.",
+    "Each key does the same thing in the same place on every keyboard (on AZERTY you walk with Z, Q, S and D), and the game shows it as your keyboard prints it."
+  ],
+  "more": [
+    {
+      "head": "In the Works",
+      "points": ["Shift and = zooms in, as + on the number pad does. = alone picks the 12th tool."]
+    }
+  ]
+}

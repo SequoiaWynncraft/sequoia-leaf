@@ -1,10 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
+import { gameContract } from "../../../contracts/game.ts";
 import { isRecord } from "./net.ts";
 import { type GameStats, numbersOf, readBoard, readPerson } from "./person.ts";
 
 /** What Leaf's game routes really answer, from the contract its own tests write. */
-const GAME: unknown = await Bun.file(new URL("../../../contracts/leaf-game-v1.json", import.meta.url)).json();
+const GAME: unknown = gameContract();
 const answer =
   isRecord(GAME) && isRecord(GAME["GET /v1/game/people/{player}"]) ? GAME["GET /v1/game/people/{player}"].body : null;
 

@@ -39,13 +39,13 @@ export const UP_THE_TREE: Patch = {
     // last Ember, and Orphion, whose seat Unc takes.
     retire: ["peep", "kettle", "munch", "clutch", "whitefox"],
     add: {
-      // The dev: gives a cast back to whichever friend cast last.
+      // The dev, and an LHZ: gives a cast back to whichever friend cast last.
       vi: {
         name: "Vi",
         tier: 1,
         kin: "canopy",
         calling: "chorus",
-        extra: [],
+        extra: ["lhz"],
         hp: 320,
         attack: 32,
         speed: 0.75,

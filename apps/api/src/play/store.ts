@@ -64,7 +64,7 @@ const Activity = Schema.Struct({
 export type ActivityRow = typeof Activity.Type;
 
 /** Where somebody stands, as read back: their place, their score and what is shown beside it. */
-const Own = Schema.Struct({
+export const Own = Schema.Struct({
   place: Schema.Int,
   score: Schema.Int,
   also: Schema.fromJsonString(Schema.Record(Schema.String, Schema.Number)),

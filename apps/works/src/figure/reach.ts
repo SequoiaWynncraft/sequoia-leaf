@@ -1,27 +1,36 @@
 /**
- * Reach: you build by hand only near where you stand, on the plot you stand on and the plots round
- * it, as many plots out as the yard's range (`Open.range`: 1, the eight round it, until research
- * makes it more: 2 with `longreach`, 3 with `longerreach`). On the 7 by 7 land, 3 is the whole land
- * from its middle plot; with less you walk out to build by hand far away.
+ * Reach is off for now. You build by hand anywhere on your land, wherever your character stands.
+ * The limit got in the way of building more than it added, so it is switched off (`reachRule.on`)
+ * until it earns its place back. The rule below is kept whole and tested with the
+ * switch on, so turning it back on is one line. While it is off, nothing is out of reach, exactly as
+ * without a figure, and the research that only widens reach (`REACH_RESEARCH`) is not listed; yards
+ * that know it keep it, and saves do not change.
+ *
+ * The rule, when on: you build by hand only near where you stand, on the plot you stand on and the
+ * plots round it, as many plots out as the yard's range (`Open.range`: 1, the eight round it, until
+ * research makes it more: 2 with `longreach`, 3 with `longerreach`). On the 7 by 7 land, 3 is the
+ * whole land from its middle plot; with less you walk out to build by hand far away.
  *
  * Reach is for building by hand and for nothing else (`footprint`): one piece built, raised or
  * turned in place by building over it, a run of belt, a tunnel, and one piece removed by hand. Every
  * tile such a command puts a piece on or takes one off must be in reach, whatever stood there
  * before. Nothing the select tool or a blueprint does is limited by reach: moving, copying or
  * removing an area, saving it, and setting down a blueprint (a pasted code's too) work anywhere on
- * the yard's land. They are the way to build far from where you stand. Nor is anything that puts no
- * piece down and takes none up: turning a piece, Upgrade, a card's settings, painting, Undo.
+ * the yard's land. Nor is anything that puts no piece down and takes none up: turning a piece,
+ * Upgrade, a card's settings, painting, Undo.
  *
  * A preview asks it of the very command its press would send (`acts.ts`), and `doNow` asks it before
  * the rules, so a gold preview is never refused and a coral one never goes through. Without a figure
  * of yours (a visit, a review page's own yard) nothing is out of reach.
  *
- * It is the page's rule alone for now: Leaf does not know where you stand until visitors walk, and
- * building far away gains nothing over anyone else.
+ * It is the page's rule alone: Leaf does not know where you stand until visitors walk, and building
+ * far away gains nothing over anyone else.
  */
 import {
   type Act,
   at,
+  type Goal,
+  GOALS,
   legPiece,
   type Piece,
   piecesAt,
@@ -36,17 +45,27 @@ import {
 import { S } from "../state.ts";
 import { yourPlot } from "./you.ts";
 
+/** Whether reach limits building by hand: off for now. Tests switch it on to test the rule. */
+export const reachRule: { on: boolean } = { on: false };
+
+/** The research that only widens reach: not listed while reach is off. */
+export const REACH_RESEARCH: readonly string[] = ["longreach", "longerreach"];
+
+/** Whether a piece of research is listed: all of it, but the reach research while reach is off. */
+export const researchListed = (g: Goal): boolean => reachRule.on || !REACH_RESEARCH.includes(GOALS[g]?.id ?? "");
+
 /** What a press out of reach says, and the code it is refused with. */
 export const OUT_OF_REACH = "Out of reach";
 const REACH = "out_of_reach";
 
 /**
- * The tiles within reach, corner to corner, or nothing for no limit: you have no figure here. The
+ * The tiles within reach, corner to corner, or nothing for no limit: reach is off, or you have no
+ * figure here. The
  * one box every question of reach asks: the plot you stand on and `range` plots out on every side,
  * however far past the land's edge that goes.
  */
 export function reachBox(y: Yard = S.world): { x0: number; y0: number; x1: number; y1: number } | null {
-  const plot = yourPlot();
+  const plot = reachRule.on ? yourPlot() : null;
   if (plot === null) return null;
   const p = y.land.plots[plot];
   // Off every plot (only ever for a moment, before you are put on clear ground), nothing is in reach.

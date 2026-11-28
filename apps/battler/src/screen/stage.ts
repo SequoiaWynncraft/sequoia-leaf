@@ -13,10 +13,12 @@ import { paced } from "@sequoia-leaf/kit/pace.ts";
 import { scope } from "@sequoia-leaf/kit/scope.ts";
 import { type Ctx, makeCanvas, must } from "@sequoia-leaf/kit/util.ts";
 import { type Looks, newLooks } from "@sequoia-leaf/raid";
+import { HOME_ROWS } from "@sequoia-leaf/raid/hex.ts";
 
+import { BOARD, halvesOf, quietOf } from "./art/board.ts";
 import { paintPlace } from "./art/place.ts";
-import { paintHalf, type Place } from "./art/table.ts";
-import { BENCH_H, BENCH_Y, BOARD_W, GAP, type Pt } from "./geometry.ts";
+import { paintHalf, type Place, warmGlow } from "./art/table.ts";
+import { BENCH_H, BENCH_Y, BOARD_H, BOARD_W, GAP, type Pt, ROW } from "./geometry.ts";
 
 export const V = {
   /** Screen pixels to one art pixel, and screen pixels to one CSS pixel. */
@@ -71,14 +73,49 @@ const buf = makeCanvas(320, 200, true);
 const overBuf = makeCanvas(320, 200, true);
 let table: HTMLCanvasElement | null = null;
 let tableKey = "";
-let halves: { far: HTMLCanvasElement; near: HTMLCanvasElement } | null = null;
+/** The board's halves as pictures, by what they are drawn for: planning, and a fight's quiet grooves. */
+const halves = new Map<string, { far: HTMLCanvasElement; near: HTMLCanvasElement }>();
 let overWasDrawn = false;
 let stopped = false;
 
-/** The two halves of the board as pictures. */
-export function boardHalves(): { far: HTMLCanvasElement; near: HTMLCanvasElement } {
-  halves ??= { far: paintHalf(true), near: paintHalf(false) };
-  return halves;
+/** The two halves of the board as pictures, in the cloth on the table; `quiet`, a fight's, with the grooves half gone. */
+export function boardHalves(quiet = false): { far: HTMLCanvasElement; near: HTMLCanvasElement } {
+  const cloth = hooks?.looks().cloth ?? "bare";
+  const key = `${cloth}${quiet ? " quiet" : ""}`;
+  let h = halves.get(key);
+  if (!h) {
+    const { near, far } = halvesOf(cloth);
+    h = quiet
+      ? { far: paintHalf(true, quietOf(far)), near: paintHalf(false, quietOf(near)) }
+      : { far: paintHalf(true, far), near: paintHalf(false, near) };
+    halves.set(key, h);
+  }
+  return h;
+}
+
+/** How far the warm pool over the board reaches. */
+const POOL_W = 192;
+const POOL_H = 140;
+/**
+ * The two halves, and in a fight their quiet pair over them, coming in as the halves close; then
+ * the lanterns' warm pool over the board's middle, which the dusk over the table never touches.
+ */
+export function drawBoard(g: Ctx, fighting: boolean): void {
+  const lay = (h: { far: HTMLCanvasElement; near: HTMLCanvasElement }): void => {
+    g.drawImage(h.far, V.bx - 1, V.by - Math.round(V.gap) - 1);
+    g.drawImage(h.near, V.bx - 1, V.by + HOME_ROWS * ROW - 1);
+  };
+  lay(boardHalves());
+  const quiet = fighting ? 1 - V.gap / GAP : 0;
+  if (quiet > 0) {
+    g.globalAlpha = quiet;
+    lay(boardHalves(true));
+  }
+  g.globalCompositeOperation = "lighter";
+  g.globalAlpha = BOARD.pool;
+  g.drawImage(warmGlow(), V.bx + BOARD_W / 2 - POOL_W / 2, V.by + BOARD_H / 2 - POOL_H / 2, POOL_W, POOL_H);
+  g.globalAlpha = 1;
+  g.globalCompositeOperation = "source-over";
 }
 
 /** A point on the page (CSS pixels) as a point in the picture (art pixels). */

@@ -18,6 +18,7 @@ import {
   takeRefusal,
 } from "@sequoia-leaf/factory";
 
+import { researchListed } from "../figure/reach.ts";
 import { S } from "../state.ts";
 import { type Begin, type Count, type Given, givenIn, type Need, nodeKind, type Stands } from "./goal.ts";
 
@@ -76,9 +77,9 @@ export function nextWords(n: Next): { readonly label: string; readonly title: st
   return { label: "", title: "Every project is done", line: "More tiers are coming." };
 }
 
-/** The research of the tiers open, in the table's order. */
+/** The research of the tiers open, in the table's order, but what is not listed (`researchListed`). */
 export const researchOf = (): Goal[] =>
-  ALL_GOALS.filter((g) => !isNode(g) && (GOALS[g]?.tier ?? 0) <= S.world.open.tier);
+  ALL_GOALS.filter((g) => !isNode(g) && (GOALS[g]?.tier ?? 0) <= S.world.open.tier && researchListed(g));
 
 /** Whether a Study stands in the yard. */
 export const studyStands = (): boolean => S.world.kind.some((k) => STUDIES[k] === 1);

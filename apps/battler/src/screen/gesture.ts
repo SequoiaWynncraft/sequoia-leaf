@@ -27,7 +27,7 @@ import {
 
 import { handing, reachOf, reachOfOffer } from "./logic.ts";
 import { type Aim, pairsOf, wanters } from "./making.ts";
-import { zoneOf } from "./zone.ts";
+import { zoneSeats } from "./zone.ts";
 
 /** A thing in the hand: one of the party's figures (by its number), an offer on the stall, one of a kind on the rack. */
 export type Held =
@@ -106,7 +106,7 @@ export interface Marks {
   seats: number[];
   swaps: number[];
   slots: number[];
-  /** The seats of the rows the figure in hand belongs in (`zone.ts`), lit softly whether it may go there or not. */
+  /** The seats of the rows the figure in hand belongs in (`zone.ts`), lit as one band whether it may go there or not. */
   zone: number[];
   /** The place under the hand. */
   target: Spot | null;
@@ -197,12 +197,12 @@ function reachMarks(held: Held, run: RunView): Partial<Marks> {
       seats: reach.seats,
       swaps: reach.swaps,
       slots: [...reach.slots, ...reach.slotSwaps],
-      zone: zoneOf(run, piece.kind),
+      zone: zoneSeats(run, piece.kind),
     };
   }
   if (held.what === "offer") {
     const reach = reachOfOffer(run, held.at);
-    return { seats: reach.seats, slots: reach.slots, zone: zoneOf(run, held.kind) };
+    return { seats: reach.seats, slots: reach.slots, zone: zoneSeats(run, held.kind) };
   }
   const item = held.item;
   // A tool is taken by whoever it can be used on; it forges with nothing.

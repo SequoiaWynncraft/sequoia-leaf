@@ -145,6 +145,12 @@ const worthIn =
  * worth a step only with this many others that stay on the board in front (reach 1) meanwhile.
  */
 const LEAVES_THE_BOARD: Readonly<Partial<Record<TraitId, number>>> = { canopy: 2 };
+/**
+ * What a trait is worth at each of its steps, counted in steps of most traits (each worth 1 more),
+ * where its first does far less: LHZ's is a little mana once, nothing to keep a lone one-acorn
+ * figure for all run (Vi), and only its second, the casts fed, is worth a step.
+ */
+const STEPS_WORTH: Readonly<Partial<Record<TraitId, readonly number[]>>> = { lhz: [0, 1] };
 /** A trait whose figure is fielded in every fight once owned, whatever else it is worth (Crafter counts fights on the board). */
 const ALWAYS_FIELDED: TraitId = "crafter";
 
@@ -161,7 +167,7 @@ function partyScore(cat: Catalog, habit: Habit, party: readonly Piece[]): number
     const front = LEAVES_THE_BOARD[trait];
     if (front !== undefined && staysInFront(cat, party, trait) < front) continue;
     const step = stepFor(cat, trait, counts[trait] ?? 0);
-    if (step > 0) score += step * 1.1 * (habit.taste[trait] ?? 1);
+    if (step > 0) score += (STEPS_WORTH[trait]?.[step - 1] ?? step) * 1.1 * (habit.taste[trait] ?? 1);
   }
   return score;
 }
@@ -231,6 +237,7 @@ const BOON_LIKES: Record<BoonId, number> = {
   graidcharm: 3,
   sneakcharm: 3,
   canopycharm: 3,
+  lhzcharm: 3,
 };
 function likesBoon(run: RunView, habit: Habit, boon: BoonId): number {
   let score = BOON_LIKES[boon];
