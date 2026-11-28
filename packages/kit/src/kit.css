@@ -1644,6 +1644,23 @@ button.k-info-stat:hover .k-label,
 .k-settings > .k-tabs {
   padding: calc(var(--u) * 4) calc(var(--u) * 5) 0;
 }
+/* Privacy and Terms, small at the foot of the panel under every tab (`legal.ts`). */
+.k-settings-legal {
+  flex: none;
+  display: flex;
+  justify-content: center;
+  gap: calc(var(--u) * 8);
+  padding: calc(var(--u) * 2) calc(var(--u) * 5) calc(var(--u) * 3);
+  border-top: var(--u) solid var(--k-edge);
+  font: var(--f-small);
+}
+.k-settings-legal a {
+  color: var(--k-faint);
+  text-underline-offset: var(--u);
+}
+.k-settings-legal a:hover {
+  color: var(--k-cream);
+}
 .k-settings-page {
   flex: 1;
   min-height: 0;

@@ -13,6 +13,8 @@
  *   linked, and signing out (`account.ts`).
  * - Whatever tabs a page adds of its own (`MenuOf.tabs`).
  *
+ * Under every tab, at the foot of the panel, the links to the Privacy and Terms pages (`legal.ts`).
+ *
  * What it changes is the player's settings on this device (`settings.ts`), which every open page
  * follows at once; what the menu shows follows them too, whichever page changed them, and so does a
  * tip that is up, which may name a key. A page builds its menu once, at the start (`settingsMenu`).
@@ -23,6 +25,7 @@ import { dialog } from "./dialog.ts";
 import { el, icon } from "./dom.ts";
 import { type KeyList, nameOf } from "./keyboard.ts";
 import { KeysTab, shelf } from "./keystab.ts";
+import { legalLinks } from "./legal.ts";
 import { where } from "./live.ts";
 import type { Scope } from "./scope.ts";
 import { LOUDEST, type Settings, settings } from "./settings.ts";
@@ -57,6 +60,8 @@ export interface MenuOf {
   readonly account?: boolean;
   /** Told as the menu opens (true) and is put away (false): the page lets go of held keys and takes no play while it is open. */
   readonly opened?: (open: boolean) => void;
+  /** How the page opens an address outside itself, where a plain link to a new tab will not (a Discord call). */
+  readonly openLink?: (url: string) => void;
 }
 
 /** The menu of a page. */
@@ -170,6 +175,7 @@ class SettingsMenu implements Menu {
       this.#tabs.el,
       this.#keys.line,
       this.#page,
+      legalLinks(of.openLink),
     );
     this.#scrim.append(this.#panel);
     document.body.append(this.#scrim);
