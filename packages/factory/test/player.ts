@@ -253,10 +253,11 @@ export class Player {
       case 23:
         return { do: "first", way: this.pick([null, 0, 1, 2, 3]), ...this.of(F.SPLITTER) };
       case 24: {
-        const any = [...F.NODES.map((n) => n.id), "nap"];
+        const named = F.NODES.slice(0, this.names.nodes);
+        const any = [...named.map((n) => n.id), "nap"];
         // Mostly a node that may go in line, as a player picks one; now and then any, or none.
         if (this.r() < 0.7) {
-          const may = F.NODES.filter((n) => F.queueRefusal(y, F.goal(n.id)) === null).map((n) => n.id);
+          const may = named.filter((n) => F.queueRefusal(y, F.goal(n.id)) === null).map((n) => n.id);
           return { do: "queue", node: this.pick(may.length > 0 && this.r() < 0.8 ? may : any) };
         }
         // Mostly a node that is in line, as a player takes one out; now and then any, or none.
