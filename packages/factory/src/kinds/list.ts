@@ -9,6 +9,7 @@ import { belt } from "./belt.ts";
 import { bench } from "./bench.ts";
 import { boiler } from "./boiler.ts";
 import { breaker } from "./breaker.ts";
+import { cracker } from "./cracker.ts";
 import { crate } from "./crate.ts";
 import { depot } from "./depot.ts";
 import { gatherer } from "./gatherer.ts";
@@ -16,9 +17,11 @@ import { joiner } from "./joiner.ts";
 import { gradeKept, tintKept } from "./kept.ts";
 import type { Hooks, KindDef } from "./kind.ts";
 import { mill } from "./mill.ts";
+import { powerhouse } from "./powerhouse.ts";
 import { pylon } from "./pylon.ts";
 import { sorter } from "./sorter.ts";
 import { splitter } from "./splitter.ts";
+import { still } from "./still.ts";
 import { stop } from "./stop.ts";
 import { study } from "./study.ts";
 import { tunnel } from "./tunnel.ts";
@@ -44,6 +47,9 @@ export const KIND_DEFS = [
   sorter,
   assembler,
   breaker,
+  still,
+  cracker,
+  powerhouse,
 ] as const satisfies readonly KindDef[];
 export type KindName = (typeof KIND_DEFS)[number]["name"];
 
@@ -56,7 +62,7 @@ const none = (): number => 0;
 const nowhere = (): number => -1;
 const never = (): boolean => false;
 const nothing = (): null => null;
-const still = (): void => undefined;
+const idle = (): void => undefined;
 /** What a kind keeps that says nothing of it: its colour if it has one, and its grade if it has one. */
 const plain: KindRules["keeps"] = (k, kind, v) => ({
   ...(k.TINTED[kind] === 1 ? tintKept(k, v) : {}),
@@ -71,7 +77,7 @@ const LEFT_OUT: KindRules = {
   sends: () => 7,
   wants: never,
   room: never,
-  give: still,
+  give: idle,
   turns: never,
   hands: null,
   ready: never,
@@ -80,16 +86,16 @@ const LEFT_OUT: KindRules = {
   refusal: nothing,
   over: nothing,
   lays: () => [],
-  laid: still,
+  laid: idle,
   asLaid: (_k, p) => p,
   set: {},
   condition: none,
   words: () => ({ line: "" }),
   aim: nothing,
   last: nothing,
-  flow: still,
+  flow: idle,
   most: none,
-  onto: still,
+  onto: idle,
   keeps: plain,
   waysTo: (_k, y, i) => void (y.shut[i] = 0),
   locks: nothing,

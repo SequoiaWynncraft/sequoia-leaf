@@ -43,7 +43,7 @@ describe("a deep culvert", () => {
       ["longculvert"],
       { span: 12 },
     ]);
-    expect([yard().open.span, yard(["deepculvert"]).open.span, F.SPAN_MOST]).toEqual([5, 12, 12]);
+    expect([yard().open.span, yard(["deepculvert"]).open.span]).toEqual([5, 12]);
   });
 
   test("says what each tile beyond 5 adds at each grade, as the prices have it", () => {

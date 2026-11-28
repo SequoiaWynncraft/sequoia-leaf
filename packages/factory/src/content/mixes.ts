@@ -14,6 +14,8 @@ export interface MixInfo {
   readonly holds: number;
   /** What it is doing while it works, as its status begins: "Breaking" (salvage). */
   readonly doing: string;
+  /** What a thing it gives says it was made from, on the thing's card: "Broken from" (salvage). */
+  readonly madeFrom: string;
   readonly gives: readonly ItemName[];
 }
 
@@ -24,6 +26,7 @@ export const MIXES: readonly MixInfo[] = [
     ticks: 6,
     holds: 8,
     doing: "Breaking",
+    madeFrom: "Broken from",
     // 8 copper, 5 ingots, 3 glass, 3 slag and 1 gear of every 20.
     gives: [
       "copper",
@@ -47,5 +50,15 @@ export const MIXES: readonly MixInfo[] = [
       "ingot",
       "gear",
     ],
+  },
+  {
+    by: "still",
+    from: "tar",
+    ticks: 5,
+    holds: 8,
+    doing: "Distilling",
+    madeFrom: "Distilled from",
+    // 3 pitch, 2 creosote and 1 spirit of every 6, each out of its own part of the still's front.
+    gives: ["pitch", "creosote", "pitch", "spirit", "pitch", "creosote"],
   },
 ];

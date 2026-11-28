@@ -181,4 +181,32 @@ export const ASKS: Partial<Record<ItemName, readonly Ask[]>> = {
     },
     { from: "Moth", line: "Moth would like a string of lights of its own. Moth has friends coming." },
   ],
+  tar: [
+    {
+      from: "Worm",
+      line: "Worm has found that tar keeps the rain out of the log. Worm would like the rest of the log kept dry.",
+    },
+    {
+      from: "The crab pond",
+      line: "A crab walked through the tar. The crabs would like enough for the rest to match.",
+    },
+  ],
+  tarmac: [
+    { from: "The raid parties", line: "The long road is mud. The carts would like it to be a road." },
+    { from: "Glorp", line: "Glorp sat on the tarmac while it was warm. Glorp would like some that has not set yet." },
+  ],
+  sleeper: [
+    { from: "The gnomes", line: "The gnomes laid the cart track straight onto the moss. The moss has moved." },
+    {
+      from: "The gate",
+      line: "The gate posts have rotted through again. A sleeper does not rot. The lookouts have asked twice.",
+    },
+  ],
+  varnish: [
+    { from: "Tindra", line: "Tindra varnishes everything on her stall. Then it sticks to the stall." },
+    {
+      from: "The quest board",
+      line: "The board has been rained on for years. It would like a coat of varnish before the next quest goes up.",
+    },
+  ],
 };

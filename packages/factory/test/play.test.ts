@@ -24,14 +24,16 @@ describe("random play", () => {
     ["a yard at tier 3", () => F.create({ seed: 13, tier: 3 })],
     ["a yard with tier 4 done", () => F.create({ seed: 14, tier: 5 })],
     ["a yard with tier 5's research done", () => F.create({ seed: 15, tier: 6 })],
+    ["a yard with tier 6's research done", () => F.create({ seed: 16, tier: 7 })],
     ["a delivering yard, its board filled", boardFilled],
     ["a yard clearing a plot, all it wants delivered", clearingFilled],
     ["a generated yard", () => F.decode(F.encode(generated().y), generated().y.land) ?? F.create()],
   ];
+  // The yard with every kind open plays longer: with 21 kinds to pick from, 500 commands may build none of one.
   for (const [name, start] of starts)
     test(`${name}: a refused command changes nothing, and the yard reads back as itself`, () => {
-      new Player(start(), name.length * 7919, took).play(500);
-    }, 30_000);
+      new Player(start(), name.length * 7919, took).play(name.includes("tier 6") ? 2000 : 500);
+    }, 60_000);
 
   test("reached every kind of command and piece", () => {
     const keys = [

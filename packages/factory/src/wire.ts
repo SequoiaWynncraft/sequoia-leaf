@@ -17,7 +17,7 @@ import { room as makerRoom, wants as makerWants } from "./kinds/maker.ts";
  */
 import { besideWater, toward } from "./land.ts";
 import { deliver, giveGoal } from "./orders.ts";
-import { carried, makes, MINUTE, mixPerMinute } from "./planner.ts";
+import { carried, makes, MINUTE, mixPerMinute, mixShare } from "./planner.ts";
 import { litAt, litOf } from "./power.ts";
 import { lit as litBig, outsOf, OWN, pieceOf, roomRound, sendsThing, takesAt } from "./sizes.ts";
 import { smogged, smogPace } from "./smog.ts";
@@ -528,6 +528,7 @@ export const KIT: Kit = {
   recipesFor,
   makes,
   mixPerMinute,
+  mixShare,
   MINUTE,
   carried,
   BURNS,

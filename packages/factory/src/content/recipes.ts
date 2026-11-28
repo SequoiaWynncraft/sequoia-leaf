@@ -5,8 +5,8 @@
  */
 import type { ItemName, Wants } from "./items.ts";
 
-/** The machines that make things: one thing in, two in, three in. */
-export type Maker = "mill" | "bench" | "workshop";
+/** The machines that make things: one thing in, two in, three in; and the cracker, which turns one of a still's things into the next lighter. */
+export type Maker = "mill" | "bench" | "workshop" | "cracker";
 
 export interface RecipeInfo {
   readonly out: ItemName;
@@ -56,4 +56,11 @@ export const RECIPES: readonly RecipeInfo[] = [
   { out: "spark", from: { coil: 1, bulb: 1, gear: 1 }, by: "workshop", ticks: 40 },
   { out: "telegraph", from: { coil: 2, bulb: 1, frame: 1 }, by: "workshop", ticks: 80 },
   { out: "lights", from: { bulb: 3, wire: 2, pole: 1 }, by: "workshop", ticks: 40 },
+  // Tier 6, the still: a cracker turns pitch into creosote and creosote into spirit (a still makes all
+  // three, and the planner plans creosote and spirit from it); a bench makes one good of each.
+  { out: "creosote", from: { pitch: 2 }, by: "cracker", ticks: 10 },
+  { out: "spirit", from: { creosote: 2 }, by: "cracker", ticks: 10 },
+  { out: "tarmac", from: { gravel: 1, pitch: 1 }, by: "bench", ticks: 20 },
+  { out: "sleeper", from: { plank: 2, creosote: 1 }, by: "bench", ticks: 20 },
+  { out: "varnish", from: { spirit: 1, oil: 1 }, by: "bench", ticks: 20 },
 ];

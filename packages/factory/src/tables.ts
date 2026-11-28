@@ -208,21 +208,17 @@ export const HALF = 2;
 export const DRAWN: readonly number[] = [HALF, ...halves((g) => g.draw)];
 /** The power a piece of a kind at a grade draws where power reaches it, in halves: its kind's, once for each half its grade draws. */
 export const drawnAt = (k: number, grade: number): number => (DRAW[k] ?? 0) * (DRAWN[isGraded(k) ? grade : 0] ?? HALF);
-/** A thing a burner burns: the thing, the ticks a piece of it burns, and the smog a piece taken adds to the burner's plot. */
-export interface Fuel {
-  readonly fuel: Item;
-  readonly ticks: number;
-  readonly smog: number;
-}
 /**
- * For each kind that burns for power (`KindDef.burns`): what it burns, in the order it takes them;
- * how many pieces of each it holds; and the power it gives while it burns, in halves.
+ * For each kind that burns for power (`KindDef.burns`): what it burns, in the order it takes them, each
+ * a thing, the ticks a piece of it burns and the smog a piece taken adds to its plot; how many pieces
+ * of each it holds; and the power it gives while it burns, in halves.
  */
 export interface Burns {
-  readonly fuels: readonly Fuel[];
+  readonly fuels: readonly { readonly fuel: Item; readonly ticks: number; readonly smog: number }[];
   readonly holds: number;
   readonly halves: number;
 }
+export type Fuel = Burns["fuels"][number];
 export const BURNS: readonly (Burns | null)[] = KIND_DEFS.map((d: KindDef) => {
   const b = d.burns;
   if (!b) return null;
@@ -233,8 +229,7 @@ export const BURNS: readonly (Burns | null)[] = KIND_DEFS.map((d: KindDef) => {
   }));
   return { fuels, holds: b.holds, halves: d.info.gives * HALF };
 });
-/** What a burner burns of a thing, if it burns it. */
-export const fuelOf = (b: Burns, n: number): Fuel | undefined => b.fuels.find((f) => f.fuel === n);
+
 /** The work in gathering one thing and in studying one folio, in half-ticks. */
 export const WORK = { gather: TICKS.gather * 2, study: TICKS.study * 2 } as const;
 /** For each kind that runs under tiles, what each tile past so many adds to its cost (`KindDef.deeper`). */
@@ -305,6 +300,7 @@ export interface Mix {
   readonly work: number;
   readonly holds: number;
   readonly doing: string;
+  readonly madeFrom: string;
   readonly gives: readonly Item[];
 }
 export const MIXES_N: readonly Mix[] = MIXES.map((m) => ({
@@ -313,17 +309,20 @@ export const MIXES_N: readonly Mix[] = MIXES.map((m) => ({
   work: m.ticks * 2,
   holds: m.holds,
   doing: m.doing,
+  madeFrom: m.madeFrom,
   gives: m.gives.map(item),
 }));
 /** The mix each kind makes, by its number, or null. */
 export const MIX_OF: readonly (Mix | null)[] = ALL_KINDS.map((k) => MIXES_N.find((m) => m.by === k) ?? null);
+/** The mix that gives each thing, if one does. */
+const MIX_GIVING: readonly (Mix | null)[] = ALL_ITEMS.map((n) => MIXES_N.find((x) => x.gives.includes(n)) ?? null);
 /**
  * Each thing a mix gives, as a recipe for planning alone (no machine makes it so): the mix's share of
  * it, 1 for every so many of `from`, at the work of so many of the mix's runs. A thing only a mix gives
  * is planned by it (`recipeFor`): 20 salvage for 8 copper.
  */
 const MIXED: readonly (Recipe | null)[] = ALL_ITEMS.map((n) => {
-  const m = MIXES_N.find((x) => x.gives.includes(n));
+  const m = MIX_GIVING[n];
   if (!m) return null;
   const every = m.gives.length / m.gives.filter((g) => g === n).length;
   return {
@@ -336,14 +335,20 @@ const MIXED: readonly (Recipe | null)[] = ALL_ITEMS.map((n) => {
     work: m.work * every,
   };
 });
-/** The recipe of each thing, or a mix's share of it: what says where it is made (`locked`). */
-const OWN: readonly (Recipe | null)[] = ALL_ITEMS.map((n) => RECIPE[n] ?? MIXED[n] ?? null);
-/** Every recipe that makes each thing: the one it is the thing of first, then those that make it beside their own, then a mix's share of it. */
-const MAKING: readonly (readonly Recipe[])[] = ALL_ITEMS.map((n) => [
-  ...RECIPES_N.filter((r) => r.out === n),
-  ...RECIPES_N.filter((r) => r.also === n),
-  ...(MIXED[n] ? [MIXED[n]] : []),
-]);
+/**
+ * Every recipe that makes each thing: the one it is the thing of first, then those that make it beside
+ * their own, then a mix's share of it; but the mix's share first where every recipe of its own only
+ * turns other things of that mix into it (a cracker's creosote, from a still's pitch), so that the
+ * mix is what makes it and the recipe what makes more of it.
+ */
+const MAKING: readonly (readonly Recipe[])[] = ALL_ITEMS.map((n) => {
+  const own = [...RECIPES_N.filter((r) => r.out === n), ...RECIPES_N.filter((r) => r.also === n)];
+  const [mixed, m] = [MIXED[n], MIX_GIVING[n]];
+  if (!mixed || !m) return own;
+  return own.every((r) => r.from.every((part) => m.gives.includes(part))) ? [mixed, ...own] : [...own, mixed];
+});
+/** What makes each thing first, its own recipe or a mix's share of it: what says where it is made (`locked`). */
+const OWN: readonly (Recipe | null)[] = ALL_ITEMS.map((n) => MAKING[n]?.[0] ?? null);
 /**
  * The recipes that make a thing: the one it is the thing of first, then each that makes it beside its
  * own (`Recipe.also`), one with each. The one place what makes a thing is asked: what the yard can make
@@ -370,12 +375,13 @@ export const makesThing = (k: number, n: number): n is Item => {
   const r = isItem(n) ? RECIPE[n] : null;
   return r !== null && r !== undefined && timesOf(k, r) > 0;
 };
-/** The kinds of machine that make a thing by the recipe it names: its own first, then those that make it as that one (`KindDef.as`). */
-export const kindsMaking = (n: Item): Kind[] => {
-  // A thing only a mix gives is made by its share of the mix (`makersOf`): by the kind that breaks it.
-  const r = RECIPE[n] ?? MIXED[n];
-  return r ? [r.by, ...ALL_KINDS.filter((k) => k !== r.by && timesOf(k, r) > 0)] : [];
-};
+/**
+ * The kinds that make a thing, by every recipe and mix that makes it (`makersOf`), in that order: each
+ * recipe's own maker first, then those that make it as that one (`KindDef.as`); a mix's by the kind
+ * that breaks or distils it.
+ */
+const madeAs = (r: Recipe): Kind[] => [r.by].concat(ALL_KINDS.filter((x) => x !== r.by && timesOf(x, r) > 0));
+export const kindsMaking = (n: Item): Kind[] => [...new Set(makersOf(n).flatMap(madeAs))];
 /** For each kind, the most of any machine it is one of (`TIMES`): what its pace on a recipe is at most times its grade's. */
 export const TIMES_MOST = Uint8Array.from(ALL_KINDS, (k) =>
   Math.max(...TIMES.subarray(k * KIND_COUNT, (k + 1) * KIND_COUNT)),

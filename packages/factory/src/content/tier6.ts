@@ -1,0 +1,98 @@
+/**
+ * Tier 6's nodes, put on the end of `NODES` (`nodes.ts`) in this order. The gate path wants tarmac,
+ * which is pitch: a still's creosote and spirit are in the way at once, and the powerhouse is the
+ * quick answer. The pit props want sleepers, which is creosote: now the pitch and the spirit are in
+ * the way. The commission wants pitch, creosote and spirit as 1, 2 and 3, the still's proportion
+ * backwards, which cracking answers. Then four long works; `paving` wants pitch and creosote and no
+ * spirit, so the light end is the surplus there, and cracking cannot use it up.
+ */
+import type { NodeInfo } from "./nodes.ts";
+
+export const TIER_6: readonly NodeInfo[] = [
+  {
+    id: "gatepath",
+    tier: 6,
+    kind: "project",
+    title: "Tarmac for the gate path",
+    from: "The gate",
+    say: "The path to the gate is mud. The lookouts have stopped wiping their feet. There is no point.",
+    want: { tarmac: 400 },
+    pay: 15000,
+    unlocks: {},
+    needs: ["tarring", "powerhouse"],
+  },
+  {
+    id: "pitprops",
+    tier: 6,
+    kind: "project",
+    title: "Props for the old workings",
+    from: "The gnomes",
+    say: "The old workings are held up by one plank and a gnome. The gnome would like to go home.",
+    want: { sleeper: 3000, pole: 1000 },
+    pay: 15000,
+    unlocks: {},
+    needs: ["sleepers"],
+  },
+  {
+    id: "roadbed",
+    tier: 6,
+    kind: "commission",
+    title: "A road that stays where it is put",
+    from: "The raid parties",
+    say: "The long road is mud from the gate to the ridge. Carts go in. Some come out.",
+    want: { tarmac: 2000, sleeper: 4000, varnish: 6000 },
+    pay: 30000,
+    unlocks: {},
+    needs: ["cracker", "tarring", "sleepers", "varnishing"],
+    gift: { id: "tar-road", line: "A tarred road runs from the gate to the ridge. Carts go in. All of them come out." },
+  },
+  {
+    id: "paving",
+    tier: 6,
+    kind: "project",
+    title: "Paving the long road",
+    from: "The raid parties",
+    say: "The road is tarred as far as the ridge. The raid parties go further than the ridge.",
+    want: { tarmac: 30000, sleeper: 20000, pole: 10000 },
+    pay: 60000,
+    unlocks: { stops: 5 },
+    needs: ["tarring", "sleepers"],
+  },
+  {
+    id: "hallroof",
+    tier: 6,
+    kind: "project",
+    title: "A roof for the scholars' hall",
+    from: "The scholars",
+    say: "The scholars' hall leaks on the folios. The scholars have moved the folios. It leaks there too.",
+    want: { varnish: 60000, sleeper: 30000, frame: 30000 },
+    pay: 60000,
+    unlocks: { crate: 1024, hooks: 7 },
+    needs: ["varnishing", "sleepers"],
+  },
+  {
+    id: "vaultwinch",
+    tier: 6,
+    kind: "project",
+    title: "A winch for the vault",
+    from: "Cinfy",
+    say: "The vault's winch gave out again. Cinfy would like one that does not need Cinfy to turn it.",
+    want: { coil: 60000, tarmac: 30000, sleeper: 30000 },
+    pay: 80000,
+    unlocks: { depot: 200 },
+    needs: ["tarring", "sleepers"],
+  },
+  {
+    id: "greatroad",
+    tier: 6,
+    kind: "project",
+    title: "The road to the far camp",
+    from: "The guild",
+    say: "The beacon road is a line of lights with mud between them. The guild would like the mud replaced.",
+    want: { tarmac: 60000, sleeper: 80000, varnish: 120000, telegraph: 20000 },
+    pay: 300000,
+    unlocks: { away: 36 },
+    needs: ["paving", "hallroof", "vaultwinch"],
+    gift: { id: "great-road", line: "A tarred road runs under the beacons to the far camp." },
+  },
+];
