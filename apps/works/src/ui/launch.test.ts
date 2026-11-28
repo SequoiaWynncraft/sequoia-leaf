@@ -3,8 +3,9 @@
  * it charges, all out just after a beat); the charged cells' and the rockets' cards, which name the
  * charger and the launch pad before either is known; the pad's card (each part filling, its charged
  * cells by bars, the beat to come, and what the page counted: the most since its last launch and what
- * came in over the last minute), its buttons for a rocket, which name the rocket it showed, and its
- * picture's stage and pips; and a run of belt tapped from any of its tiles beginning at its way out.
+ * came in over the last minute), its buttons for a rocket, which name the rocket it showed and warn of
+ * nothing (changing it takes nothing out), and its picture's stage and pips; and a run of belt tapped
+ * from any of its tiles beginning at its way out.
  */
 import { expect, test } from "bun:test";
 
@@ -23,7 +24,6 @@ import {
   padAt,
   portTo,
   put,
-  setRecipe,
   type Yard,
 } from "@sequoia-leaf/factory";
 import type { Row } from "@sequoia-leaf/kit/card.ts";
@@ -158,6 +158,8 @@ test("a standing pad's card shows each part filling, its charged cells by bars, 
     true,
   ]);
   expect(said[0]).toMatch(/^Every charged cell loses a bar in \d+ seconds?\.$/);
+  // It has not launched since the yard was opened: the most is counted from then.
+  expect(said[1]).toBe(`The most it has held since you opened the yard: ${counted?.most}.`);
   expect(said[2]).toBe(
     `In the last minute, ${counted?.came} charged cells came in. To hold 100 at once, it needs about 110 /min.`,
   );
@@ -165,18 +167,11 @@ test("a standing pad's card shows each part filling, its charged cells by bars, 
   expect([lookOf(reading).stage, lookOf(reading).lit > 0, (counted?.most ?? 0) < 100]).toEqual([4, true, true]);
 }, 60_000);
 
-test("its buttons set it to each rocket that comes with it, naming the rocket the card showed, and say what changing tips out", async () => {
+test("its buttons set it to each rocket that comes with it, naming the rocket the card showed, and warn of nothing", async () => {
   const y = yard();
   const pad = piece(y, PAD, 12, 6);
   fill(y, pad, HULL, 60);
   fill(y, pad, FUEL, 240);
-  // A second pad, set to the rocket and full: changing it to the test rocket would tip out most of it.
-  const full = piece(y, PAD, 4, 6);
-  const [x0, z0] = corner(y);
-  expect(setRecipe(y, x0 + 4, z0 + 6, item("rocket"), item("testrocket"))).toBeNull();
-  fill(y, full, HULL, 900);
-  fill(y, full, FUEL, 3600);
-  fill(y, full, THREE, 300);
   await opened(y, 1_000);
   const print = printOf(tileRef(pad));
   if (print?.card !== "standing") throw new Error("no card");
@@ -184,14 +179,9 @@ test("its buttons set it to each rocket that comes with it, naming the rocket th
   const hands = { act: (a: Act): boolean => (sent.push(a), true) };
   const buttons = rocketButtons(print, hands);
   expect(buttons.map((b) => [b.label, b.lit, b.about])).toEqual([
-    ["Test rocket", true, "It is set to this rocket."],
-    ["Rocket", false, "Nothing it holds is tipped out."],
+    ["Test rocket", true, undefined],
+    ["Rocket", false, undefined],
   ]);
-  const other = printOf(tileRef(full));
-  if (other?.card !== "standing") throw new Error("no card");
-  expect(rocketButtons(other, hands)[0]?.about).toBe(
-    "Tips out 840 hull sections, 3,360 rocket fuel and 200 charged cells.",
-  );
   // A button to press it with, from a stand-in document, as the page has none here.
   Object.defineProperty(globalThis, "document", { value: { createElement: () => ({}) }, configurable: true });
   buttons[1]?.on(el("button"));

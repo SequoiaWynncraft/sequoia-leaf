@@ -6,21 +6,12 @@
  * top of the screen and leaves a pale trail for 3 seconds (`fx.ts` holds when, as the page counted it).
  *
  * Its card shows each part filling, its charged cells by bars and in all, how long until every charged
- * cell loses a bar, the most it has held since its last launch and what came in over the last minute
- * (as the page counted them, `pads.ts`), and a button for each rocket it may be set to, which names
- * the rocket the card showed it set to.
+ * cell loses a bar, the most it has held since its last launch or since the yard was opened and what
+ * came in over the last minute (as the page counted them, `pads.ts`), and a button for each rocket it
+ * may be set to, which names the rocket the card showed it set to. Setting it to another takes nothing
+ * out, so a button says nothing more than its rocket's name.
  */
-import {
-  CHARGED,
-  type Item,
-  ITEM_INFO,
-  kind,
-  outsAs,
-  padAt,
-  type PadReading,
-  ROCKETS_N,
-  secondsTo,
-} from "@sequoia-leaf/factory";
+import { CHARGED, kind, outsAs, padAt, type PadReading, ROCKETS_N, secondsTo } from "@sequoia-leaf/factory";
 import type { Action, Block, Row } from "@sequoia-leaf/kit/card.ts";
 import { lessMotion } from "@sequoia-leaf/kit/dom.ts";
 import { perMinute, whole } from "@sequoia-leaf/kit/say.ts";
@@ -50,8 +41,6 @@ const LAUNCHPAD = kind("launchpad");
 const CHOICES = ROCKETS_N.filter((r) => r.withPad);
 /** Seconds a launch is shown for: its rocket's rise and its trail fading. */
 const SHOWN = 3;
-
-const many = (n: Item): string => ITEM_INFO[n]?.many ?? "";
 
 /** Its way out, facing `d`: the tile of its box it leaves from, counted from its box's corner (its own tile is the middle, two in), and the way things leave. */
 function outOf(d: number): readonly [number, number, number] {
@@ -98,7 +87,7 @@ function holding(p: StandingPrint): Row[] {
   ];
 }
 
-/** The beat to come, the most it has held since its last launch, and what came in over the last minute, as its card says them. */
+/** The beat to come, the most it has held since its last launch or since the yard was opened, and what came in over the last minute, as its card says them. */
 function said(p: StandingPrint): Block[] {
   const l = p.launch;
   const pad = l?.pad;
@@ -107,7 +96,8 @@ function said(p: StandingPrint): Block[] {
   const c = l.counted;
   if (c && pad.ready) {
     const flat = c.stood && c.most < pad.rocket.cells ? " Cells go flat as fast as they come." : "";
-    blocks.push({ body: `The most it has held since its last launch is ${whole(c.most)}.${flat}` });
+    const since = c.sinceLaunch ? "its last launch" : "you opened the yard";
+    blocks.push({ body: `The most it has held since ${since}: ${whole(c.most)}.${flat}` });
     const over = c.seconds >= 60 ? "the last minute" : `the last ${c.seconds} second${c.seconds === 1 ? "" : "s"}`;
     const holds = whole(pad.rocket.cells);
     blocks.push({
@@ -115,19 +105,6 @@ function said(p: StandingPrint): Block[] {
     });
   }
   return blocks;
-}
-
-/** What setting it to another rocket tips out, in words: what it holds beyond that rocket's number of each part, and charged cells beyond its cells. */
-function tipsOut(pad: PadReading, to: (typeof CHOICES)[number]): string {
-  const lost = pad.parts.flatMap((q) => {
-    const keeps = to.parts.find((t) => t.item === q.item)?.need ?? 0;
-    return q.held > keeps ? [`${whole(q.held - keeps)} ${many(q.item)}`] : [];
-  });
-  if (pad.charged > to.cells) lost.push(`${whole(pad.charged - to.cells)} charged cells`);
-  const last = lost.pop();
-  return last === undefined
-    ? "Nothing it holds is tipped out."
-    : `Tips out ${lost.length > 0 ? `${lost.join(", ")} and ` : ""}${last}.`;
 }
 
 /** A button for each rocket it may be set to: the one it is set to lit; each names the rocket the card shows it set to. */
@@ -138,7 +115,6 @@ export function rocketButtons(p: StandingPrint, hands: Pick<Hands, "act">): Acti
     label: r.name,
     look: "wood sm",
     lit: r === pad.rocket,
-    about: r === pad.rocket ? "It is set to this rocket." : tipsOut(pad, r),
     on: () => {
       if (r === pad.rocket) return;
       if (hands.act({ do: "recipe", x: p.x, y: p.y, item: r.counts, was: pad.rocket.counts })) sfx.tap();

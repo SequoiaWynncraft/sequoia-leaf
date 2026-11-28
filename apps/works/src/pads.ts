@@ -3,10 +3,14 @@
  * After each tick the page's copy runs, each pad is read beside how it stood the tick before
  * (`notePads`):
  *
- * - the charged cells that came in: what it holds now less what it held, with what a launch used (all
- *   of them: its parts went too) and what the beat turned plain (its cells with 1 bar) put back;
- * - the most charged cells it has held since its last launch, and the tick that most was reached, so
- *   that its card can say once it has stood for two beats that cells go flat as fast as they come;
+ * - the charged cells that came in: what it holds now less what it held, with what a launch used (its
+ *   rocket's cells, those with the fewest bars first, as the rules use them) and what the beat turned
+ *   plain (its cells with 1 bar) put back. One thing is out of sight: a plain cell it let out on a beat
+ *   tick, which hides a cell with 1 bar that came in and went flat on that tick, so at most 1 a beat
+ *   goes uncounted;
+ * - the most charged cells it has held since its last launch, or since the count began where it has
+ *   not launched since, and the tick that most was reached, so that its card can say once it has stood
+ *   for two beats that cells go flat as fast as they come;
  * - the tick of its last launch, which the frame is told of (`fx.ts`), for its rocket's rise and trail.
  *
  * Counted a second of the yard's clock at a time, a minute of seconds kept, for each pad by its own
@@ -14,7 +18,7 @@
  * plays each pad is read again as it stands (`commanded`), and one no longer standing is forgotten. A
  * yard with no pad runs on as it always has. Counting a tick makes no objects.
  */
-import { beats, CHARGED, held, holderOf, kind, OWN, padAt, type Yard } from "@sequoia-leaf/factory";
+import { beats, CHARGED, held, holderOf, kind, NONE, OWN, rocketSet, type Yard } from "@sequoia-leaf/factory";
 
 import { launched as noteLaunch } from "./fx.ts";
 
@@ -39,9 +43,10 @@ interface Count {
   readonly came: Int32Array;
 }
 
-/** What a pad's card says of what the page counted: the most since its last launch and whether it has stood two beats, and what came in over the last minute. */
+/** What a pad's card says of what the page counted: the most since its last launch (or, with none seen, since the count began) and whether it has stood two beats, and what came in over the last minute. */
 export interface PadCounted {
   readonly most: number;
+  readonly sinceLaunch: boolean;
   readonly stood: boolean;
   readonly came: number;
   readonly seconds: number;
@@ -67,10 +72,19 @@ export const counting = (y: Yard): boolean => padsOf(y).length > 0;
 
 /** All its rocket's parts a pad holds, in all: they go only with a launch, in a tick. */
 function partsIn(y: Yard, i: number, r: number): number {
-  const rocket = padAt(y, i)?.rocket;
+  const parts = rocketSet(y.set[i] ?? NONE)?.parts ?? [];
   let n = 0;
-  for (const p of rocket?.parts ?? []) n += held(y.holders, r, p.item);
+  for (let p = 0; p < parts.length; p++) n += held(y.holders, r, parts[p]?.item ?? NONE);
   return n;
+}
+
+/** Of a pad's charged cells by bars (1, 2, 3) before a launch, how many of those with `bars` were left: its rocket's cells used, the fewest bars first. */
+function leftOf(c: Count, used: number, bars: 1 | 2 | 3): number {
+  const [one, two, three] = [c.one, c.two, c.three];
+  const after1 = Math.max(0, used - one);
+  const after2 = Math.max(0, after1 - two);
+  if (bars === 1) return one - Math.min(one, used);
+  return bars === 2 ? two - Math.min(two, after1) : three - Math.min(three, after2);
 }
 
 /** Sets a count's reading of a pad as it stands: its charged cells by bars, its plain cells, and its parts. */
@@ -110,8 +124,9 @@ function noteOne(c: Count, y: Yard, i: number, beat: boolean, second: number, at
   const [one, two, three, plain] = [held(h, r, ONE), held(h, r, TWO), held(h, r, THREE), held(h, r, CHARGED.plain)];
   const parts = partsIn(y, i, r);
   const launched = parts < c.parts;
-  // What it held before what came in: nothing after a launch, which used every charged cell.
-  const [b1, b2, b3] = launched ? [0, 0, 0] : [c.one, c.two, c.three];
+  // What it held before what came in: after a launch, less its rocket's cells.
+  const used = launched ? (rocketSet(y.set[i] ?? NONE)?.cells ?? 0) : 0;
+  const [b1, b2, b3] = [leftOf(c, used, 1), leftOf(c, used, 2), leftOf(c, used, 3)];
   // On a beat what it held lost a bar after what came in had come: those with 1 bar went plain.
   const came = beat ? one + two - b2 - b3 + Math.max(0, plain - c.plain - b1) : one + two + three - b1 - b2 - b3;
   if (c.second[at] !== second) {
@@ -174,7 +189,13 @@ export function padCounted(y: Yard, i: number): PadCounted | null {
     came += c.came[s] ?? 0;
     first = Math.min(first, was);
   }
-  return { most: c.most, stood: y.tick - c.mostAt >= TWO_BEATS, came, seconds: Math.min(SECONDS, second - first + 1) };
+  return {
+    most: c.most,
+    sinceLaunch: c.launched >= 0,
+    stood: y.tick - c.mostAt >= TWO_BEATS,
+    came,
+    seconds: Math.min(SECONDS, second - first + 1),
+  };
 }
 
 /**
