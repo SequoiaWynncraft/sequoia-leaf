@@ -565,7 +565,10 @@ export const floorWaiting = (): number | null => floored?.floor.waiting ?? null;
 /** The floor on the screen (`floor.ts`): for the ground it was opened on, and the count of losses it last saw. */
 let floored: { gr: Ground; floor: Floor; lost: number } | null = null;
 function floorFor(gr: Ground, p: Painter): Floor {
-  if (floored?.gr !== gr) floored = { gr, floor: new Floor(gr, p), lost };
+  if (floored?.gr !== gr) {
+    floored?.floor.drop();
+    floored = { gr, floor: new Floor(gr, p), lost };
+  }
   if (floored.lost !== lost) {
     floored.lost = lost;
     floored.floor.wipe();

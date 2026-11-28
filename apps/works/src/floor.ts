@@ -126,6 +126,12 @@ export class Floor {
     this.#settled = null;
   }
 
+  /** Gives the ground's memory on the card back: this floor is not laid again. */
+  drop(): void {
+    for (const page of this.#pages) this.#p.drop(page.sheet);
+    this.#pages.length = 0;
+  }
+
   /** How many chunks are still to be painted, for a review page waiting for the land to be whole. */
   get waiting(): number {
     const h = this.#hands;
