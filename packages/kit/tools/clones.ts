@@ -27,18 +27,32 @@ export function tokens(text: string): string[] {
   return [...text.matchAll(TOKEN)].flatMap((m) => (m[2] === undefined ? [] : [m[2]]));
 }
 
+/** A name as a token: a word that is not a string or a number. */
+const NAME = /^[$A-Za-z_][$\w]*$/;
+
 /**
- * A source's tokens as the check reads them (`tokens`), without its import declarations: from an
- * `import` that begins a statement (not `import(` or `import.meta`) to its semicolon.
+ * Whether the token at `i` begins a static import declaration: `import` where a statement begins,
+ * followed by `{`, `*`, `type`, a string, or a name and then `from` or `,`. Not `import(`, not
+ * `import.meta`, and not a class field or a key named `import` (`import = run();`).
+ */
+function importAt(all: readonly string[], i: number): boolean {
+  const before = all[i - 1];
+  const next = all[i + 1] ?? "";
+  if (all[i] !== "import" || (before !== undefined && before !== ";" && before !== "}")) return false;
+  if (next === "{" || next === "*" || next === "type" || /^["'`]/.test(next)) return true;
+  const after = all[i + 2];
+  return NAME.test(next) && (after === "from" || after === ",");
+}
+
+/**
+ * A source's tokens as the check reads them (`tokens`), without its static import declarations: from
+ * the `import` that begins one (`importAt`) to its semicolon.
  */
 export function code(text: string): string[] {
   const all = tokens(text);
   const out: string[] = [];
   for (let i = 0; i < all.length; i++) {
-    const before = all[i - 1];
-    const next = all[i + 1];
-    const starts = before === undefined || before === ";" || before === "}";
-    if (all[i] === "import" && starts && next !== "(" && next !== ".") {
+    if (importAt(all, i)) {
       while (i < all.length && all[i] !== ";") i++;
       continue;
     }

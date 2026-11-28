@@ -319,6 +319,18 @@ describe("the clone check", () => {
     expect(code(`${names}\nconst a = 1;`)).toEqual(["const", "a", "=", "1", ";"]);
     const dynamic = 'const m = import("./m.ts"); const d = import.meta.dir;';
     expect(code(dynamic)).toEqual(tokens(dynamic));
+    // A class field named `import` is code, with its initializer.
+    const field = "class Task { done = false; import = runTask(); }";
+    expect(code(field)).toEqual(tokens(field));
+    // Every form of a static import is left out.
+    const forms = [
+      'import "./side.ts";',
+      'import * as all from "./all.ts";',
+      'import type { T } from "./t.ts";',
+      'import one from "./one.ts";',
+      'import two, { three } from "./two.ts";',
+    ].join("\n");
+    expect(code(`${forms}\nconst a = 1;`)).toEqual(["const", "a", "=", "1", ";"]);
     expect(
       shared(
         new Map([
