@@ -73,6 +73,14 @@ function fill(y: F.Yard, tiles: readonly number[]): void {
   F.changed(y);
 }
 
+/** A grower's status, stopped with star crystals it cannot send on. */
+const STOPPED: F.Status = {
+  state: "blocked",
+  trouble: true,
+  line: "Stopped: its star crystals cannot leave by its middle way out. It grows nothing more until they do.",
+  stuck: F.item("crystal"),
+};
+
 /** What is on each tile and how far across it, in order. */
 const where = (y: F.Yard, tiles: readonly number[]): string => tiles.map((i) => `${y.item[i]}:${y.prog[i]}`).join(" ");
 
@@ -276,11 +284,35 @@ describe("a ring of belts", () => {
     y.holders.out[r] = F.item("crystal");
     F.changed(y);
     F.step(y);
-    expect(F.status(y, g)).toEqual({
-      state: "blocked",
-      trouble: true,
-      line: "Stopped: its star crystals cannot leave by its middle way out. It grows nothing more until they do.",
-      stuck: F.item("crystal"),
+    expect(F.status(y, g)).toEqual(STOPPED);
+  });
+
+  test("a grower whose full belt runs into a full ring with no way off it is stopped, a splitter or a sorter set to nothing on the ring or not", () => {
+    const shapes = (["belt", "splitter", "sorter", "drained"] as const).map((onRing) => {
+      const y = bare();
+      for (const x of [31, 27, 23, 19, 15, 11, 7, 3]) must(y, { do: "build", kind: "pylon", x, y: 10, dir: 0 });
+      const tiles = ring(y, 7, 2, 7, 7);
+      // On the ring's top row: a splitter whose ways left and right go nowhere, or a sorter set to nothing.
+      if (onRing === "sorter") must(y, { do: "remove", x: 10, y: 2 });
+      if (onRing === "splitter" || onRing === "sorter") must(y, { do: "build", kind: onRing, x: 10, y: 2, dir: 0 });
+      // Or a splitter there that sends what it can north into a shut crate.
+      if (onRing === "drained") drain(y, 10, 2, 0);
+      // A grower facing east two tiles from the ring, its way out onto a belt of two into the ring's west side.
+      must(y, { do: "build", kind: "grower", x: 3, y: 5, dir: 0 });
+      for (const x of [5, 6]) must(y, { do: "build", kind: "belt", x, y: 5, dir: 0 });
+      fill(y, [...tiles, F.at(y, 5, 5), F.at(y, 6, 5)]);
+      const g = F.at(y, 3, 5);
+      y.holders.out[F.holderOf(y, g)] = F.item("crystal");
+      F.changed(y);
+      F.step(y);
+      const s = F.status(y, g);
+      return [onRing, s?.state, s?.trouble];
     });
+    expect(shapes).toEqual([
+      ["belt", "blocked", true],
+      ["splitter", "blocked", true],
+      ["sorter", "blocked", true],
+      ["drained", "waiting", false],
+    ]);
   });
 });
