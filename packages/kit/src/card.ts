@@ -806,11 +806,10 @@ export function settle(): void {
     if (!o.pinned) deck.close();
     return;
   }
-  // A screen that changed size (a folding phone opened or closed) may want a finger's card as a
-  // sheet where it stood beside its thing, or the other way: the card takes the screen's form now.
-  node.classList.toggle("sheet", faceOf(o).sheet);
-  // A card followed to stays where it is; a sheet goes to whichever edge keeps it off its thing now.
-  if (!node.classList.contains("sheet") && o.pinned && o.stack.length > 1) return;
+  // The card takes the screen's form first: a screen that changed size (a folding phone opened or
+  // closed) may want a finger's card as a sheet where it stood beside its thing, or the other way.
+  // Then a card followed to stays where it is; a sheet goes to whichever edge keeps it off its thing now.
+  if (!node.classList.toggle("sheet", faceOf(o).sheet) && o.pinned && o.stack.length > 1) return;
   placeCard(node, o, "follow");
 }
 
