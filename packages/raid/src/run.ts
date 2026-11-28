@@ -588,6 +588,9 @@ export function buy(run: RunView, offerAt: number): Done {
   if (stop) return no(stop);
   const kind = run.stall[offerAt];
   if (!kind) return no("stall_empty");
+  // What is on the stall is bought as it was drawn: an offer of a figure retired from normal mode
+  // stays after the run sells its last copy, as drawn stock stays across a change of era. Only
+  // the next draw goes by what the run holds (`stallPool`).
   const cost = priceOf(run, offerAt);
   if (run.acorns < cost) return no("not_enough_acorns");
   const slot = run.bench.indexOf(null);

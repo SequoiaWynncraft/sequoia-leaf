@@ -3,9 +3,11 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 
 import { type Ctx, isRefused } from "@sequoia-leaf/core";
 import type { Habit } from "@sequoia-leaf/raid/bot.ts";
+import { catalogAt } from "@sequoia-leaf/raid/content/catalog.ts";
 import { ENDLESS } from "@sequoia-leaf/raid/content/endless.ts";
+import { LEGACY_ERA } from "@sequoia-leaf/raid/content/releases.ts";
 import { resolveFight } from "@sequoia-leaf/raid/fight/engine.ts";
-import { boardMet } from "@sequoia-leaf/raid/foe.ts";
+import { boardMet, keptEra } from "@sequoia-leaf/raid/foe.ts";
 import { fightRecord, readFight, replayOf } from "@sequoia-leaf/raid/fought.ts";
 import { RAID, type Table } from "@sequoia-leaf/raid/game.ts";
 import { picksOf, startRun } from "@sequoia-leaf/raid/run.ts";
@@ -228,10 +230,12 @@ describe("every row the goldens keep", () => {
   );
   test.each(rows("board"))("%s is met as a board, with levels only on a lane that keeps them", (name, text) => {
     const data: unknown = JSON.parse(text);
+    // Met by a run of the era it was kept in: one kept before boards said, by the tests' own.
+    const cat = catalogAt(keptEra(data) ?? LEGACY_ERA);
     if (name.includes("-own")) {
-      expect(boardMet(CAT, met(data), true)?.figures.some((p) => (p.level ?? 0) > 0)).toBe(true);
+      expect(boardMet(cat, met(data), true)?.figures.some((p) => (p.level ?? 0) > 0)).toBe(true);
     } else {
-      const board = boardMet(CAT, met(data), false, name.includes("-held") ? ENDLESS.chairs : 0);
+      const board = boardMet(cat, met(data), false, name.includes("-held") ? ENDLESS.chairs : 0);
       expect(board?.figures.length).toBeGreaterThan(0);
       expect(board?.figures.some((p) => p.level !== undefined)).toBe(false);
     }

@@ -195,13 +195,14 @@ export type Shape = (typeof SHAPES)[number];
 /**
  * Each shape's version. A fight (a row of `raid_fights`), a board and a depth (pieces left in
  * `play_kept`) are kept with no version of their own: the number here stands for one, and moves
- * when their keys do, in the PR that says why. Fight 3: a row keeps its fight's setup.
+ * when their keys do, in the PR that says why. Fight 3: a row keeps its fight's setup. Board 2: a
+ * board keeps the era it was fought in, and only a run of that era meets it.
  */
 export const VERSIONS: Readonly<Record<Shape, number>> = {
   table: TABLE_VERSION,
   sitting: SITTING_VERSION,
   fight: 3,
-  board: 1,
+  board: 2,
   depth: 1,
 };
 

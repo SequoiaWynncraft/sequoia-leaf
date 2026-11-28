@@ -287,7 +287,7 @@ describe("every command a player has", () => {
     ]);
   });
   test("handing over an item, and picking a component and a boon, with one redraw", () => {
-    let state = planned(started(5));
+    let state = planned(started(6));
     state = must(state, { do: "fight" }).state;
     state = must(state, { do: "take" }).state;
     // The first room is trouble: a component pick follows it.
@@ -936,7 +936,8 @@ describe("another member's board in a sparring room", () => {
     const done = must(planned(reach(started(5), 2)), { do: "fight" });
     const side = fought(done.state)?.setup.sides[0];
     expect(side?.figures.length).toBeGreaterThan(0);
-    expect(done.keep).toEqual([{ slot: "board:0:2", data: side }]);
+    // Kept with the era it was fought in: only a run of that era meets it.
+    expect(done.keep).toEqual([{ slot: "board:0:2", data: { ...side, era: fought(done.state)?.setup.era } }]);
     expect(SLOT.test("board:0:2")).toBe(true);
     // Its takings keep nothing more.
     expect(must(done.state, { do: "take" }).keep).toEqual([]);
@@ -1256,11 +1257,12 @@ describe("a run with the member's own figures", () => {
     expect(board?.slot).toBe("own:0:2");
     expect(RAID.meets?.(sent.state, { do: "take" })).toEqual({ slot: "own:0:3", avoid: [] });
     const met = metOf(board?.data);
-    // Met in the era the run is in, which has everything its board holds.
+    // Met in the era the run is in, which has everything its board holds. The main way would meet it
+    // only if all of it were in the era's set: this one holds figures out of January's, so a regular stays.
     const era = catalogAt(eraAt(ctx().now));
     const inOwn = opposition(era, 1, 2, 0, met, true);
     const inMain = opposition(era, 1, 2, 0, met);
-    expect([inOwn.by, inMain.by]).toEqual([MEMBER, MEMBER]);
+    expect([inOwn.by, inMain.by]).toEqual([MEMBER, undefined]);
     expect(inOwn.figures.every((p) => p.level === 6)).toBe(true);
     expect(inMain.figures.every((p) => p.level === undefined)).toBe(true);
   });

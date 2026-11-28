@@ -13,6 +13,7 @@ import { chance, mix } from "@sequoia-leaf/core";
 import { catalogOf } from "../content/catalog.ts";
 import { specOf, starScale } from "../content/figures.ts";
 import { FIGHT, levelBoost } from "../content/rooms.ts";
+import { bind } from "../content/rules.ts";
 import { distance, seatCell, type Side, stepToward } from "../hex.ts";
 import { type Party, type Placed, traitSteps } from "../party.ts";
 import { cast } from "./abilities.ts";
@@ -106,7 +107,8 @@ export function openFight(setup: FightSetup, cat = catalogOf(setup), hooks: Tabl
     traits: [traitSteps(cat, ours), traitSteps(cat, theirs)],
     dusk: 0,
     falls: 0,
-    wilds: wildsOf(setup),
+    // Its room's rules, bound with those its era's every fight is fought under (`Catalog.fight`).
+    wilds: bind(wildsOf(setup), cat.fight),
     out: opening,
     pending: [],
     boons: [ours.boons, theirs.boons],
@@ -333,6 +335,9 @@ function act(f: Fight, u: Unit): void {
 /** Once a second: burns bite, the regrowing regrow, mana comes by the second, `second` is asked, and after dusk everyone hurts. */
 function everySecond(f: Fight): void {
   const second = f.tick / HZ;
+  // Healing and shields wane, and damage rises, from this second on (`wanes`): said once, as it comes.
+  const { wanes, wane, rises, risesMost } = f.wilds;
+  if (second === wanes && (wane > 0 || rises > 0)) emit(f, { t: "wane", by: wane, rises, most: risesMost });
   for (const u of f.units) {
     if (!u.alive) continue;
     if (u.burnUntil >= f.tick && u.burnBy > 0) {

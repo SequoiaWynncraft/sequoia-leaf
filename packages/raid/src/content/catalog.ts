@@ -5,6 +5,12 @@
  * have it, and what the pulls give it as. There is no table of them to read but a catalogue's, so
  * what exists, and what its numbers are, cannot be asked without when.
  *
+ * An era's **set** is normal mode's roster, what every way with everyone's figures draws from: the
+ * grove figures open then, but those a release has retired and none has brought back, and a
+ * headliner whose banner is open (`Figure.everyones`). So a release that adds figures can retire as
+ * many, and each cost keeps its count. A retired figure is still the pulls' and the exchange's,
+ * and a run with the member's own figures still sells it to whoever pulled it.
+ *
  * `available` is the one door to which figures a draw may draw: a stall, a starter pick, a regular,
  * a carousel, a pull, the exchange or the almanac. A run, a table, a sitting, a fight's setup and the
  * views Leaf sends each carry their era, and `catalogOf` reads the catalogue from it: never from a
@@ -34,6 +40,7 @@ import { GROOT_NIGHT } from "./releases/groot-night.ts";
 import { GROOT } from "./releases/groot.ts";
 import { PENGUIN_MONTH } from "./releases/penguin-month.ts";
 import { UP_THE_TREE } from "./releases/up-the-tree.ts";
+import { type FightRules, ruled } from "./rules.ts";
 import { TRAIT_IDS, type TraitId, type TraitSpec } from "./traits.ts";
 
 export type { FigureId } from "./figures.ts";
@@ -54,15 +61,18 @@ export type Access = "shared" | { readonly headliner: Banner["id"] };
  * whether it is one of everyone's figures, its rarity as a prize, how it is drawn (everyone's by the
  * set; a headliner as its banner says), and the chairs it takes on a board (`chairsUsed`).
  *
- * `everyones`: whether the ways with everyone's figures have it, whoever pulled what: their stall,
- * first pick, regulars, carousel, the boards they meet, and the almanac. Every figure the grove's
- * pulls give is; a banner's headliner is in an era its banner is open in, and in no other
- * (`openIn`). The banners' dates are all that says so.
+ * `everyones`: whether it is in the era's set, which the ways with everyone's figures have,
+ * whoever pulled what: their stall, first pick, regulars, carousel, the boards they meet, and the
+ * almanac. A grove figure is, but while a release has it retired (`retired`); a banner's headliner
+ * is in an era its banner is open in, and in no other (`openIn`). The banners' dates and the
+ * patches' `retire` and `return` are all that says so.
  */
 export interface Figure extends FigureSpec {
   readonly since: ReleaseId;
   readonly access: Access;
   readonly everyones: boolean;
+  /** A grove figure out of normal mode in this era: retired by a release, and not brought back by a later one. */
+  readonly retired: boolean;
   readonly prize: Rarity;
   readonly look: Look;
   readonly chairs: 0 | 1;
@@ -71,7 +81,7 @@ export interface Figure extends FigureSpec {
 }
 
 /** Every release's patch, in the order the releases open. A release with nothing in it yet has none. */
-const PATCHES: readonly Patch[] = [BASE, GROOT, GAZ_STALL, GROOT_NIGHT, PENGUIN_MONTH, UP_THE_TREE];
+export const PATCHES: readonly Patch[] = [BASE, GROOT, GAZ_STALL, GROOT_NIGHT, PENGUIN_MONTH, UP_THE_TREE];
 
 /** Every figure any release may bring, in the order a release's arrivals are drawn in. */
 const ALL_FIGURES: readonly FigureId[] = [...FIGURE_IDS, ...MEMBER_IDS];
@@ -130,6 +140,8 @@ export interface Catalog {
   readonly ids: Open;
   /** The banners whose release is open. */
   readonly banners: readonly Banner[];
+  /** The rules every fight of this era is fought under, bound with its room's: healing and shields waning late. */
+  readonly fight: FightRules;
   /** The catalogue of an era up to this one: what a banner's pool was when it opened. */
   readonly earlier: (era: Era) => Catalog;
 }
@@ -159,17 +171,48 @@ function openIn(banner: Banner, era: Era): boolean {
 /**
  * How a figure a release brings is had, and how it is drawn: from the grove, by the set; or from its
  * banner, as the banner says, if a banner that release opens has it as its headliner. And whether it
- * is one of everyone's in an era: a grove figure always, a headliner while its banner is open.
+ * is one of everyone's in an era: a grove figure unless it is retired then, a headliner while its
+ * banner is open.
  */
 function whoseOf(
   id: FigureId,
   since: ReleaseId,
   era: Era,
-): { readonly access: Access; readonly look: Look; readonly everyones: boolean } {
+  retired: boolean,
+): { readonly access: Access; readonly look: Look; readonly everyones: boolean; readonly retired: boolean } {
   const banner = BANNERS.find((b) => b.headliner === id);
-  if (!banner) return { access: "shared", look: "set", everyones: true };
+  if (!banner) return { access: "shared", look: "set", everyones: !retired, retired };
   if (banner.opens !== since) throw new Error(`${banner.id}'s headliner comes with ${since}, not with its banner`);
-  return { access: { headliner: banner.id }, look: banner.look, everyones: openIn(banner, era) };
+  return { access: { headliner: banner.id }, look: banner.look, everyones: openIn(banner, era), retired: false };
+}
+
+/**
+ * The figures out of normal mode once a release's patch is folded in: those out before, less those
+ * it brings back, and those it retires. Retiring a figure not out before the release (one it brings
+ * among them), a headliner, or one out already, or bringing back one that is not out, is a mistake
+ * in the content and stops the catalogue being made.
+ */
+function retiredAfter(
+  was: ReadonlySet<FigureId>,
+  before: Readonly<Partial<Record<FigureId, Arrival>>>,
+  release: ReleaseId,
+  part: Patch["figures"],
+): Set<FigureId> {
+  const [retire, back] = [part?.retire ?? [], part?.return ?? []];
+  const out = new Set(was);
+  for (const id of back) {
+    if (!out.has(id)) throw new Error(`${release} brings back ${id}, which is not retired`);
+    if (back.indexOf(id) !== back.lastIndexOf(id)) throw new Error(`${release} brings back ${id} twice`);
+    out.delete(id);
+  }
+  for (const id of retire) {
+    if (!before[id]) throw new Error(`${release} retires ${id}, which is not out before it`);
+    if (BANNERS.some((b) => b.headliner === id)) throw new Error(`${release} retires ${id}, a headliner`);
+    if (was.has(id) || out.has(id)) throw new Error(`${release} retires ${id}, which is retired already`);
+    if (back.includes(id)) throw new Error(`${release} both retires and brings back ${id}`);
+    out.add(id);
+  }
+  return out;
 }
 
 /** Checks every item is of the sort its id's list says: a mistake in the content stops the catalogue being made. */
@@ -191,12 +234,17 @@ export function catalogsOf(patches: readonly Patch[]): readonly Catalog[] {
   const came: FigureId[] = [];
   const banners: Banner[] = [];
   let was: Kinds = { traits: {}, items: {}, boons: {} };
+  let retired: ReadonlySet<FigureId> = new Set();
+  /** The fight rules the patches so far set, the later's fields over the earlier's. */
+  const fight: Partial<FightRules> = {};
   for (const { id: release } of RELEASES) {
     const found = patches.filter((p) => p.release === release);
     if (found.length > 1) throw new Error(`${release} has ${found.length} patches`);
     const patch = found[0];
     const before = arrived;
     arrived = fold(ALL_FIGURES, before, patch?.figures, fields);
+    retired = retiredAfter(retired, before, release, patch?.figures);
+    Object.assign(fight, patch?.fight);
     for (const id of ALL_FIGURES.filter((f) => arrived[f] && !before[f])) {
       since[id] = release;
       came.push(id);
@@ -211,7 +259,9 @@ export function catalogsOf(patches: readonly Patch[]): readonly Catalog[] {
     const figures: Partial<Record<FigureId, Figure>> = {};
     for (const id of came) {
       const [f, from] = [arrived[id], since[id]];
-      if (f && from) figures[id] = { ...f, since: from, ...whoseOf(id, from, era), chairs: f.chairs ?? 1 };
+      if (f && from) {
+        figures[id] = { ...f, since: from, ...whoseOf(id, from, era, retired.has(id)), chairs: f.chairs ?? 1 };
+      }
     }
     const order = [...DRAWN.filter((id) => figures[id]), ...came.filter((id) => !DRAWN.includes(id))];
     banners.push(...BANNERS.filter((b) => b.opens === release));
@@ -227,7 +277,7 @@ export function catalogsOf(patches: readonly Patch[]): readonly Catalog[] {
       if (!cat || at > era) throw new RangeError(`Era ${era} has no catalogue of era ${at}`);
       return cat;
     };
-    out.push({ era, figures, order, ...was, ids, banners: [...banners], earlier });
+    out.push({ era, figures, order, ...was, ids, banners: [...banners], fight: ruled(fight), earlier });
   }
   return out;
 }
@@ -259,7 +309,11 @@ export type Figures = { readonly pool: "fair" } | { readonly pool: "own"; readon
 
 /** What a draw is for, and what decides what it may draw. */
 export type Purpose =
-  | { readonly for: "stall"; readonly figures: Figures; readonly tier: Tier }
+  /**
+   * A run's stall at a cost. `holds`: the figures the run has a copy of that can still star up, on
+   * its board or bench; a retired one stays on a stall with everyone's figures while it holds one.
+   */
+  | { readonly for: "stall"; readonly figures: Figures; readonly tier: Tier; readonly holds: readonly FigureId[] }
   /** A run's first pick, of whom to set out with. */
   | { readonly for: "starter" }
   /** Who sits as a regular: their parties, the bot's, a live table's empty seats. */
@@ -269,17 +323,26 @@ export type Purpose =
   | { readonly for: "pull"; readonly pool: string; readonly rarity: Rarity }
   /** What Seeds buy, had or not. */
   | { readonly for: "exchange" }
-  /** The almanac's figures: everyone's, and each headliner of the roster. */
-  | { readonly for: "almanac"; readonly roster: Roster };
+  /** The almanac's figures: the set. */
+  | { readonly for: "almanac" }
+  /**
+   * The almanac's figures apart, "In your collection": those of the roster out of normal mode, a
+   * retired one or a headliner whose banner is closed.
+   */
+  | { readonly for: "collection"; readonly roster: Roster };
 
-/** Who a stall sells at a cost: everyone's; with the member's own, every one-acorn figure, and above that only the roster's. */
-function stall(cat: Catalog, figures: Figures, tier: Tier): FigureId[] {
+/**
+ * Who a stall sells at a cost: the set, and each retired figure the run holds (`holds`), so a run
+ * finishes starring what it has but starts none. With the member's own: the roster's, the set or
+ * not, and at one acorn the set's (and a retired one held) to anyone.
+ */
+function stall(cat: Catalog, figures: Figures, tier: Tier, holds: readonly FigureId[]): FigureId[] {
   return cat.order.filter((id) => {
     const f = cat.figures[id];
     if (f?.tier !== tier) return false;
-    if (figures.pool === "fair") return f.everyones;
-    const owned = figures.roster[id] !== undefined;
-    return owned || (tier === 1 && f.access === "shared");
+    const sold = f.everyones || (f.retired && holds.includes(id));
+    if (figures.pool === "fair") return sold;
+    return figures.roster[id] !== undefined || (tier === 1 && sold);
   });
 }
 
@@ -303,7 +366,7 @@ export function available(cat: Catalog, p: Purpose): readonly FigureId[] {
   const costs = (tier: Tier) => (id: FigureId) => everyones(id) && cat.figures[id]?.tier === tier;
   switch (p.for) {
     case "stall":
-      return stall(cat, p.figures, p.tier);
+      return stall(cat, p.figures, p.tier, p.holds);
     case "starter":
       return cat.order.filter(costs(1));
     case "regular":
@@ -315,7 +378,9 @@ export function available(cat: Catalog, p: Purpose): readonly FigureId[] {
     case "exchange":
       return [...prizes(cat, GROVE, "Dryad"), ...prizes(cat, GROVE, "Druid")];
     case "almanac":
-      return cat.order.filter((id) => everyones(id) || p.roster[id] !== undefined);
+      return cat.order.filter(everyones);
+    case "collection":
+      return cat.order.filter((id) => !everyones(id) && p.roster[id] !== undefined);
   }
 }
 

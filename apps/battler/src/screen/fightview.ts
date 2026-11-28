@@ -105,6 +105,7 @@ export function startFight(setup: FightSetup, speed: Speed, bases: BaseLook, don
   FV.flashes = [];
   FV.signs = [];
   FV.dusk = 0;
+  FV.wane = 0;
   FV.clacked = false;
   FV.bump = { at: -99, px: 0 };
   FV.done = done;
@@ -125,6 +126,7 @@ export function endFight(): void {
   FV.flashes = [];
   FV.signs = [];
   FV.dusk = 0;
+  FV.wane = 0;
   FV.done = null;
   FV.seen = [];
   pace.k = 1;
@@ -437,9 +439,9 @@ export function drawFight(g: Ctx, list: Standing[]): void {
   const pb = FV.pb;
   if (!pb) return;
   const c = pb.clock;
-  // Dusk falling over the table itself; the figures stay lit.
-  if (FV.dusk > 0) {
-    g.fillStyle = `rgba(32,14,50,${Math.min(0.5, 0.14 + FV.dusk * 0.03)})`;
+  // Dusk falling over the table itself; the figures stay lit. A step of it from when healing and shields wane.
+  if (FV.dusk > 0 || FV.wane > 0) {
+    g.fillStyle = `rgba(32,14,50,${FV.dusk > 0 ? Math.min(0.5, 0.14 + FV.dusk * 0.03) : 0.07})`;
     g.fillRect(0, 0, V.w, V.h);
   }
   for (const fl of FV.flashes) {

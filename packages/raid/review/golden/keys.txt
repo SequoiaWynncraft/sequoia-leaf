@@ -3604,5 +3604,18 @@ board 1
   might
   title
   who
+board 2
+  boons
+  era
+  figures
+  figures[].fed
+  figures[].items
+  figures[].kind
+  figures[].level
+  figures[].seat
+  figures[].stars
+  might
+  title
+  who
 depth 1
   room

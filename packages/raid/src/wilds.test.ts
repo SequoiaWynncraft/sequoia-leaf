@@ -306,7 +306,17 @@ describe("each rule in the fight", () => {
   test("a fight set up with no rule is played as it always was", () => {
     const a = playOut(setupOf(BRAWL, BRAWL));
     const f = openFight(setupOf(BRAWL, BRAWL));
-    expect(f.wilds).toEqual({ closed: [], closedToSit: [], reach: Number.POSITIVE_INFINITY, dusk: 30, alone: 0 });
+    expect(f.wilds).toEqual({
+      closed: [],
+      closedToSit: [],
+      reach: Number.POSITIVE_INFINITY,
+      dusk: 30,
+      alone: 0,
+      wanes: Number.POSITIVE_INFINITY,
+      wane: 0,
+      rises: 0,
+      risesMost: 0,
+    });
     expect(f.taken.every((v) => v >= -1)).toBe(true);
     expect(a.f.result).not.toBeNull();
   });

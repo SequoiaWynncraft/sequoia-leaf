@@ -1,0 +1,12 @@
+{
+  "who": "You",
+  "title": "",
+  "figures": [
+    { "kind": "crab7", "stars": 2, "seat": 2, "items": ["wasptail"], "fed": 0, "level": 2 },
+    { "kind": "slug", "stars": 1, "seat": 3, "items": ["crabcharm"], "fed": 0, "level": 1 },
+    { "kind": "mossmote", "stars": 1, "seat": 24, "items": [], "fed": 0 }
+  ],
+  "boons": [],
+  "might": 100,
+  "era": 3
+}

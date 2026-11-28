@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 
 import { type Game, type Met, type PlayerId, playerId } from "@sequoia-leaf/core";
 import { isParty, RAID, readView, type Roster, type TableView } from "@sequoia-leaf/raid";
+import { keptBoard } from "@sequoia-leaf/raid/foe.ts";
 import { wayOn } from "@sequoia-leaf/raid/way.ts";
 import { Schema } from "effect";
 
@@ -187,7 +188,7 @@ describe("the Deep Woods at Leaf", () => {
     const fight = view.held.endless?.stage.phase === "fight" ? view.held.endless.stage.fight : null;
     expect(fight?.outcome.result).toBe("win");
     expect(await keptAt("deep:17")).toEqual([
-      { player: alice, data: JSON.stringify(fight?.setup.sides[0]), at: clock.now },
+      { player: alice, data: JSON.stringify(fight ? keptBoard(fight.setup) : undefined), at: clock.now },
     ]);
     const held = await get("/v1/game/raid/held", alice);
     expect(Schema.decodeUnknownSync(RaidHeld)(await held.json())).toEqual({ rooms: [18] });

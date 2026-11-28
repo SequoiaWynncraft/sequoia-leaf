@@ -12,6 +12,7 @@ import { pick, type Stream, weighted } from "@sequoia-leaf/core";
 import { available, type Catalog } from "./content/catalog.ts";
 import { type FigureId, figureIn, specOf, type Stars, starScale, traitsOf } from "./content/figures.ts";
 import type { ComponentId, ItemId } from "./content/items.ts";
+import { favourites } from "./content/reach.ts";
 import { holdItem } from "./content/recipes.ts";
 import { HANDLES, ROOMS, type SparStrength, STALL_ODDS, TRAILS } from "./content/rooms.ts";
 import { type CallingId, isCalling, isKin, type KinId, stepFor, traitIn } from "./content/traits.ts";
@@ -75,8 +76,9 @@ export function sparParty(
   const s: Stream = { rng: seed >>> 0 };
   const trail = TRAILS[trailIndex] ?? TRAILS[0];
   const who = pick(s, HANDLES);
-  const kin: KinId = pick(s, cat.ids.traits.filter(isKin));
-  const calling: CallingId = pick(s, cat.ids.traits.filter(isCalling));
+  // Its favourites are traits the set reaches a step of by figures alone (`favourites`).
+  const kin: KinId = pick(s, favourites(cat, cat.ids.traits).filter(isKin));
+  const calling: CallingId = pick(s, favourites(cat, cat.ids.traits).filter(isCalling));
   const likes = (id: FigureId): number =>
     (traitsOf(cat, id).includes(kin) ? LIKES_KIN : 1) * (traitsOf(cat, id).includes(calling) ? LIKES_CALLING : 1);
   const levelOdds = STALL_ODDS[Math.min(STALL_ODDS.length, Math.max(1, strength.level)) - 1] ?? STALL_ODDS[0];

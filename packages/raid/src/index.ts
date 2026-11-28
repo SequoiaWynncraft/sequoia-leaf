@@ -19,6 +19,15 @@ export {
   type Rarity,
   RARITY_IDS,
 } from "./content/catalog.ts";
+// How far normal mode reaches a trait, and what every view shows of its steps.
+export {
+  favourites,
+  reachedByFigures,
+  shownInNormal,
+  traitReach,
+  type TraitShown,
+  traitShown,
+} from "./content/reach.ts";
 export { type Era, eraAt, eraOf, isEra, LAST_ERA, LEGACY_ERA, type ReleaseId, RELEASES } from "./content/releases.ts";
 export { type Banner, BANNERS, GROVE } from "./content/banners.ts";
 

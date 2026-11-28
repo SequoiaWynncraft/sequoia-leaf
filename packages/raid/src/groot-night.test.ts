@@ -27,13 +27,14 @@ describe("Groot Night opens on Leaf's clock", () => {
   const BROUGHT = [1, 3, 4, 5] as const;
   const PURPOSES: readonly (readonly [string, Purpose, readonly FigureId[]])[] = [
     ...BROUGHT.map(
-      (tier) => [`the stall at ${tier}`, { for: "stall", figures: { pool: "fair" }, tier }, EVERYONES] as const,
+      (tier) =>
+        [`the stall at ${tier}`, { for: "stall", holds: [], figures: { pool: "fair" }, tier }, EVERYONES] as const,
     ),
     ...BROUGHT.map(
       (tier) =>
         [
           `the own stall at ${tier}`,
-          { for: "stall", figures: { pool: "own", roster: ALL }, tier },
+          { for: "stall", holds: [], figures: { pool: "own", roster: ALL }, tier },
           [...EVERYONES, "commodore"],
         ] as const,
     ),
@@ -48,8 +49,7 @@ describe("Groot Night opens on Leaf's clock", () => {
         [`Groot Night's ${rarity}`, { for: "pull", pool: "groot-night", rarity }, [...EVERYONES, "commodore"]] as const,
     ),
     ["the exchange", { for: "exchange" }, EVERYONES],
-    ["the almanac", { for: "almanac", roster: {} }, EVERYONES],
-    ["the almanac, the Commodore pulled", { for: "almanac", roster: ALL }, [...EVERYONES, "commodore"]],
+    ["the almanac", { for: "almanac" }, EVERYONES],
   ];
   test.each(PURPOSES.map(([name, purpose, among]) => [name, purpose, among] as const))(
     "%s: none of it a millisecond before, and what suits it at the moment",
@@ -61,7 +61,8 @@ describe("Groot Night opens on Leaf's clock", () => {
   );
   test("each figure where it belongs at the moment: its cost, its rarity, the exchange for a Druid", () => {
     const at = catalogAt(eraAt(OPENS));
-    const sold = (tier: (typeof TIERS)[number]) => available(at, { for: "stall", figures: { pool: "fair" }, tier });
+    const sold = (tier: (typeof TIERS)[number]) =>
+      available(at, { for: "stall", holds: [], figures: { pool: "fair" }, tier });
     expect([sold(1), sold(3), sold(4), sold(5)].map((list) => list.filter((id) => EVERYONES.includes(id)))).toEqual([
       ["peep"],
       ["crab31", "munch"],

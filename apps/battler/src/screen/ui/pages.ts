@@ -43,7 +43,17 @@ import { ask, pagesKey, S, type Slot } from "../state.ts";
 import { figPic, pic } from "./cards.ts";
 import { summary } from "./ended.ts";
 import { frontAway, frontBody } from "./front.ts";
-import { everyonesFigures, figuresHere, pulledLine, pulledTag, traitsHere, unshown } from "./own.ts";
+import {
+  ALL_FIGURES,
+  collectionHere,
+  everyonesFigures,
+  figuresHere,
+  pulledLine,
+  pulledTag,
+  traitsHere,
+  unshown,
+  YOUR_FIGURES,
+} from "./own.ts";
 import { frontShown, takenLine } from "./woods.ts";
 
 export type PageId = "front" | "almanac" | "howto" | "looks" | "summary";
@@ -126,20 +136,24 @@ function panel(
 
 // ---------- the almanac ----------
 
-/** A figure in the almanac: shown once it has been fielded or pulled, dark until then; a badge for three stars. */
-function figureTile(id: FigureId): HTMLElement {
+/**
+ * A figure in the almanac: shown once it has been fielded or pulled, dark until then; a badge for
+ * three stars; greyed for one of the member's own out of normal mode (`retired`).
+ */
+function figureTile(id: FigureId, retired = false): HTMLElement {
   const met = S.almanac.fielded.includes(id) || S.roster[id] !== undefined;
   const starred = S.almanac.threeStars.includes(id);
   const tile = el(
     "button",
-    `k-card tile${met ? "" : " unmet"}`,
+    `k-card tile${met ? "" : " unmet"}${retired ? " retired" : ""}`,
     { type: "button", "aria-label": met ? null : "Not met" },
     pic(portrait(id, { dark: !met }), 2),
     met ? el("span", "k-s", { text: nameOf(catalogOf(S), id) }) : null,
     starred ? pic(starsPic(3), 1, "badge") : null,
     pulledTag(id),
   );
-  if (met) link(tile, `figure:${id}/${starred ? 3 : 1}/lore`);
+  // From the collection, in the member's own terms: every step of its traits.
+  if (met) link(tile, `figure:${id}/${starred ? 3 : 1}/lore${retired ? "/own" : ""}`);
   return tile;
 }
 
@@ -150,6 +164,31 @@ const ALMANAC: readonly Choice<AlmanacTab>[] = [
   { id: "items", name: "Items" },
   { id: "raids", name: "Raids" },
 ];
+
+/**
+ * The almanac's figures: the set, how many of it fielded, and the member's own out of normal mode
+ * apart, greyed, "In your collection".
+ */
+function figuresTab(): HTMLElement[] {
+  const a = S.almanac;
+  const set = everyonesFigures();
+  const fielded = a.fielded.filter((id) => set.includes(id)).length;
+  const kept = collectionHere();
+  return [
+    el("div", "k-dim", {
+      text: `${fielded} of ${set.length} fielded. ${a.threeStars.length} taken to three stars.${pulledLine()}`,
+    }),
+    el("div", "tiles", {}, ...figuresHere().map((id) => figureTile(id))),
+    ...(kept.length === 0
+      ? []
+      : [
+          el("hr", "k-rule"),
+          el("div", "k-label", { text: "In your collection" }),
+          el("div", "k-dim", { text: `Not in "${ALL_FIGURES}" raids now. Still yours in "${YOUR_FIGURES}".` }),
+          el("div", "tiles", {}, ...kept.map((id) => figureTile(id, true))),
+        ]),
+  ];
+}
 
 function almanac(): HTMLElement {
   const a = S.almanac;
@@ -168,13 +207,7 @@ function almanac(): HTMLElement {
     },
   });
   if (tab === "figures") {
-    add(
-      page,
-      el("div", "k-dim", {
-        text: `${a.fielded.length} of ${everyonesFigures().length} fielded. ${a.threeStars.length} taken to three stars.${pulledLine()}`,
-      }),
-    );
-    add(page, el("div", "tiles", {}, ...figuresHere().map(figureTile)));
+    add(page, ...figuresTab());
   } else if (tab === "traits") {
     add(page, el("div", "k-dim", { text: `${a.topped.length} switched all the way on.` }));
     const list = el("div", "k-col", {});

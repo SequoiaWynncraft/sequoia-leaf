@@ -406,6 +406,11 @@ export type FightEvent =
   | { t: "item"; id: number; item: ItemId }
   /** Dusk falls, or deepens: its `n`th second. */
   | { t: "dusk"; n: number }
+  /**
+   * Late in the fight (`FightRules.wanes`): healing and shields wane from now on, by `by` percent,
+   * and damage rises `rises` percent each second, up to `most`.
+   */
+  | { t: "wane"; by: number; rises: number; most: number }
   | { t: "end"; result: FightResult; tick: number; standing: [number, number] };
 
 /** How one figure did. */

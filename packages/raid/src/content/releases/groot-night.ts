@@ -7,10 +7,10 @@
  * Sneak's first hits a little softer, the four emblems the banner brings, and +10% health on every
  * emblem.
  *
- * Five figures more on the stall make copies rarer (the roller's three-star figures a run: 2.01 to
- * 1.28), so the cheap ones are a little stronger than their tier, and Crab keeps its opener at 2:
- * with them, the bots clear the trail about as often as before (`review/balance.ts`, beside it with
- * `era=gaz-stall`).
+ * It retires as many figures from normal mode as it brings (`RAID-SETS.md`), so the stall has as
+ * many a cost as before and copies come round as often: Peep, Munch and Crab #31 have their tier's
+ * numbers, as `RAID-BANNERS.md` gave them. Crab keeps its opener at 2. The bots clear the trail
+ * about as often as before (`review/balance.ts`, beside it with `era=gaz-stall`).
  */
 import type { BoonSpec } from "../boons.ts";
 import { charm, EMBLEM } from "../charms.ts";
@@ -27,7 +27,14 @@ const STATS: Partial<ItemSpec> = { stats: { ...NO_STATS, ...EMBLEM } };
 
 export const GROOT_NIGHT: Patch = {
   release: "groot-night",
+  // Ember's burn, the one thing that cut healing, leaves normal mode with this release. Instead, from
+  // 20 seconds into a fight, healing and shields of every source are 20% weaker and damage rises 5%
+  // each second, up to 50% more, so that long fights end before dusk (`review/balance.ts`).
+  fight: { wanes: 20, wane: 20, rises: 5, risesMost: 50 },
   figures: {
+    // Out of normal mode from this release (`RAID-SETS.md`): Flint, Toast, Shrub, Reed and Vesta, one a
+    // figure it brings, cost for cost. Ember leaves but Brew, Chorus's two-acorn figure.
+    retire: ["emberkit", "cindernewt", "bushgnome", "heron", "hearthcat"],
     add: {
       // Goes for whoever is hardest to crack.
       peep: {
@@ -36,8 +43,8 @@ export const GROOT_NIGHT: Patch = {
         kin: "grooter",
         calling: "slinger",
         extra: [],
-        hp: 340,
-        attack: 34,
+        hp: 220,
+        attack: 24,
         speed: 0.8,
         range: 4,
         armour: 15,
@@ -47,7 +54,7 @@ export const GROOT_NIGHT: Patch = {
           name: "Hat Off",
           shape: "bolt",
           text: "Takes its hat off and throws it at the enemy in its reach with the most armour: {damage} physical damage, and that enemy has {crack} less armour and ward for the rest of the fight.",
-          n: { damage: [130, 230, 420], crack: [10, 14, 20] },
+          n: { damage: [60, 105, 190], crack: [10, 14, 20] },
           short: "{damage} physical to the most armoured in reach. Cracks {crack} armour and ward.",
         },
         quip: "Halfway out. Staying there.",
@@ -60,8 +67,8 @@ export const GROOT_NIGHT: Patch = {
         kin: "crab",
         calling: "chorus",
         extra: [],
-        hp: 500,
-        attack: 36,
+        hp: 420,
+        attack: 30,
         speed: 0.7,
         range: 2,
         armour: 25,
@@ -71,7 +78,7 @@ export const GROOT_NIGHT: Patch = {
           name: "Clack",
           shape: "ally",
           text: "Clacks its pebbles: the {count} friends nearest it with a mana bar gain {mana} mana, and it gets a shield of {shield} for {lasts} seconds.",
-          n: { count: [2, 2, 3], mana: [25, 35, 50], shield: [150, 260, 470], lasts: [4, 4, 4] },
+          n: { count: [2, 2, 3], mana: [25, 35, 50], shield: [120, 210, 380], lasts: [4, 4, 4] },
           short: "{count} nearest allies +{mana} mana. Shield {shield} for {lasts}s.",
         },
         quip: "Taps one foot. Has done since spring.",
@@ -85,8 +92,8 @@ export const GROOT_NIGHT: Patch = {
         kin: "grooter",
         calling: "fang",
         extra: [],
-        hp: 660,
-        attack: 55,
+        hp: 520,
+        attack: 46,
         speed: 0.75,
         range: 1,
         armour: 30,
@@ -96,7 +103,7 @@ export const GROOT_NIGHT: Patch = {
           name: "Shell And All",
           shape: "bolt",
           text: "Bites its target {bites} times in {lasts} second: {damage} physical damage a bite, and each bite takes {crack} armour and ward off it for the rest of the fight.",
-          n: { bites: [3, 3, 3], lasts: [1, 1, 1], damage: [95, 170, 305], crack: [6, 8, 12] },
+          n: { bites: [3, 3, 3], lasts: [1, 1, 1], damage: [55, 95, 170], crack: [6, 8, 12] },
           short: "{bites} bites over {lasts}s, {damage} physical each. Each cracks {crack} armour and ward.",
         },
         quip: "Eats the shell first.",

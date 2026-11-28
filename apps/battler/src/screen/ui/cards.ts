@@ -62,6 +62,7 @@ import {
   type TraitId,
   traitIn,
   traitShort,
+  traitShown,
   traitText,
   type Unit,
   type UnitKind,
@@ -74,10 +75,12 @@ import { attacks, formLines, formOf, shownName } from "../forms.ts";
 import {
   acrossName,
   combosWithHeld,
+  countWords,
   membersOf,
   NUMBER_KEYS,
   type Numbers,
   ownTraitCount,
+  ownWay,
   pieceNumbers,
   plainNumbers,
   recipesOf,
@@ -85,7 +88,6 @@ import {
   startNumbers,
   streakNow,
   streakRule,
-  type TraitCount,
   traitCount,
   whereIs,
 } from "../logic.ts";
@@ -94,7 +96,7 @@ import { catalogFor, doNow, S } from "../state.ts";
 import { chairsSaid } from "./endless.ts";
 import { feedActions } from "./feedtarget.ts";
 import { figuresAt, levelOnCard, oddsStats } from "./own.ts";
-import { figureRef, itemRef, pieceRef, traitRef } from "./refs.ts";
+import { figureRef, itemRef, pieceRef, traitRef, traitRefFrom } from "./refs.ts";
 import { itemsOf, wantedBy } from "./suits.ts";
 import { toolDesc, withMelt } from "./toolcard.ts";
 import { fedLine, sortWord } from "./words.ts";
@@ -173,6 +175,8 @@ export interface FigureExtras {
   party?: Pick<Party, "figures"> | null;
   /** The almanac's card: the long sentence and the flavour line too. */
   lore?: boolean;
+  /** Its traits in the member's own terms, every step shown: a raid with their own figures, or their collection. */
+  own?: boolean;
   /** One of the party's own while planning: it can be sold. */
   sellable?: { id: number } | null;
 }
@@ -207,27 +211,32 @@ function statsOf(cat: Catalog, kind: UnitKind, stars: Stars, extras: FigureExtra
 
 /** Any figure: its role, its traits, its numbers, its ability in a few words, and the items that suit it. */
 /** A figure's card, read in the catalogue of what it is about: its run's, its fight's, or Leaf's view's. */
+/**
+ * A figure card's chip for one of its traits: its count as every view writes it, for the party the
+ * figure is in (the member's, or the one across), and the trait's card.
+ */
+function traitChip(cat: Catalog, t: TraitId | undefined, label: string, extras: FigureExtras): Chip | null {
+  if (!t) return null;
+  const own = extras.own ?? ownWay(extras.run);
+  const c = extras.party ? traitCount(cat, extras.party, t, own) : extras.run ? ownTraitCount(extras.run, t) : null;
+  return {
+    label,
+    text: traitIn(cat, t).name,
+    icon: traitIcon(t),
+    ...(c ? { count: countWords(c), lit: c.step > 0 } : {}),
+    ref: traitRefFrom(t, extras.lore, own),
+  };
+}
+
 export function figureDesc(cat: Catalog, kind: UnitKind, stars: Stars, extras: FigureExtras = {}): Description {
   const spec = specOf(cat, kind);
   const u = extras.unit;
   const figure = isFigureId(kind) ? figureIn(cat, kind) : null;
 
-  const count = (t: TraitId): TraitCount | null =>
-    extras.party ? traitCount(cat, extras.party, t) : extras.run ? ownTraitCount(extras.run, t) : null;
   const items = extras.items ?? u?.items ?? [];
   // Its own traits, then the trait of any emblem it holds.
   const [kin, calling, ...more] = carriedTraits(cat, kind, items);
-  const chip = (t: TraitId | undefined, label: string): Chip | null => {
-    if (!t) return null;
-    const c = count(t);
-    return {
-      label,
-      text: traitIn(cat, t).name,
-      icon: traitIcon(t),
-      ...(c ? { count: `${c.count}/${c.next}`, lit: c.step > 0 } : {}),
-      ref: traitRef(t),
-    };
-  };
+  const chip = (t: TraitId | undefined, label: string): Chip | null => traitChip(cat, t, label, extras);
 
   const lv = levelOnCard(kind, extras);
 
@@ -337,14 +346,24 @@ function member(cat: Catalog, id: FigureId, run: RunView | null): Entry {
   };
 }
 
-/** A trait: what it is, its steps (the one reached lit, the next saying how many more), and every figure that carries it. */
-export function traitDesc(cat: Catalog, id: TraitId, run: RunView | null, lore = false): Description {
+/**
+ * A trait: what it is, its steps (the one reached lit, the next saying how many more), and every
+ * figure that carries it. Its steps as every view shows them (`traitShown`): every one in a raid
+ * with the member's own figures, or in the member's collection (`own`).
+ */
+export function traitDesc(
+  cat: Catalog,
+  id: TraitId,
+  run: RunView | null,
+  lore = false,
+  // A raid with the member's own figures is the member's own view unless a caller says otherwise.
+  own = run?.way.figures.pool === "own",
+): Description {
   const spec = traitIn(cat, id);
   const state = run ? ownTraitCount(run, id) : null;
-  const count = state?.count ?? 0;
-  const step = state?.step ?? 0;
-  const next = spec.steps.findIndex((need) => need > count);
-  const blocks: Block[] = spec.steps.map((need, i) => {
+  const { count, step, steps } = state ?? traitShown(cat, id, 0, own);
+  const next = steps.findIndex((need) => need > count);
+  const blocks: Block[] = steps.map((need, i) => {
     const more = run && i === next ? need - count : 0;
     return {
       line: true,
@@ -358,7 +377,7 @@ export function traitDesc(cat: Catalog, id: TraitId, run: RunView | null, lore =
   const draw = traitDraw(id);
   const draws = drawName(draw);
   if (draws) blocks.unshift({ body: rich(`${draws}: enemies pick them as if ${drawReach(draw)}.`) });
-  if (lore) spec.steps.forEach((need, i) => blocks.push({ title: `${need}`, body: traitText(cat, id, i + 1) }));
+  if (lore) steps.forEach((need, i) => blocks.push({ title: `${need}`, body: traitText(cat, id, i + 1) }));
   return {
     name: spec.name,
     icon: traitIcon(id),
@@ -368,14 +387,14 @@ export function traitDesc(cat: Catalog, id: TraitId, run: RunView | null, lore =
       "k-row tight",
       {},
       el("span", "k-label", { text: sortWord(id) }),
-      state ? el("b", "", { text: `${count}/${state.next}` }) : null,
+      state ? el("b", "", { text: countWords(state) }) : null,
     ),
     blocks,
     rows: [
       {
         label: "Every figure",
         look: "tiles",
-        things: membersOf(cat, id, figuresAt(run)).map((f) => member(cat, f, run)),
+        things: membersOf(cat, id, figuresAt(run, own)).map((f) => member(cat, f, run)),
       },
     ],
   };
@@ -519,7 +538,7 @@ export function registerCards(): void {
     if (!isFigureId(id)) return null;
     const lore = flags.includes("lore");
     return lore
-      ? figureDesc(catalogOf(S), id, starsOf(flags), { lore })
+      ? figureDesc(catalogOf(S), id, starsOf(flags), { lore, own: flags.includes("own") })
       : figureDesc(catalogFor(S.run), id, starsOf(flags), { run: S.run });
   });
   register("piece", (raw) => {
@@ -546,6 +565,7 @@ export function registerCards(): void {
       level: foe.level ?? 0,
       whose: `${acrossName(run.foe)}'s`,
       party: run.foe,
+      own: ownWay(run),
       numbers: startNumbers(run.era, run.foe, foe.seat),
     });
   });
@@ -559,13 +579,16 @@ export function registerCards(): void {
       whose: u.side === FV.ours ? "Yours" : `${acrossName(run.foe)}'s`,
       run: u.side === FV.ours ? run : null,
       party: u.side === FV.ours ? null : run.foe,
+      own: ownWay(run),
     });
   });
   register("trait", (raw) => {
     const { id, flags } = flagsOf(raw);
     if (!isTraitId(id)) return null;
     const lore = flags.includes("lore");
-    return lore ? traitDesc(catalogOf(S), id, null, lore) : traitDesc(catalogFor(S.run), id, S.run);
+    return lore
+      ? traitDesc(catalogOf(S), id, null, lore, flags.includes("own"))
+      : traitDesc(catalogFor(S.run), id, S.run);
   });
   register("item", (raw) => {
     const { id: head, flags } = flagsOf(raw);

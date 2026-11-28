@@ -33,12 +33,17 @@ describe("Penguin Month opens on Leaf's clock", () => {
   const TIER = [1, 2, 3, 4] as const;
   const PURPOSES: readonly (readonly [string, Purpose, readonly FigureId[]])[] = [
     ...TIER.map(
-      (tier) => [`the stall at ${tier}`, { for: "stall", figures: { pool: "fair" }, tier }, EVERYONES] as const,
+      (tier) =>
+        [`the stall at ${tier}`, { for: "stall", holds: [], figures: { pool: "fair" }, tier }, EVERYONES] as const,
     ),
-    [`the stall at 5`, { for: "stall", figures: { pool: "fair" }, tier: 5 }, ["yule"]],
+    [`the stall at 5`, { for: "stall", holds: [], figures: { pool: "fair" }, tier: 5 }, ["yule"]],
     ...TIER.map(
       (tier) =>
-        [`the own stall at ${tier}`, { for: "stall", figures: { pool: "own", roster: ALL }, tier }, EVERYONES] as const,
+        [
+          `the own stall at ${tier}`,
+          { for: "stall", holds: [], figures: { pool: "own", roster: ALL }, tier },
+          EVERYONES,
+        ] as const,
     ),
     ["the first pick", { for: "starter" }, ["dibs"]],
     ["a regular", { for: "regular" }, [...EVERYONES, "yule"]],
@@ -51,7 +56,7 @@ describe("Penguin Month opens on Leaf's clock", () => {
         [`Penguin Month's ${rarity}`, { for: "pull", pool: "penguin-month", rarity }, [...EVERYONES, "yule"]] as const,
     ),
     ["the exchange", { for: "exchange" }, EVERYONES],
-    ["the almanac", { for: "almanac", roster: {} }, [...EVERYONES, "yule"]],
+    ["the almanac", { for: "almanac" }, [...EVERYONES, "yule"]],
   ];
   test.each(PURPOSES.map(([name, purpose, among]) => [name, purpose, among] as const))(
     "%s: none of it a millisecond before, and what suits it at the moment",
@@ -63,7 +68,8 @@ describe("Penguin Month opens on Leaf's clock", () => {
   );
   test("each figure where it belongs at the moment: its cost, its rarity, and Yule on everyone's stall in the Commodore's place", () => {
     const at = catalogAt(eraAt(OPENS));
-    const sold = (tier: (typeof TIERS)[number]) => available(at, { for: "stall", figures: { pool: "fair" }, tier });
+    const sold = (tier: (typeof TIERS)[number]) =>
+      available(at, { for: "stall", holds: [], figures: { pool: "fair" }, tier });
     expect([sold(1), sold(2), sold(3), sold(4)].map((list) => list.filter((id) => EVERYONES.includes(id)))).toEqual([
       ["dibs"],
       ["jet"],
@@ -101,7 +107,7 @@ function across(room: number): ReturnType<typeof startRun> {
 }
 
 describe("a fight settles in the era it was locked in", () => {
-  test("the gnomes pay as Gnome was when it set out: two are a step before 22 December, none after", () => {
+  test("the gnomes pay for a fight locked before 22 December and settled after: two are a step", () => {
     const run = across(1);
     const taken = takeTakings(run);
     expect(taken.ok).toBe(true);

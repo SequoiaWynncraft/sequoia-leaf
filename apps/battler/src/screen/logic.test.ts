@@ -2,7 +2,9 @@ import { describe, expect, test } from "bun:test";
 
 import {
   buy,
+  catalogAt,
   choose,
+  eraOf,
   type FigureId,
   type ItemId,
   LEGACY_ERA,
@@ -15,13 +17,14 @@ import {
   traitNumber,
 } from "@sequoia-leaf/raid";
 import { REGULARS } from "@sequoia-leaf/raid/content/rooms.ts";
-import { CAT, EVERYONES } from "@sequoia-leaf/raid/testkit.ts";
+import { at as placedAt, CAT, EVERYONES, partyOfFigures } from "@sequoia-leaf/raid/testkit.ts";
 
 import {
   acrossName,
   arrivalOf,
   canBuy,
   combosWithHeld,
+  countWords,
   fightTitle,
   handing,
   membersOf,
@@ -39,6 +42,7 @@ import {
   streakName,
   streakNow,
   streakRule,
+  traitCount,
   TraitWatch,
   watchersOf,
   whereIs,
@@ -353,13 +357,28 @@ describe("what a card says about a figure", () => {
     const run = startRun(3, { era: LEGACY_ERA, way: onTrail(0) });
     run.board.fill(null);
     run.board[0] = { id: 1, kind: "emberkit", stars: 1, items: [], fed: 0, fights: 0 };
-    expect(ownTraitCount(run, "ember")).toEqual({ count: 1, next: 2, step: 0 });
+    expect(ownTraitCount(run, "ember")).toMatchObject({ count: 1, next: 2, step: 0 });
     run.board[1] = { id: 2, kind: "kettle", stars: 1, items: [], fed: 0, fights: 0 };
-    expect(ownTraitCount(run, "ember")).toEqual({ count: 2, next: 4, step: 1 });
-    expect(ownTraitCount(run, "sage")).toEqual({ count: 0, next: 2, step: 0 });
+    expect(ownTraitCount(run, "ember")).toMatchObject({ count: 2, next: 4, step: 1 });
+    expect(ownTraitCount(run, "sage")).toMatchObject({ count: 0, next: 2, step: 0 });
     // A Finch holding an Ember emblem is a third Ember.
     run.board[2] = { id: 3, kind: "finch", stars: 1, items: ["embercharm"], fed: 0, fights: 0 };
-    expect(ownTraitCount(run, "ember")).toEqual({ count: 3, next: 4, step: 1 });
+    expect(ownTraitCount(run, "ember")).toMatchObject({ count: 3, next: 4, step: 1 });
+  });
+  test("every counter counts to the step normal mode shows: 4 Feathers in January read 4/4, with the member's own 4/5", () => {
+    const tree = catalogAt(eraOf("up-the-tree"));
+    const party = partyOfFigures([
+      placedAt("finch", 0, 0),
+      placedAt("jay", 0, 1),
+      placedAt("unc", 0, 2),
+      placedAt("fogowl", 0, 3),
+    ]);
+    expect([
+      countWords(traitCount(tree, party, "feather", false)),
+      countWords(traitCount(tree, party, "feather", true)),
+    ]).toEqual(["4/4", "4/5"]);
+    // Nobody in January's set is an Ember: a carried Flint counts 1, with no step to count to.
+    expect(countWords(traitCount(tree, partyOfFigures([placedAt("emberkit", 0, 0)]), "ember", false))).toBe("1");
   });
   test("a trait's figures run cheapest first", () => {
     expect(membersOf(CAT, "ember", EVERYONES)).toEqual(["emberkit", "kettle", "cindernewt", "hearthcat"]);

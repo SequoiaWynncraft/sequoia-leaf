@@ -34,7 +34,7 @@ import { rimTop, stumpOf } from "../art/table.ts";
 import { fightCatalog, fightEvents, fightUnits } from "../fightview.ts";
 import type { Speed } from "../keep.ts";
 import { light } from "../light.ts";
-import { acrossName, canBuy, savings, TraitWatch } from "../logic.ts";
+import { acrossName, canBuy, countWords, ownTraitCount, savings, TraitWatch } from "../logic.ts";
 import { facing, shownCounts } from "../screen.ts";
 import { artPx, place, V } from "../stage.ts";
 import { busy, catalogFor, S } from "../state.ts";
@@ -261,15 +261,15 @@ function renderTraits(run: RunView): void {
   for (const [trait, chip] of chips) if (!wanted.has(trait)) chip.remove();
   states.forEach((state, i) => {
     const spec = traitIn(catalogOf(run), state.trait);
-    const next = spec.steps.find((need) => need > state.count) ?? spec.steps[spec.steps.length - 1] ?? 1;
+    const shown = ownTraitCount(run, state.trait);
     const chip = chipFor(state.trait);
     chip.classList.toggle("lit", state.step > 0);
-    chip.classList.toggle("top", state.step >= spec.steps.length);
+    chip.classList.toggle("top", shown.steps.length > 0 && state.step >= shown.steps.length);
     // On a phone the chip shows no name: it is said all the same.
-    chip.setAttribute("aria-label", `${spec.name} ${state.count}/${next}`);
+    chip.setAttribute("aria-label", `${spec.name} ${countWords(shown)}`);
     chip.replaceChildren(
       pic(traitIcon(state.trait)),
-      el("b", "", { text: `${state.count}/${next}` }),
+      el("b", "", { text: countWords(shown) }),
       el("span", "name", { text: spec.name }),
     );
     // Moved only when out of place: a chip under the pointer stays where it is.

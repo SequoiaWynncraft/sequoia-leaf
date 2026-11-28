@@ -154,15 +154,18 @@ const sides = (items: ItemId[]): [Party, Party] => [
 ];
 /** So many of Crab #12. */
 const crabs = (n: number): { kind: FigureId }[] => Array.from({ length: n }, () => ({ kind: "crab12" }));
-/** Another member's board of these figures, one a seat, as Leaf hands it over. */
-const met = (kinds: readonly FigureId[]) => ({
+/** Another member's board of these figures, one a seat, kept in an era (Penguin Month's), as Leaf hands it over. */
+const met = (kinds: readonly FigureId[], era = PATCHED.era) => ({
   player: "10000000-0000-0000-0000-00000000ca7c",
   name: "Someone",
   of: 1,
-  data: partyOfFigures(
-    kinds.map((kind, seat): Placed => ({ ...at(kind, 0, 0), seat })),
-    { who: "Someone", title: "their board" },
-  ),
+  data: {
+    ...partyOfFigures(
+      kinds.map((kind, seat): Placed => ({ ...at(kind, 0, 0), seat })),
+      { who: "Someone", title: "their board" },
+    ),
+    era,
+  },
 });
 
 /** For each of the party, whether it is a Sneak in the fight (its first hits do more) and leapt as it began. */
@@ -244,6 +247,6 @@ describe("a figure that takes no chair", () => {
     expect(boardMet(PATCHED, met([...full, "moth"]))).toBeNull();
     expect(boardMet(PATCHED, met([...full, "crab12", "crab12"]))).toBeNull();
     // Today the crab takes a chair like anyone.
-    expect(boardMet(CAT, met([...full, "crab12"]))).toBeNull();
+    expect(boardMet(CAT, met([...full, "crab12"], CAT.era))).toBeNull();
   });
 });
