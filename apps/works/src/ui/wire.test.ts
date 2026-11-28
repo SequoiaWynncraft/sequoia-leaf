@@ -13,6 +13,7 @@ import {
   create,
   holderOf,
   MIX_OF,
+  outsOf,
   plot,
   plotPrice,
   plotState,
@@ -23,7 +24,7 @@ import {
 } from "@sequoia-leaf/factory";
 
 import { opened, useFakeLeaf } from "../../test/fake-leaf.ts";
-import { breaker } from "../kinds/breaker.ts";
+import { breaker, outOf } from "../kinds/breaker.ts";
 import { S } from "../state.ts";
 import { setTool } from "../tools.ts";
 import { smoggy } from "../trouble.ts";
@@ -134,4 +135,19 @@ test("a Study slowed by smog says smog slows it, not that power is short; with p
   Object.assign(S.world.open, { depot: 1 });
   rewire(S.world);
   expect(numbersOf(S.world, i)).toEqual([expect.stringMatching(/: power is short and smog slows it\.$/)]);
+});
+
+test("a breaker's chute is drawn at its way out whichever way it faces, placed or about to be", () => {
+  const y = workings(6);
+  const corner = y.land.plots.find((p) => p.plot === WORKINGS);
+  const outs = ([0, 1, 2, 3] as const).map((d) => {
+    const [x, z] = [(corner?.x ?? 0) + 1 + 3 * d, (corner?.y ?? 0) + 10];
+    expect(build(y, BREAKER, x, z, d, Infinity).ok).toBe(true);
+    const o = outsOf(y, at(y, x, z))[0];
+    if (!o) throw new Error("a breaker with no way out");
+    // The preview's, from the way alone, is the standing one's.
+    expect(outOf(d)).toEqual([o.dx, o.dy, o.way]);
+    return outOf(d).slice(0, 2).join(",");
+  });
+  expect(new Set(outs).size).toBe(4);
 });

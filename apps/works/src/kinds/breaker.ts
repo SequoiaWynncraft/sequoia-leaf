@@ -6,7 +6,7 @@
  * one sign of the smog it makes: at grade III a steady thread. Its card says how much salvage it
  * breaks a minute and shows its mix of 20, the next picked out.
  */
-import { BREAKER, type Dir, isItem, MIX_OF, mixPerMinute, outsOf, type Yard } from "@sequoia-leaf/factory";
+import { BREAKER, isItem, MIX_OF, mixPerMinute, outsAs } from "@sequoia-leaf/factory";
 import type { Row, Stat } from "@sequoia-leaf/kit/card.ts";
 import { lessMotion } from "@sequoia-leaf/kit/dom.ts";
 import { perMinute } from "@sequoia-leaf/kit/say.ts";
@@ -97,9 +97,9 @@ function pictureOf(n: number, ox: number, oy: number, way: number, phase: number
   return made;
 }
 
-/** Where its way out is, as tiles of its box from its own tile (its box's corner), and the way things leave. */
-function outOf(y: Yard, i: number, d: Dir): readonly [number, number, number] {
-  const o = outsOf(y, i)[0];
+/** Where its way out is, facing `d`, standing or about to be placed: as tiles of its box from its own tile (its box's corner), and the way things leave. */
+export function outOf(d: number): readonly [number, number, number] {
+  const o = outsAs(BREAKER, d)[0];
   return o ? [o.dx, o.dy, o.way] : [1, 0, d];
 }
 
@@ -121,8 +121,8 @@ const mixRow = (label: string, next: number | null): Row[] => [
 
 export const breaker: KindPage = {
   picture: (_p, n) => pictureOf(n, 1, 0, 0, 0),
-  draw(art, y, at) {
-    const [ox, oy, way] = at.real ? outOf(y, at.i, at.d) : [1, 0, at.d];
+  draw(art, _y, at) {
+    const [ox, oy, way] = outOf(at.d);
     const phase = at.working ? Math.floor(at.t * 10) % FRAMES : 0;
     at.put(pictureOf(at.grade, ox, oy, way, phase), at.x - PAD, at.top - PAD - TALL, at.z, at.a);
     // Stopped with a thing finished, it sits in the chute's mouth.

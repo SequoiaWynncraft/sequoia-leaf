@@ -96,6 +96,7 @@ export {
   layOver,
   OWN,
   type Out,
+  outsAs,
   outsOf,
   pieceOf,
   piecesTiles,
