@@ -39,5 +39,7 @@ describe("tier 8's launches, by the real rules", () => {
     expect([...y.launches.ever]).toEqual([1, 0, 0, 0, 0]);
     expect(y.news.some((n) => n.kind === "done" && n.goal === "launch")).toBe(true);
     expect(F.NODES[LAUNCH]?.gift?.id).toBe("sky-beacon");
+    // Its postcard names the light the first launch put in the town's sky; before it, none.
+    expect([F.postcard(y).sky, "sky" in F.postcard(launchYard())]).toEqual([["sky-beacon"], false]);
   }, 120_000);
 });
