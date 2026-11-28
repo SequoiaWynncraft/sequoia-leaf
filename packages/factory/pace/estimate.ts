@@ -34,16 +34,9 @@ function path(g: F.Goal, out: F.Goal[] = []): F.Goal[] {
   return out;
 }
 
-/** A goal's grade III line-hours: each thing it wants, at what one grade III machine of its maker makes of it a minute. */
-function lineHours(g: F.Goal): number {
-  const want = F.GOALS[g]?.want ?? F.counts();
-  return F.ALL_ITEMS.reduce((sum, n) => {
-    const count = want[n] ?? 0;
-    if (count === 0) return sum;
-    const { kind, recipe } = F.makerOf(n);
-    return sum + count / F.makes(kind, 3, recipe) / 60;
-  }, 0);
-}
+/** A goal's grade III line-hours: each thing it wants, as the planner counts it (`lineHours`: a rocket as its parts). */
+const lineHours = (g: F.Goal): number =>
+  F.ALL_ITEMS.reduce((sum, n) => sum + F.lineHours(n, F.GOALS[g]?.want[n] ?? 0), 0);
 
 /** The pieces of the grade III lines that make what a goal wants in `minutes`. */
 function pieces(g: F.Goal, minutes: number): number {

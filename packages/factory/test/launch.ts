@@ -12,7 +12,9 @@ import { must } from "./yards.ts";
 export type At = readonly [number, number];
 
 export const CELL = F.item("cell");
-export const [ONE, TWO, THREE] = F.CHARGED.bars;
+export const ONE = F.item("charged1");
+export const TWO = F.item("charged2");
+export const THREE = F.item("charged3");
 export const HULL = F.item("hull");
 export const FUEL = F.item("fuel");
 export const PAD = F.kind("launchpad");
@@ -67,7 +69,7 @@ export function pylons(y: F.Yard): void {
 /** Drops a charged cell with 3 bars onto a belt's tile where none is, as a crate would hand one on: a door fed as fast as its belt carries. */
 export function drop(y: F.Yard, i: number): void {
   if (y.item[i] !== F.NONE) return;
-  y.item[i] = THREE ?? F.NONE;
+  y.item[i] = THREE;
   y.prog[i] = 0;
   y.via[i] = 0;
 }

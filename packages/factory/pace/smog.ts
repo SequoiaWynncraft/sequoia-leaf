@@ -15,8 +15,9 @@ import * as F from "../src/index.ts";
 
 /**
  * The plot each tier's dirty work stands on with no second plot bought, and the share of ticks SPEC-2
- * means it to lose, in per cent: none said for tier 7, whose figure is printed all the same (its
- * growers make none; the breakers and stills of its folio lines and its spirit do).
+ * means it to lose, in per cent: none said for tiers 7 and 8, whose figures are printed all the same
+ * (growers, chargers and pads make none; the breakers and stills of their folio lines, copper, pitch,
+ * spirit and creosote do).
  */
 export const SMOG_FROM: Readonly<
   Record<number, { readonly plot: F.PlotName; readonly lost?: readonly [number, number] }>
@@ -24,6 +25,7 @@ export const SMOG_FROM: Readonly<
   5: { plot: "workings", lost: [0, 0] },
   6: { plot: "workings", lost: [5, 30] },
   7: { plot: "workings" },
+  8: { plot: "workings" },
 };
 
 /** What grade III lines making each thing at so many a minute make of smog a minute. */

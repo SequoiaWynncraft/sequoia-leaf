@@ -55,14 +55,14 @@ const HOURS: readonly (readonly [string, number])[] = [
 const lineHours = (g: F.Goal): number =>
   F.ALL_ITEMS.reduce((sum, n) => sum + F.lineHours(n, F.GOALS[g]?.want[n] ?? 0), 0);
 
-const bars = [ONE, TWO, THREE].map((b) => b ?? F.NONE);
+const bars: readonly F.Item[] = [ONE, TWO, THREE];
 
 /** Every charged cell in a yard, by its bars (1, 2, 3), and the plain cells: on what carries, under the ground and in every holder. */
 function everyCell(y: F.Yard): number[] {
   const count = [0, 0, 0, 0];
   const tally = (n: number, c = 1): void => {
-    const at = n === CELL ? 0 : bars.indexOf(n) + 1;
-    if (at >= 0 && (at > 0 || n === CELL)) count[at] = (count[at] ?? 0) + c;
+    const at = n === CELL ? 0 : bars.findIndex((b) => b === n) + 1;
+    if (at > 0 || n === CELL) count[at] = (count[at] ?? 0) + c;
   };
   for (const n of y.item) tally(n);
   for (let k = 0; k < y.tunnels.size * F.SPAN_MOST; k++) tally(y.tunnels.under[k] ?? F.NONE);
@@ -89,7 +89,7 @@ describe("tier 8's tables", () => {
 
   test("the charger and the launch pad are the last two kinds; a charged cell is planned from a cell by a charger, a rocket from its parts by a launch pad", () => {
     expect(F.KINDS.slice(-2)).toEqual(["charger", "launchpad"]);
-    expect([F.sizeOf(CHARGER), F.sizeOf(PAD)]).toEqual([
+    expect([F.sizeOf(CHARGER, 0), F.sizeOf(PAD, 0)]).toEqual([
       [2, 2],
       [5, 5],
     ]);
@@ -111,14 +111,14 @@ describe("tier 8's tables", () => {
     expect(F.kindsMaking(F.item("testrocket")).map(F.kindName)).toEqual(["launchpad"]);
     // Before either is researched, a thing's maker is named and locked.
     const y = F.create({ seed: 1, tier: 8 });
-    expect(F.locked(y.open, { make: THREE ?? F.NONE })).toBe("The charger is not unlocked yet");
+    expect(F.locked(y.open, { make: THREE })).toBe("The charger is not unlocked yet");
     expect(F.locked(y.open, { make: F.item("rocket") })).toBe("The launch pad is not unlocked yet");
   });
 
   test("the board never asks for a rocket or a charged cell, even with every tier 8 node done and every thing makeable", () => {
     const raws = F.ALL_ITEMS.filter(F.isRaw).map((n, k): [number, number, F.ItemName] => [1 + k, 1, F.itemName(n)]);
     const y = F.create({ land: bareLand(20, 12, raws, [16, 6]), seed: 4, tier: 9 });
-    const asked = new Set(F.askable(y).map(F.itemName));
+    const asked = new Set<string>(F.askable(y).map(F.itemName));
     expect(["cell", "hull", "fuel"].every((n) => asked.has(n))).toBe(true);
     expect(
       ["rocket", "testrocket", "heavyrocket", "charged1", "charged2", "charged3"].filter((n) => asked.has(n)),
@@ -134,21 +134,21 @@ describe("tier 8's tables", () => {
 function cellsEverywhere(tier: number): { y: F.Yard; charger: number; pad: number; box: number } {
   const y = bareYard(32, 22, [27, 11], tier);
   const belt = put(y, "belt", [2, 2], 0);
-  y.item[belt] = THREE ?? F.NONE;
+  y.item[belt] = THREE;
   y.prog[belt] = 8;
   must(y, tunnel(2, 18, 4));
   const far = F.at(y, 7, 18);
-  y.item[far] = THREE ?? F.NONE;
+  y.item[far] = THREE;
   y.prog[far] = 8;
-  y.tunnels.under[F.tunnelOf(y, F.at(y, 2, 18)) * F.SPAN_MOST + 3] = THREE ?? F.NONE;
-  const box = crate(y, [2, 8], 0, THREE ?? F.NONE, 5, true);
+  y.tunnels.under[F.tunnelOf(y, F.at(y, 2, 18)) * F.SPAN_MOST + 3] = THREE;
+  const box = crate(y, [2, 8], 0, THREE, 5, true);
   let charger = -1;
   let pad = -1;
   if (tier > 8) {
     charger = put(y, "charger", [5, 12], 0);
-    y.holders.out[F.holderOf(y, charger)] = THREE ?? F.NONE;
+    y.holders.out[F.holderOf(y, charger)] = THREE;
     pad = put(y, "launchpad", [14, 10], 0);
-    fill(y, pad, THREE ?? F.NONE, 7);
+    fill(y, pad, THREE, 7);
   }
   pylons(y);
   F.changed(y);
@@ -160,7 +160,7 @@ describe("the beat", () => {
     const { y, charger, pad, box } = cellsEverywhere(9);
     until(y, 199);
     expect(everyCell(y)).toEqual([0, 0, 0, 16]);
-    expect(y.tunnels.under.includes(THREE ?? F.NONE)).toBe(true);
+    expect(y.tunnels.under.includes(THREE)).toBe(true);
     F.step(y);
     expect([y.tick, everyCell(y)]).toEqual([200, [0, 0, 16, 0]]);
     expect([y.holders.out[F.holderOf(y, charger)], holding(y, pad, bars), holding(y, box, bars)]).toEqual([
@@ -178,11 +178,11 @@ describe("the beat", () => {
     expect([y.holders.kinds[F.holderOf(y, box)], y.holders.count[F.holderOf(y, box)]]).toEqual([1, 5]);
     // A crate of plain cells and cells with 1 bar holds two things before a beat and one after it.
     const both = crate(y, [2, 4], 0, CELL, 2, true);
-    fill(y, both, ONE ?? F.NONE, 3);
+    fill(y, both, ONE, 3);
     const r = F.holderOf(y, both);
     expect([y.holders.kinds[r], y.holders.count[r]]).toEqual([2, 5]);
     until(y, 800);
-    expect([y.holders.kinds[r], y.holders.count[r], holding(y, both, [CELL, ONE ?? 0])]).toEqual([1, 5, [5, 0]]);
+    expect([y.holders.kinds[r], y.holders.count[r], holding(y, both, [CELL, ONE])]).toEqual([1, 5, [5, 0]]);
     expect(y.holders.out[F.holderOf(y, charger)]).toBe(CELL);
   });
 
@@ -214,18 +214,18 @@ describe("the charger", () => {
     const c = put(y, "charger", [4, 4], 0);
     pylons(y);
     const r = F.holderOf(y, c);
-    fill(y, c, TWO ?? F.NONE, 1);
-    fill(y, c, ONE ?? F.NONE, 1);
+    fill(y, c, TWO, 1);
+    fill(y, c, ONE, 1);
     fill(y, c, CELL, 1);
-    expect([F.wants(y, c, CELL), F.wants(y, c, THREE ?? F.NONE), y.holders.count[r]]).toEqual([true, false, 3]);
+    expect([F.wants(y, c, CELL), F.wants(y, c, THREE), y.holders.count[r]]).toEqual([true, false, 3]);
     until(y, 10);
     // Its first charge, at grade I, is 10 ticks: the cell went.
-    expect([y.holders.out[r], holding(y, c, [CELL, ONE ?? 0, TWO ?? 0])]).toEqual([THREE, [0, 1, 1]]);
+    expect([y.holders.out[r], holding(y, c, [CELL, ONE, TWO])]).toEqual([THREE, [0, 1, 1]]);
     // A crate of cells behind it fills it to 4 in all, and no more: 2 go in, and the crate holds 1 more ready to.
     const behind = crate(y, [3, 4], 0, CELL, 10);
     until(y, 100);
     // Nothing is ahead of it: it holds its charged cell and charges nothing more.
-    expect([y.holders.out[r], holding(y, c, [CELL, ONE ?? 0, TWO ?? 0]), holding(y, behind, [CELL])]).toEqual([
+    expect([y.holders.out[r], holding(y, c, [CELL, ONE, TWO]), holding(y, behind, [CELL])]).toEqual([
       THREE,
       [2, 1, 1],
       [7],
@@ -322,7 +322,7 @@ describe("the launch pad", () => {
     pylons(y);
     const north = F.at(y, 14, 6);
     const south = F.at(y, 14, 22);
-    expect([y.set[pad], F.wants(y, pad, CELL), F.wants(y, pad, THREE ?? F.NONE), F.wants(y, pad, HULL)]).toEqual([
+    expect([y.set[pad], F.wants(y, pad, CELL), F.wants(y, pad, THREE), F.wants(y, pad, HULL)]).toEqual([
       TESTROCKET,
       false,
       true,
@@ -397,10 +397,10 @@ describe("the launch pad", () => {
       if (name === "rocket") setRocket(y, pad, name);
       const rocket = F.rocketSet(y.set[pad] ?? F.NONE);
       for (const p of rocket?.parts ?? []) fill(y, pad, p.item, p.need);
-      fill(y, pad, THREE ?? F.NONE, rocket?.cells ?? 0);
+      fill(y, pad, THREE, rocket?.cells ?? 0);
       const till = y.till;
       F.step(y);
-      expect([name, (y.till - till) / F.MILLI, [...y.launches.ever], y.depot[F.item(name)]]).toEqual([
+      expect([name, (y.till - till) / F.MILLI, [...y.launches.ever], y.depot[F.item(name)]]).toEqual<unknown[]>([
         name,
         coins,
         ever,
@@ -427,15 +427,12 @@ describe("the launch pad", () => {
     must(y, { do: "recipe", ...at, item: "rocket", was: "testrocket" });
     fill(y, pad, HULL, 900);
     fill(y, pad, FUEL, 3600);
-    fill(y, pad, THREE ?? F.NONE, 400);
-    fill(y, pad, ONE ?? F.NONE, 200);
+    fill(y, pad, THREE, 400);
+    fill(y, pad, ONE, 200);
     fill(y, pad, CELL, 30);
     must(y, { do: "recipe", ...at, item: "testrocket", was: "rocket" });
     // The fullest charged cells kept first, to the test rocket's 100; its plain cells stay, to leave by its front.
-    expect([holding(y, pad, [HULL, FUEL, CELL, ONE ?? 0, THREE ?? 0]), y.set[pad]]).toEqual([
-      [60, 240, 30, 0, 100],
-      TESTROCKET,
-    ]);
+    expect([holding(y, pad, [HULL, FUEL, CELL, ONE, THREE]), y.set[pad]]).toEqual([[60, 240, 30, 0, 100], TESTROCKET]);
     // Kept and read back, it is set to what it was.
     must(y, { do: "recipe", ...at, item: "rocket", was: "testrocket" });
     const back = F.decode(F.encode(y), y.land);
@@ -453,8 +450,8 @@ describe("the launch pad", () => {
     expect(line()).toBe("Waiting for 40 rocket fuel.");
     fill(y, pad, FUEL, 40);
     expect([F.status(y, pad)?.state, line()]).toEqual(["working", "Ready. Holds 0 of 100 charged cells."]);
-    fill(y, pad, THREE ?? F.NONE, 28);
-    fill(y, pad, ONE ?? F.NONE, 12);
+    fill(y, pad, THREE, 28);
+    fill(y, pad, ONE, 12);
     until(y, 130);
     expect(line()).toBe("Ready. Holds 40 of 100 charged cells. 12 lose their last bar in 7 seconds.");
     fill(y, pad, CELL, 1000);

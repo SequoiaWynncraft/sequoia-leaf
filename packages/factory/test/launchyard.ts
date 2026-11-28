@@ -41,32 +41,51 @@ const DOORS: readonly Door[] = [
   { sorter: [22, 25], dir: 3, from: 33, chargers: [27, 29, 31].map((z): At => [23, z]), face: 2 },
 ];
 
-/** A door: its belt from its far end to its sorter, the sorter set to plain cells with a shut crate at its side, and its chargers fed from crates. */
-function door(y: F.Yard, d: Door): void {
+/**
+ * A door: its belt from its far end to its sorter, the sorter set to plain cells with a shut crate at
+ * its side (or with `stop`, a cart stop, which sells them), and its first `chargers` chargers, each fed
+ * `cells` from a crate.
+ */
+function door(y: F.Yard, d: Door, chargers = 3, cells = 2000, stop = false): void {
   const [x, z] = d.sorter;
   run(y, [x, d.from], d.dir, Math.abs(z - d.from));
   put(y, "sorter", d.sorter, d.dir, 3);
   must(y, { do: "sort", x, y: z, item: "cell" });
   // What it sends aside goes to its left: east of a sorter facing south, west of one facing north, into
   // a shut crate facing away from it, which takes from all but its front.
-  crate(y, [d.dir === 1 ? x + 1 : x - 1, z], d.dir === 1 ? 0 : 2, CELL, 0, true);
-  for (const c of d.chargers) {
+  const aside: At = [d.dir === 1 ? x + 1 : x - 1, z];
+  if (stop) put(y, "stop", aside, 0);
+  else crate(y, aside, d.dir === 1 ? 0 : 2, CELL, 0, true);
+  for (const c of d.chargers.slice(0, chargers)) {
     put(y, "charger", c, d.face, 3);
     // Its crate of cells behind it: west of one facing east, east of one facing west, into its back.
-    crate(y, d.face === 0 ? [c[0] - 1, c[1]] : [c[0] + 2, c[1]], d.face, CELL, 2000);
+    crate(y, d.face === 0 ? [c[0] - 1, c[1]] : [c[0] + 2, c[1]], d.face, CELL, cells);
   }
+}
+
+/** Powerhouses along the top, each fed `spirit` from a crate above it. */
+function power(y: F.Yard, count: number, spirit: number): void {
+  for (let k = 0; k < count; k++) {
+    put(y, "powerhouse", [2 + k * 4, 2], 0);
+    crate(y, [2 + k * 4, 1], 1, F.item("spirit"), spirit);
+  }
+}
+
+/** The main pad, set to the rocket: its parts from crates against its back (`hull` and twice `fuel`), its front into a cart stop. */
+function mainPad(y: F.Yard, hull: number, fuel: number): void {
+  put(y, "launchpad", MAIN, 0);
+  must(y, { do: "recipe", x: MAIN[0], y: MAIN[1], item: "rocket", was: "testrocket" });
+  crate(y, [17, 20], 0, HULL, hull);
+  crate(y, [17, 21], 0, FUEL, fuel);
+  crate(y, [17, 22], 0, FUEL, fuel);
+  put(y, "stop", [23, 22], 0);
 }
 
 /** The staged yard: tier 8 open, chargers III, the pad and the rocket's parts known, the test firing in hand. */
 export function launchYard(): F.Yard {
   const y = tier8Yard(W, H, DEPOT, ["charger3", "launchpad"], 8);
   must(y, { do: "take", node: "testfiring" });
-
-  // Powerhouses along the top, each fed spirit from a crate above it.
-  for (let k = 0; k < 6; k++) {
-    put(y, "powerhouse", [2 + k * 4, 2], 0);
-    crate(y, [2 + k * 4, 1], 1, F.item("spirit"), 2000);
-  }
+  power(y, 6, 2000);
 
   // The test pad: two chargers at grade I against its back, and a crate of its parts.
   put(y, "launchpad", TEST, 0);
@@ -77,15 +96,24 @@ export function launchYard(): F.Yard {
   const parts = crate(y, [33, 12], 0, HULL, 60);
   fill(y, parts, FUEL, 240);
 
-  // The main pad, set to the rocket: its parts from crates against its back, its front into a cart stop.
-  put(y, "launchpad", MAIN, 0);
-  must(y, { do: "recipe", x: MAIN[0], y: MAIN[1], item: "rocket", was: "testrocket" });
-  crate(y, [17, 20], 0, HULL, 900);
-  crate(y, [17, 21], 0, FUEL, 1800);
-  crate(y, [17, 22], 0, FUEL, 1800);
-  put(y, "stop", [23, 22], 0);
+  mainPad(y, 900, 1800);
   for (const d of DOORS) door(y, d);
 
+  pylons(y);
+  y.history = [];
+  return y;
+}
+
+/**
+ * The bench's yard (`bench.ts`): the main pad alone with its four doors and 10 chargers III (3, 3, 2
+ * and 2), every crate holding enough for eight hours of the yard's time, and cart stops at the doors'
+ * sides, so it goes on launching and charging.
+ */
+export function padYard(): F.Yard {
+  const y = tier8Yard(W, H, DEPOT, ["charger3", "launchpad"], 8);
+  power(y, 5, 60_000);
+  mainPad(y, 60_000, 60_000);
+  DOORS.forEach((d, n) => door(y, d, n < 2 ? 3 : 2, 60_000, true));
   pylons(y);
   y.history = [];
   return y;

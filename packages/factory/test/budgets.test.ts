@@ -332,8 +332,17 @@ describe("time", () => {
       y.powered = false;
       F.changed(y);
     }, 21);
+    // The beat (tier 8: every charged cell loses a bar, once in 200 ticks in a yard that knows the charger), alone.
+    const wire = F.rewire(y);
+    const beats: number[] = [];
+    for (let k = 0; k < 101; k++) {
+      const t = Bun.nanoseconds();
+      F.beat(y, wire);
+      beats.push((Bun.nanoseconds() - t) / 1e6);
+    }
+    const beat = beats.toSorted((p, q) => p - q)[50] ?? Infinity;
     console.log(
-      `the median tick ${median.toFixed(2)} ms; the first after a change ${changed.toFixed(2)} ms, after power may have moved ${repowered.toFixed(2)} ms`,
+      `the median tick ${median.toFixed(2)} ms, the beat ${beat.toFixed(3)} ms once in 200 ticks; the first after a change ${changed.toFixed(2)} ms, after power may have moved ${repowered.toFixed(2)} ms`,
     );
   }, 60_000);
 });
