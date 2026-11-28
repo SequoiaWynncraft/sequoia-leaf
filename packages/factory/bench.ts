@@ -17,8 +17,8 @@
 import { heapStats } from "bun:jsc";
 
 import * as F from "./src/index.ts";
-import { generate } from "./test/gen.ts";
 import { folded } from "./test/folded.ts";
+import { generate } from "./test/gen.ts";
 import { ringOfGrowers } from "./test/growers.ts";
 import { bareLand, makeLand } from "./test/land.ts";
 import { generated, must, saved, SAVES, staged, STAGES } from "./test/yards.ts";
