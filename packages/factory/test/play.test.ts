@@ -32,7 +32,7 @@ describe("random play", () => {
   // The yard with every kind open plays longer: with 21 kinds to pick from, 500 commands may build none of one.
   for (const [name, start] of starts)
     test(`${name}: a refused command changes nothing, and the yard reads back as itself`, () => {
-      new Player(start(), name.length * 7919, took).play(name.includes("tier 6") ? 2000 : 500);
+      new Player(start(), name.length * 7919, took, true).play(name.includes("tier 6") ? 2000 : 500);
     }, 60_000);
 
   test("reached every kind of command and piece", () => {

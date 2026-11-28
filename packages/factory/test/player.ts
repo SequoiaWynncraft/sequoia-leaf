@@ -10,6 +10,13 @@ import { buying, delivering, must } from "./yards.ts";
 type Rec = Record<string, unknown>;
 
 /**
+ * How many things, nodes and pieces of research random play names in its commands (`command`): those
+ * there were before tier 6, so that what is added later changes no recorded play it is not open in;
+ * or, for a player told to (`every`), all of them.
+ */
+const BEFORE_6 = { items: 40, nodes: 39, research: 37 } as const;
+
+/**
  * A seeded player who gives a yard commands off the wire, valid and not, with ticks between: every
  * kind of command, on pieces of every kind, now and then a tick ahead or in the past.
  */
@@ -17,10 +24,12 @@ export class Player {
   readonly r: () => number;
   readonly y: F.Yard;
   readonly took: Map<string, number>;
-  constructor(y: F.Yard, seed: number, took: Map<string, number>) {
+  readonly names: { readonly items: number; readonly nodes: number; readonly research: number };
+  constructor(y: F.Yard, seed: number, took: Map<string, number>, every = false) {
     this.y = y;
     this.r = rng(seed);
     this.took = took;
+    this.names = every ? { items: F.ITEMS.length, nodes: F.NODES.length, research: F.RESEARCH.length } : BEFORE_6;
   }
   int(n: number): number {
     return Math.floor(this.r() * n);
@@ -121,7 +130,9 @@ export class Player {
     const y = this.y;
     const at = this.spot();
     const orders = y.board.map((o) => o.id);
-    const things = [...F.ITEMS, "moss"];
+    // Names of things, nodes and research: those there were before tier 6, so that what is added
+    // later changes no play it is not open in, as with the kinds' names below.
+    const things = [...F.ITEMS.slice(0, this.names.items), "moss"];
     switch (this.int(28)) {
       case 0:
         // Any name, of a kind or none: the names of the first sixteen kinds, so a kind added later
@@ -180,7 +191,9 @@ export class Player {
         return { do: "paint", tint: this.int(8), ...at };
       case 12: {
         const m = this.of(F.MILL, F.BENCH, F.WORKSHOP);
-        const made = (F.MADE_BY[y.kind[F.at(y, m.x, m.y)] ?? F.NONE] ?? []).map((r) => F.itemName(r.out));
+        const made = (F.MADE_BY[y.kind[F.at(y, m.x, m.y)] ?? F.NONE] ?? [])
+          .filter((r) => r.out < this.names.items)
+          .map((r) => F.itemName(r.out));
         return { do: "recipe", item: this.r() < 0.1 ? null : this.pick(this.r() < 0.7 ? made : things), ...m };
       }
       case 13: {
@@ -221,10 +234,10 @@ export class Player {
         return { do: r < 0.98 ? "handClearing" : "stopClearing", plot: c ? F.plotName(c.plot) : plot, start };
       }
       case 18:
-        return { do: "take", node: this.pick([...F.NODES.map((n) => n.id), "nap"]) };
+        return { do: "take", node: this.pick([...F.NODES.slice(0, this.names.nodes).map((n) => n.id), "nap"]) };
       case 19: {
         // Any research to study; mostly research in the line to take out, as a player takes one out.
-        const any = F.RESEARCH.map((r) => r.id);
+        const any = F.RESEARCH.slice(0, this.names.research).map((r) => r.id);
         if (this.r() < 0.7) return { do: "study", research: this.pick(any) };
         const lined = y.line.flatMap((g) => F.GOALS[g]?.id ?? []);
         return { do: "unstudy", research: this.pick(lined.length > 0 && this.r() < 0.8 ? lined : any) };
