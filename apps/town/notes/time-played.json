@@ -1,0 +1,9 @@
+{
+  "id": "time-played",
+  "at": "2026-11-22T22:41Z",
+  "title": "Time played",
+  "lines": [
+    "A person's card shows how long they have played each game, and all games together.",
+    "It counts from this update on. Play before it is not counted."
+  ]
+}

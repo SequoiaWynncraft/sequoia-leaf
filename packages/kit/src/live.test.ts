@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { type Balances, readBalances } from "@sequoia-leaf/core";
 
+import { gameContract } from "../../../contracts/game.ts";
 import {
   followLeaf,
   isGuest,
@@ -31,7 +32,7 @@ import {
 } from "./standin.ts";
 
 /** What Leaf's game routes really answer, from the contract its own tests write. */
-const GAME: unknown = await Bun.file(new URL("../../../contracts/leaf-game-v1.json", import.meta.url)).json();
+const GAME: unknown = gameContract();
 
 let world: Standin | null = null;
 let ears: Listening | null = null;

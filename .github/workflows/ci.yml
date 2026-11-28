@@ -25,7 +25,7 @@ jobs:
         with:
           persist-credentials: false
           # The merge commit and the base branch it merges into, its first parent: what changed is
-          # told by it, and the lint's, imports' and copies' baselines are held to its (ratchet.ts).
+          # told by it, the lint's counts are held to its, and the baselines may not rise above its (ratchet.ts).
           fetch-depth: 2
       # What the merge commit changes from the base branch is what the pull request changes. Under
       # act (`bun run ci`) there is no merge commit, and everything is checked.

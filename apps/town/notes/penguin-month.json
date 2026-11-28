@@ -1,0 +1,57 @@
+{
+  "id": "penguin-month",
+  "at": "2026-12-22T00:00Z",
+  "title": "Penguin Month",
+  "lines": [
+    "Penguin Month is open until 5 January. Its top prize is Yule. Flurry, Pomp, Larp, Jet and Dibs are featured. Half the pulls of their rarity give one of them.",
+    "In The Little Raid, Huddle is a new origin: Huddle figures that start the fight touching share one shield. The Carving Knife is a new component that turns up after a boss."
+  ],
+  "more": [
+    {
+      "head": "Leaving every raid",
+      "points": [
+        "Leaving now: Hodge, Glorp, Drizzle, Eaves and Dose. You can still pull them at the Grove, and buy them in raids with your own figures.",
+        "Groot Night has closed. You can only buy the Commodore in raids with your own figures, if you pulled him."
+      ]
+    },
+    {
+      "head": "New figures",
+      "points": [
+        "Dibs (1 acorn, Huddle Bulwark) shields itself and the most hurt friend touching it: 90 for 4 seconds.",
+        "Jet (2 acorns, Huddle Sneak) slides in a line through its target. Every enemy on the line takes 100 physical damage.",
+        "Jet leaves ice on the line for 3 seconds. Enemies on the ice are 30% slower.",
+        "Larp (3 acorns, Gnome Slinger, and Huddle) throws 4 snowballs, each at a different enemy if it can. Each does 55 physical damage.",
+        "Flurry (4 acorns, Huddle Sage) brings snow for 4 seconds. It falls on the enemy in reach with the most enemies touching it, and the hexes touching that one.",
+        "Enemies in Flurry's snow take 60 magic damage a second and are 25% slower.",
+        "Pomp (4 acorns, Gnome Chorus) gives every friend in its row 30 mana. They attack 25% faster for 4 seconds.",
+        "Yule (5 acorns, Huddle Mender, and LHZ) is Penguin Month's top prize. It puts the most hurt friend in a bubble for 2 seconds.",
+        "Nothing can hurt a friend in the bubble, and they can't act. They come out with 520 health back and a full mana bar.",
+        "Each later cast bubbles 1 more friend, up to 3.",
+        "While Penguin Month is open, anyone can buy Yule in any raid."
+      ]
+    },
+    {
+      "head": "Traits",
+      "points": [
+        "New origin: LHZ. Yule is one.",
+        "One LHZ figure starts the fight with 15 more mana. Two start with 25 more each.",
+        "With two, each time one uses its ability, the other gets 15 mana.",
+        "The Honorary Badge is a new charm. The figure holding it counts as LHZ.",
+        "Huddle, with 2 and 4: Huddle figures that start the fight touching share one shield. It is worth 25% or 35% of their health added together.",
+        "Huddle, with 5: the shield comes back once, 6 seconds after it breaks. It is then worth 35% of the health of those still standing.",
+        "Sage has a third step at 6. Abilities are 90% stronger, and each attack gives 7 more mana.",
+        "Chorus has a fourth step at 5. The party gains 4 mana a second, and Chorus figures 8."
+      ]
+    },
+    {
+      "head": "Items",
+      "points": [
+        "After you beat a boss, the second component pick always has a Carving Knife.",
+        "A Knife and any other component make a class emblem. The emblem keeps that component's stat.",
+        "The five: Wooden Tooth (Thorn, Fang), Wooden Sling (Plume, Slinger), Wooden Spectacles (Glowcap, Sage), Wooden Buckler (Bark, Bulwark) and Wooden Spoon (Chestnut, Mender).",
+        "Two Knives make An Extra Chair.",
+        "Guild Onesie is a new charm. The figure holding it counts as Huddle."
+      ]
+    }
+  ]
+}

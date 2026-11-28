@@ -1,6 +1,6 @@
 name: News
 
-# Each patch note in the town's News tab (apps/town/src/notes.json) is posted to Discord once it is
+# Each patch note in the town's News tab (apps/town/notes/<id>.json) is posted to Discord once it is
 # out, by each webhook kept as the secrets NEWS_WEBHOOK and NEWS_WEBHOOK_2, each in its own job, so
 # one that fails or hangs never keeps the notes from the other. A secret that is not set is skipped.
 # A note is out from its `at`, so one merged ahead of its day (a banner's) waits for it.
@@ -12,11 +12,12 @@ name: News
 # is tried again on the next run. A mark that cannot be written fails the job once the rest are
 # posted. Which notes is `toPost`'s to say and what counts as taken `deliver`'s
 # (apps/town/src/notes.ts, tested there); apps/town/review/news.ts runs them. A note changed after
-# it was posted is not posted again.
+# it was posted is not posted again. A note's record is on the commit that first added its id, to its
+# own file or, for the notes older than the files, to apps/town/src/notes.json.
 on:
   push:
     branches: [main]
-    paths: [apps/town/src/notes.json]
+    paths: [apps/town/notes/**]
   schedule:
     - cron: "11,41 * * * *"
   # GitHub may start a timed run late or not at all; a note due at a moment (a banner's) can also be
@@ -50,9 +51,9 @@ jobs:
         run: |
           set -euo pipefail
           now=$(date +%s000)
-          due=$(jq --argjson now "$now" '
+          due=$(jq -s --argjson now "$now" '
             map(.at | (if test("T") then sub("Z$"; ":00Z") else . + "T00:00:00Z" end) | fromdateiso8601 * 1000
-              | select(. <= $now and . > $now - 604800000)) | length' apps/town/src/notes.json)
+              | select(. <= $now and . > $now - 604800000)) | length' apps/town/notes/*.json)
           printf 'due=%s\n' "$due" | tee -a "$GITHUB_OUTPUT"
       # When each note was added, and when the record began, are in the history.
       - name: Fetch the history

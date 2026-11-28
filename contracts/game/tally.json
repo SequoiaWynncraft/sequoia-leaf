@@ -1,0 +1,81 @@
+{
+  "GET /v1/game/tally/{board}/{period}": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/tally/raids/week"
+    },
+    "status": 200,
+    "body": {
+      "board": "raids",
+      "period": "week",
+      "from": "2026-11-23T00:00:00.000Z",
+      "top": [
+        {
+          "place": 1,
+          "id": "10000000-0000-0000-0000-000000000001",
+          "name": "Alice",
+          "guest": false,
+          "score": 9,
+          "you": true
+        },
+        {
+          "place": 2,
+          "id": "10000000-0000-0000-0000-000000000002",
+          "name": "Bob",
+          "guest": false,
+          "score": 2,
+          "you": false
+        }
+      ],
+      "you": {
+        "place": 1,
+        "score": 9
+      }
+    }
+  },
+  "GET /v1/game/tally/{board}/{period}, all time": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/tally/level/all"
+    },
+    "status": 200,
+    "body": {
+      "board": "level",
+      "period": "all",
+      "from": null,
+      "top": [
+        {
+          "place": 1,
+          "id": "10000000-0000-0000-0000-000000000001",
+          "name": "Alice",
+          "guest": false,
+          "score": 13,
+          "you": true
+        },
+        {
+          "place": 2,
+          "id": "10000000-0000-0000-0000-000000000002",
+          "name": "Bob",
+          "guest": false,
+          "score": 1,
+          "you": false
+        }
+      ],
+      "you": {
+        "place": 1,
+        "score": 13
+      }
+    }
+  },
+  "GET /v1/game/tally/{board}/{period}, no such board": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/tally/level/week"
+    },
+    "status": 404,
+    "body": {
+      "code": "no_such_board",
+      "message": "The Tally keeps no such board"
+    }
+  }
+}

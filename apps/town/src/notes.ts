@@ -1,19 +1,20 @@
 /**
  * What has changed in the game, for the "News" tab on the quest board, newest first: the notes are
- * data, in `notes.json`. A change a player can see adds a note at the top of it, in the words of
- * someone telling a friend, and nothing is ever taken out of the middle. A note is out from its
- * `at` (`notesAt`), so one for a release merged ahead of its day waits for that moment, here and on
- * Discord (`.github/workflows/news.yml`, `toPost`).
+ * data, one file each, `apps/town/notes/<id>.json`, read as the page is built (`notesListed`, a
+ * macro). A change a player can see adds a note file of its own, in the words of someone telling a
+ * friend, and no note is ever taken out. The notes are in the order of their `at`, newest first, and
+ * notes of one minute by id. A note is out from its `at` (`notesAt`), so one for a release merged
+ * ahead of its day waits for that moment, here and on Discord (`.github/workflows/news.yml`, `toPost`).
  *
  * A note's one or two lines are what everyone reads on the board. A bigger change also has its full
  * notes (`more`), which open under the lines: a few parts, each a heading and what changed under it.
  */
 
-import listed from "./notes.json" with { type: "json" };
+import { type Listed, notesListed } from "../build/notes.ts" with { type: "macro" };
 
 export interface Note {
   id: string;
-  /** When it went live, by the world's clock: `2026-11-22T19:09Z`. An old note has only its day, `2026-11-22`. */
+  /** When it went live, by the world's clock, to the minute: `2026-11-22T19:09Z`. */
   at: string;
   title: string;
   lines: readonly string[];
@@ -31,26 +32,36 @@ const isWords = (v: unknown): v is string[] => Array.isArray(v) && v.every((w) =
 
 function readPart(v: unknown): Part {
   if (!isRecord(v) || typeof v.head !== "string" || !isWords(v.points))
-    throw new Error(`notes.json: a part that does not read: ${JSON.stringify(v)}`);
+    throw new Error(`notes: a part that does not read: ${JSON.stringify(v)}`);
   return { head: v.head, points: v.points };
 }
 
-/** A note from `notes.json`; one that does not read is a mistake in the file, and the board's tests say so. */
+/** A note from its file; one that does not read is a mistake in the file, and the board's tests say so. */
 function readNote(v: unknown): Note {
   if (!isRecord(v) || typeof v.id !== "string" || typeof v.at !== "string" || typeof v.title !== "string")
-    throw new Error(`notes.json: a note that does not read: ${JSON.stringify(v)}`);
-  if (!isWords(v.lines)) throw new Error(`notes.json: the lines of ${v.id} do not read`);
+    throw new Error(`notes: a note that does not read: ${JSON.stringify(v)}`);
+  if (!isWords(v.lines)) throw new Error(`notes: the lines of ${v.id} do not read`);
   const note: Note = { id: v.id, at: v.at, title: v.title, lines: v.lines };
   if (v.more === undefined) return note;
-  if (!Array.isArray(v.more)) throw new Error(`notes.json: the full notes of ${v.id} do not read`);
+  if (!Array.isArray(v.more)) throw new Error(`notes: the full notes of ${v.id} do not read`);
   return { ...note, more: v.more.map(readPart) };
 }
 
-/** Every note in `notes.json`, newest first, out or waiting for its moment. */
-export const NOTES: readonly Note[] = listed.map(readNote);
+/** A note from its file, which is named for its id: `apps/town/notes/<id>.json`. */
+function readFile({ file, note }: Listed): Note {
+  const read = readNote(note);
+  if (read.id !== file) throw new Error(`notes: ${file}.json has the note ${read.id}; name it ${read.id}.json`);
+  return read;
+}
 
-/** The moment a note goes out, by the world's clock: its `at`; a note with only its day, at that day's start. */
+/** The moment a note goes out, by the world's clock: its `at`. */
 export const noteAt = (n: Pick<Note, "at">): number => Date.parse(n.at);
+
+/** Newest first, and notes of one moment by id. */
+const newestFirst = (a: Note, b: Note): number => noteAt(b) - noteAt(a) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+
+/** Every note, newest first, out or waiting for its moment. */
+export const NOTES: readonly Note[] = notesListed().map(readFile).toSorted(newestFirst);
 /**
  * The notes out at a moment of Leaf's clock (`leafNow`), newest first. A note whose `at` is still
  * to come waits for it: one merged ahead of a release (a banner's) shows only as it opens.
@@ -95,7 +106,7 @@ export function toPost(notes: readonly Note[], run: Posting): Note[] {
     const ours = run.merged(n.id) >= run.since || at > run.since;
     return at <= run.now && at > run.now - KEPT_FOR && ours && !run.taken(n.id);
   });
-  // The file is newest first: reversed, notes of one moment keep the order they were written in.
+  // The notes are newest first: reversed, then sorted, notes of one moment go out in a fixed order.
   return due.toReversed().toSorted((a, b) => noteAt(a) - noteAt(b));
 }
 

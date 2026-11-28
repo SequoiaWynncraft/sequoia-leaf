@@ -1,0 +1,57 @@
+{
+  "id": "groot-night",
+  "at": "2026-12-08T00:00Z",
+  "title": "Groot Night",
+  "lines": [
+    "Groot Night is open until 22 December. Its top prize is the Commodore. Crab #8, Clutch, Crab #31, Munch, Peep and Seqwawa are featured. Half the pulls of their rarity give one of them.",
+    "In The Little Raid, Grooter is a new origin. Its hits take armour and ward from what they hit. Chorus is a new class. It gives the party mana every second."
+  ],
+  "more": [
+    {
+      "head": "Fights",
+      "points": [
+        "20 seconds into a fight, healing and shields get 20% weaker.",
+        "From then on, all damage rises 5% each second, up to 50% more."
+      ]
+    },
+    {
+      "head": "Leaving every raid",
+      "points": [
+        "Every raid now has 29 figures at a time. When new ones arrive, the same number leave.",
+        "Leaving now: Flint, Toast, Shrub, Reed and Vesta. You can still pull them at the Grove, and buy them in raids with your own figures.",
+        "gaz's banner has closed. You can only buy gaz in raids with your own figures, if you pulled gaz."
+      ]
+    },
+    {
+      "head": "New figures",
+      "points": [
+        "Peep (1 acorn, Grooter Slinger) throws its hat at the enemy in reach with the most armour. The hit takes 10 armour and ward off it.",
+        "Crab #31 (3 acorns, Crab Chorus) gives its 2 nearest friends 25 mana and shields itself.",
+        "Munch (3 acorns, Grooter Fang) bites its target 3 times in 1 second. Each bite takes 6 armour and ward off it.",
+        "Clutch (4 acorns, Grooter Bulwark) hatches Hatchlings beside it, up to 3 at a time.",
+        "Crab #8 (5 acorns, Crab Sneak) hides in its shell for 1 second. Then it hits the enemy with the least health, and again if that enemy falls.",
+        "Crab #8 doesn't take up a place on your board. A second Crab #8 does.",
+        "The Commodore (5 acorns, Grooter Chorus) is Groot Night's top prize. He calls up to 3 grooters onto free hexes within 2 of him. Grooters still standing are healed to full instead.",
+        "While Groot Night is open, anyone can buy the Commodore in any raid."
+      ]
+    },
+    {
+      "head": "Traits",
+      "points": [
+        "Grooter, with 2, 3 and 4: each hit from a Grooter figure or its summons takes 4, 6 or 8 armour and ward. One enemy loses at most 30, 50 or 80.",
+        "Chorus, with 2, 3 and 4: your whole party gains 1, 2 or 3 mana a second. Chorus figures gain 2, 4 or 6.",
+        "Twig, Brew and Drizzle are Chorus too.",
+        "Crab's top step now needs 7 Crabs, not 5. With 2, a Crab #?? joins. With 4, a Big Crab #??. With 7, a Big Crab #?? and two Crab #??.",
+        "Sneak's first hits now do 35% and 60% more, down from 40% and 70%."
+      ]
+    },
+    {
+      "head": "Emblems",
+      "points": [
+        "Four new charms: Grooter Ping (Grooter), Tin Whistle (Chorus), Party Finder (Graid) and False Moustache (Sneak).",
+        "A Party Finder holder with no true form gets back up as itself.",
+        "Every emblem now also gives 10% more health."
+      ]
+    }
+  ]
+}

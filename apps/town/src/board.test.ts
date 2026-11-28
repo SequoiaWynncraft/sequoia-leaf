@@ -17,7 +17,7 @@ import {
 } from "./board.ts";
 import type { Quest } from "./guild.ts";
 import { readQuests } from "./live.ts";
-import { type Note, noteAt, NOTES, notesAt } from "./notes.ts";
+import { newestAt, type Note, noteAt, NOTES, notesAt } from "./notes.ts";
 
 /** The member's quests as Leaf really sends them, from the contract its own tests write. */
 const contract: unknown = await Bun.file(new URL("../../../contracts/leaf-api-v1.json", import.meta.url)).json();
@@ -108,7 +108,33 @@ describe("what a quest's note says it is", () => {
 const noteWords = (n: Note): string[] =>
   [n.title, ...n.lines].concat((n.more ?? []).flatMap((p) => [p.head].concat(p.points)));
 
-/** A moment of Leaf's clock after every note in the file is out. */
+/** The 150 notes of `apps/town/src/notes.json`, in its order, newest first, before each had a file of its own. */
+const BEFORE_FILES = `
+up-the-tree penguin-month groot-night works-tier-6-still works-tier-5-wire works-outer-land works-assembler
+versus-tracker works-quiet-line works-reach works-tier-5-research raid-item-tools versus-smooth
+pages-survive-deploys names-wrap raid-front-steady works-belt-feel gaz-on-the-stall works-you-walk
+raid-endless-past-400 raid-own-endless raid-zone-hint wilds-rule-icons raid-crab-numbers raid-graid raid-groot
+kit-one-tip raid-wilds-rules raid-seat-forge raid-live-tables raid-endless raid-gaz-body raid-end-clearly
+raid-menu raid-gaz-balance raid-spar-variety raid-gaz-look raid-second-place raid-looks-steady raid-card-hover
+raid-sell-items-back raid-fight-show raid-figure-mechanics raid-gaz-sage raid-steady-table raid-items-easy
+raid-fight-behaviour raid-member-figure raid-own raid-met-boards camp-member-stands works-building-tweaks
+blueprint-codes fell-redwoods paid-requests-extra le-for-leaf page-drift bosses-once-camp-pets
+works-whole-yard-plan works-orders-and-power works-corner-stays works-undo works-top-two-rows card-rows-spacing
+works-letter-ink works-per-minute works-pointer discord-sign-in works-phone stump-log-first letter-works-coins
+camp-here rebind-keys works-orders-handed works-card-move items-per-minute works-folds background-frames
+keyboards cat-purr settings-menu works-ways-in camp-live camp-visits town-no-walking-ghosts works-sorter-sides
+tally-board works-long-works kit-reach works-clearer raid-clearer town-clearer works-steady-2 town-live-once
+works-steady late-raids town-ways leaf-turns raid-fixes tally town-presence works-visit-live
+works-splitter-grades works-recipe works-tier-3 works-gate works-tiers grove-quiet figures-town-look grove-hold
+pull-characters storage grove-full-screen banner-1-open one-town-2 works-away one-town works-smoother
+touches-seen the-grove board-rerolls time-played nobody-inside timber-and-shingle gate-card splitter-ways
+works-area works-orders-list seen-in-town nothing-stuck belt-colours treasury-requests taps-land fire-seen
+one-face visit-camps stand-apart works-splitters camp-follows-you new-look visit-yards works-plain-words
+top-yards works-follows-you seen-lately-everyone lit-on-phones works-words raid-follows-you tap-to-leave
+quick-return
+`;
+
+/** A moment of Leaf's clock after every note is out. */
 const LATER = Math.max(...NOTES.map(noteAt)) + 1;
 
 describe("the board's news", () => {
@@ -118,15 +144,14 @@ describe("the board's news", () => {
     world = null;
   });
 
-  test("every note has an id of its own, a real moment or day, newest first, one or two lines, and full notes that say something", () => {
+  test("every note has an id of its own, a real moment, newest first, one or two lines, and full notes that say something", () => {
     const ids = NOTES.map((n) => n.id);
     expect(new Set(ids).size).toBe(ids.length);
     const ats = NOTES.map((n) => n.at);
     for (const at of ats) {
-      expect(at).toMatch(/^\d{4}-\d\d-\d\d(T\d\d:\d\dZ)?$/);
+      expect(at).toMatch(/^\d{4}-\d\d-\d\dT\d\d:\d\dZ$/);
       expect(Number.isNaN(new Date(at).getTime())).toBe(false);
     }
-    // A note with only its day is older than every note of that day with a time, and sorts so.
     expect(ats).toEqual(ats.toSorted().toReversed());
     for (const n of NOTES) expect([1, 2]).toContain(n.lines.length);
     // Full notes, where a note has them: each part a heading and something under it, and no empty words.
@@ -142,6 +167,15 @@ describe("the board's news", () => {
     expect(noteWhen("2026-11-22T05:05Z", "UTC")).toBe("22 Nov, 05:05");
     expect(noteWhen("2026-11-22")).toBe("22 Nov");
     expect(noteWhen("2027-01-05")).toBe("5 Jan");
+  });
+
+  test("the notes written before they had a file each come out in the order the one file had them", () => {
+    const before = BEFORE_FILES.split(/\s+/).filter((id) => id !== "");
+    expect(before).toHaveLength(150);
+    expect(NOTES.map((n) => n.id).filter((id) => before.includes(id))).toEqual(before);
+    // The ten newest of them, as the News tab showed them then; notes written since come in above.
+    const shown = newestAt(LATER, NOTES.length).map((n) => n.id);
+    expect(shown.filter((id) => before.includes(id)).slice(0, 10)).toEqual(before.slice(0, 10));
   });
 
   test("the news calls Worm, Moth, Rock, Greg and Orphion Graid, and Groot only the Nest of the Grootslangs", () => {

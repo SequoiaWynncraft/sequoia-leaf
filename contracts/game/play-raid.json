@@ -1,0 +1,1547 @@
+{
+  "GET /v1/game/play/{game}": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/play/raid"
+    },
+    "status": 200,
+    "body": {
+      "rev": 0,
+      "now": "2026-11-25T12:55:00.000Z",
+      "state": {
+        "era": 3,
+        "begun": {
+          "main": 0,
+          "endless": 0
+        },
+        "held": {
+          "main": null,
+          "endless": null
+        },
+        "week": {
+          "at": 1795392000000,
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          }
+        },
+        "apart": {
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          },
+          "week": {
+            "at": 1795392000000,
+            "deepest": {
+              "wilds": 0,
+              "deep": 0
+            }
+          }
+        },
+        "almanac": {
+          "fielded": [],
+          "threeStars": [],
+          "forged": [],
+          "topped": [],
+          "bosses": [[], [], []],
+          "best": [0, 0, 0],
+          "runs": 0,
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          }
+        },
+        "trail": 0,
+        "looks": {
+          "place": "clearing",
+          "cloth": "bare",
+          "lantern": "iron",
+          "bases": "plain",
+          "owned": []
+        },
+        "roster": {}
+      },
+      "purse": {
+        "coins": 300,
+        "leaf": 32163,
+        "version": 16
+      }
+    }
+  },
+  "POST /v1/game/play/{game}": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/play/raid",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000001",
+        "commands": [
+          {
+            "id": "c-1",
+            "do": "start",
+            "trail": 0
+          },
+          {
+            "id": "c-2",
+            "do": "choose",
+            "option": 0
+          }
+        ]
+      }
+    },
+    "status": 200,
+    "body": {
+      "rev": 1,
+      "now": "2026-11-25T12:55:00.000Z",
+      "state": {
+        "era": 3,
+        "begun": {
+          "main": 1,
+          "endless": 0
+        },
+        "held": {
+          "main": {
+            "era": 3,
+            "way": {
+              "course": {
+                "id": "trail",
+                "trail": 0
+              },
+              "figures": {
+                "pool": "fair"
+              }
+            },
+            "room": 0,
+            "stage": {
+              "phase": "plan",
+              "picks": []
+            },
+            "resolve": 20,
+            "acorns": 2,
+            "streak": 0,
+            "level": 1,
+            "xp": 0,
+            "board": [
+              null,
+              null,
+              null,
+              {
+                "id": 1,
+                "kind": "barrowgnome",
+                "stars": 1,
+                "items": [],
+                "fed": 0,
+                "fights": 0
+              },
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
+            ],
+            "bench": [null, null, null, null, null, null, null, null, null],
+            "rack": {},
+            "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
+            "held": false,
+            "rustles": 1,
+            "bought": 0,
+            "boons": [],
+            "foe": {
+              "who": "The forest",
+              "title": "A few gnats",
+              "figures": [
+                {
+                  "kind": "gnat",
+                  "stars": 1,
+                  "seat": 2,
+                  "items": [],
+                  "fed": 0
+                },
+                {
+                  "kind": "gnat",
+                  "stars": 1,
+                  "seat": 4,
+                  "items": [],
+                  "fed": 0
+                }
+              ],
+              "boons": [],
+              "might": 100
+            },
+            "record": [],
+            "before": {
+              "fought": 0,
+              "won": 0,
+              "lost": 0,
+              "furthest": 0,
+              "deepest": 0,
+              "cleared": [],
+              "bosses": [],
+              "bossesPast": 0,
+              "met": []
+            },
+            "nextId": 2,
+            "last": null,
+            "wing": null,
+            "seen": {
+              "fielded": [],
+              "threeStars": [],
+              "forged": [],
+              "topped": []
+            }
+          },
+          "endless": null
+        },
+        "week": {
+          "at": 1795392000000,
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          }
+        },
+        "apart": {
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          },
+          "week": {
+            "at": 1795392000000,
+            "deepest": {
+              "wilds": 0,
+              "deep": 0
+            }
+          }
+        },
+        "almanac": {
+          "fielded": [],
+          "threeStars": [],
+          "forged": [],
+          "topped": [],
+          "bosses": [[], [], []],
+          "best": [0, 0, 0],
+          "runs": 0,
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          }
+        },
+        "trail": 0,
+        "looks": {
+          "place": "clearing",
+          "cloth": "bare",
+          "lantern": "iron",
+          "bases": "plain",
+          "owned": []
+        },
+        "roster": {}
+      },
+      "purse": {
+        "coins": 300,
+        "leaf": 32163,
+        "version": 16
+      },
+      "results": [
+        {
+          "id": "c-1",
+          "notes": [
+            {
+              "t": "started",
+              "trail": 0,
+              "run": 1
+            }
+          ]
+        },
+        {
+          "id": "c-2",
+          "notes": [
+            {
+              "t": "starter",
+              "kind": "barrowgnome",
+              "piece": 1,
+              "to": {
+                "on": "board",
+                "at": 3
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "POST /v1/game/play/{game}, a refusal": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/play/raid",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000001",
+        "commands": [
+          {
+            "id": "c-3",
+            "do": "take"
+          }
+        ]
+      }
+    },
+    "status": 200,
+    "body": {
+      "rev": 1,
+      "now": "2026-11-25T12:55:00.000Z",
+      "state": {
+        "era": 3,
+        "begun": {
+          "main": 1,
+          "endless": 0
+        },
+        "held": {
+          "main": {
+            "era": 3,
+            "way": {
+              "course": {
+                "id": "trail",
+                "trail": 0
+              },
+              "figures": {
+                "pool": "fair"
+              }
+            },
+            "room": 0,
+            "stage": {
+              "phase": "plan",
+              "picks": []
+            },
+            "resolve": 20,
+            "acorns": 2,
+            "streak": 0,
+            "level": 1,
+            "xp": 0,
+            "board": [
+              null,
+              null,
+              null,
+              {
+                "id": 1,
+                "kind": "barrowgnome",
+                "stars": 1,
+                "items": [],
+                "fed": 0,
+                "fights": 0
+              },
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
+            ],
+            "bench": [null, null, null, null, null, null, null, null, null],
+            "rack": {},
+            "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
+            "held": false,
+            "rustles": 1,
+            "bought": 0,
+            "boons": [],
+            "foe": {
+              "who": "The forest",
+              "title": "A few gnats",
+              "figures": [
+                {
+                  "kind": "gnat",
+                  "stars": 1,
+                  "seat": 2,
+                  "items": [],
+                  "fed": 0
+                },
+                {
+                  "kind": "gnat",
+                  "stars": 1,
+                  "seat": 4,
+                  "items": [],
+                  "fed": 0
+                }
+              ],
+              "boons": [],
+              "might": 100
+            },
+            "record": [],
+            "before": {
+              "fought": 0,
+              "won": 0,
+              "lost": 0,
+              "furthest": 0,
+              "deepest": 0,
+              "cleared": [],
+              "bosses": [],
+              "bossesPast": 0,
+              "met": []
+            },
+            "nextId": 2,
+            "last": null,
+            "wing": null,
+            "seen": {
+              "fielded": [],
+              "threeStars": [],
+              "forged": [],
+              "topped": []
+            }
+          },
+          "endless": null
+        },
+        "week": {
+          "at": 1795392000000,
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          }
+        },
+        "apart": {
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          },
+          "week": {
+            "at": 1795392000000,
+            "deepest": {
+              "wilds": 0,
+              "deep": 0
+            }
+          }
+        },
+        "almanac": {
+          "fielded": [],
+          "threeStars": [],
+          "forged": [],
+          "topped": [],
+          "bosses": [[], [], []],
+          "best": [0, 0, 0],
+          "runs": 0,
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          }
+        },
+        "trail": 0,
+        "looks": {
+          "place": "clearing",
+          "cloth": "bare",
+          "lantern": "iron",
+          "bases": "plain",
+          "owned": []
+        },
+        "roster": {}
+      },
+      "purse": {
+        "coins": 300,
+        "leaf": 32163,
+        "version": 16
+      },
+      "results": [
+        {
+          "id": "c-3",
+          "refused": "no_fight"
+        }
+      ]
+    }
+  },
+  "POST /v1/game/play/{game}, sent again": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/play/raid",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000001",
+        "commands": [
+          {
+            "id": "c-1",
+            "do": "start",
+            "trail": 0
+          },
+          {
+            "id": "c-2",
+            "do": "choose",
+            "option": 0
+          }
+        ]
+      }
+    },
+    "status": 200,
+    "body": {
+      "rev": 1,
+      "now": "2026-11-25T12:55:00.000Z",
+      "state": {
+        "era": 3,
+        "begun": {
+          "main": 1,
+          "endless": 0
+        },
+        "held": {
+          "main": {
+            "era": 3,
+            "way": {
+              "course": {
+                "id": "trail",
+                "trail": 0
+              },
+              "figures": {
+                "pool": "fair"
+              }
+            },
+            "room": 0,
+            "stage": {
+              "phase": "plan",
+              "picks": []
+            },
+            "resolve": 20,
+            "acorns": 2,
+            "streak": 0,
+            "level": 1,
+            "xp": 0,
+            "board": [
+              null,
+              null,
+              null,
+              {
+                "id": 1,
+                "kind": "barrowgnome",
+                "stars": 1,
+                "items": [],
+                "fed": 0,
+                "fights": 0
+              },
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
+            ],
+            "bench": [null, null, null, null, null, null, null, null, null],
+            "rack": {},
+            "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
+            "held": false,
+            "rustles": 1,
+            "bought": 0,
+            "boons": [],
+            "foe": {
+              "who": "The forest",
+              "title": "A few gnats",
+              "figures": [
+                {
+                  "kind": "gnat",
+                  "stars": 1,
+                  "seat": 2,
+                  "items": [],
+                  "fed": 0
+                },
+                {
+                  "kind": "gnat",
+                  "stars": 1,
+                  "seat": 4,
+                  "items": [],
+                  "fed": 0
+                }
+              ],
+              "boons": [],
+              "might": 100
+            },
+            "record": [],
+            "before": {
+              "fought": 0,
+              "won": 0,
+              "lost": 0,
+              "furthest": 0,
+              "deepest": 0,
+              "cleared": [],
+              "bosses": [],
+              "bossesPast": 0,
+              "met": []
+            },
+            "nextId": 2,
+            "last": null,
+            "wing": null,
+            "seen": {
+              "fielded": [],
+              "threeStars": [],
+              "forged": [],
+              "topped": []
+            }
+          },
+          "endless": null
+        },
+        "week": {
+          "at": 1795392000000,
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          }
+        },
+        "apart": {
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          },
+          "week": {
+            "at": 1795392000000,
+            "deepest": {
+              "wilds": 0,
+              "deep": 0
+            }
+          }
+        },
+        "almanac": {
+          "fielded": [],
+          "threeStars": [],
+          "forged": [],
+          "topped": [],
+          "bosses": [[], [], []],
+          "best": [0, 0, 0],
+          "runs": 0,
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          }
+        },
+        "trail": 0,
+        "looks": {
+          "place": "clearing",
+          "cloth": "bare",
+          "lantern": "iron",
+          "bases": "plain",
+          "owned": []
+        },
+        "roster": {}
+      },
+      "purse": {
+        "coins": 300,
+        "leaf": 32163,
+        "version": 16
+      },
+      "results": [
+        {
+          "id": "c-1",
+          "notes": [
+            {
+              "t": "started",
+              "trail": 0,
+              "run": 1
+            }
+          ]
+        },
+        {
+          "id": "c-2",
+          "notes": [
+            {
+              "t": "starter",
+              "kind": "barrowgnome",
+              "piece": 1,
+              "to": {
+                "on": "board",
+                "at": 3
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "POST /v1/game/play/{game}, not a command": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/play/raid",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000001",
+        "commands": [
+          {
+            "id": "c-4",
+            "do": "win"
+          }
+        ]
+      }
+    },
+    "status": 400,
+    "body": {
+      "code": "invalid_command",
+      "message": "Command c-4 is not one of the game's"
+    }
+  },
+  "POST /v1/game/play/{game}, a look bought with Leaf": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/play/raid",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000001",
+        "commands": [
+          {
+            "id": "c-5",
+            "do": "buyLook",
+            "kind": "cloth",
+            "look": "plum"
+          }
+        ]
+      }
+    },
+    "status": 200,
+    "body": {
+      "rev": 2,
+      "now": "2026-11-25T12:55:00.000Z",
+      "state": {
+        "era": 3,
+        "begun": {
+          "main": 1,
+          "endless": 0
+        },
+        "held": {
+          "main": {
+            "era": 3,
+            "way": {
+              "course": {
+                "id": "trail",
+                "trail": 0
+              },
+              "figures": {
+                "pool": "fair"
+              }
+            },
+            "room": 0,
+            "stage": {
+              "phase": "plan",
+              "picks": []
+            },
+            "resolve": 20,
+            "acorns": 2,
+            "streak": 0,
+            "level": 1,
+            "xp": 0,
+            "board": [
+              null,
+              null,
+              null,
+              {
+                "id": 1,
+                "kind": "barrowgnome",
+                "stars": 1,
+                "items": [],
+                "fed": 0,
+                "fights": 0
+              },
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
+            ],
+            "bench": [null, null, null, null, null, null, null, null, null],
+            "rack": {},
+            "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
+            "held": false,
+            "rustles": 1,
+            "bought": 0,
+            "boons": [],
+            "foe": {
+              "who": "The forest",
+              "title": "A few gnats",
+              "figures": [
+                {
+                  "kind": "gnat",
+                  "stars": 1,
+                  "seat": 2,
+                  "items": [],
+                  "fed": 0
+                },
+                {
+                  "kind": "gnat",
+                  "stars": 1,
+                  "seat": 4,
+                  "items": [],
+                  "fed": 0
+                }
+              ],
+              "boons": [],
+              "might": 100
+            },
+            "record": [],
+            "before": {
+              "fought": 0,
+              "won": 0,
+              "lost": 0,
+              "furthest": 0,
+              "deepest": 0,
+              "cleared": [],
+              "bosses": [],
+              "bossesPast": 0,
+              "met": []
+            },
+            "nextId": 2,
+            "last": null,
+            "wing": null,
+            "seen": {
+              "fielded": [],
+              "threeStars": [],
+              "forged": [],
+              "topped": []
+            }
+          },
+          "endless": null
+        },
+        "week": {
+          "at": 1795392000000,
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          }
+        },
+        "apart": {
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          },
+          "week": {
+            "at": 1795392000000,
+            "deepest": {
+              "wilds": 0,
+              "deep": 0
+            }
+          }
+        },
+        "almanac": {
+          "fielded": [],
+          "threeStars": [],
+          "forged": [],
+          "topped": [],
+          "bosses": [[], [], []],
+          "best": [0, 0, 0],
+          "runs": 0,
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          }
+        },
+        "trail": 0,
+        "looks": {
+          "place": "clearing",
+          "cloth": "plum",
+          "lantern": "iron",
+          "bases": "plain",
+          "owned": ["plum"]
+        },
+        "roster": {}
+      },
+      "purse": {
+        "coins": 300,
+        "leaf": 4163,
+        "version": 17
+      },
+      "results": [
+        {
+          "id": "c-5",
+          "notes": [
+            {
+              "t": "look",
+              "kind": "cloth",
+              "id": "plum"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "POST /v1/game/play/{game}, a look bought, sent again": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/play/raid",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000001",
+        "commands": [
+          {
+            "id": "c-5",
+            "do": "buyLook",
+            "kind": "cloth",
+            "look": "plum"
+          }
+        ]
+      }
+    },
+    "status": 200,
+    "body": {
+      "rev": 2,
+      "now": "2026-11-25T12:55:00.000Z",
+      "state": {
+        "era": 3,
+        "begun": {
+          "main": 1,
+          "endless": 0
+        },
+        "held": {
+          "main": {
+            "era": 3,
+            "way": {
+              "course": {
+                "id": "trail",
+                "trail": 0
+              },
+              "figures": {
+                "pool": "fair"
+              }
+            },
+            "room": 0,
+            "stage": {
+              "phase": "plan",
+              "picks": []
+            },
+            "resolve": 20,
+            "acorns": 2,
+            "streak": 0,
+            "level": 1,
+            "xp": 0,
+            "board": [
+              null,
+              null,
+              null,
+              {
+                "id": 1,
+                "kind": "barrowgnome",
+                "stars": 1,
+                "items": [],
+                "fed": 0,
+                "fights": 0
+              },
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
+            ],
+            "bench": [null, null, null, null, null, null, null, null, null],
+            "rack": {},
+            "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
+            "held": false,
+            "rustles": 1,
+            "bought": 0,
+            "boons": [],
+            "foe": {
+              "who": "The forest",
+              "title": "A few gnats",
+              "figures": [
+                {
+                  "kind": "gnat",
+                  "stars": 1,
+                  "seat": 2,
+                  "items": [],
+                  "fed": 0
+                },
+                {
+                  "kind": "gnat",
+                  "stars": 1,
+                  "seat": 4,
+                  "items": [],
+                  "fed": 0
+                }
+              ],
+              "boons": [],
+              "might": 100
+            },
+            "record": [],
+            "before": {
+              "fought": 0,
+              "won": 0,
+              "lost": 0,
+              "furthest": 0,
+              "deepest": 0,
+              "cleared": [],
+              "bosses": [],
+              "bossesPast": 0,
+              "met": []
+            },
+            "nextId": 2,
+            "last": null,
+            "wing": null,
+            "seen": {
+              "fielded": [],
+              "threeStars": [],
+              "forged": [],
+              "topped": []
+            }
+          },
+          "endless": null
+        },
+        "week": {
+          "at": 1795392000000,
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          }
+        },
+        "apart": {
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          },
+          "week": {
+            "at": 1795392000000,
+            "deepest": {
+              "wilds": 0,
+              "deep": 0
+            }
+          }
+        },
+        "almanac": {
+          "fielded": [],
+          "threeStars": [],
+          "forged": [],
+          "topped": [],
+          "bosses": [[], [], []],
+          "best": [0, 0, 0],
+          "runs": 0,
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          }
+        },
+        "trail": 0,
+        "looks": {
+          "place": "clearing",
+          "cloth": "plum",
+          "lantern": "iron",
+          "bases": "plain",
+          "owned": ["plum"]
+        },
+        "roster": {}
+      },
+      "purse": {
+        "coins": 300,
+        "leaf": 4163,
+        "version": 17
+      },
+      "results": [
+        {
+          "id": "c-5",
+          "notes": [
+            {
+              "t": "look",
+              "kind": "cloth",
+              "id": "plum"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "POST /v1/game/play/{game}, a guest with too little Leaf": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/play/raid",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000003",
+        "commands": [
+          {
+            "id": "v-1",
+            "do": "buyLook",
+            "kind": "cloth",
+            "look": "plum"
+          }
+        ]
+      }
+    },
+    "status": 200,
+    "body": {
+      "rev": 0,
+      "now": "2026-11-25T12:55:00.000Z",
+      "state": {
+        "era": 3,
+        "begun": {
+          "main": 0,
+          "endless": 0
+        },
+        "held": {
+          "main": null,
+          "endless": null
+        },
+        "week": {
+          "at": 1795392000000,
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          }
+        },
+        "apart": {
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          },
+          "week": {
+            "at": 1795392000000,
+            "deepest": {
+              "wilds": 0,
+              "deep": 0
+            }
+          }
+        },
+        "almanac": {
+          "fielded": [],
+          "threeStars": [],
+          "forged": [],
+          "topped": [],
+          "bosses": [[], [], []],
+          "best": [0, 0, 0],
+          "runs": 0,
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          }
+        },
+        "trail": 0,
+        "looks": {
+          "place": "clearing",
+          "cloth": "bare",
+          "lantern": "iron",
+          "bases": "plain",
+          "owned": []
+        },
+        "roster": {}
+      },
+      "purse": {
+        "coins": 300,
+        "leaf": 0,
+        "version": 2
+      },
+      "results": [
+        {
+          "id": "v-1",
+          "refused": "not_enough_leaf"
+        }
+      ]
+    }
+  },
+  "GET /v1/game/play/{game}/of/{player}, nothing to visit": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/play/raid/of/10000000-0000-0000-0000-000000000002"
+    },
+    "status": 404,
+    "body": {
+      "code": "nothing_to_visit",
+      "message": "There is nothing of theirs to visit there"
+    }
+  },
+  "POST /v1/game/play/{game}, not you": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/play/raid",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000002",
+        "commands": [
+          {
+            "id": "c-1",
+            "do": "start",
+            "trail": 0
+          },
+          {
+            "id": "c-2",
+            "do": "choose",
+            "option": 0
+          }
+        ]
+      }
+    },
+    "status": 409,
+    "body": {
+      "code": "not_you",
+      "message": "This page is signed in as someone else now. Load it again"
+    }
+  },
+  "POST /v1/game/play/{game}, setting out on an endless run": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/play/raid",
+      "body": {
+        "player": "10000000-0000-0000-0000-000000000001",
+        "commands": [
+          {
+            "id": "endless-1",
+            "do": "endless",
+            "way": "wilds"
+          }
+        ]
+      }
+    },
+    "status": 200,
+    "body": {
+      "rev": 3,
+      "now": "2026-11-25T12:55:00.000Z",
+      "state": {
+        "era": 3,
+        "begun": {
+          "main": 1,
+          "endless": 1
+        },
+        "held": {
+          "main": {
+            "era": 3,
+            "way": {
+              "course": {
+                "id": "trail",
+                "trail": 0
+              },
+              "figures": {
+                "pool": "fair"
+              }
+            },
+            "room": 0,
+            "stage": {
+              "phase": "plan",
+              "picks": []
+            },
+            "resolve": 20,
+            "acorns": 2,
+            "streak": 0,
+            "level": 1,
+            "xp": 0,
+            "board": [
+              null,
+              null,
+              null,
+              {
+                "id": 1,
+                "kind": "barrowgnome",
+                "stars": 1,
+                "items": [],
+                "fed": 0,
+                "fights": 0
+              },
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
+            ],
+            "bench": [null, null, null, null, null, null, null, null, null],
+            "rack": {},
+            "stall": ["worm", "finch", "mossmote", "worm", "crab7"],
+            "held": false,
+            "rustles": 1,
+            "bought": 0,
+            "boons": [],
+            "foe": {
+              "who": "The forest",
+              "title": "A few gnats",
+              "figures": [
+                {
+                  "kind": "gnat",
+                  "stars": 1,
+                  "seat": 2,
+                  "items": [],
+                  "fed": 0
+                },
+                {
+                  "kind": "gnat",
+                  "stars": 1,
+                  "seat": 4,
+                  "items": [],
+                  "fed": 0
+                }
+              ],
+              "boons": [],
+              "might": 100
+            },
+            "record": [],
+            "before": {
+              "fought": 0,
+              "won": 0,
+              "lost": 0,
+              "furthest": 0,
+              "deepest": 0,
+              "cleared": [],
+              "bosses": [],
+              "bossesPast": 0,
+              "met": []
+            },
+            "nextId": 2,
+            "last": null,
+            "wing": null,
+            "seen": {
+              "fielded": [],
+              "threeStars": [],
+              "forged": [],
+              "topped": []
+            }
+          },
+          "endless": {
+            "era": 3,
+            "way": {
+              "course": {
+                "id": "wilds"
+              },
+              "figures": {
+                "pool": "fair"
+              }
+            },
+            "room": 0,
+            "stage": {
+              "phase": "plan",
+              "picks": [
+                {
+                  "kind": "starter",
+                  "options": ["finch", "emberkit", "crab7"]
+                }
+              ]
+            },
+            "resolve": 20,
+            "acorns": 2,
+            "streak": 0,
+            "level": 1,
+            "xp": 0,
+            "board": [
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
+            ],
+            "bench": [null, null, null, null, null, null, null, null, null],
+            "rack": {},
+            "stall": ["barrowgnome", "emberkit", "moth", "barrowgnome", "barrowgnome"],
+            "held": false,
+            "rustles": 1,
+            "bought": 0,
+            "boons": [],
+            "foe": {
+              "who": "The forest",
+              "title": "A few gnats",
+              "figures": [
+                {
+                  "kind": "gnat",
+                  "stars": 1,
+                  "seat": 2,
+                  "items": [],
+                  "fed": 0
+                },
+                {
+                  "kind": "gnat",
+                  "stars": 1,
+                  "seat": 4,
+                  "items": [],
+                  "fed": 0
+                }
+              ],
+              "boons": [],
+              "might": 100
+            },
+            "record": [],
+            "before": {
+              "fought": 0,
+              "won": 0,
+              "lost": 0,
+              "furthest": 0,
+              "deepest": 0,
+              "cleared": [],
+              "bosses": [],
+              "bossesPast": 0,
+              "met": []
+            },
+            "nextId": 1,
+            "last": null,
+            "wing": null,
+            "seen": {
+              "fielded": [],
+              "threeStars": [],
+              "forged": [],
+              "topped": []
+            }
+          }
+        },
+        "week": {
+          "at": 1795392000000,
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          }
+        },
+        "apart": {
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          },
+          "week": {
+            "at": 1795392000000,
+            "deepest": {
+              "wilds": 0,
+              "deep": 0
+            }
+          }
+        },
+        "almanac": {
+          "fielded": [],
+          "threeStars": [],
+          "forged": [],
+          "topped": [],
+          "bosses": [[], [], []],
+          "best": [0, 0, 0],
+          "runs": 0,
+          "deepest": {
+            "wilds": 0,
+            "deep": 0
+          }
+        },
+        "trail": 0,
+        "looks": {
+          "place": "clearing",
+          "cloth": "plum",
+          "lantern": "iron",
+          "bases": "plain",
+          "owned": ["plum"]
+        },
+        "roster": {}
+      },
+      "purse": {
+        "coins": 275,
+        "leaf": 4163,
+        "version": 19
+      },
+      "results": [
+        {
+          "id": "endless-1",
+          "notes": [
+            {
+              "t": "started",
+              "trail": 0,
+              "run": 1,
+              "endless": "wilds"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

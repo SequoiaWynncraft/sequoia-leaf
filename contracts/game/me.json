@@ -1,0 +1,97 @@
+{
+  "GET /v1/game/me": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/me"
+    },
+    "status": 200,
+    "body": {
+      "player": {
+        "id": "10000000-0000-0000-0000-000000000001",
+        "username": "Alice"
+      },
+      "rank": "CAPTAIN",
+      "guest": false,
+      "leaf": 32163,
+      "xp": 31063,
+      "level": {
+        "number": 13,
+        "xp_into_level": 2563,
+        "xp_for_next_level": 4000
+      },
+      "event_cursor": 14,
+      "coins": 300,
+      "version": 15,
+      "signed_in_with": "sequoia",
+      "linked": true,
+      "ask_link": false
+    }
+  },
+  "GET /v1/game/me, signed out": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/me"
+    },
+    "status": 401,
+    "body": {
+      "code": "unauthorized",
+      "message": "Your session has expired. Sign in again"
+    }
+  },
+  "GET /v1/game/me, a guest": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/me"
+    },
+    "status": 200,
+    "body": {
+      "player": {
+        "id": "10000000-0000-0000-0000-000000000003",
+        "username": "Visitor"
+      },
+      "rank": null,
+      "guest": true,
+      "leaf": 0,
+      "xp": 0,
+      "level": {
+        "number": 1,
+        "xp_into_level": 0,
+        "xp_for_next_level": 1000
+      },
+      "event_cursor": 0,
+      "coins": 300,
+      "version": 0,
+      "signed_in_with": "sequoia",
+      "linked": true,
+      "ask_link": false
+    }
+  },
+  "GET /v1/game/me, after a look bought": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/me"
+    },
+    "status": 200,
+    "body": {
+      "player": {
+        "id": "10000000-0000-0000-0000-000000000001",
+        "username": "Alice"
+      },
+      "rank": "CAPTAIN",
+      "guest": false,
+      "leaf": 4163,
+      "xp": 31063,
+      "level": {
+        "number": 13,
+        "xp_into_level": 2563,
+        "xp_for_next_level": 4000
+      },
+      "event_cursor": 14,
+      "coins": 300,
+      "version": 17,
+      "signed_in_with": "sequoia",
+      "linked": true,
+      "ask_link": false
+    }
+  }
+}

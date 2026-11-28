@@ -1,0 +1,32 @@
+{
+  "id": "works-tier-3",
+  "at": "2026-11-23T18:45Z",
+  "title": "The Works: tier 3 takes longer",
+  "lines": [
+    "Lanterns for the great tree needs all 10 pieces of tier 3 research, not 3, and tier 3 research costs 1.5 times as many Timber folios.",
+    "Research you have finished stays finished. Research you are studying keeps the folios it has had."
+  ],
+  "more": [
+    {
+      "head": "Why",
+      "points": [
+        "Played through by the rules, tier 3 took about 1 hour 45 minutes. It is meant to take 4 to 5 hours. It now takes about 4 hours 15 minutes."
+      ]
+    },
+    {
+      "head": "Tier 3 research, in Timber folios",
+      "points": [
+        "The oil press: 90, was 60.",
+        "The workshop: 225, was 150.",
+        "A bigger flywheel: 300, was 200.",
+        "Second-tier machines: 600, was 400.",
+        "The sorter: 450, was 300.",
+        "A plan chest: 450, was 300.",
+        "The cart track: 600, was 400.",
+        "A night shift: 600, was 400.",
+        "Upgrading an area: 375, was 250.",
+        "The Brass folio: 1,350, was 900."
+      ]
+    }
+  ]
+}

@@ -4,6 +4,7 @@ import type { TallyBoard } from "@sequoia-leaf/core";
 import { isRecord } from "@sequoia-leaf/kit/net.ts";
 import { scope } from "@sequoia-leaf/kit/scope.ts";
 
+import { gameContract } from "../../../contracts/game.ts";
 import {
   type Answer,
   type Board,
@@ -15,7 +16,7 @@ import {
   weeklyReset,
 } from "./tally.ts";
 
-const GAME: unknown = await Bun.file(new URL("../../../contracts/leaf-game-v1.json", import.meta.url)).json();
+const GAME: unknown = gameContract();
 const answer = (name: string): unknown => (isRecord(GAME) && isRecord(GAME[name]) ? GAME[name].body : null);
 /** Somebody at a place on a board. */
 const row = (place: number, you = false) => ({

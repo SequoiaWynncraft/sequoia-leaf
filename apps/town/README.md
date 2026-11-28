@@ -13,6 +13,9 @@ bun run build    # dist/
 bun test         # the arrival letter, the town's own, what goes by Leaf's clock on the town's ground, the guild live, strings of lights tied at both ends, the town live, what a touch means
 ```
 
+The patch notes in `notes/` are read once as the page is built: restart `bun run dev` after adding
+or editing a note.
+
 The town always plays on Leaf: on a developer's machine that is `apps/api/test/play.ts` (the
 repository's README, and "Looking at it from outside" below). Anywhere without Leaf the kit's card
 says so.
@@ -39,7 +42,7 @@ says so.
   along the bottom opens any of them at once, the character walks there meanwhile, and the slot
   for the place they are standing at is lit.
 - **The quest board.** Two tabs: the quests, and "News", the ten newest notes on what has changed
-  in the game (`notes.json`, newest first). Every quest Leaf sends (`GET /v1/me/quests`), open and
+  in the game (`notes/<id>.json`, a file each, newest first). Every quest Leaf sends (`GET /v1/me/quests`), open and
   just finished, is a note; the panel scrolls when they do not fit. A quest says what it asks with
   the Leaf it pays beside it, and has a bar and count for each way to finish it Leaf sends (raids
   or wars, side by side). At its foot an open quest says its kind as the mod names them (Daily,

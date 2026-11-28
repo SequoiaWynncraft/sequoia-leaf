@@ -2,10 +2,11 @@ import { describe, expect, test } from "bun:test";
 
 import { isRecord } from "@sequoia-leaf/kit/net.ts";
 
+import { gameContract } from "../../../contracts/game.ts";
 import { leBlocked, LOST, named, type Offers, offersOf, type Outcome, outcomeOf, shown } from "./requests.ts";
 
 /** What Leaf answers the Treasury, as recorded from the real routes. */
-const GAME: unknown = await Bun.file(new URL("../../../contracts/leaf-game-v1.json", import.meta.url)).json();
+const GAME: unknown = gameContract();
 
 /** A recorded exchange's answer: its status and body. */
 function recorded(name: string): { status: number; body: unknown } {

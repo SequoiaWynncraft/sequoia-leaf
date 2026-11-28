@@ -1,0 +1,22 @@
+{
+  "id": "raid-board-dusk",
+  "at": "2026-11-28T11:07Z",
+  "title": "The raid's board at dusk",
+  "lines": [
+    "In The Little Raid, the board is now darker wood, so figures stand out. Your half is lighter and warmer than theirs.",
+    "While you drag a figure, the rows it belongs in light up. Sneak figures have none."
+  ],
+  "more": [
+    {
+      "head": "Also",
+      "points": [
+        "Figures on the board cast a shadow.",
+        "In a fight, the lines between hexes fade.",
+        "Each zone has one outline around it.",
+        "Zones have their own marks: blobs for slime, ripples for puddles, specks for dust, glints for ice, drifts for snow.",
+        "Closed hexes are bare wood with a stump or moss.",
+        "The baize, the velvet, the gingham and the hall are darker to match."
+      ]
+    }
+  ]
+}

@@ -9,12 +9,17 @@
  *
  *     NAME=<channel> WEBHOOK=<url> GH_TOKEN=<token> GITHUB_REPOSITORY=<owner/repo> bun apps/town/review/news.ts
  *
+ * With `--dry` it posts and marks nothing, needs no WEBHOOK, and says what it would post: a token
+ * that reads statuses is enough (`GH_TOKEN=$(gh auth token)`).
+ *
  * The record began with the first commit whose workflow asks to write statuses: the poster before it
- * posted every note merged earlier.
+ * posted every note merged earlier. The commit that added each note is `added.ts`'s to say; a note
+ * due that no commit is known to have added stops the run before anything is posted, as it could
+ * be neither marked nor known to be taken.
  */
 import { deliver, everyPage, messageOf, type Note, NOTES, toPost } from "../src/notes.ts";
+import { addedBy, unrecorded } from "./added.ts";
 
-const FILE = "apps/town/src/notes.json";
 const WORKFLOW = ".github/workflows/news.yml";
 /** What the workflow says once the poster keeps a record. */
 const RECORDS = "statuses: write";
@@ -38,26 +43,6 @@ function recordSince(): number {
   return Number(first) * 1000;
 }
 
-interface Added {
-  readonly sha: string;
-  readonly at: number;
-}
-/** The commit that added each note to the file, and when: from one pass over the file's history. */
-function addedBy(): ReadonlyMap<string, Added> {
-  const out = new Map<string, Added>();
-  let commit: Added | null = null;
-  for (const line of git("log", "--reverse", "--format=commit %H %ct", "-p", "--", FILE).split("\n")) {
-    const head = /^commit ([0-9a-f]{40}) (\d+)$/.exec(line);
-    if (head) {
-      commit = { sha: head[1] ?? "", at: Number(head[2]) * 1000 };
-      continue;
-    }
-    const id = /^\+\s*"id": "([^"]+)"/.exec(line)?.[1];
-    if (id !== undefined && commit && !out.has(id)) out.set(id, commit);
-  }
-  return out;
-}
-
 const API = `https://api.github.com/repos/${env("GITHUB_REPOSITORY")}`;
 const HEADERS = {
   Authorization: `Bearer ${env("GH_TOKEN")}`,
@@ -65,9 +50,8 @@ const HEADERS = {
   "X-GitHub-Api-Version": "2022-11-28",
 };
 const CHANNEL = env("NAME");
-/** The channel's webhook, asked to answer only once the message is saved. */
-const WEBHOOK = new URL(env("WEBHOOK"));
-WEBHOOK.searchParams.set("wait", "true");
+/** Whether to say what would be posted and post nothing. */
+const DRY = process.argv.includes("--dry");
 /** Statuses to a page, the most GitHub gives. */
 const PAGE = 100;
 const contextOf = (id: string): string => `news/${CHANNEL}/${id}`;
@@ -89,17 +73,35 @@ async function marked(sha: string): Promise<ReadonlySet<string>> {
   );
 }
 
-const added = addedBy();
+const added = addedBy(process.cwd());
 const due = toPost(NOTES, {
   now: Date.now(),
   since: recordSince(),
   merged: (id) => added.get(id)?.at ?? Number.NEGATIVE_INFINITY,
   taken: () => false,
 });
+const dueIds = due.map((n) => n.id);
+const lost = unrecorded(dueIds, added);
+if (lost.length > 0) {
+  for (const id of lost) console.log(`::error::No commit is known to have added the note ${id}: nothing is posted.`);
+  process.exit(1);
+}
 const shas = [...new Set(due.flatMap((n) => added.get(n.id)?.sha ?? []))];
 const taken = new Set<string>();
 for (const set of await Promise.all(shas.map(marked))) for (const context of set) taken.add(context);
 const untaken = due.filter((n) => !taken.has(contextOf(n.id)));
+
+if (DRY) {
+  const would = untaken.map((n) => n.id).join(", ") || "none";
+  console.log(
+    `${CHANNEL}: ${due.length} due, ${due.length - untaken.length} marked taken; would post ${untaken.length} (${would}).`,
+  );
+  process.exit(0);
+}
+
+/** The channel's webhook, asked to answer only once the message is saved. */
+const WEBHOOK = new URL(env("WEBHOOK"));
+WEBHOOK.searchParams.set("wait", "true");
 
 /** Posts a note to the channel; what it answered, or 0 for no answer. One a second, as Discord asks. */
 async function send(n: Note): Promise<number> {

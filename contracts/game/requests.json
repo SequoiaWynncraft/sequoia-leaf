@@ -1,0 +1,84 @@
+{
+  "GET /v1/game/requests": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/requests"
+    },
+    "status": 200,
+    "body": {
+      "aspect": {
+        "price": 3000,
+        "why_not": null
+      },
+      "tome": {
+        "price": 3000,
+        "why_not": null
+      },
+      "le": {
+        "price": 200,
+        "minimum": 32,
+        "why_not": "32 LE costs 6,400 Leaf. You have 4,163."
+      }
+    }
+  },
+  "POST /v1/game/requests": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/requests",
+      "body": {
+        "type": "tome",
+        "reason": "For the war tower"
+      }
+    },
+    "status": 200,
+    "body": {
+      "type": "tome",
+      "position": 2,
+      "leaf_paid": 3000,
+      "leaf": 1163
+    }
+  },
+  "POST /v1/game/requests, refused": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/requests",
+      "body": {
+        "type": "tome",
+        "reason": "For the war tower"
+      }
+    },
+    "status": 409,
+    "body": {
+      "code": "request_refused",
+      "message": "You already have a pending tome request in the queue."
+    }
+  },
+  "POST /v1/game/requests, LE": {
+    "request": {
+      "method": "POST",
+      "path": "/v1/game/requests",
+      "body": {
+        "type": "le",
+        "amount": 40
+      }
+    },
+    "status": 200,
+    "body": {
+      "type": "le",
+      "position": 2,
+      "leaf_paid": 8000,
+      "leaf": 1163
+    }
+  },
+  "GET /v1/game/requests, a guest": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/game/requests"
+    },
+    "status": 403,
+    "body": {
+      "code": "members_only",
+      "message": "For guild members with 7 days in the guild."
+    }
+  }
+}

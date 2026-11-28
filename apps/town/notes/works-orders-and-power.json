@@ -1,0 +1,23 @@
+{
+  "id": "works-orders-and-power",
+  "at": "2026-11-25T18:00Z",
+  "title": "The Works: orders and power numbers fixed",
+  "lines": [
+    "A side order's card stays on that order when another order is swapped or handed over.",
+    "A machine's card, the power book, the power bar and the Trouble list agree on what a machine makes and the power it draws."
+  ],
+  "more": [
+    {
+      "head": "Fixed",
+      "points": [
+        "A machine where power does not reach shows 0 /min on its card.",
+        "The Items list stops counting a machine once you take it away. A machine built in its place counts once it starts making something.",
+        "The power book says what one machine draws at its grade. Mills of grades I and II show 3 to 4.5 each.",
+        "When power is short, the power book, the power bar and the Trouble list show the same speed.",
+        "A belt laid with two taps from the tile in front of a mill or boiler into it is one belt, not three around the corner.",
+        "Dragging the map and touching it with a second finger no longer closes the map and moves the view.",
+        "Holding a finger on the yard no longer opens a card after the browser has taken the touch away."
+      ]
+    }
+  ]
+}

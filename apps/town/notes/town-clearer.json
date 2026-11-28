@@ -1,0 +1,25 @@
+{
+  "id": "town-clearer",
+  "at": "2026-11-24T03:32Z",
+  "title": "Clearer town panels",
+  "lines": ["A quest's Leaf now sits by its title, so it no longer looks like the price of a reroll."],
+  "more": [
+    {
+      "head": "Changed",
+      "points": [
+        "When a quest ends is said at its foot, beside Reroll.",
+        "You shows your XP in numbers, and this week's raids, wars and quests as a list.",
+        "The cabin shows how far along you are to the next pet moving in.",
+        "The market's rows are a thing's picture, name, how many you have and its price. Tap the picture or the name for the rest.",
+        "At the Grove, a prize your Seeds do not reach has a lock on its price."
+      ]
+    },
+    {
+      "head": "Fixed",
+      "points": [
+        "You said things you win go to your cabin. They go to Storage at your camp.",
+        "Escape puts away only the card that is up, not the panel under it as well."
+      ]
+    }
+  ]
+}
