@@ -135,7 +135,7 @@ const inRoom = (p: Player): Visitor => ({
 /**
  * What Live has to write down about where players are, in the order it happened: players in a room
  * (come in, or still there), one gone from it, one who did something (for their time, and an act
- * for the Tally), and Leaf's farewell, when every open visit closes.
+ * for the Tally), and Leaf's farewell, when every open visit is handed over to the next Leaf.
  */
 type Whereabouts =
   | { readonly kind: "in"; readonly players: readonly Visitor[]; readonly place: string; readonly at: number }
@@ -157,9 +157,9 @@ const quietly = (what: string, effect: Effect.Effect<void>) =>
   );
 
 /**
- * How long Leaf's farewell waits for the open visits to be closed before it closes the connections
- * anyway. Closing them takes a few milliseconds; a deploy waits on the whole stop, which has half a
- * second.
+ * How long Leaf's farewell waits for the open visits to be handed over before it closes the
+ * connections anyway. Handing them over takes a few milliseconds; a deploy waits on the whole stop,
+ * which has half a second.
  */
 const FAREWELL_WAIT = Duration.millis(200);
 /**
@@ -253,8 +253,9 @@ export interface Page {
  * A player in a room of one of the game's places (the town) is there as far as their visits know
  * (`Visits`), as if their game said so: their visit opens when they come in, is heard of every
  * `presenceMs` while they stay, and closes when they go, so that nobody's page need say where they
- * are while it is in a room; and Leaf's farewell closes every open visit before it closes any
- * connection. Whenever who is about changes, everybody in every room of the game's places is told,
+ * are while it is in a room; and Leaf's farewell hands every open visit over to the next Leaf
+ * (`Visits.handOver`: none closes for a deploy) before it closes any connection. Whenever who is
+ * about changes, everybody in every room of the game's places is told,
  * once for a burst of changes within `ABOUT_GATHER` (`AboutTold`): a page of version 3 what changed
  * (`aboutChanged`), having been given all of it as it came in; a page of version 2 all of who is
  * about now (`about`, the presence routes' answer).
@@ -300,8 +301,8 @@ export class Live extends Context.Service<
     /** What the next `live` log line would say, so far. */
     readonly line: Effect.Effect<LiveLine>;
     /**
-     * Closes every open visit, then tells every player Leaf is restarting and closes their
-     * connections, so that they come back to the next one.
+     * Hands every open visit over to the next Leaf, then tells every player Leaf is restarting and
+     * closes their connections, so that they come back to the next one.
      */
     readonly farewell: Effect.Effect<void>;
   }
@@ -328,12 +329,11 @@ export class Live extends Context.Service<
       // Said here as it happens, without waiting, and written by one fiber in the same order.
       const whereabouts = yield* Queue.unbounded<Whereabouts>();
       /**
-       * Once every open visit was closed for Leaf's farewell, nothing more of visits is written: a
-       * player who left as the connections closed may be back in the next Leaf already, in a visit
-       * of its own.
+       * Once every open visit was handed over for Leaf's farewell, nothing more of visits is
+       * written: they are the next Leaf's, and a player whose connection closes here is no leaver.
        */
       const ofVisits = (effect: Effect.Effect<void>) =>
-        Effect.suspend(() => (stop === "visits closed" ? Effect.void : quietly("live visits", effect)));
+        Effect.suspend(() => (stop === "handed over" ? Effect.void : quietly("live visits", effect)));
       const write = (w: Whereabouts): Effect.Effect<void> => {
         switch (w.kind) {
           case "in":
@@ -345,10 +345,10 @@ export class Live extends Context.Service<
           case "act":
             return quietly("live tallies", tallies.acted(w.playerId, w.act, w.arg, w.at));
           case "farewell":
-            return ofVisits(visits.closeAll(w.at)).pipe(
+            return ofVisits(visits.handOver(w.at)).pipe(
               Effect.andThen(
                 Effect.sync(() => {
-                  stop = stopped(stop, "visits closed");
+                  stop = stopped(stop, "handed over");
                 }),
               ),
               Effect.ensuring(Deferred.succeed(w.done, undefined)),
@@ -683,8 +683,8 @@ export class Live extends Context.Service<
         return p;
       };
 
-      // Every open visit is closed first, after everything said before it, so that none a player
-      // opens in the next Leaf, once their connection here has closed, is closed with them.
+      // Every open visit is handed over first, after everything said before it, and nothing of
+      // visits is written after: a connection closing here is no leaving, and the next Leaf goes on.
       const farewell = Effect.gen(function* () {
         const first = stop === "running";
         stop = stopped(stop, "farewell");

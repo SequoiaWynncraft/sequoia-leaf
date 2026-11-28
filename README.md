@@ -589,15 +589,21 @@ player (`players_seen.stay`). It answers `{ "at", "present": [...], "resting":
 later is newer), each entry `{ "id", "username", "place", "guest", "seen_at" }`:
 `present` is the 50 heard of most recently of everyone whose newest visit is
 open and was heard of in the last 90 seconds (`VISIT_RULES.silentMs`), the
-player included, in name order, each with `acted_at`; `resting` is the rest of
-those whose newest visit was heard of in the last day (closed, or silent), last
-seen when it closed, whose `stay` is true, newest first, at most 24, and `gone`
-the same of those whose `stay` is false. All of it is read in one statement,
+player included, in name order, each with `since` (when their visit there
+began), `live` (whether a live room of the place has them, where the others in
+it see them and Leaf hears what they do; false where only their page says they
+are there) and `acted_at` (when they last did something; null for not since
+they came); `resting` is the rest of
+those whose newest visit was heard of in the last day (closed, or silent),
+whose `stay` is true, newest first, at most 24, and `gone`
+the same of those whose `stay` is false: of each, `seen_at` is when they left.
+Each list says what Leaf knows and a page shows it as it is: nobody is in two
+lists, and a page works nothing out from who is in its own room and who is not. All of it is read in one statement,
 from each player's newest visit, which the database keeps, one row a player
 (`last_visits`), as visits are written. The lists are read at most once a second
 for everybody who asks, and again at once after this Leaf writes a change to
-them (somebody comes, goes, moves, says otherwise about staying, goes silent,
-or is back from being away); so a time that changes without a change, when
+them (somebody comes, goes, moves, comes into a live room or is no longer in one,
+says otherwise about staying, goes silent, or is back from being away); so a time that changes without a change, when
 somebody here was last heard of or last did something, may be a second old. A
 player in one of Live's rooms of the game's places (the town) is there by Live
 itself, as if their game had said so (below). Word of a player older than the
@@ -1277,7 +1283,7 @@ closed. Nothing is compressed.
 | 4001 | The player opened the game live somewhere else.             | Does not reconnect.        |
 | 4003 | The player's session ended.                                 | Does not, until signed in. |
 
-When Leaf stops, every open visit is closed, and then every connection with
+When Leaf stops, every open visit is handed over to the next Leaf, open, and then every connection is closed with
 1012, and every event stream ends, before the HTTP server stops: production and the tests both serve Leaf with `serveLeaf` in `app.ts`,
 which puts Leaf's farewell on top of the server (see [Deploying](#deploying)). The game tries again
 half a second later, and then every second or so until Leaf is back (`retryAfter`
@@ -1495,9 +1501,12 @@ rules are `packages/core/src/visits.ts`; the store is `apps/api/src/activity`.
   seconds, at the last time it was. A page's call in the place of the room a
   player then comes into is the same visit, the room's from then on. Each Leaf
   process has an id of its own (`instance`), and a visit is the one's that last
-  heard of it: Leaf stopping closes its own open visits at that moment, before
-  any connection, and leaves open those the other container in a deploy has
-  heard of since, with the time they began.
+  heard of it. A deploy is nobody's leaving: Leaf stopping closes none, and hands
+  its own open visits over before any connection closes (`Visits.handOver`): one
+  a room of its kept is heard of at that moment and is no room's from then, and
+  each is written with what its player last did. The next Leaf goes on with each
+  as its player comes back, in the same visit, begun when it was; whoever does
+  not come back is closed 90 seconds on, at the last time they were heard of.
 - **Sessions** (`sessions`): visits by one player less than five minutes apart
   are one sitting: its start and end (null while a visit of it is open), its
   seconds, the seconds in each place (`places`, JSON) and `device`, `phone` or

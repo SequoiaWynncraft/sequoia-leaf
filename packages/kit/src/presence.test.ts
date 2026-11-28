@@ -23,6 +23,8 @@ import { HELLO, type Standin, standin, TESTER } from "./standin.ts";
 const aliceRow = (fields: Record<string, unknown>) => ({
   id: "a",
   username: "Alice",
+  live: false,
+  since: "2026-11-25T09:30:00.000Z",
   seen_at: "2026-11-25T10:00:00.000Z",
   ...fields,
 });
@@ -44,7 +46,8 @@ describe("who is here", () => {
         camp: null,
         rank: null,
         guest: false,
-        seen: Date.UTC(2026, 10, 25, 12, 55),
+        live: false,
+        since: Date.UTC(2026, 10, 25, 12, 54, 30),
         acted: null,
       },
       {
@@ -54,7 +57,8 @@ describe("who is here", () => {
         camp: null,
         rank: null,
         guest: true,
-        seen: Date.UTC(2026, 10, 25, 12, 55),
+        live: false,
+        since: Date.UTC(2026, 10, 25, 12, 55),
         acted: null,
       },
     ]);
@@ -114,14 +118,28 @@ describe("who is here", () => {
     expect(
       readPresent({
         present: [
-          { id: "a", username: "Alice", place: "works", rank: "chief" },
-          { id: "b", username: "Bob", place: "the moon" },
-          { id: 3, username: "Cleo", place: "town" },
+          aliceRow({ place: "works", rank: "chief" }),
+          aliceRow({ id: "b", username: "Bob", place: "the moon" }),
+          aliceRow({ id: 3, username: "Cleo", place: "town" }),
           "nobody",
+          // Where, with no word of since when or whether a live room has them: not Leaf's, and nobody is made up from it.
+          { id: "d", username: "Dan", place: "town", seen_at: "2026-11-25T10:00:00.000Z", acted_at: null },
+          aliceRow({ id: "e", username: "Eve", place: "town", live: "yes" }),
+          aliceRow({ id: "f", username: "Fay", place: "town", since: "a while" }),
         ],
       }),
     ).toEqual([
-      { id: "a", name: "Alice", place: "works", camp: null, rank: "chief", guest: false, seen: null, acted: null },
+      {
+        id: "a",
+        name: "Alice",
+        place: "works",
+        camp: null,
+        rank: "chief",
+        guest: false,
+        live: false,
+        since: Date.UTC(2026, 10, 25, 9, 30),
+        acted: null,
+      },
     ]);
     expect(readPresent(null)).toEqual([]);
   });
@@ -211,9 +229,7 @@ const aliceAt = (place: string, made = "2026-11-25T10:00:01.000Z") => ({
   status: 200,
   body: {
     at: made,
-    present: [
-      { id: "a", username: "Alice", place, seen_at: "2026-11-25T10:00:00.000Z", acted_at: "2026-11-25T09:58:00.000Z" },
-    ],
+    present: [aliceRow({ place, acted_at: "2026-11-25T09:58:00.000Z" })],
     resting: [],
   },
 });
@@ -290,8 +306,8 @@ describe("saying where the member is", () => {
     stop();
 
     expect(heard.map((p) => p.map((m) => m.place))).toEqual([["works"]]);
-    expect([heard[0]?.[0]?.seen, heard[0]?.[0]?.acted]).toEqual([
-      Date.UTC(2026, 10, 25, 10),
+    expect([heard[0]?.[0]?.since, heard[0]?.[0]?.acted]).toEqual([
+      Date.UTC(2026, 10, 25, 9, 30),
       Date.UTC(2026, 10, 25, 9, 58),
     ]);
   });

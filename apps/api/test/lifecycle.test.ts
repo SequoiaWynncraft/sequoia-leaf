@@ -75,15 +75,15 @@ describe("going from one of a player's pages to another", () => {
 });
 
 /** Live's stop after these, in order, from `from`. */
-const after = (from: Stop, ...events: ("farewell" | "visits closed")[]) => events.reduce(stopped, from);
+const after = (from: Stop, ...events: ("farewell" | "handed over")[]) => events.reduce(stopped, from);
 
 describe("Live's stop", () => {
-  it("goes from running to closing every open visit to visits closed, and never back", () => {
-    expect(after("running", "farewell")).toBe("closing visits");
-    expect(after("running", "farewell", "visits closed")).toBe("visits closed");
+  it("goes from running to handing every open visit over to handed over, and never back", () => {
+    expect(after("running", "farewell")).toBe("handing over");
+    expect(after("running", "farewell", "handed over")).toBe("handed over");
     // Out of order, or again: nothing changes.
-    expect(after("running", "visits closed")).toBe("running");
-    expect(after("running", "farewell", "farewell")).toBe("closing visits");
-    expect(after("running", "farewell", "visits closed", "farewell")).toBe("visits closed");
+    expect(after("running", "handed over")).toBe("running");
+    expect(after("running", "farewell", "farewell")).toBe("handing over");
+    expect(after("running", "farewell", "handed over", "farewell")).toBe("handed over");
   });
 });

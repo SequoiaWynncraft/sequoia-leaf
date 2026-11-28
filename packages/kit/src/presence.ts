@@ -9,6 +9,14 @@
  * that the room tells it whenever who is about changes, with the lists (`heardAbout`). Of two lists,
  * the one Leaf made later is kept, by the time Leaf put on it (`at`): one older than lists already
  * heard is dropped, however it came. Without Leaf it does nothing.
+ *
+ * Where the page stands with Live is one value (`Linked`), and only a page that is the member's
+ * says where they are. One Leaf let go of (the member plays on another page of theirs, which says
+ * where they are, or their session ended) says nothing and asks nothing until a room welcomes it
+ * again: left to call, it kept the member "in town" for as long as its tab stayed open.
+ *
+ * Leaf's lists are what is true of each person and are shown as they are: a page works nothing out
+ * from somebody being on a list and not in its room.
  */
 
 import { device, member } from "./live.ts";
@@ -28,7 +36,7 @@ interface Spot {
   readonly camp: string | null;
 }
 
-/** Somebody the server has seen in the game lately, and where. */
+/** Somebody in the game now, as Leaf says: where, since when, and what it knows of them there. Times are in milliseconds since 1970. */
 export interface Present {
   id: string;
   name: string;
@@ -39,20 +47,22 @@ export interface Present {
   rank: string | null;
   /** Whether they play as a guest, not in the guild. */
   guest: boolean;
-  /** When the server last saw them there, in milliseconds since 1970; null from a server that does not say. */
-  seen: number | null;
-  /** When they last did something, as far as the server knows, in milliseconds since 1970; null for not yet, or a server that does not say. */
+  /** Whether a live room of the place has them: the others in it see them, and Leaf hears what they do. Not live, only their page says they are there. */
+  live: boolean;
+  /** Since when they have been there. */
+  since: number;
+  /** When they last did something, as far as Leaf knows; null for not since they came. */
   acted: number | null;
 }
 
-/** Somebody gone from the game in the last day whose character stays in town, and when they were last seen. */
+/** Somebody gone from the game in the last day, and when they left. */
 export interface Resting {
   id: string;
   name: string;
   place: Place;
   /** At a camp, whose, when the server says; null anywhere else. */
   camp: CampOwner | null;
-  /** When the server last saw them, in milliseconds since 1970. */
+  /** When they left, in milliseconds since 1970. */
   seen: number;
   /** Whether they played as a guest, not in the guild. */
   guest: boolean;
@@ -71,13 +81,18 @@ function campOf(row: Record<string, unknown>): CampOwner | null {
     : null;
 }
 
-/** The list from the server's answer, leaving out anything that makes no sense. */
+/**
+ * The list from the server's answer, leaving out anything that makes no sense: a row that does not
+ * say since when somebody is there, or whether a live room has them, is none of Leaf's (a Leaf from
+ * before it said so, for the moment of the deploy that brought it), and nobody is made up from it.
+ */
 export function readPresent(v: unknown): Present[] {
   if (!isRecord(v) || !Array.isArray(v.present)) return [];
   const out: Present[] = [];
   for (const p of v.present) {
     if (!isRecord(p) || typeof p.id !== "string" || typeof p.username !== "string" || !isPlace(p.place)) continue;
-    const seen = typeof p.seen_at === "string" ? Date.parse(p.seen_at) : NaN;
+    const since = typeof p.since === "string" ? Date.parse(p.since) : NaN;
+    if (typeof p.live !== "boolean" || !Number.isFinite(since)) continue;
     const acted = typeof p.acted_at === "string" ? Date.parse(p.acted_at) : NaN;
     out.push({
       id: p.id,
@@ -86,7 +101,8 @@ export function readPresent(v: unknown): Present[] {
       camp: campOf(p),
       rank: typeof p.rank === "string" ? p.rank : null,
       guest: p.guest === true,
-      seen: Number.isFinite(seen) ? seen : null,
+      live: p.live,
+      since,
       acted: Number.isFinite(acted) ? acted : null,
     });
   }
@@ -115,8 +131,15 @@ let at: Spot | null = null;
 let staying: boolean | null = null;
 let timer: ReturnType<typeof setInterval> | null = null;
 const ears = new Set<(present: readonly Present[], resting: readonly Resting[], gone: readonly Resting[]) => void>();
-/** The place of the live room this page is in now (`realtime.ts` says), if it is one. */
-let roomed: Place | null = null;
+/**
+ * Where this page stands with Live (`realtime.ts` says): in a room, of one of the game's places or
+ * not (`place` null: a camp's, a visit's); in none just now, and saying where the member is itself;
+ * or let go of by Leaf, when it is not the member's page and says nothing.
+ */
+type Linked = { readonly is: "in"; readonly place: Place | null } | { readonly is: "out" } | { readonly is: "letGo" };
+let linked: Linked = { is: "out" };
+/** The place of the live room this page is in now, if it is in one of a place. */
+const roomed = (): Place | null => (linked.is === "in" ? linked.place : null);
 /** When Leaf made the newest lists heard, by its clock, in milliseconds since 1970; or none yet. */
 let newest = -Infinity;
 
@@ -141,8 +164,8 @@ function heard(body: unknown): void {
  * be told.
  */
 async function send(telling = false, asking = false): Promise<void> {
-  if (at === null || !member()) return;
-  const roomKeeps = at.place === roomed && !telling;
+  if (at === null || !member() || linked.is === "letGo") return;
+  const roomKeeps = at.place === roomed() && !telling;
   // In a room of the place, the room keeps the member there, and tells the page of every change.
   if (roomKeeps && !asking) return;
   const on = device();
@@ -182,10 +205,21 @@ export function stay(on: boolean): void {
 
 /**
  * The page is in a live room of a kind now (`realtime.ts` says so at each welcome), or in none
- * (`null`): while it is in one of the place it is at, the room keeps where the member is.
+ * (`null`): while it is in one of the place it is at, the room keeps where the member is. A page
+ * let go of is the member's again at its next welcome, and not before.
  */
 export function inRoom(kind: string | null): void {
-  roomed = isPlace(kind) ? kind : null;
+  if (kind !== null) linked = { is: "in", place: isPlace(kind) ? kind : null };
+  else if (linked.is === "in") linked = { is: "out" };
+}
+
+/**
+ * Leaf let go of this page (`realtime.ts` says: the member opened the game live somewhere else, or
+ * their session ended): it is not where the member is, and says nothing of them until a room
+ * welcomes it again (`inRoom`).
+ */
+export function letGo(): void {
+  linked = { is: "letGo" };
 }
 
 /**
@@ -194,7 +228,7 @@ export function inRoom(kind: string | null): void {
  * other asks at its turn.
  */
 export function askAgain(): void {
-  if (roomed !== null && roomed === at?.place) void send(false, true);
+  if (roomed() !== null && roomed() === at?.place) void send(false, true);
 }
 
 /**
@@ -212,14 +246,14 @@ export function askNow(): Promise<void> {
  */
 export function heardAbout(who: unknown): void {
   if (who === undefined) askAgain();
-  else if (roomed !== null && roomed === at?.place) heard(who);
+  else if (roomed() !== null && roomed() === at?.place) heard(who);
 }
 
 /** Forgets where the member is and what the town said of staying (for tests). */
 export function forgetPresence(): void {
   at = null;
   staying = null;
-  roomed = null;
+  linked = { is: "out" };
   newest = -Infinity;
   if (timer !== null) clearInterval(timer);
   timer = null;

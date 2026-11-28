@@ -28,7 +28,12 @@ export interface Visitor {
   readonly device: Device | null;
 }
 
-/** How Leaf knows a player is somewhere: they are in a live room of the place, or their page said so. */
+/**
+ * How Leaf knows a player is somewhere: a live room of the place, on a Leaf that is running, has
+ * them (`room`: everybody in it sees them, and Leaf hears what they do); or their page says so
+ * (`call`). It is what everybody is told of them (`Present.live`), so it is never left saying a room
+ * has somebody whom none has (`keptBy`, `handOver`).
+ */
 type Source = "room" | "call";
 
 /**
@@ -77,6 +82,15 @@ const staysPut = (v: OpenVisit, place: string, source: Source): boolean =>
 
 /** Whether an open visit is at `spot`: the same place, and the same camp or none. */
 const isAt = (v: OpenVisit, spot: Spot): boolean => v.place === spot.place && v.campOwner === spot.camp;
+
+/**
+ * What keeps an open visit, heard of again from `source` by the Leaf `instance`: a room that hears
+ * of it keeps it. A page's call leaves a room's visit the room's only on the Leaf whose room it is,
+ * which closes it when they leave; heard by any other Leaf, no room of that Leaf has them, and it is
+ * the page's from then.
+ */
+const keptBy = (v: OpenVisit, source: Source, instance: string): Source =>
+  source === "room" || (v.source === "room" && v.instance === instance) ? "room" : "call";
 
 /** A player's newest visit, open (`leftAt` null) or closed. */
 const NewestVisit = Schema.Struct({ ...OpenVisit.fields, leftAt: Schema.NullOr(Schema.Int) });
@@ -144,12 +158,13 @@ const statements = (sql: SqlClient.SqlClient, instance: string) => ({
       ORDER BY heard_at, id LIMIT ${most}
     `,
   }),
-  /** Up to `most` open visits this Leaf was the last to hear of. */
+  /** Up to `most` open visits this Leaf was the last to hear of, in order, after the one numbered `after`. */
   ownOpen: SqlSchema.findAll({
-    Request: Schema.Int,
+    Request: Schema.Struct({ after: Schema.Int, most: Schema.Int }),
     Result: OpenVisit,
-    execute: (most) => sql`
-      SELECT ${sql.literal(OPEN_COLUMNS)} FROM visits WHERE left_at IS NULL AND instance = ${instance}
+    execute: ({ after, most }) => sql`
+      SELECT ${sql.literal(OPEN_COLUMNS)} FROM visits
+      WHERE left_at IS NULL AND instance = ${instance} AND id > ${after}
       ORDER BY id LIMIT ${most}
     `,
   }),
@@ -244,10 +259,6 @@ const close = (w: Writer, visit: OpenVisit, at: number) =>
     `;
   });
 
-/** When a visit closes if it closes at `now`: then, or at the last time it was heard of, if it has gone silent. */
-const endOf = (visit: OpenVisit, now: number): number =>
-  silentSince(visit.heardAt, now, VISIT_RULES) ? visit.heardAt : now;
-
 /**
  * Opens a visit at `spot` for a player who has none open, who last did something at `actedAt`, in
  * their last session if it ended less than five minutes ago, or else in a new one.
@@ -313,7 +324,7 @@ const standingAt = (w: Writer, playerId: string, now: number) =>
  * room's, if this is the room), with their name and whether a guest as they are now; or the one
  * they have elsewhere (another place, or another camp) closes and one opens here; unless Leaf heard
  * of them later than `now` (`standingAt`), or a room says so while they play a game (`staysPut`).
- * Says whether who is about changed.
+ * Says whether who is about changed: they came, or what keeps their visit did (`keptBy`).
  */
 const arrive = (w: Writer, who: Visitor, spot: Spot, source: Source, now: number) =>
   Effect.gen(function* () {
@@ -322,7 +333,7 @@ const arrive = (w: Writer, who: Visitor, spot: Spot, source: Source, now: number
     const current = standing.at === "visit" ? Option.some(standing.visit) : Option.none<OpenVisit>();
     if (Option.isSome(current) && staysPut(current.value, spot.place, source)) return false;
     if (Option.isSome(current) && isAt(current.value, spot)) {
-      const kept = source === "room" ? "room" : current.value.source;
+      const kept = keptBy(current.value, source, w.instance);
       const guest = who.guest ? 1 : 0;
       yield* count(w, current.value, now);
       yield* w.sql`
@@ -334,7 +345,7 @@ const arrive = (w: Writer, who: Visitor, spot: Spot, source: Source, now: number
         UPDATE players_seen SET name = ${who.username}, guest = ${guest}
         WHERE player_id = ${who.playerId} AND (name <> ${who.username} OR guest <> ${guest})
       `;
-      return false;
+      return kept !== current.value.source;
     }
     // What they last did goes with them: a Leaf that took over in a deploy knows it from their visit alone.
     const actedAt = Option.isSome(current) ? w.actedOf(current.value) : w.heardActed(who.playerId);
@@ -423,6 +434,40 @@ const closeInParts = <E>(w: Writer, which: Effect.Effect<readonly OpenVisit[], E
       Effect.asVoid,
     );
 
+/**
+ * Leaf is stopping, and an open visit it was the last to hear of stays open for the next Leaf to go
+ * on with: a deploy is nobody's leaving. One a room of this Leaf kept is heard of once more, now,
+ * its time counted, and is no room's from here (the rooms go with this Leaf); any is written with
+ * what its player last did, which this Leaf alone had heard. Whoever comes back to the next Leaf is
+ * heard of in the same visit, with when it began and what they last did as they were; whoever does
+ * not is closed by it at this moment, as any visit gone silent is at the last it was heard of.
+ */
+const handOver = (w: Writer, visit: OpenVisit, now: number) =>
+  Effect.gen(function* () {
+    const kept = visit.source === "room" && !silentSince(visit.heardAt, now, VISIT_RULES);
+    if (kept) yield* count(w, visit, now);
+    yield* w.sql`
+      UPDATE visits SET heard_at = ${kept ? now : visit.heardAt}, acted_at = ${w.actedOf(visit)}, source = 'call'
+      WHERE id = ${visit.id}
+    `;
+  });
+
+/** Hands over every open visit this Leaf was the last to hear of (`handOver`), `AT_ONCE` a transaction, in their order. */
+const handOverAll = (w: Writer, now: number, after = 0): Effect.Effect<void> =>
+  w.sql
+    .withTransaction(
+      Effect.tap(w.rows.ownOpen({ after, most: AT_ONCE }), (visits) =>
+        Effect.forEach(visits, (v) => handOver(w, v, now), { discard: true }),
+      ),
+    )
+    .pipe(
+      Effect.orDie,
+      Effect.flatMap((visits) => {
+        const last = visits.at(-1);
+        return last !== undefined && visits.length === AT_ONCE ? handOverAll(w, now, last.id) : Effect.void;
+      }),
+    );
+
 /** A player's page said they are at `spot` now, and whether they would stay (null: as they last said); says whether who is about changed. */
 const pageSaid = (w: Writer, who: Visitor, spot: Spot, stay: boolean | null, now: number) =>
   Effect.gen(function* () {
@@ -499,15 +544,19 @@ const sharedLists = (
  * there (`PUT /v1/game/presence`), and is heard of again while they stay: by the room every half
  * minute, and by each of the page's calls. It closes when they leave the room (or their grace runs
  * out), when they go somewhere else, or, not heard of for 90 seconds, at the last time it was. A
+ * deploy closes none: the Leaf stopping hands its open visits over (`handOver`), and the next goes
+ * on with each as its player comes back, so a visit's beginning and its end are the player's. A
  * player has one open visit at most: coming somewhere closes the one anywhere else. At a camp, a
  * visit is in one camp, as the page says (`Spot`): going to another is coming somewhere else. Word of a
  * player older than the last Leaf heard of them (a room's, written late) moves them nowhere.
  *
  * Each player's newest visit is also where everybody else sees them (`about`, from `last_visits`,
- * which the database keeps): here, or gone and last seen when, with whether their character stays
- * in town after they go, as their page last said (`players_seen.stay`; yes until it says). Every
- * change to it (somebody comes, goes, is somewhere else, says otherwise about staying, or is back
- * from being away) is told on `changes` once it is written; a burst may be heard as one. Sessions
+ * which the database keeps), and the only thing that says so: here, since when, and whether a live
+ * room has them (`Source`); or gone, and when they left; with whether their character stays in
+ * town after they go, as their page last said (`players_seen.stay`; yes until it says). Every
+ * change to it (somebody comes, goes, is somewhere else, comes into a live room or is no longer in
+ * one, says otherwise about staying, or is back from being away) is told on `changes` once it is
+ * written; a burst may be heard as one. Sessions
  * and players are kept up to date as visits open and close, in the same transaction, and a
  * player's name and whether a guest each time Leaf hears of them. A visit belongs to the Leaf
  * process (`LeafInstance`) that last heard of it, so that a player who moves to the new container
@@ -525,10 +574,10 @@ export class Visits extends Context.Service<
     /** A player has left a live room of `place`. Nothing changes if Leaf has heard since that they are somewhere else. */
     readonly leftRoom: (playerId: PlayerId, place: string, now: number) => Effect.Effect<void>;
     /**
-     * Leaf is stopping: every open visit this Leaf was the last to hear of closes now (those gone
-     * silent, at the last time they were heard of). One another Leaf has heard of since stays open.
+     * Leaf is stopping: every open visit this Leaf was the last to hear of is handed over to the
+     * next (`handOver`), open. One another Leaf has heard of since is that Leaf's already.
      */
-    readonly closeAll: (now: number) => Effect.Effect<void>;
+    readonly handOver: (now: number) => Effect.Effect<void>;
     /** Closes every open visit not heard of for 90 seconds, at the last time it was, `AT_ONCE` a transaction. */
     readonly closeSilent: (now: number) => Effect.Effect<void>;
     /** Removes up to `REMOVED_AT_ONCE` visits, and as many sessions, that ended 180 days before `now`; players stay. */
@@ -603,7 +652,7 @@ export class Visits extends Context.Service<
             { discard: true },
           ),
         leftRoom: (playerId, place, now) => write(w, leaveRoom(w, playerId, place, now), now),
-        closeAll: (now) => closeInParts(w, w.rows.ownOpen(AT_ONCE), (v) => endOf(v, now)),
+        handOver: (now) => handOverAll(w, now),
         closeSilent: (now) =>
           closeInParts(w, w.rows.silentOpen({ heard: now - VISIT_RULES.silentMs, most: AT_ONCE }), (v) => v.heardAt),
         removeOld: (now) => removeOld(sql, now),

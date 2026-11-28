@@ -677,9 +677,9 @@ describe("the live guild", () => {
     const leaf = isRecord(route) && isRecord(route.body) ? route.body : {};
     const reply = {
       present: [
-        { id: TESTER.player.id, username: "Tester", place: "town" },
+        { id: TESTER.player.id, username: "Tester", place: "town", live: true, since: "2026-11-25T12:00:00.000Z" },
         ...listed(leaf.present),
-        { id: "m-1", username: "Mira", place: "table" },
+        { id: "m-1", username: "Mira", place: "table", live: false, since: "2026-11-25T12:50:00.000Z" },
       ],
       resting: [
         ...listed(leaf.resting),
@@ -832,8 +832,18 @@ describe("the live guild", () => {
 describe("who is here, and who is dozing", () => {
   test("Leaf's list as the town reads it: a guest is Guest, a member's rank the list says is the town's word for it", () => {
     expect(
-      listedHere({ id: "g", name: "Wanderer", place: "table", camp: null, rank: null, guest: true, seen: 5, acted: 3 }),
-    ).toEqual({ id: "g", name: "Wanderer", rank: "Guest", at: "table", camp: null, seen: 5, acted: 3 });
+      listedHere({
+        id: "g",
+        name: "Wanderer",
+        place: "table",
+        camp: null,
+        rank: null,
+        guest: true,
+        live: false,
+        since: 2,
+        acted: 3,
+      }),
+    ).toEqual({ id: "g", name: "Wanderer", rank: "Guest", at: "table", camp: null, live: false, since: 2, acted: 3 });
     const bobs = { id: "b", name: "Bob" };
     expect(
       listedHere({
@@ -843,10 +853,11 @@ describe("who is here, and who is dozing", () => {
         camp: bobs,
         rank: "chief",
         guest: false,
-        seen: null,
+        live: false,
+        since: 7,
         acted: null,
       }),
-    ).toEqual({ id: "a", name: "Alice", rank: "Chief", at: "camp", camp: bobs, seen: null, acted: null });
+    ).toEqual({ id: "a", name: "Alice", rank: "Chief", at: "camp", camp: bobs, live: false, since: 7, acted: null });
     expect(listedGone({ id: "h", name: "Drifter", place: "grove", camp: null, seen: 5, guest: false })).toEqual({
       id: "h",
       name: "Drifter",
@@ -911,8 +922,15 @@ describe("a guest's town", () => {
         body: {
           present: [
             { id: GUEST.player.id, username: "Wanderer", place: "town", guest: true },
-            { id: "m-1", username: "Mira", place: "town", guest: false },
-            { id: "g-2", username: "Drifter", place: "table", guest: true },
+            { id: "m-1", username: "Mira", place: "town", guest: false, live: true, since: "2026-11-25T12:00:00.000Z" },
+            {
+              id: "g-2",
+              username: "Drifter",
+              place: "table",
+              guest: true,
+              live: false,
+              since: "2026-11-25T12:50:00.000Z",
+            },
           ],
           resting: [],
         },
@@ -945,7 +963,15 @@ describe("a guest's town", () => {
     ]);
     // Others in town, members and guests, are there all the same.
     expect(guild.visitors()).toEqual([
-      { id: "g-2", name: "Drifter", rank: "Guest", at: "table", skin: "/v1/game/skins/g-2", acted: null },
+      // Nothing heard of what they did: counted from when they came.
+      {
+        id: "g-2",
+        name: "Drifter",
+        rank: "Guest",
+        at: "table",
+        skin: "/v1/game/skins/g-2",
+        acted: Date.UTC(2026, 10, 25, 12, 50),
+      },
     ]);
   });
 

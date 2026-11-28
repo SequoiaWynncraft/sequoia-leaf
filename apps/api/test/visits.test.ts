@@ -257,7 +257,16 @@ describe("visits from the presence calls", () => {
     ]);
     const about = await services.run(Visits.use((v) => v.about(T0 + 21 * SECOND)));
     expect(about.present).toEqual([
-      { playerId: alice, username: "Alice", place: "works", camp: null, guest: false, seenAt: T0 + 20 * SECOND },
+      {
+        playerId: alice,
+        username: "Alice",
+        place: "works",
+        camp: null,
+        guest: false,
+        seenAt: T0 + 20 * SECOND,
+        live: false,
+        since: T0 + 20 * SECOND,
+      },
     ]);
   });
 
@@ -277,7 +286,7 @@ describe("visits from the presence calls", () => {
       // The old Leaf's room word from before, written late, as it stops.
       await old.run(Visits.use((v) => v.inRoom([inTown], "town", T0 + 10 * SECOND)));
       const afterLate = await instance();
-      await old.run(Visits.use((v) => v.closeAll(T0 + 30 * SECOND)));
+      await old.run(Visits.use((v) => v.handOver(T0 + 30 * SECOND)));
 
       expect(afterLate).toEqual(["new"]);
       expect(await instance()).toEqual(["new"]);
@@ -330,7 +339,7 @@ describe("visits from the presence calls", () => {
         await here.run(Visits.use((v) => v.inRoom([inTownAlice], "town", T0)));
         await here.run(Visits.use((v) => v.leftRoom(alice, "town", T0 + 30 * SECOND)));
         await other.run(Visits.use(word));
-        await other.run(Visits.use((v) => v.closeAll(T0 + 31 * SECOND)));
+        await other.run(Visits.use((v) => v.handOver(T0 + 31 * SECOND)));
 
         expect(await here.query((sql) => sql`SELECT place, entered_at, left_at, seconds FROM visits`)).toEqual([
           { place: "town", entered_at: T0, left_at: T0 + 30 * SECOND, seconds: 30 },
@@ -413,16 +422,67 @@ describe("visits from the presence calls", () => {
     expect(await visits()).toMatchObject([{ place: "town", source: "room", left_at: T0, seconds: 0 }]);
   });
 
-  it("closes a visit gone silent at its last call when Leaf stops, and the others then", async () => {
-    await call("alice", "town");
-    clock.now = T0 + 60 * SECOND;
+  it("closes no visit when Leaf stops: a room's is heard of then, its time counted, and is no room's; a page's stays as it was last heard of", async () => {
+    const inTown = { playerId: alice, username: "Alice", guest: false, device: null };
+    await services.run(Visits.use((v) => v.inRoom([inTown], "town", T0)));
+    await services.run(Visits.use((v) => v.acted(alice, T0 + 5 * SECOND)));
+    clock.now = T0 + 20 * SECOND;
     await call("bob", "works");
-    await services.run(Visits.use((v) => v.closeAll(T0 + 100 * SECOND)));
+    await services.run(Visits.use((v) => v.handOver(T0 + 50 * SECOND)));
 
-    expect((await visits()).map((v) => [v.player_id, v.left_at])).toEqual([
-      [alice, T0],
-      [bob, T0 + 100 * SECOND],
+    expect(
+      await services.query(
+        (sql) => sql`SELECT player_id, source, entered_at, heard_at, acted_at, left_at FROM visits ORDER BY id`,
+      ),
+    ).toEqual([
+      // What she last did, which this Leaf alone had heard, is written for the next.
+      {
+        player_id: alice,
+        source: "call",
+        entered_at: T0,
+        heard_at: T0 + 50 * SECOND,
+        acted_at: T0 + 5 * SECOND,
+        left_at: null,
+      },
+      {
+        player_id: bob,
+        source: "call",
+        entered_at: T0 + 20 * SECOND,
+        heard_at: T0 + 20 * SECOND,
+        acted_at: null,
+        left_at: null,
+      },
     ]);
+    expect(await timeIn()).toEqual([{ player_id: alice, game: "town", played: 50 * SECOND, afk: 0 }]);
+    // Handed over again (a stop told twice), nothing is counted twice.
+    await services.run(Visits.use((v) => v.handOver(T0 + 50 * SECOND)));
+    expect(await timeIn()).toEqual([{ player_id: alice, game: "town", played: 50 * SECOND, afk: 0 }]);
+  });
+
+  it("a visit gone silent before Leaf stops is closed by the next at the last time it was heard of, not when Leaf stopped", async () => {
+    const inTown = { playerId: alice, username: "Alice", guest: false, device: null };
+    await services.run(Visits.use((v) => v.inRoom([inTown], "town", T0)));
+    await services.run(Visits.use((v) => v.handOver(T0 + 100 * SECOND)));
+    await services.run(Visits.use((v) => v.closeSilent(T0 + 101 * SECOND)));
+
+    expect((await visits()).map((v) => [v.player_id, v.left_at])).toEqual([[alice, T0]]);
+  });
+
+  it("hands over more visits than one transaction writes, each once", async () => {
+    const many = Array.from({ length: 250 }, (_, n) => ({
+      playerId: playerId(`30000000-0000-0000-0000-${String(n).padStart(12, "0")}`),
+      username: `Member${n}`,
+      guest: false,
+      device: null,
+    }));
+    await services.run(Visits.use((v) => v.inRoom(many, "town", T0)));
+    await services.run(Visits.use((v) => v.handOver(T0 + 30 * SECOND)));
+
+    expect(
+      await services.query(
+        (sql) => sql`SELECT source, heard_at, left_at, count(*) AS n FROM visits GROUP BY source, heard_at, left_at`,
+      ),
+    ).toEqual([{ source: "call", heard_at: T0 + 30 * SECOND, left_at: null, n: 250 }]);
   });
 
   it("hears a room's word of many players at once as it would each alone, a game's player staying in the game", async () => {
@@ -906,6 +966,8 @@ const Newest = Schema.Struct({
   guest: Schema.BooleanFromBit,
   heardAt: Schema.Number,
   leftAt: Schema.NullOr(Schema.Number),
+  source: Schema.Literals(["room", "call"]),
+  enteredAt: Schema.Int,
   stay: Schema.BooleanFromBit,
 });
 const newestOfTheDay = async (now: number) =>
@@ -913,7 +975,7 @@ const newestOfTheDay = async (now: number) =>
     await services.query(
       (sql) => sql`
         SELECT v.player_id AS playerId, p.name AS username, v.place, v.camp_owner AS campOwner, o.name AS campOwnerName,
-               v.guest, v.heard_at AS heardAt, v.left_at AS leftAt, p.stay
+               v.guest, v.heard_at AS heardAt, v.left_at AS leftAt, v.source, v.entered_at AS enteredAt, p.stay
         FROM visits AS v JOIN players_seen AS p ON p.player_id = v.player_id
           LEFT JOIN players_seen AS o ON o.player_id = v.camp_owner
         WHERE v.id IN (SELECT max(id) FROM visits WHERE heard_at >= ${now - DAY} GROUP BY player_id)

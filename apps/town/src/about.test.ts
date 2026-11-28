@@ -4,24 +4,42 @@ import type { Place } from "@sequoia-leaf/kit/presence.ts";
 
 import { agoLine, ALONE, campWords, cardLine, held, partsOf, whoIsAbout } from "./about.ts";
 import { GUEST } from "./live.ts";
-import { type InRoom, type Listed, whereabouts } from "./where.ts";
+import { type Gone, type Here, type InRoom, whereabouts } from "./where.ts";
 
 const NOW = 1_800_000_000_000;
 const MIN = 60_000;
+const HOUR = 60 * MIN;
 const ME: InRoom = { id: "me", name: "Tester", rank: "Strategist" };
-/** Somebody on Leaf's list: in the game now (seen, and doing something, just now), or gone (seen when given). */
+/**
+ * Somebody on Leaf's list as in the game: there since `NOW` and doing something then (or when `acted`
+ * says), in a live room if in town, unless `o` says otherwise.
+ */
 const mate = (
   id: string,
   name: string,
   at: Place,
   rank: string | null = null,
-  seen: number = NOW,
   acted: number | null = NOW,
-): Listed => ({ id, name, rank, at, camp: null, seen, acted });
-/** Somebody on Leaf's list at `owner`'s camp (by id), named as Leaf names them; or at a camp Leaf does not say whose. */
-const camper = (id: string, name: string, owner: string | null, seen: number = NOW): Listed => ({
-  ...mate(id, name, "camp", null, seen),
-  camp: owner === null ? null : { id: owner, name: owner === ME.id ? ME.name : owner.toUpperCase() },
+  o: Partial<Here> = {},
+): Here => ({ id, name, rank, at, camp: null, live: at === "town", since: NOW, acted, ...o });
+/** Somebody on Leaf's list as gone, who left at `seen`. */
+const past = (id: string, name: string, at: Place, rank: string | null, seen: number): Gone => ({
+  id,
+  name,
+  rank,
+  at,
+  camp: null,
+  seen,
+});
+/** Whose camp, by its owner's id, named as Leaf names them. */
+const campOf = (owner: string): { id: string; name: string } => ({
+  id: owner,
+  name: owner === ME.id ? ME.name : owner.toUpperCase(),
+});
+/** Somebody on Leaf's list at `owner`'s camp (by id); or at a camp Leaf does not say whose. */
+const camper = (id: string, name: string, owner: string | null): Here => ({
+  ...mate(id, name, "camp"),
+  camp: owner === null ? null : campOf(owner),
 });
 /**
  * Who is about with the member, from the room (or none) and Leaf's lists, by way of where each is;
@@ -29,8 +47,8 @@ const camper = (id: string, name: string, owner: string | null, seen: number = N
  */
 function whoIs(o: {
   room: readonly InRoom[] | null;
-  present?: readonly Listed[];
-  resting?: readonly Listed[];
+  present?: readonly Here[];
+  resting?: readonly Gone[];
   ranks?: ReadonlyMap<string, string>;
   idle?: readonly string[];
 }): ReturnType<typeof whoIsAbout> {
@@ -42,7 +60,6 @@ function whoIs(o: {
     gone: [],
     ...(o.ranks ? { ranks: o.ranks } : {}),
     stirred: new Map((o.room ?? []).filter((m) => !o.idle?.includes(m.id)).map((m) => [m.id, NOW])),
-    now: NOW,
   });
   return whoIsAbout({ me: ME, all, now: NOW });
 }
@@ -93,9 +110,9 @@ describe("who is about", () => {
       room: [ME],
       present: [],
       resting: [
-        mate("f", "Fernhollow", "town", "Recruit", NOW - 180 * MIN),
-        mate("q", "Quillon", "works", null, NOW - 40 * MIN),
-        { ...mate("o", "Oakhart", "camp", GUEST, NOW - 61 * MIN), camp: { id: "o", name: "Oakhart" } },
+        past("f", "Fernhollow", "town", "Recruit", NOW - 180 * MIN),
+        past("q", "Quillon", "works", null, NOW - 40 * MIN),
+        { ...past("o", "Oakhart", "camp", GUEST, NOW - 61 * MIN), camp: { id: "o", name: "Oakhart" } },
       ],
     });
     expect(shown(about)).toEqual([
@@ -142,21 +159,61 @@ describe("who is about", () => {
     expect(someoneAway.alone).toBe(false);
   });
 
-  test("believes the room over Leaf's lists, and puts nobody in two parts", () => {
+  test("somebody in the room is in town whatever the list says, and nobody is in two parts", () => {
     const about = whoIs({
       room: [ME, { id: "b", name: "Birchwood", rank: "Captain" }],
       present: [
-        // Still at the Works as far as the guild's half-minute-old list knows, but in the room now.
+        // Still at the Works as far as the list of a moment ago knows, but in the room now.
         mate("b", "Birchwood", "works"),
-        // The guild still has them in town, but the room does not: they have only just walked out.
+        // In town by Leaf's list, and not in the room with the member: in town.
         mate("q", "Quillon", "town"),
         mate("me", "Tester", "town"),
       ],
-      resting: [mate("q", "Quillon", "town", null, NOW - 5 * MIN), mate("f", "Fernhollow", "town", null, NOW - MIN)],
+      // Lists that had somebody twice would still show them once, where they are now.
+      resting: [past("q", "Quillon", "town", null, NOW - 5 * MIN), past("f", "Fernhollow", "town", null, NOW - MIN)],
     });
     expect(shown(about)).toEqual([
-      ["In town", ["Tester: Strategist (you)", "Birchwood: Captain"]],
-      ["Seen lately", ["Quillon: just now", "Fernhollow: 1 minute ago"]],
+      ["In town", ["Tester: Strategist (you)", "Birchwood: Captain", "Quillon: "]],
+      ["Seen lately", ["Fernhollow: 1 minute ago"]],
+    ]);
+  });
+
+  test("a player whose page says the town with no live room is never listed as having just left", () => {
+    for (const ago of [61_000, 10 * MIN, 3 * HOUR]) {
+      const kira = mate("k", "Kira", "town", "Recruit", null, { live: false, since: NOW - ago });
+      // In the town's room with others, alone in it, or out of it.
+      for (const room of [[ME, { id: "b", name: "Birchwood", rank: null }], [ME], null]) {
+        const about = whoIs({ room, present: [kira] });
+        expect(about.rows.get("k")?.part).toBe("In town");
+        expect(partsOf(about).some((p) => p.title === "Seen lately")).toBe(false);
+        expect(about.rows.get("k")?.line).toBe(
+          `Recruit · ${ago === 61_000 ? "away for 1 minute" : ago === 10 * MIN ? "away for 10 minutes" : "away for 3 hours"}`,
+        );
+      }
+    }
+  });
+
+  test("the town's list: somebody connected, one whose page only says so, one who has just left, and one away for hours", () => {
+    const about = whoIs({
+      room: [ME, { id: "c", name: "Connie", rank: "Captain" }],
+      present: [
+        mate("c", "Connie", "town", null, NOW - 20_000, { since: NOW - 30 * MIN }),
+        mate("k", "Kira", "town", "Recruit", null, { live: false, since: NOW - 49 * MIN }),
+        mate("h", "Hollis", "town", "Chief", NOW - 3 * HOUR, { since: NOW - 4 * HOUR }),
+      ],
+      resting: [past("j", "Juno", "town", "Recruit", NOW - 20_000)],
+    });
+    expect(shown(about)).toEqual([
+      [
+        "In town",
+        [
+          "Tester: Strategist (you)",
+          "Connie: Captain",
+          "Hollis: Chief · away for 3 hours",
+          "Kira: Recruit · away for 49 minutes",
+        ],
+      ],
+      ["Seen lately", ["Juno: Recruit · a moment ago"]],
     ]);
   });
 
@@ -176,7 +233,7 @@ describe("who is about", () => {
     const about = whoIs({
       room: [ME],
       present: [mate("q", "Quillon", "works")],
-      resting: [mate("f", "Fernhollow", "town", null, NOW - 3 * 60 * MIN)],
+      resting: [past("f", "Fernhollow", "town", null, NOW - 3 * 60 * MIN)],
       ranks: new Map([
         ["q", "Chief"],
         ["f", "Recruit"],
@@ -194,35 +251,40 @@ describe("who is away", () => {
     const about = whoIs({
       room: [ME, { id: "b", name: "Birchwood", rank: "Captain" }, { id: "w", name: "Wrenly", rank: null }],
       present: [
-        mate("b", "Birchwood", "town", null, NOW, NOW - 20 * MIN),
-        mate("q", "Quillon", "works", null, NOW, NOW - 5 * MIN),
-        mate("m", "Mossling", "table", "Recruiter", NOW, NOW - 5 * MIN + 1),
-        mate("g", "Glimmer", "grove", null, NOW, null),
+        mate("b", "Birchwood", "town", null, NOW - 20 * MIN),
+        mate("q", "Quillon", "works", null, NOW - 5 * MIN),
+        mate("m", "Mossling", "table", "Recruiter", NOW - 5 * MIN + 1),
+        // Nothing heard since they came: counted from then.
+        mate("g", "Glimmer", "grove", null, null, { since: NOW - 12 * MIN }),
+        mate("n", "Nettle", "works", null, null, { since: NOW - MIN }),
       ],
       idle: ["b", "w"],
     });
     expect(shown(about)).toEqual([
-      ["In town", ["Tester: Strategist (you)", "Birchwood: Captain · away for 20 minutes", "Wrenly: away"]],
+      // Wrenly, in the room and not on Leaf's list yet: nothing says since when, so nothing is said.
+      ["In town", ["Tester: Strategist (you)", "Birchwood: Captain · away for 20 minutes", "Wrenly: "]],
       [
         "Elsewhere",
         [
-          "Glimmer: in the Grove · away",
+          "Glimmer: in the Grove · away for 12 minutes",
           "Mossling: Recruiter · at the raid table",
+          "Nettle: at the Works",
           "Quillon: at the Works · away for 5 minutes",
         ],
       ],
     ]);
+    // Nobody is away without a time.
+    expect([...about.rows.values()].filter((r) => /away(?! for )/.test(r.line))).toEqual([]);
   });
 
   test("whoever the page sees do something in the room is back at once, whatever Leaf's list said", () => {
     const all = whereabouts({
       me: ME.id,
       room: [ME, { id: "b", name: "Birchwood", rank: null }],
-      present: [mate("b", "Birchwood", "town", null, NOW, NOW - 20 * MIN)],
+      present: [mate("b", "Birchwood", "town", null, NOW - 20 * MIN)],
       resting: [],
       gone: [],
       stirred: new Map([["b", NOW - 1000]]),
-      now: NOW,
     });
     expect(all.get("b")).toMatchObject({ state: "live", acted: NOW - 1000 });
     expect(shown(whoIsAbout({ me: ME, all, now: NOW }))[0]?.[1]).toEqual(["Tester: Strategist (you)", "Birchwood: "]);
@@ -233,14 +295,13 @@ describe("who is away", () => {
       me: ME.id,
       room: [ME, { id: "b", name: "Birchwood", rank: null }],
       present: [
-        mate("b", "Birchwood", "town", null, NOW, NOW - 61 * MIN),
+        mate("b", "Birchwood", "town", null, NOW - 61 * MIN),
         mate("q", "Quillon", "works"),
-        mate("m", "Mossling", "table", null, NOW, NOW - 7 * MIN),
+        mate("m", "Mossling", "table", null, NOW - 7 * MIN),
       ],
-      resting: [mate("f", "Fernhollow", "town", null, NOW - 3 * MIN)],
+      resting: [past("f", "Fernhollow", "town", null, NOW - 3 * MIN)],
       gone: [],
       stirred: new Map([["b", NOW - 61 * MIN]]),
-      now: NOW,
     });
     expect(["b", "q", "m", "f", "nobody"].map((id) => cardLine(all.get(id), NOW, ME.id))).toEqual([
       "Away for an hour",
@@ -262,7 +323,10 @@ describe("who is about, at the camps", () => {
         camper("w", "Wren", "o"),
         camper("x", "Ash", null),
       ],
-      resting: [camper("r", "Rowan", "o", NOW - 3 * 60 * MIN), mate("q", "Quillon", "works", null, NOW - 2 * 60 * MIN)],
+      resting: [
+        { ...past("r", "Rowan", "camp", null, NOW - 3 * 60 * MIN), camp: campOf("o") },
+        past("q", "Quillon", "works", null, NOW - 2 * 60 * MIN),
+      ],
     });
     expect(shown(about)).toEqual([
       ["In town", ["Tester: Strategist (you)"]],
@@ -278,7 +342,6 @@ describe("who is about, at the camps", () => {
       present: [camper("o", "Oakley", "o"), camper("v", "Vale", ME.id), camper("w", "Wren", "o")],
       resting: [],
       gone: [],
-      now: NOW,
     });
     expect(["o", "v", "w"].map((id) => cardLine(all.get(id), NOW, ME.id))).toEqual([
       "In their camp",
@@ -298,18 +361,22 @@ describe("who is about, from Leaf's list", () => {
     ]);
   });
 
-  test("somebody Leaf last saw 90 seconds ago is seen lately, from then, whatever list they are on", () => {
-    const about = whoIs({ room: [ME], present: [mate("q", "Quillon", "works", null, NOW - 90_000)] });
-    expect(shown(about)).toEqual([
+  test("somebody at a game stays where Leaf's list has them until Leaf says they have gone", () => {
+    const quillon = mate("q", "Quillon", "works", null, NOW - 2 * MIN, { since: NOW - HOUR });
+    expect(shown(whoIs({ room: [ME], present: [quillon] }))).toEqual([
       ["In town", ["Tester: Strategist (you)"]],
-      ["Seen lately", ["Quillon: 1 minute ago"]],
+      ["Elsewhere", ["Quillon: at the Works"]],
+    ]);
+    expect(shown(whoIs({ room: [ME], resting: [past("q", "Quillon", "works", null, NOW - 2 * MIN)] }))).toEqual([
+      ["In town", ["Tester: Strategist (you)"]],
+      ["Seen lately", ["Quillon: 2 minutes ago"]],
     ]);
   });
 });
 
 /** The room with the member and these others in it, and who is about with them there. */
 const inRoom = (...others: string[]): InRoom[] => [ME, ...others.map((n) => ({ id: n, name: n, rank: null }))];
-const about = (room: InRoom[], present: Listed[] = []): ReturnType<typeof whoIsAbout> => whoIs({ room, present });
+const about = (room: InRoom[], present: Here[] = []): ReturnType<typeof whoIsAbout> => whoIs({ room, present });
 /** Each part's title and its rows' names, with "(gone)" for those no longer in it. */
 const names = (a: ReturnType<typeof whoIsAbout>): [string, string[]][] =>
   partsOf(a).map((p) => [p.title, p.rows.map((r) => `${r.name}${r.gone ? " (gone)" : ""}`)]);
@@ -345,16 +412,16 @@ describe("the panel while it stays open", () => {
     expect(names(held(opened, went))[0]?.[1]).toContain("Birchwood (gone)");
   });
 
-  test("somebody who walks out of the room stays in town, dimmed, as just gone, and is not listed again as seen lately", () => {
+  test("somebody who leaves town stays where they were listed, dimmed, saying how long ago, and is not listed again as seen lately", () => {
     const opened = about(inRoom("Glacade"));
-    // Out of the room, while the guild's lists still have them in town.
-    const left = about(inRoom(), [mate("Glacade", "Glacade", "town", GUEST)]);
+    // Leaf says they have gone: out of the room, and on its list as gone.
+    const left = whoIs({ room: inRoom(), resting: [past("Glacade", "Glacade", "town", GUEST, NOW - 20_000)] });
     expect(names(left)).toEqual([
       ["In town", ["Tester"]],
       ["Seen lately", ["Glacade"]],
     ]);
     expect(shown(held(opened, left))).toEqual([
-      ["In town", ["Tester: Strategist (you)", `Glacade: ${GUEST} · just now`]],
+      ["In town", ["Tester: Strategist (you)", `Glacade: ${GUEST} · a moment ago`]],
     ]);
     // And somebody seen lately who comes back into town stays where they were, saying so.
     const back = held(left, opened);
