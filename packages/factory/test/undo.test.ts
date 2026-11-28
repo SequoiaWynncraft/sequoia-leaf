@@ -13,7 +13,7 @@ import { bareLand } from "./land.ts";
 import { near, xy } from "./near.ts";
 import { Player } from "./player.ts";
 import { rng } from "./random.ts";
-import { buying, delivering, give, junctions, lay, must, saved, staged } from "./yards.ts";
+import { bought, buying, delivering, give, junctions, lay, must, saved, staged } from "./yards.ts";
 
 type Rec = Record<string, unknown>;
 
@@ -24,13 +24,22 @@ function laid(seed = 1): F.Yard {
   return y;
 }
 
-/** Every plot the slice sells with the generator's pieces on it, tier 4 open (where an area may be upgraded), and nothing yet to undo. */
+/** Buys every plot the generator's yard may, each cleared first where it must be, until none is for sale. */
+function buyEvery(gen: { y: F.Yard }): void {
+  for (let more = true; more;) {
+    const p = F.PLOT_IDS.find((id) => F.plotState(gen.y, F.plot(id)).state === "for sale");
+    more = p !== undefined;
+    if (p) bought(gen.y, p);
+  }
+}
+/**
+ * Every plot of the land bought, each cleared first where it must be and each bought touching the
+ * land before it, with the generator's pieces on them; tier 4 open (where an area may be upgraded),
+ * and nothing yet to undo.
+ */
 function large(): F.Yard {
-  const plots = F.PLOT_IDS.filter((p) => p !== "yard");
-  const buy = (gen: { y: F.Yard; cmd: (c: Rec) => boolean }): void => {
-    for (const plot of plots) gen.cmd(buying(gen.y, plot));
-  };
-  const y = generate(F.LAND, 600, 20_261_122, buy, F.create({ seed: 20_261_122, tier: 4 })).y;
+  const y = generate(F.LAND, 600, 20_261_122, buyEvery, F.create({ seed: 20_261_122, tier: 5 })).y;
+  expect(y.plots.toSorted((a, b) => a - b)).toEqual(F.LAND.plots.map((p) => p.plot).toSorted((a, b) => a - b));
   y.history = [];
   return y;
 }
