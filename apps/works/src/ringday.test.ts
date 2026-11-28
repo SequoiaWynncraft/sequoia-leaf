@@ -6,7 +6,20 @@
  */
 import { expect, test } from "bun:test";
 
-import { FACTORY, check, create, held, holderOf, item, play, put, readCommand, type Yard } from "@sequoia-leaf/factory";
+import {
+  check,
+  create,
+  FACTORY,
+  held,
+  holderOf,
+  item,
+  litAt,
+  play,
+  put,
+  readCommand,
+  ringsOf,
+  type Yard,
+} from "@sequoia-leaf/factory";
 
 import { ctx, opened, useFakeLeaf } from "../test/fake-leaf.ts";
 import { countedAt } from "./grown.ts";
@@ -31,7 +44,8 @@ function must(y: Yard, c: Record<string, unknown>): void {
  * with a ring of 32 belts above the depot (rows 39 and 40), and two growers on it facing south, each
  * dropping onto the ring's top row and fed star crystals off it by a splitter that sends them up into
  * its east side first, and crystal feed from a full crate on its west side. A plain splitter on the
- * ring's bottom row sends every other thing down into the depot. 8 star crystals ride the ring.
+ * ring's bottom row sends every other thing down into the depot. 8 star crystals ride the ring. The
+ * growers and the belts up into them are on the ring too: 38 tiles things go round.
  */
 function ringYard(): Yard {
   const y = create({ seed: 5, tier: 8 });
@@ -48,7 +62,7 @@ function ringYard(): Yard {
     belt(gx + 2, 38, 3);
     belt(gx + 2, 37, 2);
     must(y, { do: "build", kind: "crate", x: gx - 2, y: 37, dir: 0 });
-    const r = holderOf(y, (gx - 2) + 37 * y.land.w);
+    const r = holderOf(y, gx - 2 + 37 * y.land.w);
     for (let k = 0; k < y.open.crate; k++) put(y.holders, r, FEED);
   }
   must(y, { do: "build", kind: "splitter", x: 56, y: 40, dir: 2 });
@@ -63,6 +77,7 @@ function ringYard(): Yard {
 test("a ring with growers on it, Leaf tending its yard now and then across a day and the page running its copy by its own loop, stand at one tick with one check all the way", async () => {
   const fake = await opened(ringYard());
   const growers = [50, 56].map((x) => x + 37 * S.world.land.w);
+  expect([ringsOf(S.world), growers.map((i) => litAt(S.world, i))]).toEqual([{ rings: 1, tiles: 38 }, [true, true]]);
   const marks = new Set([
     ...Array.from({ length: 12 }, (_, m) => m + 1),
     ...Array.from({ length: 24 }, (_, h) => (h + 1) * 60),
@@ -74,11 +89,13 @@ test("a ring with growers on it, Leaf tending its yard now and then across a day
     fake.leaf.ms = ms;
     performance.now = () => 1000 + ms;
     runYard(1000 + ms);
-    if (!marks.has(minute)) continue;
-    // What the page sent on the way reaches Leaf; then Leaf tends its yard on to its clock, as it does.
+    // What the page sent reaches Leaf at once, as it would.
     await Bun.sleep(1);
+    if (!marks.has(minute)) continue;
+    // Leaf tends its yard on to its clock, as it does.
     const leaf = fake.leaf.yard;
-    FACTORY.tend?.(leaf, { ...ctx(), now: ctx().now + ms }, () => true);
+    for (let further = true; further;)
+      further = FACTORY.tend?.(leaf, { ...ctx(), now: ctx().now + ms }, () => true) ?? false;
     const same = leaf.tick === S.world.tick && check(leaf) === check(S.world);
     seen.push(`${minute}: ${same}`);
     grown = Math.max(grown, leaf.depot[CRYSTAL] ?? 0);
